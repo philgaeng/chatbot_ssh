@@ -99,18 +99,20 @@ import {
   validateEntityCode,
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
-import { OfficersTab } from "@/components/settings/OfficersTab";
-import { OrganizationsTab } from "@/components/settings/OrganizationsTab";
 import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectTypesTab } from "@/components/settings/ProjectTypesTab";
-import { OrgCreateModal } from "@/components/settings/OrgCreateModal";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { LocationSearch } from "@/components/LocationSearch";
 import { JURISDICTION_MODE_LABELS, type JurisdictionMode } from "@/lib/jurisdiction";
 import { roleInTrack, roleMatchesFilter, type TrackFilter } from "@/lib/trackFilter";
 import { orgRoleBadge } from "@/lib/design-tokens";
+// RB-2/RB-4: the god-file's flat OrgsSection + actor-role editor are replaced by the
+// decomposed org-chart surfaces (tree + CSV + position types) and the doc-13 participant model.
+import { OrganisationTab } from "@/components/settings/org/OrganisationTab";
+import { OfficersTabV2 } from "@/components/settings/officers-v2/OfficersTabV2";
+import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
@@ -2145,259 +2147,6 @@ function WorkflowsTab({
 
 // ── Organizations section ─────────────────────────────────────────────────────
 
-function OrgsSection({ onNavigateToProject }: { onNavigateToProject: (id: string) => void }) {
-  const [countries, setCountries] = useState<CountryItem[]>([]);
-  const [editing, setEditing] = useState<OrganizationItem | null>(null);
-
-  useEffect(() => {
-    listCountries().then(setCountries).catch(() => {});
-  }, []);
-
-  if (editing) {
-    return (
-      <OrgEditor
-        org={editing}
-        countries={countries}
-        onBack={() => setEditing(null)}
-        onUpdated={(updated) => setEditing(updated)}
-        onNavigateToProject={onNavigateToProject}
-      />
-    );
-  }
-
-  return (
-    <OrganizationsTab
-      onEdit={setEditing}
-      onNavigateToProject={onNavigateToProject}
-    />
-  );
-}
-
-
-// ── Org editor ────────────────────────────────────────────────────────────────
-
-function OrgEditor({
-  org: initial,
-  countries,
-  onBack,
-  onUpdated,
-  onNavigateToProject,
-}: {
-  org: OrganizationItem;
-  countries: CountryItem[];
-  onBack: () => void;
-  onUpdated: (o: OrganizationItem) => void;
-  onNavigateToProject: (id: string) => void;
-}) {
-  const [org, setOrg]       = useState<OrganizationItem>(initial);
-  const [nameVal, setNameVal] = useState(org.name);
-  const [countryVal, setCountryVal] = useState(org.country_code ?? "");
-  const [activeVal, setActiveVal]   = useState(org.is_active);
-  const [msg, setMsg]       = useState("");
-  const [dirty, setDirty]   = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  // Project-linking state
-  const [allProjects, setAllProjects] = useState<ProjectItem[]>([]);
-  const [orgRoles, setOrgRoles]       = useState<OrgRole[]>([]);
-  const [linkedProjects, setLinkedProjects] = useState<ProjectItem[]>([]);
-  const [projectsLoading, setProjectsLoading] = useState(true);
-  // Packages where this org is the contractor, keyed by project_id (read-only context)
-  const [packagesByProject, setPackagesByProject] = useState<Record<string, PackageItem[]>>({});
-
-  function flash(t: string) { setMsg(t); setTimeout(() => setMsg(""), 2500); }
-
-  useEffect(() => {
-    Promise.all([listProjects(), getOrgRoles().catch(() => [] as OrgRole[])])
-      .then(([all, roles]) => {
-        setAllProjects(all);
-        setOrgRoles(roles);
-        setLinkedProjects(all.filter((p) => p.organizations.some((o) => o.organization_id === org.organization_id)));
-      })
-      .finally(() => setProjectsLoading(false));
-  }, [org.organization_id]);
-
-  // Load packages for each linked project — show read-only contractor context
-  useEffect(() => {
-    if (linkedProjects.length === 0) { setPackagesByProject({}); return; }
-    Promise.all(
-      linkedProjects.map((proj) =>
-        listPackages(proj.project_id)
-          .then((pkgs) => [
-            proj.project_id,
-            pkgs.filter((pkg) =>
-              (pkg.organizations ?? []).some((o) => o.organization_id === org.organization_id),
-            ),
-          ] as [string, PackageItem[]])
-          .catch(() => [proj.project_id, []] as [string, PackageItem[]])
-      )
-    ).then((entries) => setPackagesByProject(Object.fromEntries(entries)));
-  }, [linkedProjects, org.organization_id]);
-
-  async function handleSaveMeta() {
-    if (!nameVal.trim()) return;
-    setSaving(true);
-    try {
-      const updated = await updateOrganization(org.organization_id, {
-        name: nameVal.trim(),
-        country_code: countryVal || null,
-        is_active: activeVal,
-      });
-      setOrg(updated); onUpdated(updated); setDirty(false); flash("Saved ✓");
-    } catch { flash("Save failed"); }
-    setSaving(false);
-  }
-
-  return (
-    <div>
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">← Organizations</button>
-        <span className="text-gray-300">/</span>
-        <h2 className="text-lg font-semibold text-gray-800">{org.name}</h2>
-        <span className="font-mono text-sm text-gray-400">{org.organization_id}</span>
-        {msg && <span className="text-xs text-green-600 font-medium ml-2">{msg}</span>}
-      </div>
-
-      {/* Meta fields */}
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-5 mb-6 max-w-lg space-y-4">
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Full name</label>
-          <input
-            value={nameVal}
-            onChange={(e) => { setNameVal(e.target.value); setDirty(true); }}
-            className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-        </div>
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Country</label>
-            <select
-              value={countryVal}
-              onChange={(e) => { setCountryVal(e.target.value); setDirty(true); }}
-              className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-            >
-              <option value="">— none (multi-country) —</option>
-              {countries.map((c) => <option key={c.country_code} value={c.country_code}>{c.name} ({c.country_code})</option>)}
-            </select>
-          </div>
-          <div className="flex items-end pb-1">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={activeVal}
-                onChange={(e) => { setActiveVal(e.target.checked); setDirty(true); }}
-                className="w-4 h-4 rounded"
-              />
-              <span className="text-sm text-gray-700">Active</span>
-            </label>
-          </div>
-        </div>
-        {dirty && (
-          <div className="flex justify-end">
-            <button
-              onClick={handleSaveMeta}
-              disabled={saving || !nameVal.trim()}
-              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded font-medium hover:bg-blue-700 disabled:opacity-50 transition"
-            >
-              {saving ? "Saving…" : "Save changes"}
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* Projects — read-only list; click to open in Projects tab */}
-      <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-2">Projects</h3>
-        <p className="text-xs text-gray-400 mb-3">
-          Projects this organization is involved in. Click a project to open it and manage assignments.
-        </p>
-
-        {projectsLoading ? (
-          <p className="text-sm text-gray-400 animate-pulse">Loading…</p>
-        ) : linkedProjects.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">
-            Not linked to any projects yet.{" "}
-            <button
-              onClick={() => onNavigateToProject("")}
-              className="text-blue-500 hover:underline"
-            >
-              Go to Projects &amp; packages →
-            </button>
-          </p>
-        ) : (
-          <div className="border border-gray-200 rounded-lg overflow-hidden max-w-xl">
-            <table className="w-full text-sm">
-              <tbody>
-                {linkedProjects.map((proj) => {
-                  const link = proj.organizations.find((o) => o.organization_id === org.organization_id);
-                  const roleDef = orgRoles.find((r) => r.key === link?.org_role);
-                  const roleColor = link?.org_role ? orgRoleBadge(link.org_role) : "";
-                  const contractorPkgs = packagesByProject[proj.project_id] ?? [];
-                  return (
-                    <React.Fragment key={proj.project_id}>
-                      {/* Clickable project row → navigates to Projects tab with this project open */}
-                      <tr
-                        className="border-t border-gray-100 first:border-t-0 hover:bg-blue-50 cursor-pointer group transition-colors"
-                        onClick={() => onNavigateToProject(proj.project_id)}
-                      >
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium text-gray-800 group-hover:text-blue-700 transition-colors">
-                            {proj.name}
-                          </div>
-                          <div className="font-mono text-xs text-gray-400">{proj.short_code}</div>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          {roleDef ? (
-                            <span className={`text-xs px-2 py-0.5 rounded border font-medium ${roleColor}`}>
-                              {roleDef.label}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-300">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span className="text-xs text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                            Open →
-                          </span>
-                        </td>
-                      </tr>
-                      {/* Package contractor context (read-only) */}
-                      {contractorPkgs.length > 0 && (
-                        <tr
-                          className="bg-amber-50/60 cursor-pointer"
-                          onClick={() => onNavigateToProject(proj.project_id)}
-                        >
-                          <td colSpan={3} className="px-4 pb-2.5 pt-1">
-                            <div className="flex flex-wrap gap-1.5 items-center">
-                              <span className="text-xs text-gray-400 mr-0.5">Contractor on:</span>
-                              {contractorPkgs.map((pkg) => (
-                                <span
-                                  key={pkg.package_id}
-                                  title={pkg.name}
-                                  className="text-xs font-mono bg-amber-100 text-amber-700 border border-amber-200 px-1.5 py-0.5 rounded"
-                                >
-                                  {pkg.package_code}
-                                </span>
-                              ))}
-                            </div>
-                          </td>
-                        </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── Locations section ─────────────────────────────────────────────────────────
-
 function LocationsSection() {
   const [countries, setCountries] = useState<CountryItem[]>([]);
   const [country, setCountry]     = useState("NP");
@@ -3442,26 +3191,16 @@ function ProjectEditor({
         )}
       </div>
 
-      {canEditProjectWorkflows && (
-      <ProjectActorRolesEditor
-        roles={projectActorRoles}
-        saving={rolesSaving}
-        readOnly={lockTypeConfig}
-        onChange={setProjectActorRolesState}
-        onSave={async (roles) => {
-          setRolesSaving(true);
-          try {
-            const saved = await setProjectActorRoles(p.project_id, roles);
-            setProjectActorRolesState(saved);
-            flash("Actor roles saved ✓");
-          } catch (e: unknown) {
-            flash(e instanceof Error ? e.message : "Failed to save roles");
-          } finally {
-            setRolesSaving(false);
-          }
-        }}
-      />
-      )}
+      {/* doc-13 / DECISION 2026-07-10: the per-project actor-role catalog is retired in
+          favour of a single implementing agency + optional donors (with the last-step
+          donor guardrail). */}
+      <div className="mb-6">
+        <ProjectParticipants
+          project={p}
+          canEdit={canEditProjectWorkflows && !lockTypeConfig}
+          onUpdated={() => onUpdated(p)}
+        />
+      </div>
 
       {/* Project actors (project-wide org + role) */}
       <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
@@ -3665,116 +3404,6 @@ function ProjectEditor({
 }
 
 // ── Project actor role vocabulary (per project) ─────────────────────────────
-
-function ProjectActorRolesEditor({
-  roles,
-  saving,
-  readOnly = false,
-  onChange,
-  onSave,
-}: {
-  roles: OrgRole[];
-  saving: boolean;
-  readOnly?: boolean;
-  onChange: (roles: OrgRole[]) => void;
-  onSave: (roles: OrgRole[]) => Promise<void>;
-}) {
-  const [dirty, setDirty] = useState(false);
-
-  function updateRow(index: number, patch: Partial<OrgRole>) {
-    onChange(roles.map((r, i) => (i === index ? { ...r, ...patch } : r)));
-    setDirty(true);
-  }
-
-  function addRow() {
-    onChange([...roles, { key: "", label: "", description: "" }]);
-    setDirty(true);
-  }
-
-  function removeRow(index: number) {
-    onChange(roles.filter((_, i) => i !== index));
-    setDirty(true);
-  }
-
-  return (
-    <div className="mb-6 border border-gray-200 rounded-lg p-4 bg-white max-w-2xl">
-      <h3 className="text-sm font-semibold text-gray-700 mb-1">Actor roles</h3>
-      <p className="text-xs text-gray-500 mb-3">
-        {readOnly
-          ? "Role keys are defined by the project type. Assign organizations to these roles below."
-          : "Role types for project and package actors. Seeded from system defaults; customize per project."}
-      </p>
-      <div className="border border-gray-200 rounded-lg overflow-hidden mb-3">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-slate-50 text-left border-b border-gray-200">
-              <th className="px-3 py-2 text-xs font-medium text-gray-500">Key</th>
-              <th className="px-3 py-2 text-xs font-medium text-gray-500">Label</th>
-              <th className="px-3 py-2 text-xs font-medium text-gray-500">Description</th>
-              <th className="w-8" />
-            </tr>
-          </thead>
-          <tbody>
-            {roles.map((r, i) => (
-              <tr key={i} className="border-t border-gray-100">
-                <td className="px-2 py-1.5">
-                  <input
-                    value={r.key}
-                    readOnly={readOnly}
-                    onChange={(e) => updateRow(i, { key: e.target.value })}
-                    placeholder="e.g. main_contractor"
-                    className="w-full font-mono text-xs border border-gray-200 rounded px-2 py-1"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={r.label}
-                    readOnly={readOnly}
-                    onChange={(e) => updateRow(i, { label: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded px-2 py-1"
-                  />
-                </td>
-                <td className="px-2 py-1.5">
-                  <input
-                    value={r.description ?? ""}
-                    readOnly={readOnly}
-                    onChange={(e) => updateRow(i, { description: e.target.value })}
-                    className="w-full text-xs border border-gray-200 rounded px-2 py-1"
-                  />
-                </td>
-                <td className="px-2 py-1.5 text-right">
-                  {!readOnly && (
-                    <button type="button" onClick={() => removeRow(i)}
-                      className="text-gray-300 hover:text-red-500 text-lg leading-none">×</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {!readOnly && (
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={addRow} className="text-xs text-blue-600 hover:text-blue-800 font-medium">
-            + Add role
-          </button>
-          {dirty && (
-            <button
-              type="button"
-              onClick={() => { void onSave(roles).then(() => setDirty(false)); }}
-              disabled={saving}
-              className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700 disabled:opacity-50 ml-auto"
-            >
-              {saving ? "Saving…" : "Save roles"}
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Package row (collapsed + expanded editor) ─────────────────────────────────
 
 function PackageRow({
   projectId,
@@ -4648,9 +4277,14 @@ export default function SettingsPage() {
             active={orgSub}
             onChange={setOrgSub}
           />
-          {orgSub === "organizations" && <OrgsSection onNavigateToProject={navigateToProject} />}
+          {orgSub === "organizations" && (
+            <OrganisationTab canEdit={canManageStructure} canCreateRoot={isSuperAdmin} />
+          )}
           {orgSub === "officers" && (
-            <OfficersTab roleCatalog={roleCatalog} allowGlobalInvite={isSuperAdmin || isCountryAdmin} />
+            <OfficersTabV2
+              canInvite={isSuperAdmin || isCountryAdmin || isProjectAdmin}
+              canManage={canManageStructure}
+            />
           )}
         </>
       )}
