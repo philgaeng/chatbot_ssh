@@ -169,6 +169,18 @@ def seed_seah(db: Session | None = None) -> None:
         # SEAH-specific
         seed_seah_workflow(db)
         seed_seah_assignment(db)
+        # Back-fill the legacy project.seah_workflow_id now that the SEAH workflow exists.
+        # seed_project (in seed_standard) runs BEFORE this, so it can't set the FK then;
+        # project_workflows is the primary binding, this keeps the legacy column consistent.
+        from sqlalchemy import update as _update
+
+        from ticketing.models.project import Project
+
+        db.execute(
+            _update(Project)
+            .where(Project.short_code == "KL_ROAD")
+            .values(seah_workflow_id=WORKFLOW_SEAH_ID)
+        )
         db.commit()
         logger.info("SEAH seed complete.")
     except Exception:

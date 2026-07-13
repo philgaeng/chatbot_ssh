@@ -540,6 +540,46 @@ def seed_project_organizations(db: Session) -> None:
     db.flush()
 
 
+def seed_packages(db: Session) -> None:
+    """Seed the 5 KL Road lots + their district coverage (canonical location codes).
+
+    Formerly seeded inside migration b8c2d4e6f1a3 — moved into the seed so a data reset
+    (mock_tickets --reset TRUNCATEs everything) re-creates them; alembic never re-runs an
+    applied migration. Idempotent (ON CONFLICT DO NOTHING); caller commits.
+    """
+    from sqlalchemy import text
+
+    db.execute(text("""
+        INSERT INTO ticketing.project_packages
+            (package_id, project_id, package_code, name, description, is_active, created_at, updated_at)
+        SELECT gen_random_uuid()::text, p.project_id, v.package_code, v.name, v.description, true, NOW(), NOW()
+        FROM ticketing.projects p
+        CROSS JOIN (VALUES
+            ('01', 'Lot 1 — Kakarbhitta to Sitapur',                 'Civil works: Km 0+000 to Km 45+000'),
+            ('02', 'Lot 2 — Km 45 to Km 85',                          'Civil works: Km 45+000 to Km 85+000'),
+            ('03', 'Lot 3 — Km 85 to Km 95.76',                       'Civil works: Km 85+000 to Km 95+760'),
+            ('04', 'Lot 4 — Major Bridges (Ninda, Biring, Kankai)',   'Bridge construction'),
+            ('05', 'Lot 5 — Major Bridges (Ratuwa, Bakra, Lohendra)', 'Bridge construction')
+        ) AS v(package_code, name, description)
+        WHERE p.short_code = 'KL_ROAD'
+        ON CONFLICT (project_id, package_code) DO NOTHING
+    """))
+    db.execute(text("""
+        INSERT INTO ticketing.package_locations (package_id, location_code)
+        SELECT pp.package_id, v.location_code
+        FROM ticketing.project_packages pp
+        JOIN ticketing.projects p ON p.project_id = pp.project_id
+        CROSS JOIN (VALUES
+            ('01', 'P1_JHA'), ('02', 'P1_MOR'), ('03', 'P1_SUN'),
+            ('04', 'P1_JHA'), ('05', 'P1_JHA'), ('05', 'P1_MOR')
+        ) AS v(package_code, location_code)
+        WHERE p.short_code = 'KL_ROAD' AND pp.package_code = v.package_code
+          AND EXISTS (SELECT 1 FROM ticketing.locations WHERE location_code = v.location_code)
+        ON CONFLICT DO NOTHING
+    """))
+    db.flush()
+
+
 def seed_standard(db: Session | None = None) -> None:
     """Run all standard seed steps inside a single transaction."""
     own_session = db is None
@@ -556,6 +596,7 @@ def seed_standard(db: Session | None = None) -> None:
         seed_workflow_assignment(db)
         seed_project(db)
         seed_project_organizations(db)
+        seed_packages(db)  # KL Road lots (was migration-seeded; re-created here after reset)
         seed_settings(db)
         db.commit()
         logger.info("Standard seed complete.")
