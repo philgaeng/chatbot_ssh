@@ -19,10 +19,10 @@
 | R4 | T1 | project_admin appointment containment | MO2 | MOD | **done** | ✅ 2 tests | this T1 commit |
 | R5 | T2 | Friendly-error contract: unwrap object detail + wire ErrorNotice | M3 | MAJOR | **done** | ✅ vitest+guardrails+build | this T2 commit |
 | R6 | T2 | Plain-language labels + owning-level chip in inline clusters | M4, M7 | MAJOR | **done** | ✅ guardrail+build | this T2 commit |
-| R7 | T3 | Invite-by-position for new officers | M5 | MAJOR | todo | ☐ | — |
-| R8 | T3 | Frame 01 Setup & go-live landing (**decision — §R8**) | M6 | MAJOR | todo | ☐ | — |
+| R7 | T3 | Invite-by-position for new officers | M5 | MAJOR | **done** | ✅ 2 tests + tsc | this T3 commit |
+| R8 | T3 | Frame 01 Setup & go-live landing (**built** per decision) | M6 | MAJOR | **done** | ✅ next build | this T3 commit |
 | R9 | T3 | Server-side search at scale (directory + org tree) | M8 | MAJOR | todo | ☐ | — |
-| R10 | T3 | authz-UI corrections (project_admin / officer_admin) | MO1 | MOD | todo | ☐ | — |
+| R10 | T3 | authz-UI corrections (project_admin / officer_admin) | MO1 | MOD | **partial** | ✅ build | this T3 commit — OfficersTab manage decoupled; ProjectParticipants gate is backend-enforced (R2) |
 | R11 | T4 | Design-token + label hygiene sweep | MO3/4/6/11 + MINOR | MOD | todo | ☐ | — |
 | R12 | T4 | Fidelity nits (deactivate/notif/why-excluded/territory/IA) | MO5/7/8/9/10 | MOD | todo | ☐ | — |
 | R13 | T4 | Doc + migration hygiene | BE-2 F4/F5/F6, BE-1 routing | MINOR | todo | ☐ | — |

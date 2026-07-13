@@ -1383,6 +1383,9 @@ class OfficerInviteRequest(BaseModel):
     package_id: Optional[str] = None
     includes_children: bool = False
     temp_password: Optional[str] = None
+    # R7 (BUILD-REVIEW M5): invite-by-position — record the officer_positions row so a
+    # freshly-invited officer shows their position (parity with assign_officer_position).
+    position_type_id: Optional[str] = None
 
 
 class OfficerInviteResponse(BaseModel):
@@ -1476,6 +1479,22 @@ def invite_officer(
     loc = (body.location_code or "").strip() or None
     upsert_user_role_row(db, email, role, body.organization_id, loc)
     create_scope_row(db, email, juris, resolved_pc)
+
+    # R7 (M5): if invited by position, record the descriptive officer_positions row so the
+    # directory shows the position (the enforcement rows above already exist).
+    if body.position_type_id:
+        from ticketing.models.officer_position import OfficerPosition
+        from ticketing.models.position_type import PositionType
+
+        pt = db.get(PositionType, body.position_type_id)
+        if pt is None:
+            raise HTTPException(status_code=404, detail="Position type not found")
+        db.add(OfficerPosition(
+            user_id=email,
+            position_type_id=pt.position_type_id,
+            organization_id=body.organization_id,
+            is_active=True,
+        ))
 
     ob = db.get(OfficerOnboarding, email)
     if ob:

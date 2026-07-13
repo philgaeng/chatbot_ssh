@@ -113,6 +113,7 @@ import { orgRoleBadge } from "@/lib/design-tokens";
 import { OrganisationTab } from "@/components/settings/org/OrganisationTab";
 import { OfficersTabV2 } from "@/components/settings/officers-v2/OfficersTabV2";
 import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
+import { SetupOverview } from "@/components/settings/overview/SetupOverview";
 // R5 (BUILD-REVIEW M3): the friendly-error contract — inline clusters route caught errors
 // through formatUserFacingError (unwraps object 4xx detail) instead of raw messages or browser dialogs.
 import { formatUserFacingError } from "@/lib/user-messages";
@@ -286,12 +287,13 @@ function RoleEditModal({ role, onSaved, onClose }: {
   );
 }
 
-type MainTab = "org_officers" | "workflows_roles" | "projects" | "platform";
+type MainTab = "setup" | "org_officers" | "workflows_roles" | "projects" | "platform";
 type OrgOfficersSub = "organizations" | "officers";
 type WorkflowsRolesSub = "workflows" | "roles";
 type PlatformSub = "locations" | "reports" | "project_types" | "system_config" | "admin_access";
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
+  { id: "setup",             label: "Setup & go-live" },   // R8: Frame 01 landing
   { id: "org_officers",      label: "Organizations & officers" },
   { id: "workflows_roles",   label: "Workflows, roles & permissions" },
   { id: "projects",          label: "Projects & packages" },
@@ -4186,12 +4188,12 @@ export default function SettingsPage() {
       return tabs;
     }
     if (isProjectAdmin) {
-      return MAIN_TABS.filter((t) => t.id === "org_officers" || t.id === "workflows_roles" || t.id === "projects");
+      return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "org_officers" || t.id === "workflows_roles" || t.id === "projects");
     }
-    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "projects");
-    return MAIN_TABS.filter((t) => t.id === "projects");
+    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "projects");
+    return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "projects");
   }, [isSuperAdmin, isCountryAdmin, isProjectAdmin, isAdmin, adminWorkflowTracks]);
-  const [activeMain, setActiveMain] = useState<MainTab>("projects");
+  const [activeMain, setActiveMain] = useState<MainTab>("setup");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
   const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
   const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
@@ -4289,6 +4291,8 @@ export default function SettingsPage() {
       </div>
       )}
 
+      {activeMain === "setup" && <SetupOverview onOpenProject={navigateToProject} />}
+
       {activeMain === "org_officers" && (
         <>
           <SettingsSubTabs
@@ -4304,8 +4308,11 @@ export default function SettingsPage() {
           )}
           {orgSub === "officers" && (
             <OfficersTabV2
+              // R10 (BUILD-REVIEW MO1): managing officers is an officer-admin capability, not
+              // org-structure — decouple from canManageStructure so a project_admin who can
+              // invite can also manage/deactivate. (Backend already enforces the real scope.)
               canInvite={isSuperAdmin || isCountryAdmin || isProjectAdmin}
-              canManage={canManageStructure}
+              canManage={isSuperAdmin || isCountryAdmin || isProjectAdmin}
             />
           )}
         </>

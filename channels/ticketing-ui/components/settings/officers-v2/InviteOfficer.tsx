@@ -450,6 +450,7 @@ export function InviteOfficer({
         await assignOfficerPosition(existingOfficer.user_id, payload);
       } else {
         // New email → invite (provisions Keycloak, emails a set-password link).
+        // R7 (M5): carry the chosen position so the invite records the officer_positions row.
         const payload: OfficerInvitePayload = {
           email: email.trim(),
           role_key: values.roleKey,
@@ -458,6 +459,7 @@ export function InviteOfficer({
           project_id: values.projectId,
           project_code: values.projectCode,
           includes_children: values.includesChildren,
+          position_type_id: position.position_type_id,
         };
         await inviteOfficer(payload);
       }
