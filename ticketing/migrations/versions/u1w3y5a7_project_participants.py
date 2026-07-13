@@ -56,7 +56,8 @@ def upgrade() -> None:
         ["implementing_agency_org_id"],
         schema="ticketing",
     )
-    # Back-fill from the legacy org_role='implementing_agency' link (first match per project).
+    # Back-fill from the legacy org_role='implementing_agency' link (an arbitrary matching
+    # row per project — IA is singular in practice, so this is deterministic enough).
     op.execute(
         """
         UPDATE ticketing.projects p

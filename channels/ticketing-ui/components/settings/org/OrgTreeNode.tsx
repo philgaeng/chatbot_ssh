@@ -11,7 +11,7 @@
 import { useState } from "react";
 
 import type { OrganizationItem } from "@/lib/api";
-import { orgRoleBadge, text as textTokens } from "@/lib/design-tokens";
+import { orgCategoryBadge, text as textTokens } from "@/lib/design-tokens";
 import { Bilingual } from "@/components/shared/Bilingual";
 
 import {
@@ -42,7 +42,7 @@ function Caret({ open, onClick }: { open: boolean; onClick: () => void }) {
 function CategoryChip({ category }: { category: string | null | undefined }) {
   if (!category) return null;
   return (
-    <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${orgRoleBadge(category)}`}>
+    <span className={`rounded border px-1.5 py-0.5 text-[11px] font-medium ${orgCategoryBadge(category)}`}>
       {orgCategoryLabel(category)}
     </span>
   );

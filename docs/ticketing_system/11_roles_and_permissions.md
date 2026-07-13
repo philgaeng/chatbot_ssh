@@ -133,7 +133,7 @@ The **narrowest** admin: **invite, modify, and revoke officers** within an org s
 | **`seah_admin`** *(if seeded)* | → `org_admin` + `workflow_track: seah` |
 | **`seah_project_admin`** | Never shipped — use `project_admin` + `workflow_track: seah` |
 
-**Code gap:** Today `local_admin` maps to generic `is_admin`; implement scope `workflow_track` enforcement in §8.
+**As-built (SH-7):** `workflow_track` enforcement + the 4-tier ladder shipped (migration `q7s9u1w3`); the legacy `local_admin`→`org_admin` mapping is done. See §8.
 
 ---
 
@@ -379,7 +379,7 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | Filter operational vs admin in Roles API/UI | ✅ `GET /roles?kind=operational` |
 | `role_origin` column + system role delete guard | ✅ Column + delete rules |
 | Platform **Admin access** sub-tab | ✅ `super_admin` only |
-| `local_admin` → matrix migration | ✅ Seed: `country-admin@grm.local` + scopes |
+| `local_admin` → matrix migration | ✅ Seed: `org_admin` scopes (the demo `country-admin@grm.local` login is a retained email alias; the role key is `org_admin`) |
 | `project_admin` + `workflow_track` on admin scope | ✅ `project-admin@grm.local` KL_ROAD standard |
 
 ---

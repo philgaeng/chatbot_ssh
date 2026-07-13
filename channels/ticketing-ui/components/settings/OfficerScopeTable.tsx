@@ -289,7 +289,7 @@ function ScopeRowEditor({
                     type="checkbox"
                     checked={draft.includes_children}
                     onChange={(e) => patchDraft({ includes_children: e.target.checked })}
-                    className="accent-purple-500"
+                    className="accent-blue-600"
                   />
                   sub-locations
                 </label>

@@ -176,3 +176,16 @@ export function orgRoleBadge(role: string | null | undefined): string {
   if (!role) return ORG_ROLE_BADGE_FALLBACK;
   return ORG_ROLE_BADGE[role] ?? ORG_ROLE_BADGE_FALLBACK;
 }
+
+// R11 (BUILD-REVIEW FE-1 #3): org_category chip — each actor type visually distinct
+// (the org tree previously keyed on the retired org-role map → government == gray).
+export const ORG_CATEGORY_BADGE: Record<string, string> = {
+  government:       "bg-blue-100 text-blue-700 border-blue-200",
+  local_government: "bg-green-100 text-green-700 border-green-200",
+  donor:            "bg-violet-100 text-violet-700 border-violet-200",
+  third_party:      "bg-amber-100 text-amber-700 border-amber-200",
+} as const;
+
+export function orgCategoryBadge(category: string | null | undefined): string {
+  return (category ? ORG_CATEGORY_BADGE[category] : undefined) ?? ORG_ROLE_BADGE_FALLBACK;
+}

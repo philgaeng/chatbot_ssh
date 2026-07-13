@@ -594,7 +594,9 @@ function ManageOfficerModal({
           <section className="space-y-1 border-t border-gray-100 pt-3">
             <p className={`text-xs ${textTokens.muted}`}>Coming soon (backend pending):</p>
             <div className="flex flex-wrap gap-2">
-              {["Edit role & area", "Transfer", "Deactivate"].map((label) => (
+              {/* R12 (BUILD-REVIEW MO5): Deactivate is wired in the row ⋯ menu — removed from
+                  this "coming soon" list to kill the self-contradiction. */}
+              {["Edit role & area", "Transfer"].map((label) => (
                 <button
                   key={label}
                   type="button"

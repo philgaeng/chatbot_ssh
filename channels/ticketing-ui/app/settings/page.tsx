@@ -488,9 +488,8 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
       </div>
 
       {!loading && catalog.length === 0 && (
-        <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2 mb-3">
-          No roles found. Run Alembic migrations and seed (e.g. <span className="font-mono">mock_tickets --reset</span>) so{" "}
-          <span className="font-mono">ticketing.constants.grm_role_catalog</span> is applied.
+        <p className="text-sm text-gray-600 mb-3">
+          No roles yet.{canCreate ? " Create the first role to get started." : ""}
         </p>
       )}
 
@@ -555,7 +554,7 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
       </div>
       <p className="text-xs text-gray-400 mt-3">
         Operational catalog only — admin assignments live under Settings → Admin access.
-        Country admins may create custom roles via archetype templates.
+        Organisation admins may create custom roles from &ldquo;acts as&rdquo; presets.
       </p>
     </div>
   );
@@ -768,7 +767,7 @@ type WorkflowRoleOption = { key: string; label: string; origin?: string };
 function statusBadge(status: string) {
   const map: Record<string, string> = {
     published: "bg-green-100 text-green-700",
-    draft:     "bg-yellow-100 text-yellow-700",
+    draft:     "bg-amber-100 text-amber-700",
     archived:  "bg-gray-100 text-gray-500",
     template:  "bg-blue-100 text-blue-700",
   };

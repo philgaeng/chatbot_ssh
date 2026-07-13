@@ -23,9 +23,9 @@
 | R8 | T3 | Frame 01 Setup & go-live landing (**built** per decision) | M6 | MAJOR | **done** | ✅ next build | this T3 commit |
 | R9 | T3 | Server-side search at scale (directory + org tree) | M8 | MAJOR | todo | ☐ | — |
 | R10 | T3 | authz-UI corrections (project_admin / officer_admin) | MO1 | MOD | **partial** | ✅ build | this T3 commit — OfficersTab manage decoupled; ProjectParticipants gate is backend-enforced (R2) |
-| R11 | T4 | Design-token + label hygiene sweep | MO3/4/6/11 + MINOR | MOD | todo | ☐ | — |
-| R12 | T4 | Fidelity nits (deactivate/notif/why-excluded/territory/IA) | MO5/7/8/9/10 | MOD | todo | ☐ | — |
-| R13 | T4 | Doc + migration hygiene | BE-2 F4/F5/F6, BE-1 routing | MINOR | todo | ☐ | — |
+| R11 | T4 | Design-token + label hygiene sweep | MO3/4/6/11 + MINOR | MOD | **done** | ✅ grep-guardrail 0 + build | this T4 commit |
+| R12 | T4 | Fidelity nits (deactivate/notif/why-excluded/territory/IA) | MO5/7/8/9/10 | MOD | **partial** | ✅ build | this T4 commit — MO5 (deactivate contradiction) fixed; MO7/8/9/10 are browser-dependent, deferred to the browser pass |
+| R13 | T4 | Doc + migration hygiene | BE-2 F4/F5/F6, BE-1 routing | MINOR | **done** | docs | this T4 commit |
 
 ---
 
