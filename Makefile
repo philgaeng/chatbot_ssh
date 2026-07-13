@@ -220,7 +220,7 @@ endef
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
 	aws-seed-seah-providers prod-seed-seah-providers \
-	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed compose_seed_seah_catalog check_grm_ports \
+	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed wsl-seed-locations wsl-seed-full compose_seed_seah_catalog check_grm_ports \
 	compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local \
 	compose_docker_wsl_ticketing compose_docker_wsl_down compose-down-all stop-all \
 	compose_docker_wsl_nginx compose_docker_wsl_grm_demo compose_docker_wsl_grm_auth \
@@ -441,6 +441,18 @@ keycloak-setup compose_keycloak_setup:
 # GRM demo tickets in ticketing.* (idempotent with --reset).
 wsl-seed:
 	$(COMPOSE_WSL) exec -T ticketing_api python -m ticketing.seed.mock_tickets --reset
+
+# Import Nepal geodata into ticketing.locations (idempotent upsert, ~837 nodes). Required by
+# mock_tickets + the test suite for location-hierarchy resolution; empty locations is a
+# recurring setup gap (org territory FK + auto-assign hierarchy silently break).
+wsl-seed-locations:
+	$(COMPOSE_WSL) exec -T ticketing_api python -m ticketing.seed.import_locations_json \
+	  --country NP --en backend/dev-resources/location_dataset/en_cleaned.json \
+	  --ne backend/dev-resources/location_dataset/ne_cleaned.json --max-level 3
+
+# Full dev seed in dependency order (geodata first, then workflows/officers/tickets). One
+# command so the location import is never skipped. Run after `make migrate_all`.
+wsl-seed-full: wsl-seed-locations wsl-seed
 
 # ── Ticketing tests ───────────────────────────────────────────────────────────
 # Container: same image/deps/DB as production stack (preferred).

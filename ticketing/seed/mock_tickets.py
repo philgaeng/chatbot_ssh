@@ -663,27 +663,29 @@ def seed_all(reset: bool = False) -> None:
     db = SessionLocal()
     try:
         if reset:
-            logger.info("Reset mode: deleting all ticketing.* rows...")
-            db.execute(TicketEvent.__table__.delete())
-            db.execute(Ticket.__table__.delete())
-            from ticketing.models.admin_scope import AdminScope
-            db.execute(AdminScope.__table__.delete())
-            db.execute(OfficerScope.__table__.delete())
-            db.execute(UserRole.__table__.delete())
-            from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
-            from ticketing.models.organization import Organization
-            from ticketing.models.user import Role
-            from ticketing.models.settings import Settings
-            db.execute(WorkflowAssignment.__table__.delete())
-            db.execute(WorkflowStep.__table__.delete())
-            db.execute(WorkflowDefinition.__table__.delete())
-            # Locations live in ticketing.locations (imported geodata) — not reset here.
-            # Only reset org/role/settings that are seeded by mock_tickets.
-            db.execute(Organization.__table__.delete())
-            db.execute(Role.__table__.delete())
-            db.execute(Settings.__table__.delete())
+            logger.info("Reset mode: truncating all ticketing.* rows (except imported geodata)...")
+            # Future-proof: TRUNCATE every ticketing table dynamically rather than hand-listing
+            # a subset that goes stale as migrations add new FK-referencing tables (e.g. the
+            # old list deleted workflow_definitions but not project_workflows → FK violation).
+            # CASCADE covers any dependency; RESTART IDENTITY resets sequences. The imported
+            # geodata (locations / countries / translations / level defs) and the alembic
+            # version table are preserved — re-importing 800+ locations would be wasteful.
+            from sqlalchemy import text as _sql_text
+
+            keep = {
+                "locations", "countries", "location_translations", "location_level_defs",
+                "alembic_version",
+            }
+            all_tables = db.execute(
+                _sql_text("SELECT tablename FROM pg_tables WHERE schemaname = 'ticketing'")
+            ).scalars().all()
+            to_truncate = [f"ticketing.{t}" for t in all_tables if t not in keep]
+            if to_truncate:
+                db.execute(
+                    _sql_text("TRUNCATE TABLE " + ", ".join(to_truncate) + " RESTART IDENTITY CASCADE")
+                )
             db.commit()
-            logger.info("Reset complete.")
+            logger.info("Reset complete (truncated %d tables).", len(to_truncate))
 
         # Seed workflows (each is idempotent)
         seed_standard(db)
