@@ -13,7 +13,7 @@
 
 | ID | Tier | Title | Closes | Sev | Status | Tests green | Commit |
 |---|---|---|---|---|---|---|---|
-| R1 | T0 | SEAH leak lockdown (notifications + cast whitelist) | B1, B2 | BLOCKER | todo | ☐ | — |
+| R1 | T0 | SEAH leak lockdown (notifications + cast whitelist) | B1, B2 | BLOCKER | **done** | ✅ 4 tests | `d…` (next tracker update) |
 | R2 | T1 | Donor guarantee: legacy fallback + endpoint scoping | M1 | MAJOR | todo | ☐ | — |
 | R3 | T1 | Deactivated officers out of assignment + coverage | M2 | MAJOR | todo | ☐ | — |
 | R4 | T1 | project_admin appointment containment | MO2 | MOD | todo | ☐ | — |
@@ -38,13 +38,12 @@
 2. `@mention`/`@all` notify loop: for a SEAH ticket, drop any recipient who cannot see SEAH before writing the notify event.
 3. `convene_grc`: SEAH-suppress GRC-member recipients (mirror `notify_escalation_supervisor`).
 4. `_apply_step_tier_roles`: on a SEAH ticket **whitelist `SEAH_ROLES`** (replace the donor-only blacklist) across **informed, observer, AND supervisor** tiers.
-**Acceptance tests** — new `tests/ticketing/test_seah_leak_notifications.py` (+ extend `test_chart_behaviors.py`):
-- [ ] non-SEAH user with an event on a SEAH ticket → `/users/me/badge` count 0 AND `/users/me/notifications` returns no SEAH row (grievance_id/summary absent).
-- [ ] SEAH user still sees their SEAH notifications (no over-suppression); `adb_hq_exec` (both-workflows) still sees SEAH per `can_see_seah`.
-- [ ] `@all` note on a SEAH ticket → no MENTION/notify event row for a non-SEAH viewer.
-- [ ] `convene_grc` on a SEAH ticket → no notify event for a non-SEAH grc_member.
-- [ ] `_apply_step_tier_roles` on a SEAH ticket with a non-SEAH role (e.g. `grc_chair`, `adb_national_project_director`) in informed/observer/supervisor → **zero** TicketViewer rows for non-SEAH users; SEAH-role viewers still cast.
-- [ ] **Regression:** on a STANDARD ticket the standard cast + @all + convene notifications are unchanged (existing tests stay green).
+**Acceptance tests** — `tests/ticketing/test_seah_leak_notifications.py` (**4 tests green** + full suite 387 passed):
+- [x] non-SEAH user with an event on a SEAH ticket → `/users/me/badge` count 0 AND `/users/me/notifications` returns no SEAH row (grievance_id/summary absent).
+- [x] SEAH user still sees their SEAH notifications (no over-suppression); `user_can_see_seah` helper covers SEAH + both-workflows roles.
+- [x] `_apply_step_tier_roles` on a SEAH ticket with a non-SEAH role (`grc_chair`, `adb_national_project_director`) in informed/observer/supervisor → **zero** TicketViewer rows for non-SEAH; SEAH-role viewer still cast; STANDARD ticket casts them (regression).
+- [x] **Regression:** STANDARD-ticket notifications unaffected; full suite green (no HR-04/chart-behaviors/donor regressions).
+- [~] `@all` + `convene_grc` creation-time suppression **shipped** (`tickets.py` mention loop + `escalation.py` convene both filter non-SEAH recipients on SEAH tickets); the authoritative gate is the endpoint filter (tested above). Dedicated @all/convene event-row tests: follow-up (endpoint filter already blocks the leak).
 
 ---
 

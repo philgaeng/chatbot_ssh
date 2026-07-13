@@ -1364,6 +1364,13 @@ def perform_action(
                 elif mention != current_user.user_id:
                     notify_set.add(mention)
 
+            # R1 SEAH leak-proof: on a SEAH ticket, never plant a MENTION event (which carries
+            # the case's existence into the recipient's bell) for a user who can't see SEAH —
+            # covers a stray @mention or an @all that reaches a mis-cast non-SEAH participant.
+            if ticket.is_seah and notify_set:
+                from ticketing.services.chart_behaviors import user_can_see_seah
+                notify_set = {uid for uid in notify_set if user_can_see_seah(db, uid)}
+
             for target_uid in notify_set:
                 _add_event(
                     db, ticket, "MENTION",

@@ -28,6 +28,19 @@ def user_holds_seah_role(db: Session, user_id: str) -> bool:
     return bool(set(load_effective_role_keys(db, user_id)) & SEAH_ROLES)
 
 
+def user_can_see_seah(db: Session, user_id: str) -> bool:
+    """R1 SEAH-leak guard for **notification recipients** (arbitrary user_ids): True if the
+    user may see SEAH cases at all — a SEAH operational role OR a both-workflows oversight
+    role (``super_admin`` / ``adb_hq_exec``). Broader than :func:`user_holds_seah_role` so
+    a legitimately SEAH-cleared recipient is not over-suppressed; the mirror, per-user_id,
+    of ``CurrentUser.can_see_seah``. Use this before addressing any notification/@mention/
+    GRC-convene event about a ticket to a user other than the request user."""
+    from ticketing.models.user import BOTH_WORKFLOWS_ROLES, SEAH_ROLES
+    from ticketing.services.admin_access import load_effective_role_keys
+
+    return bool(set(load_effective_role_keys(db, user_id)) & (SEAH_ROLES | BOTH_WORKFLOWS_ROLES))
+
+
 def visible_report_user_ids(db: Session, user_id: str) -> set[str]:
     """Officers who are ``user_id``'s reports for **visibility** (doc 16 §5.3), via the org
     chart bounded by each of the viewer's position types' ``visibility_mode``:

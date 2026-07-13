@@ -1755,12 +1755,19 @@ def get_badge(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> NotificationBadgeResponse:
     from sqlalchemy import func
-    count = db.execute(
-        select(func.count(TicketEvent.event_id)).where(
+    stmt = (
+        select(func.count(TicketEvent.event_id))
+        .select_from(TicketEvent)
+        .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
+        .where(
             TicketEvent.assigned_to_user_id == current_user.user_id,
             TicketEvent.seen.is_(False),
         )
-    ).scalar_one()
+    )
+    # R1 SEAH leak: a non-SEAH officer must never see a SEAH case's existence, even as a count.
+    if not current_user.can_see_seah:
+        stmt = stmt.where(Ticket.is_seah.is_(False))
+    count = db.execute(stmt).scalar_one()
     return NotificationBadgeResponse(unseen_count=count)
 
 
@@ -1781,7 +1788,11 @@ def get_notifications(
     """
     from sqlalchemy import func
 
-    rows = db.execute(
+    # R1 SEAH leak: exclude SEAH-ticket events (grievance_id + summary would leak the case)
+    # unless the officer may see SEAH.
+    seah_ok = current_user.can_see_seah
+
+    rows_stmt = (
         select(TicketEvent, Ticket.grievance_id, Ticket.grievance_summary)
         .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
         .where(
@@ -1790,14 +1801,22 @@ def get_notifications(
         )
         .order_by(TicketEvent.created_at.asc())
         .limit(limit)
-    ).all()
-
-    total_count = db.execute(
-        select(func.count(TicketEvent.event_id)).where(
+    )
+    count_stmt = (
+        select(func.count(TicketEvent.event_id))
+        .select_from(TicketEvent)
+        .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
+        .where(
             TicketEvent.assigned_to_user_id == current_user.user_id,
             TicketEvent.seen.is_(False),
         )
-    ).scalar_one()
+    )
+    if not seah_ok:
+        rows_stmt = rows_stmt.where(Ticket.is_seah.is_(False))
+        count_stmt = count_stmt.where(Ticket.is_seah.is_(False))
+
+    rows = db.execute(rows_stmt).all()
+    total_count = db.execute(count_stmt).scalar_one()
 
     items = [
         NotificationItem(

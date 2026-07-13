@@ -157,17 +157,21 @@ def _apply_step_tier_roles(
     Called on both ticket creation (first step) and escalation (new step).
     Scoped to the ticket's org / location / project.
     """
-    from ticketing.models.user import DONOR_ROLES
+    from ticketing.models.user import BOTH_WORKFLOWS_ROLES, SEAH_ROLES
     from ticketing.models.workflow import WorkflowStep as _Step
 
     if not isinstance(step, _Step):
         return
 
-    # SEAH leak-proof (doc 13 §3 / OC-04 §5.6): donor tiers are never cast on a SEAH
-    # ticket — a donor must receive nothing that reveals a SEAH case. The donor
-    # last-step-informed guardrail applies to the standard track's final step only.
+    # R1/B2 SEAH leak-proof: on a SEAH ticket, cast ONLY SEAH-eligible roles — a WHITELIST
+    # (SEAH operational + both-workflows oversight), not a donor-only blacklist. A donor, GRC
+    # member, or ADB observer in a SEAH step's cast must receive nothing that reveals the
+    # case. Applies to ALL tiers (informed, observer, supervisor). On the standard track this
+    # is a no-op, so the donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6) is intact.
+    _seah_eligible = SEAH_ROLES | BOTH_WORKFLOWS_ROLES
+
     def _seah_suppressed(role_key: str) -> bool:
-        return bool(ticket.is_seah) and role_key in DONOR_ROLES
+        return bool(ticket.is_seah) and role_key not in _seah_eligible
 
     for role_key in (step.informed_roles or []):
         if _seah_suppressed(role_key):
@@ -200,7 +204,7 @@ def _apply_step_tier_roles(
 
     # Supervisor tier — use this step's configured supervisor_role field
     # (set in Settings → Workflows → step editor; maps to WorkflowStep.supervisor_role)
-    if step.supervisor_role:
+    if step.supervisor_role and not _seah_suppressed(step.supervisor_role):
         for uid in _scope_candidates(
             role_key=step.supervisor_role,
             organization_id=ticket.organization_id,
@@ -447,12 +451,19 @@ def convene_grc(
     events.append(convene_event)
 
     # Notify all GRC members (creates unseen events → badge++)
+    from ticketing.services.chart_behaviors import user_can_see_seah
+
     member_ids = get_grc_member_user_ids(
         ticket.organization_id, ticket.location_code, db
     )
+    notified = 0
     for member_id in member_ids:
         if member_id == convened_by_user_id:
             continue  # don't notify self
+        # R1 SEAH leak-proof: GRC members are standard roles — a non-SEAH member must not be
+        # notified of (and thereby learn of) a SEAH case.
+        if ticket.is_seah and not user_can_see_seah(db, member_id):
+            continue
         notif = _add_event(
             db, ticket, "GRC_HEARING_NOTIFICATION",
             step_id=ticket.current_step_id,
@@ -465,10 +476,11 @@ def convene_grc(
             summary_regen_required=False,
         )
         events.append(notif)
+        notified += 1
 
     logger.info(
         "GRC convened: ticket_id=%s notified %d members",
-        ticket.ticket_id, len(member_ids) - 1,
+        ticket.ticket_id, notified,
     )
     return events
 
