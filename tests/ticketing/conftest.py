@@ -144,6 +144,37 @@ def ctx(db):
         context.cleanup()
 
 
+# The demo seed staffs one L1 per Koshi district it touches — including a Jhapa L1
+# (l1-officer-2). Several assignment tests assert province-fallback or "my own officer is
+# the only local" behaviour that requires Jhapa to have NO *seeded* local L1. This opt-in
+# fixture removes only that scope for the test and restores it after, keeping the Morang L1
+# (the fallback target) intact. Tests that deliberately accept l1-officer-2 don't use it.
+SEEDED_JHAPA_L1 = "l1-officer-2@grm.local"
+
+
+@pytest.fixture
+def without_seeded_jhapa_l1(db):
+    rows = db.execute(
+        select(OfficerScope).where(
+            OfficerScope.user_id == SEEDED_JHAPA_L1,
+            OfficerScope.role_key == ROLE_L1,
+        )
+    ).scalars().all()
+    snapshot = [
+        {c.name: getattr(r, c.name) for c in OfficerScope.__table__.columns} for r in rows
+    ]
+    for r in rows:
+        db.delete(r)
+    db.flush()
+    try:
+        yield
+    finally:
+        if snapshot:
+            for data in snapshot:
+                db.add(OfficerScope(**data))
+            db.commit()
+
+
 @pytest.fixture
 def kl_road_project(db) -> Project:
     return db.execute(

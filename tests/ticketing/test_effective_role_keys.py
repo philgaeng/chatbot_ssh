@@ -42,9 +42,16 @@ def test_effective_role_keys_merges_user_roles_and_scopes(db):
     )
     db.commit()
 
-    keys = load_effective_role_keys(db, email)
-    assert "csc_officer" in keys
-    assert "site_safeguards_focal_person" in keys
+    try:
+        keys = load_effective_role_keys(db, email)
+        assert "csc_officer" in keys
+        assert "site_safeguards_focal_person" in keys
+    finally:
+        # Clean up committed rows — a leaked officer_scope pollutes the shared assignment pool.
+        import sqlalchemy as _sa
+        db.execute(_sa.delete(OfficerScope).where(OfficerScope.user_id == email))
+        db.execute(_sa.delete(UserRole).where(UserRole.user_id == email))
+        db.commit()
 
 
 def test_enrich_user_prefers_db_over_stale_jwt(db):
@@ -73,11 +80,16 @@ def test_enrich_user_prefers_db_over_stale_jwt(db):
     )
     db.commit()
 
-    user = CurrentUser(
-        user_id=email,
-        role_keys=["csc_officer"],
-        organization_id="NP_CTJ",
-    )
-    enrich_user(db, user)
-    assert "site_safeguards_focal_person" in user.role_keys
-    assert user.role_keys == load_effective_role_keys(db, email)
+    try:
+        user = CurrentUser(
+            user_id=email,
+            role_keys=["csc_officer"],
+            organization_id="NP_CTJ",
+        )
+        enrich_user(db, user)
+        assert "site_safeguards_focal_person" in user.role_keys
+        assert user.role_keys == load_effective_role_keys(db, email)
+    finally:
+        import sqlalchemy as _sa
+        db.execute(_sa.delete(OfficerScope).where(OfficerScope.user_id == email))
+        db.commit()

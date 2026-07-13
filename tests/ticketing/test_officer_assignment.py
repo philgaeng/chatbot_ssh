@@ -117,7 +117,7 @@ class TestWorkflowResolution:
 
 
 class TestGeographicScoping:
-    def test_province_fallback_when_no_local_l1(self, db):
+    def test_province_fallback_when_no_local_l1(self, db, without_seeded_jhapa_l1):
         """
         Real-world edge case (B-GR-20260519-KOJH-F6D0):
         Birtamod/Jhapa ticket, only Morang L1 in Koshi → Morang officer assigned.
@@ -132,7 +132,7 @@ class TestGeographicScoping:
         assert assigned in candidates
         assert assigned is not None
 
-    def test_district_officer_covers_municipality_via_includes_children(self, ctx):
+    def test_district_officer_covers_municipality_via_includes_children(self, ctx, without_seeded_jhapa_l1):
         """Officer at P1_JHA + includes_children matches P1_JHA_BIR (ancestor path)."""
         jhapa_officer = _uid("jhapa-l1")
         ctx.add_scope(
@@ -145,7 +145,7 @@ class TestGeographicScoping:
         )
         assert assigned == jhapa_officer
 
-    def test_local_district_excludes_cross_district_province_fallback(self, ctx):
+    def test_local_district_excludes_cross_district_province_fallback(self, ctx, without_seeded_jhapa_l1):
         """
         When a Jhapa-scoped L1 exists, Morang L1 must NOT enter via province fallback.
         """
@@ -205,10 +205,17 @@ class TestNoMatchAndExclusions:
             ROLE_L1, ORG_DOR, LOC_P2_PAR_BIR, PROJECT_KL_ROAD, db
         ) is None
 
-    def test_simulated_create_falls_back_to_supervisor_when_no_l1(self, db):
-        """Madhesh ticket with no L1 → workflow supervisor (L2) is assigned."""
-        assigned = _simulate_create_assignment(db, location_code=LOC_P2_PAR_BIR)
-        assert assigned is not None
+    def test_simulated_create_falls_back_to_supervisor_when_no_l1(self, ctx):
+        """Madhesh ticket with no L1 → workflow supervisor (L2) is assigned. The seed's L2
+        covers Province 1 only, so stage a supervisor covering the P2 location (self-
+        contained, not dependent on incidental seed coverage)."""
+        supervisor = _uid("p2-supervisor")
+        ctx.add_scope(
+            supervisor, role_key="pd_piu_safeguards_focal",
+            location_code=LOC_P2_PAR_BIR, project_code=PROJECT_KL_ROAD,
+        )
+        assigned = _simulate_create_assignment(ctx.db, location_code=LOC_P2_PAR_BIR)
+        assert assigned == supervisor
 
     def test_organization_does_not_exclude_matching_jurisdiction(self, ctx):
         """Assignment is by role + geography/project — not officer employer org."""
@@ -255,7 +262,7 @@ class TestNoMatchAndExclusions:
 
 
 class TestLoadBalancing:
-    def test_least_loaded_among_two_officers_same_district(self, ctx):
+    def test_least_loaded_among_two_officers_same_district(self, ctx, without_seeded_jhapa_l1):
         busy = _uid("busy-l1")
         idle = _uid("idle-l1")
         for uid in (busy, idle):
@@ -272,7 +279,7 @@ class TestLoadBalancing:
         )
         assert assigned == idle
 
-    def test_tie_break_is_stable_when_load_equal(self, ctx):
+    def test_tie_break_is_stable_when_load_equal(self, ctx, without_seeded_jhapa_l1):
         """When load is equal, the same officer is picked on repeated calls (SQL row order)."""
         a = "test-tie-officer-aaa-fixed"
         b = "test-tie-officer-bbb-fixed"
@@ -427,7 +434,7 @@ class TestCountryFallback:
         assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
         assert assigned != national
 
-    def test_country_fallback_not_used_when_local_district_exists(self, ctx):
+    def test_country_fallback_not_used_when_local_district_exists(self, ctx, without_seeded_jhapa_l1):
         national = _uid("national-fallback")
         jhapa = _uid("jhapa-local")
         ctx.add_scope(
@@ -467,7 +474,7 @@ class TestEndToEndSimulation:
         assigned = _simulate_create_assignment(db, location_code=LOC_P1_JHA_BIR)
         assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
 
-    def test_full_intake_with_local_jhapa_officer(self, ctx):
+    def test_full_intake_with_local_jhapa_officer(self, ctx, without_seeded_jhapa_l1):
         jhapa_officer = _uid("jhapa-e2e")
         ctx.add_scope(
             jhapa_officer,

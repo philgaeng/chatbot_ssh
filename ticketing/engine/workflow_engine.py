@@ -180,7 +180,15 @@ def resolve_workflow(
             )
             if wf:
                 return wf
-            for wf_id in (project.standard_workflow_id, project.seah_workflow_id):
+            # Legacy fallback must respect the track: a SEAH grievance resolves to the SEAH
+            # workflow first, a standard one to the standard workflow first. (Was is_seah-blind
+            # — always returned standard first — latent while project_workflows had bindings.)
+            legacy_order = (
+                (project.seah_workflow_id, project.standard_workflow_id)
+                if is_seah
+                else (project.standard_workflow_id, project.seah_workflow_id)
+            )
+            for wf_id in legacy_order:
                 if wf_id:
                     legacy = db.get(WorkflowDefinition, wf_id)
                     if legacy:

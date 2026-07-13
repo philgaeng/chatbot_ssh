@@ -61,7 +61,8 @@ def test_enrich_user_grants_org_admin_is_admin():
 def test_org_admin_can_get_and_post_scopes():
     db = SessionLocal()
     try:
-        target = "scope.target@grm.local"
+        # Unique target so a committed scope from a prior run doesn't collide (409).
+        target = f"scope-target-{uuid.uuid4().hex[:8]}@grm.local"
         org_admin = "country-admin@grm.local"
 
         def override_user():
@@ -94,6 +95,12 @@ def test_org_admin_can_get_and_post_scopes():
         assert post_res.status_code != 403, post_res.text
     finally:
         app.dependency_overrides.clear()
+        import sqlalchemy as _sa
+
+        from ticketing.models.officer_scope import OfficerScope
+
+        db.execute(_sa.delete(OfficerScope).where(OfficerScope.user_id == target))
+        db.commit()
         db.close()
 
 

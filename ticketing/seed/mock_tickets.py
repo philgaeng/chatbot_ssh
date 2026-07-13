@@ -663,29 +663,33 @@ def seed_all(reset: bool = False) -> None:
     db = SessionLocal()
     try:
         if reset:
-            logger.info("Reset mode: truncating all ticketing.* rows (except imported geodata)...")
-            # Future-proof: TRUNCATE every ticketing table dynamically rather than hand-listing
-            # a subset that goes stale as migrations add new FK-referencing tables (e.g. the
-            # old list deleted workflow_definitions but not project_workflows → FK violation).
-            # CASCADE covers any dependency; RESTART IDENTITY resets sequences. The imported
-            # geodata (locations / countries / translations / level defs) and the alembic
-            # version table are preserved — re-importing 800+ locations would be wasteful.
+            logger.info("Reset mode: truncating transactional data (structural data preserved)...")
+            # Wipe only the *transactional / assignment* data that accumulates and is
+            # re-seeded (tickets + their children via CASCADE, officer/admin scopes, roster
+            # roles, officer positions). PRESERVE all STRUCTURAL data — workflows, projects,
+            # packages, project_workflows, organizations, roles, position_types — plus the
+            # imported geodata: the seeders upsert those idempotently, and several are
+            # *migration-seeded* (packages, project_workflows) with no seeder to re-create
+            # them, so a blanket TRUNCATE would leave them permanently empty. CASCADE covers
+            # ticket child tables; RESTART IDENTITY resets sequences.
             from sqlalchemy import text as _sql_text
 
-            keep = {
-                "locations", "countries", "location_translations", "location_level_defs",
-                "alembic_version",
-            }
-            all_tables = db.execute(
-                _sql_text("SELECT tablename FROM pg_tables WHERE schemaname = 'ticketing'")
-            ).scalars().all()
-            to_truncate = [f"ticketing.{t}" for t in all_tables if t not in keep]
-            if to_truncate:
-                db.execute(
-                    _sql_text("TRUNCATE TABLE " + ", ".join(to_truncate) + " RESTART IDENTITY CASCADE")
+            transactional = [
+                "tickets",           # → ticket_events / tasks / viewers / files / episodes (CASCADE)
+                "officer_scopes",
+                "admin_scopes",
+                "user_roles",
+                "officer_positions",
+            ]
+            db.execute(
+                _sql_text(
+                    "TRUNCATE TABLE "
+                    + ", ".join(f"ticketing.{t}" for t in transactional)
+                    + " RESTART IDENTITY CASCADE"
                 )
+            )
             db.commit()
-            logger.info("Reset complete (truncated %d tables).", len(to_truncate))
+            logger.info("Reset complete (transactional data wiped; structure preserved).")
 
         # Seed workflows (each is idempotent)
         seed_standard(db)
