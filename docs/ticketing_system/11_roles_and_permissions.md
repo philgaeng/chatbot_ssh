@@ -1,6 +1,6 @@
 # Roles and permissions
 
-**Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation:** partial — the 4-tier ladder + org-subtree scope + org-scoped catalog are **unbuilt (Handover B SH-7)**; see §8.  
+**Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation: as-built** — the 4-tier ladder + org-subtree scope + org-scoped catalog shipped in SH-7 (migration `q7s9u1w3`); `country_admin` removed from backend **and** frontend. See §8.  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [14_platform_settings.md](14_platform_settings.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [13_projects_and_packages.md](13_projects_and_packages.md)
 
 This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project actor roles** (`donor`, `contractor`, …) in `ticketing.project_actor_roles`; those are configured per project in [13_projects_and_packages.md](13_projects_and_packages.md).
@@ -373,7 +373,7 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | Item | Status |
 |------|--------|
 | Admin matrix in docs | ✅ 4 keys (`super_admin` / `org_admin` / `project_admin` / `officer_admin`); `workflow_track` on scope |
-| **4-tier ladder in code** (`org_admin`/`officer_admin` keys, org-subtree scope, org-scoped catalog) | ⏳ **Unbuilt — Handover B SH-7.** Code still seeds the old `country_admin`/`project_admin` (`grm_role_catalog.py`, `admin_access.py`); rename + subtree scope land with SH-7 |
+| **4-tier ladder in code** (`org_admin`/`officer_admin` keys, org-subtree scope, org-scoped catalog) | ✅ **Built — SH-7** (migration `q7s9u1w3`). `country_admin` retired → `org_admin` across seeds/`admin_access.py`/tests **and the frontend** (`AuthProvider`, `AdminAccessTab`, `lib/api.ts`); `officer_admin` added; org-subtree scope via `descendant_org_ids`; org-scoped catalog (`owner_organization_id` on roles/workflows/position-types + availability filter). `AdminScopeCreate` now rejects `country_admin` |
 | `workflow_track` on admin scope + API enforcement | ✅ Migration `a2b4c6d8`; `admin_access.py` + router guards (flat scope; SH-7 generalizes to subtree) |
 | `POST /roles` create + archetype permissions UI | ✅ API + Roles tab wizard |
 | Filter operational vs admin in Roles API/UI | ✅ `GET /roles?kind=operational` |

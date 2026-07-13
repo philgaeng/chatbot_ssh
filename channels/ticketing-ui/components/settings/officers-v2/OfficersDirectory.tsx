@@ -29,6 +29,9 @@ import {
   listOfficerPositions,
   endOfficerPosition,
   resendOfficerInvite,
+  deactivateOfficer,
+  reactivateOfficer,
+  getOfficerOpenCases,
   type OfficerRosterEntry,
   type GrmRole,
   type OrganizationItem,
@@ -73,6 +76,43 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [manageOfficer, setManageOfficer] = useState<OfficerRosterEntry | null>(null);
+  const [lifecycleMsg, setLifecycleMsg] = useState<string>("");
+
+  // Frame-11: history-preserving deactivate with the open-case guard (backend now shipped).
+  async function handleDeactivate(o: OfficerRosterEntry) {
+    setMenuFor(null);
+    setLifecycleMsg("");
+    if (!confirm(`Deactivate ${o.email ?? o.user_id}? They keep their history but lose access until reactivated.`)) return;
+    try {
+      await deactivateOfficer(o.user_id);
+      setLifecycleMsg(`${o.email ?? o.user_id} was deactivated.`);
+      void reload();
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (/409|open case/i.test(msg)) {
+        try {
+          const oc = await getOfficerOpenCases(o.user_id);
+          setLifecycleMsg(`Cannot deactivate: ${oc.open_count} open case(s) must be reassigned first.`);
+        } catch {
+          setLifecycleMsg("Cannot deactivate while the officer owns open cases — reassign them first.");
+        }
+      } else {
+        setLifecycleMsg(msg);
+      }
+    }
+  }
+
+  async function handleReactivate(o: OfficerRosterEntry) {
+    setMenuFor(null);
+    setLifecycleMsg("");
+    try {
+      await reactivateOfficer(o.user_id);
+      setLifecycleMsg(`${o.email ?? o.user_id} was reactivated.`);
+      void reload();
+    } catch (e: unknown) {
+      setLifecycleMsg(e instanceof Error ? e.message : String(e));
+    }
+  }
 
   async function reload() {
     try {
@@ -218,6 +258,11 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
   return (
     <div className="space-y-3">
+      {lifecycleMsg && (
+        <div className="rounded border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+          {lifecycleMsg}
+        </div>
+      )}
       {/* Search + filters (client-side for now — see file header TODO) */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-[16rem] flex-1 items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 py-1.5">
@@ -357,18 +402,25 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
                                 >
                                   Manage
                                 </button>
-                                {/* No soft-deactivate endpoint yet (frame-11 §6). Disabled on purpose;
-                                    NOT wired to the hard deleteOfficer (would orphan open cases).
-                                    TODO: enable once a history-preserving deactivate + open-case
-                                    guard ships. */}
-                                <button
-                                  type="button"
-                                  disabled
-                                  title="Backend pending: history-preserving deactivate with an open-case guard isn't available yet."
-                                  className="block w-full cursor-not-allowed px-3 py-1.5 text-left text-gray-400"
-                                >
-                                  Deactivate
-                                </button>
+                                {/* Frame-11: history-preserving deactivate with the open-case
+                                    guard (409 → reassign first). Reactivate restores access. */}
+                                {o.is_active === false ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleReactivate(o)}
+                                    className="block w-full px-3 py-1.5 text-left text-green-700 hover:bg-green-50"
+                                  >
+                                    Reactivate
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleDeactivate(o)}
+                                    className="block w-full px-3 py-1.5 text-left text-red-700 hover:bg-red-50"
+                                  >
+                                    Deactivate
+                                  </button>
+                                )}
                               </div>
                             </>
                           ) : null}

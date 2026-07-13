@@ -1,6 +1,6 @@
 # Org chart, positions, and the position→role matrix
 
-**Status:** Agreed design (July 2026) — not yet implemented.
+**Status:** **As-built (July 2026)** — implemented in the `2026-07_org_chart_positions` sprint. Org forest + `org_category` + territory (migration `m3o5q7s9`, `ticketing/services/org_tree.py`, `ticketing/api/routers/locations.py` org CRUD + CSV import + `descendant_org_ids` CTE). Position types + matrix (migration `o5q7s9u1`, `ticketing/api/routers/position_types.py`, incl. `GET /position-types/{id}/holders`). Officer positions + invite pre-fill + per-`(project,step)` supervisor resolver (migration `s9u1w3y5`, `ticketing/api/routers/officer_positions.py`, `ticketing/services/supervisor.py`). Chart behaviours + SEAH leak-proofing (`ticketing/services/chart_behaviors.py`, `ticketing/engine/escalation.py`). 4-tier admin ladder + org-scoped catalog (migration `q7s9u1w3`, `ticketing/services/admin_access.py`). Officer lifecycle (migration `w3y5a7c9`). UI: `channels/ticketing-ui/components/settings/org/` (tree editor + position types) + `officers-v2/` (invite-as-result). §5.6 donor guardrail + project participants: see [doc 13](13_projects_and_packages.md) (migration `u1w3y5a7`, `ticketing/services/donor_guardrail.py`).
 **Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [12_workflows_configuration.md](12_workflows_configuration.md)
 
 ---

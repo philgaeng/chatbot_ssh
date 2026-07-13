@@ -72,9 +72,11 @@ All-Opus sprint (high reasoning effort). Rationale in [`agents/README.md`](agent
 
 ## Definition of done (sprint level)
 
-- [ ] All 6 tickets ✅ in PROGRESS.md with tests passing in CI
-- [ ] CI green on the integration branch (uses the HR-05 gate once it lands)
-- [ ] Authz matrix covers every new endpoint × persona; SEAH-leak suite green
-- [ ] `docs/ticketing_system/16_org_chart_and_positions.md` status flipped from "Agreed design — not yet implemented" to as-built, citing the migrations/routers that prove it
-- [ ] The four §10 open questions in doc 16 resolved and recorded (Nepali columns done; vacancy/SEAH-author/history decisions logged)
-- [ ] OC-06 UX evaluation published under `docs/ticketing_system/ui/` and its actionable findings triaged into OC-05 or a backlog note
+- [x] All tickets ✅ in PROGRESS.md with tests passing (383 passed / 5 skipped in Docker) — see [`SPRINT-SUMMARY.md`](SPRINT-SUMMARY.md)
+- [ ] CI green on the integration branch (uses the HR-05 gate once it lands) — local suite green; CI note: `make wsl-seed-full` before `test-ticketing`
+- [x] Authz matrix covers every new endpoint × persona; **SEAH-leak suite green** (donor-suppression + supervisor-notify)
+- [x] `docs/ticketing_system/16_org_chart_and_positions.md` status flipped to as-built, citing the migrations/routers
+- [x] doc 16 Nepali columns done (`display_name_ne`); vacancy/SEAH-author/history decisions logged in PROGRESS deviations
+- [x] OC-06 UX evaluation published under `docs/ticketing_system/ui/` and findings triaged into the RB tickets + backlog
+
+**Open for the devil's-advocate round** (see [`SPRINT-SUMMARY.md`](SPRINT-SUMMARY.md) "Deliberately deferred"): the legacy actor-role contract migration, org merge, the remaining Workflows/Platform `page.tsx` extraction, and a browser pass of every Phase-2 surface.
