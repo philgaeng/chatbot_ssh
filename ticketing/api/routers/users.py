@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -743,20 +743,34 @@ class OfficerRosterEntry(BaseModel):
     # roster/directory, in place of raw role keys. Descriptive; no access decision.
     positions: list[str] = []
     onboarding_status: str = "active"  # invited | active
+    # Frame-11 (officer lifecycle): False = soft-deactivated (history kept, access revoked).
+    is_active: bool = True
 
 
-@router.get(
-    "/users/roster",
-    response_model=list[OfficerRosterEntry],
-    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
-)
-def list_officer_roster(
-    db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
-) -> list[OfficerRosterEntry]:
+class OfficerRosterPage(BaseModel):
+    """Paginated roster envelope for the Settings directory ("1–N of total")."""
+
+    items: list[OfficerRosterEntry]
+    total: int
+    limit: int
+    offset: int
+
+
+def _roster_matches_query(entry: OfficerRosterEntry, q: str) -> bool:
+    needle = q.strip().lower()
+    if not needle:
+        return True
+    haystack = " ".join(
+        v for v in (entry.user_id, entry.email or "", entry.display_name) if v
+    ).lower()
+    return needle in haystack
+
+
+def _build_officer_roster(db: Session) -> list[OfficerRosterEntry]:
     """
     Admin roster: merge Keycloak officer accounts with ticketing.user_roles /
     officer_scopes. user_id is always the Keycloak email when auth is enabled.
+    Returns the full, sorted list; callers apply search / pagination.
     """
     from ticketing.services.keycloak_users import list_grm_officer_profiles
 
@@ -863,6 +877,16 @@ def list_officer_roster(
         for uid, disp, org_id in pos_rows:
             positions_by[uid].append(f"{disp} · {org_id}")
 
+    # Frame-11 — soft-deactivation flag per officer (absent row = active by default).
+    active_map: dict[str, bool] = {}
+    if order:
+        active_rows = db.execute(
+            select(OfficerOnboarding.user_id, OfficerOnboarding.is_active).where(
+                OfficerOnboarding.user_id.in_(order)
+            )
+        ).all()
+        active_map = {uid: bool(active) for uid, active in active_rows}
+
     def _entry(uid: str) -> OfficerRosterEntry:
         kc = kc_profiles.get(uid.lower()) if "@" in uid else None
         effective_keys: list[str] = []
@@ -888,6 +912,7 @@ def list_officer_roster(
             scopes=scope_detail_by.get(uid, []),
             positions=positions_by.get(uid, []),
             onboarding_status=officer_roster_onboarding_status(db, uid),
+            is_active=active_map.get(uid, True),
         )
 
     # Keycloak order first (alphabetic by display name), then legacy non-email ids.
@@ -902,6 +927,59 @@ def list_officer_roster(
     other_ids.sort()
 
     return [_entry(uid) for uid in email_ids + other_ids]
+
+
+@router.get(
+    "/users/roster",
+    response_model=list[OfficerRosterEntry],
+    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
+)
+def list_officer_roster(
+    response: Response,
+    q: Optional[str] = Query(None, description="Case-insensitive match on user_id / email / name"),
+    limit: Optional[int] = Query(None, ge=1, le=200, description="Page size (omit = all)"),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> list[OfficerRosterEntry]:
+    """
+    Backward-compatible roster: with no query params it returns the full bare list
+    exactly as before. Optional `q` / `limit` / `offset` filter + paginate; the total
+    (pre-pagination) match count is always returned in the `X-Total-Count` header so
+    existing callers that parse the JSON list keep working unchanged.
+    """
+    entries = _build_officer_roster(db)
+    if q:
+        entries = [e for e in entries if _roster_matches_query(e, q)]
+    response.headers["X-Total-Count"] = str(len(entries))
+    if limit is None:
+        return entries[offset:] if offset else entries
+    return entries[offset : offset + limit]
+
+
+@router.get(
+    "/users/roster/search",
+    response_model=OfficerRosterPage,
+    summary="Paginated officer roster ({items, total, limit, offset}) for the directory",
+)
+def search_officer_roster(
+    q: Optional[str] = Query(None, description="Case-insensitive match on user_id / email / name"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> OfficerRosterPage:
+    """Structured pagination envelope so the UI can show "1–20 of N"."""
+    entries = _build_officer_roster(db)
+    if q:
+        entries = [e for e in entries if _roster_matches_query(e, q)]
+    total = len(entries)
+    return OfficerRosterPage(
+        items=entries[offset : offset + limit],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -1498,7 +1576,22 @@ def delete_officer(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ) -> None:
-    from ticketing.services.officer_admin import keycloak_delete_user, log_admin_audit
+    from ticketing.services.officer_admin import (
+        keycloak_delete_user,
+        log_admin_audit,
+        open_cases_for_officer,
+    )
+
+    # Open-case guard (Frame-11): never orphan tickets on hard delete — block until reassigned.
+    open_cases = open_cases_for_officer(db, user_id)
+    if open_cases:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Officer still owns open cases — reassign them first",
+                "open_count": len(open_cases),
+            },
+        )
 
     roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
     scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
@@ -1522,6 +1615,132 @@ def delete_officer(
         payload={"roles_removed": len(roles), "scopes_removed": len(scopes)},
     )
     db.commit()
+
+
+# ── Officer lifecycle: open-case guard + soft deactivate/reactivate ───────────
+
+class OpenCaseBrief(BaseModel):
+    ticket_id: str
+    grievance_id: str
+    status: str
+
+
+class OpenCasesResponse(BaseModel):
+    user_id: str
+    open_count: int
+    tickets: list[OpenCaseBrief]
+
+
+class OfficerActiveResponse(BaseModel):
+    ok: bool
+    user_id: str
+    is_active: bool
+    onboarding_status: str
+
+
+@router.get(
+    "/users/{user_id}/open-cases",
+    response_model=OpenCasesResponse,
+    summary="Open/assigned tickets still owned by an officer (reassign-before-remove guard)",
+)
+def get_officer_open_cases(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> OpenCasesResponse:
+    # Officers can see their own open cases; admins can see any.
+    if user_id != current_user.user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    from ticketing.services.officer_admin import open_cases_for_officer
+
+    rows = open_cases_for_officer(db, user_id)
+    return OpenCasesResponse(
+        user_id=user_id,
+        open_count=len(rows),
+        tickets=[
+            OpenCaseBrief(ticket_id=tid, grievance_id=gid, status=sc)
+            for tid, gid, sc in rows
+        ],
+    )
+
+
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=OfficerActiveResponse,
+    summary="Soft-deactivate an officer's GRM access (blocks if open cases remain)",
+)
+def deactivate_officer(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerActiveResponse:
+    from ticketing.services.officer_admin import (
+        log_admin_audit,
+        officer_exists_in_db,
+        open_cases_for_officer,
+        set_officer_active,
+    )
+
+    if not officer_exists_in_db(db, user_id):
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    open_cases = open_cases_for_officer(db, user_id)
+    if open_cases:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Officer still owns open cases — reassign them first",
+                "open_count": len(open_cases),
+            },
+        )
+
+    ob = set_officer_active(db, user_id, False)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.deactivate",
+        target_user_id=user_id,
+        payload={},
+    )
+    db.commit()
+    db.refresh(ob)
+    return OfficerActiveResponse(
+        ok=True, user_id=user_id, is_active=ob.is_active, onboarding_status=ob.status
+    )
+
+
+@router.post(
+    "/users/{user_id}/reactivate",
+    response_model=OfficerActiveResponse,
+    summary="Restore a soft-deactivated officer's GRM access",
+)
+def reactivate_officer(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerActiveResponse:
+    from ticketing.services.officer_admin import (
+        log_admin_audit,
+        officer_exists_in_db,
+        set_officer_active,
+    )
+
+    if not officer_exists_in_db(db, user_id):
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    ob = set_officer_active(db, user_id, True)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.reactivate",
+        target_user_id=user_id,
+        payload={},
+    )
+    db.commit()
+    db.refresh(ob)
+    return OfficerActiveResponse(
+        ok=True, user_id=user_id, is_active=ob.is_active, onboarding_status=ob.status
+    )
 
 
 # ── Notification badge ────────────────────────────────────────────────────────

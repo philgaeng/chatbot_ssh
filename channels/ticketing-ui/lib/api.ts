@@ -901,10 +901,64 @@ export interface OfficerRosterEntry {
   positions?: string[];
   /** invited until Keycloak webhook confirms password update */
   onboarding_status?: string;
+  /** Frame-11: soft-deactivated officers keep history but lose access. */
+  is_active?: boolean;
 }
 
 export function listOfficerRoster(): Promise<OfficerRosterEntry[]> {
   return apiFetch<OfficerRosterEntry[]>("/api/v1/users/roster");
+}
+
+// ── Officer directory search + lifecycle (Frame 11) ───────────────────────────
+
+export interface OfficerRosterPage {
+  items: OfficerRosterEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function searchOfficerRoster(opts?: {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<OfficerRosterPage> {
+  const p = new URLSearchParams();
+  if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
+  if (opts?.limit != null) p.set("limit", String(opts.limit));
+  if (opts?.offset != null) p.set("offset", String(opts.offset));
+  return apiFetch<OfficerRosterPage>(`/api/v1/users/roster/search?${p}`);
+}
+
+export interface OfficerOpenCases {
+  user_id: string;
+  open_count: number;
+  tickets: { ticket_id: string; grievance_id: string; status: string }[];
+}
+
+export function getOfficerOpenCases(userId: string): Promise<OfficerOpenCases> {
+  return apiFetch<OfficerOpenCases>(`/api/v1/users/${encodeURIComponent(userId)}/open-cases`);
+}
+
+export interface OfficerLifecycleResult {
+  ok: boolean;
+  user_id: string;
+  is_active: boolean;
+  onboarding_status?: string | null;
+}
+
+export function deactivateOfficer(userId: string): Promise<OfficerLifecycleResult> {
+  return apiFetch<OfficerLifecycleResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/deactivate`,
+    { method: "POST" },
+  );
+}
+
+export function reactivateOfficer(userId: string): Promise<OfficerLifecycleResult> {
+  return apiFetch<OfficerLifecycleResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/reactivate`,
+    { method: "POST" },
+  );
 }
 
 // ── Position types + position→role matrix (OC-02, doc 16 §3.2/§9) ─────────────
@@ -1934,14 +1988,33 @@ export interface OrganizationUpdate {
 
 export function listOrganizations(
   country?: string,
-  opts?: { rootId?: string; tree?: boolean },
+  opts?: { rootId?: string; tree?: boolean; q?: string },
 ): Promise<OrganizationItem[]> {
   const p = new URLSearchParams();
   if (country) p.set("country", country);
   p.set("active_only", "false");
   if (opts?.rootId) p.set("root_id", opts.rootId);
   if (opts?.tree) p.set("tree", "true");
+  if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
   return apiFetch<OrganizationItem[]>(`/api/v1/organizations?${p}`);
+}
+
+/** Frame-12 aggregated delete-impact preview (every blocking reference in one call). */
+export interface OrgDeleteImpact {
+  organization_id: string;
+  child_count: number;
+  ticket_count: number;
+  role_count: number;
+  scope_count: number;
+  position_count: number;
+  workflow_assignment_count: number;
+  package_actor_count: number;
+  project_actor_count: number;
+  deletable: boolean;
+}
+
+export function getOrganizationDeleteImpact(orgId: string): Promise<OrgDeleteImpact> {
+  return apiFetch<OrgDeleteImpact>(`/api/v1/organizations/${orgId}/delete-impact`);
 }
 
 export function createOrganization(payload: OrganizationCreate): Promise<OrganizationItem> {

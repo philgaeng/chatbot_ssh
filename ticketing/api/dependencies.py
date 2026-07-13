@@ -251,6 +251,15 @@ def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
             user.role_keys = effective
         elif not user.role_keys:
             user.role_keys = load_user_role_keys(db, user.user_id)
+    # Frame-11 (officer lifecycle): a soft-deactivated officer keeps their history but
+    # loses ALL GRM access — strip operational roles and admin scopes at the choke point
+    # every authenticated request passes through.
+    if user.user_id:
+        from ticketing.services.officer_admin import officer_is_active
+
+        if not officer_is_active(db, user.user_id):
+            user.role_keys = []
+            user.admin_scopes = []
     return user
 
 

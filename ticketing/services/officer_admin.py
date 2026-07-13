@@ -727,3 +727,108 @@ def keycloak_delete_user(user_id: str) -> bool:
         return False
     admin.delete_user(kc_user["id"])
     return True
+
+
+def keycloak_set_user_enabled(user_id: str, enabled: bool) -> bool:
+    """Enable/disable the realm user (soft deactivate). Returns True if Keycloak changed."""
+    if not keycloak_configured():
+        return False
+    admin = _keycloak_admin()
+    kc_user = _keycloak_find_user(admin, user_id)
+    if not kc_user:
+        return False
+    admin.update_user(user_id=kc_user["id"], payload={"enabled": bool(enabled)})
+    return True
+
+
+# ── Frame-11: officer soft-deactivation lifecycle ──────────────────────────────
+
+def _lifecycle_user_key(user_id: str) -> str:
+    """Normalize an officer id for the officer_onboarding PK (lowercase emails)."""
+    uid = (user_id or "").strip()
+    return uid.lower() if "@" in uid else uid
+
+
+def officer_exists_in_db(db: Session, user_id: str) -> bool:
+    """True when the officer has any GRM footprint (roster / scope / admin / onboarding)."""
+    from ticketing.models.admin_scope import AdminScope
+
+    normalized = _lifecycle_user_key(user_id)
+    if db.get(OfficerOnboarding, normalized):
+        return True
+    checks = (
+        select(UserRole.user_id).where(func.lower(UserRole.user_id) == normalized).limit(1),
+        select(OfficerScope.user_id).where(func.lower(OfficerScope.user_id) == normalized).limit(1),
+        select(AdminScope.user_id).where(func.lower(AdminScope.user_id) == normalized).limit(1),
+    )
+    return any(db.execute(stmt).scalar_one_or_none() is not None for stmt in checks)
+
+
+def officer_is_active(db: Session, user_id: str) -> bool:
+    """
+    True unless the officer has been soft-deactivated.
+
+    Absence of an officer_onboarding row means active by default (legacy / seed officers
+    predate the lifecycle flag).
+    """
+    ob = db.get(OfficerOnboarding, _lifecycle_user_key(user_id))
+    if ob is None:
+        return True
+    return bool(ob.is_active)
+
+
+def set_officer_active(db: Session, user_id: str, active: bool) -> OfficerOnboarding:
+    """
+    Flip the officer's GRM access flag (soft deactivate / reactivate).
+
+    Keeps user_roles / officer_scopes / ticket history intact and preserves the
+    officer_onboarding `status` (invited|active). Best-effort disables/enables the
+    Keycloak account when the auth stack is configured.
+    """
+    from datetime import datetime, timezone
+
+    normalized = _lifecycle_user_key(user_id)
+    now = datetime.now(timezone.utc)
+    ob = db.get(OfficerOnboarding, normalized)
+    if ob is None:
+        ob = OfficerOnboarding(
+            user_id=normalized,
+            status="active",
+            is_active=active,
+            deactivated_at=None if active else now,
+            updated_at=now,
+        )
+        db.add(ob)
+    else:
+        ob.is_active = active
+        ob.deactivated_at = None if active else now
+        ob.updated_at = now
+
+    try:
+        keycloak_set_user_enabled(normalized, active)
+    except Exception as exc:  # best-effort — DB flag is the source of truth
+        logger.warning("Keycloak enable=%s skipped for %s: %s", active, normalized, exc)
+    return ob
+
+
+def open_cases_for_officer(db: Session, user_id: str) -> list[tuple[str, str, str]]:
+    """
+    Open (non-deleted, non-terminal) tickets still assigned to this officer.
+
+    Returns [(ticket_id, grievance_id, status_code)] — used by the deactivate/delete
+    open-case guard so the UI can drive "reassign N cases first".
+    """
+    from ticketing.models.ticket import Ticket
+    from ticketing.services.archiving import RESOLVED_STATUSES
+
+    normalized = (user_id or "").strip()
+    stmt = select(Ticket.ticket_id, Ticket.grievance_id, Ticket.status_code).where(
+        Ticket.is_deleted.is_(False),
+        Ticket.status_code.notin_(tuple(RESOLVED_STATUSES)),
+    )
+    if "@" in normalized:
+        stmt = stmt.where(func.lower(Ticket.assigned_to_user_id) == normalized.lower())
+    else:
+        stmt = stmt.where(Ticket.assigned_to_user_id == normalized)
+    rows = db.execute(stmt.order_by(Ticket.created_at)).all()
+    return [(tid, gid, sc) for tid, gid, sc in rows]

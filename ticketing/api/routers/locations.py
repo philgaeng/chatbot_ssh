@@ -348,10 +348,14 @@ def list_organizations(
     tree: bool = Query(
         False, description="Order parents-before-children (depth-first) for tree rendering."
     ),
+    q: str | None = Query(
+        None, description="Case-insensitive search on id / name / Nepali name (Frame 12 at scale)."
+    ),
     db: Session = Depends(get_db),
     _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
-    """List organizations. ``root_id`` filters to a subtree; ``tree`` orders for rendering."""
+    """List organizations. ``root_id`` filters to a subtree; ``tree`` orders for rendering;
+    ``q`` server-side searches id/name/display_name_ne."""
     stmt = select(Organization)
     if country:
         stmt = stmt.where(Organization.country_code == country)
@@ -362,6 +366,15 @@ def list_organizations(
         if not subtree:
             return []
         stmt = stmt.where(Organization.organization_id.in_(subtree))
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Organization.organization_id).like(like),
+                func.lower(Organization.name).like(like),
+                func.lower(func.coalesce(Organization.display_name_ne, "")).like(like),
+            )
+        )
     stmt = stmt.order_by(Organization.organization_id)
     orgs = list(db.execute(stmt).scalars().all())
     if tree:
@@ -807,6 +820,60 @@ def delete_organization(
 
     db.delete(org)
     db.commit()
+
+
+class OrgDeleteImpact(BaseModel):
+    organization_id: str
+    child_count: int
+    ticket_count: int
+    role_count: int
+    scope_count: int
+    position_count: int
+    workflow_assignment_count: int
+    package_actor_count: int
+    project_actor_count: int
+    deletable: bool
+
+
+@router.get("/organizations/{organization_id}/delete-impact", response_model=OrgDeleteImpact)
+def organization_delete_impact(
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Aggregated delete-impact preview (Frame 12): every reference that blocks a delete,
+    in one call, so the UI shows the combined "N children / N projects / N officers / N
+    cases" line instead of only the first blocking guard the DELETE returns."""
+    from ticketing.models.officer_position import OfficerPosition
+
+    if not db.get(Organization, organization_id):
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    def _count(model, col) -> int:
+        return db.scalar(select(func.count()).select_from(model).where(col == organization_id)) or 0
+
+    child = _count(Organization, Organization.parent_organization_id)
+    tickets = _count(Ticket, Ticket.organization_id)
+    roles = _count(UserRole, UserRole.organization_id)
+    scopes = _count(OfficerScope, OfficerScope.organization_id)
+    positions = _count(OfficerPosition, OfficerPosition.organization_id)
+    assigns = _count(WorkflowAssignment, WorkflowAssignment.organization_id)
+    pkgs = _count(PackageOrganization, PackageOrganization.organization_id)
+    projs = _count(ProjectOrganization, ProjectOrganization.organization_id)
+    return OrgDeleteImpact(
+        organization_id=organization_id,
+        child_count=child,
+        ticket_count=tickets,
+        role_count=roles,
+        scope_count=scopes,
+        position_count=positions,
+        workflow_assignment_count=assigns,
+        package_actor_count=pkgs,
+        project_actor_count=projs,
+        # positions are informational — the org FK cascades them, so they don't block the
+        # DELETE (which guards child/ticket/role/scope/assignment/package/project refs).
+        deletable=not any([child, tickets, roles, scopes, assigns, pkgs, projs]),
+    )
 
 
 # ── Organization tree CSV import (OC-01, doc 16 §9) ──────────────────────────────
