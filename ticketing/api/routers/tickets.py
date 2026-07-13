@@ -96,7 +96,10 @@ from ticketing.tasks.llm import (
     translate_note,
 )
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
-from ticketing.engine.workflow_engine import auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status, _scope_candidates
+from ticketing.engine.workflow_engine import (
+    auto_assign_for_workflow_step, get_current_step, get_teammates, sla_status, _scope_candidates,
+    _find_supervisor_user_id, is_step_assignee_eligible,
+)
 from ticketing.models.country import Location
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
@@ -171,18 +174,6 @@ def _first_step(db: Session, workflow_id: str) -> Optional[WorkflowStep]:
     ).scalar_one_or_none()
 
 
-def _next_step(db: Session, workflow_id: str, current_order: int) -> Optional[WorkflowStep]:
-    return db.execute(
-        select(WorkflowStep)
-        .where(
-            WorkflowStep.workflow_id == workflow_id,
-            WorkflowStep.step_order > current_order,
-        )
-        .order_by(WorkflowStep.step_order)
-        .limit(1)
-    ).scalar_one_or_none()
-
-
 def _actor_role(current_user: CurrentUser) -> Optional[str]:
     """Snapshot the first role key at write time for audit correlation."""
     return current_user.role_keys[0] if getattr(current_user, "role_keys", None) else None
@@ -224,20 +215,6 @@ def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) 
     return False
 
 
-def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
-    step = get_current_step(ticket, db)
-    if not step or not step.supervisor_role:
-        return None
-    candidates = _scope_candidates(
-        role_key=step.supervisor_role,
-        organization_id=ticket.organization_id,
-        location_code=ticket.location_code,
-        project_code=ticket.project_code,
-        db=db,
-    )
-    return candidates[0] if candidates else None
-
-
 def _step_supervisor_available(db: Session, ticket: Ticket) -> bool:
     """True when the current step has a configured supervisor who can be resolved in scope."""
     return _find_supervisor_user_id(db, ticket) is not None
@@ -255,27 +232,6 @@ def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -
             if step and step.assigned_role_key in current_user.role_keys:
                 return True
     return False
-
-
-def _validate_step_assignee(db: Session, ticket: Ticket, assign_to_user_id: str) -> None:
-    """Assignee must be in the same step role + jurisdiction pool as auto-assign."""
-    step = get_current_step(ticket, db)
-    if not step:
-        return
-    eligible = get_teammates(
-        role_key=step.assigned_role_key,
-        organization_id=ticket.organization_id,
-        location_code=ticket.location_code,
-        project_code=ticket.project_code,
-        exclude_user_id=None,
-        db=db,
-        ticket_package_id=ticket.package_id,
-    )
-    if assign_to_user_id not in eligible:
-        raise HTTPException(
-            status_code=422,
-            detail="Officer is not eligible for this ticket at the current step.",
-        )
 
 
 _IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif")
@@ -891,7 +847,11 @@ def patch_ticket(
                 status_code=403,
                 detail="Only a step supervisor or admin may assign tickets to another officer.",
             )
-        _validate_step_assignee(db, ticket, payload.assign_to_user_id)
+        if not is_step_assignee_eligible(db, ticket, payload.assign_to_user_id):
+            raise HTTPException(
+                status_code=422,
+                detail="Officer is not eligible for this ticket at the current step.",
+            )
         ticket.assigned_to_user_id = payload.assign_to_user_id
         ticket.assigned_role_id = payload.assigned_role_id
         ticket.updated_by_user_id = current_user.user_id

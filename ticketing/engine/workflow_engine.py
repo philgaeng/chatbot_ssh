@@ -768,3 +768,41 @@ def get_teammates(
         ticket_package_id=ticket_package_id,
     )
     return [uid for uid in candidates if uid != exclude_user_id]
+
+
+# ── Step supervisor / assignee helpers (H2-02: moved out of the tickets router) ──
+
+def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
+    """First in-scope holder of the current step's supervisor role, if any."""
+    step = get_current_step(ticket, db)
+    if not step or not step.supervisor_role:
+        return None
+    candidates = _scope_candidates(
+        role_key=step.supervisor_role,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        db=db,
+    )
+    return candidates[0] if candidates else None
+
+
+def is_step_assignee_eligible(db: Session, ticket: Ticket, assign_to_user_id: str) -> bool:
+    """True when the user is in the current step's role + jurisdiction pool.
+
+    Pure predicate (no HTTP) — the router maps False to a 422. When the ticket has
+    no current step there is nothing to validate against, so it returns True.
+    """
+    step = get_current_step(ticket, db)
+    if not step:
+        return True
+    eligible = get_teammates(
+        role_key=step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        exclude_user_id=None,
+        db=db,
+        ticket_package_id=ticket.package_id,
+    )
+    return assign_to_user_id in eligible
