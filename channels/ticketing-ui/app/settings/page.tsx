@@ -113,6 +113,16 @@ import { orgRoleBadge } from "@/lib/design-tokens";
 import { OrganisationTab } from "@/components/settings/org/OrganisationTab";
 import { OfficersTabV2 } from "@/components/settings/officers-v2/OfficersTabV2";
 import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
+// R5 (BUILD-REVIEW M3): the friendly-error contract — inline clusters route caught errors
+// through formatUserFacingError (unwraps object 4xx detail) instead of raw messages or browser dialogs.
+import { formatUserFacingError } from "@/lib/user-messages";
+import { ErrorNotice } from "@/components/shared/ErrorNotice";
+// R6 (BUILD-REVIEW M4/M7): plain-language labels in the still-inline clusters (labels not slugs).
+import { roleLabel, CAST_TIER_LABELS } from "@/lib/labels";
+
+function friendlyError(e: unknown): string {
+  return formatUserFacingError(e).message;
+}
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
@@ -126,6 +136,8 @@ type RoleEntry = {
   role_origin?: string;
   steps_count?: number;
   officers_count?: number;
+  // R6 (BUILD-REVIEW M7): SH-7 org-scoped catalog owning level (NULL = System · everywhere).
+  owner_organization_id?: string | null;
 };
 
 function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
@@ -139,7 +151,13 @@ function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
     role_origin: r.role_origin ?? "system",
     steps_count: r.steps_count ?? 0,
     officers_count: r.officers_count ?? 0,
+    owner_organization_id: r.owner_organization_id ?? null,
   };
+}
+
+/** R6: owning-level label for the SH-7 org-scoped catalog chip (M7 / §4.4). */
+function owningLevelLabel(ownerOrgId: string | null | undefined): string {
+  return ownerOrgId ? `${ownerOrgId} & below` : "System · everywhere";
 }
 
 // ── Role edit modal ───────────────────────────────────────────────────────────
@@ -173,7 +191,7 @@ function RoleEditModal({ role, onSaved, onClose }: {
       setSaved(true);
       setTimeout(() => { setSaved(false); onClose(); }, 650);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Save failed");
+      setErr(friendlyError(e));
     } finally {
       setSaving(false);
     }
@@ -323,7 +341,7 @@ function RoleCreateModal({
       onCreated();
       onClose();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Create failed");
+      setErr(friendlyError(e));
     } finally {
       setSaving(false);
     }
@@ -333,7 +351,7 @@ function RoleCreateModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="bg-white rounded-lg shadow-xl w-full max-w-lg p-5">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">New operational role</h3>
-        {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
+        {err && <ErrorNotice error={err} className="mb-3" />}
         <div className="space-y-3 text-sm">
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Display name *</label>
@@ -416,7 +434,7 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
       if (editing?.role_id === r.role_id) setEditing(null);
       onReload();
     } catch (e: unknown) {
-      setDeleteError(e instanceof Error ? e.message : "Remove failed");
+      setDeleteError(friendlyError(e));
     }
   }
 
@@ -474,9 +492,7 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
         </p>
       )}
 
-      {deleteError && (
-        <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2 mb-3">{deleteError}</p>
-      )}
+      {deleteError && <ErrorNotice error={deleteError} className="mb-3" />}
 
       <div className="border border-gray-200 rounded-lg overflow-hidden">
         <table className="w-full text-sm">
@@ -484,6 +500,7 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
             <tr className="bg-slate-700 text-slate-100 text-left">
               <th className="px-4 py-2.5 font-medium">Role</th>
               <th className="px-4 py-2.5 font-medium">Workflow</th>
+              <th className="px-4 py-2.5 font-medium">Available in</th>
               <th className="px-4 py-2.5 font-medium">Usage</th>
               <th className="px-4 py-2.5 font-medium">Description</th>
               <th className="px-4 py-2.5 font-medium">Actions</th>
@@ -503,6 +520,11 @@ function RolesTab({ catalog, loading, onReload, canCreate }: {
                   {r.role_origin === "custom" && (
                     <span className="ml-1 text-[10px] text-gray-400">custom</span>
                   )}
+                </td>
+                <td className="px-4 py-3 text-xs whitespace-nowrap">
+                  <span className={r.owner_organization_id ? "text-blue-700" : "text-gray-500"}>
+                    {owningLevelLabel(r.owner_organization_id)}
+                  </span>
                 </td>
                 <td className="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
                   {r.steps_count ?? 0} steps · {r.officers_count ?? 0} officers
@@ -559,7 +581,7 @@ function AdminAccessTab() {
       setRows(await listAdminScopes());
       setErr("");
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to load");
+      setErr(friendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -597,7 +619,7 @@ function AdminAccessTab() {
       }
       await load();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Appoint failed");
+      setErr(friendlyError(e));
     }
   }
 
@@ -607,7 +629,7 @@ function AdminAccessTab() {
       await deleteAdminScope(id);
       await load();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Revoke failed");
+      setErr(friendlyError(e));
     }
   }
 
@@ -624,7 +646,7 @@ function AdminAccessTab() {
       }
       await load();
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Send setup email failed");
+      setErr(friendlyError(e));
     } finally {
       setResendingId(null);
     }
@@ -817,7 +839,7 @@ function StepForm({
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Save failed");
+      setError(friendlyError(e));
     } finally { setSaving(false); }
   }
 
@@ -911,13 +933,13 @@ function StepForm({
         </div>
       </div>
 
-      {/* ── Spec 12 tier model fields ────────────────────────────────────────── */}
+      {/* ── Step cast (who's involved at this step) ──────────────────────────── */}
       <div className="border-t border-blue-100 pt-3 mt-1 space-y-3">
-        <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Tier configuration (Spec 12)</div>
+        <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Who&apos;s involved at this step</div>
 
-        {/* Supervisor role */}
+        {/* Supervisor role → "Oversees" */}
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Supervisor role</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.supervisor_role}</label>
           <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
             <option value="">— None (no supervisor at this step) —</option>
@@ -928,11 +950,11 @@ function StepForm({
 
         {/* Informed roles */}
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Informed roles — auto-added when ticket enters this step</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.informed_roles} — auto-added when a ticket enters this step</label>
           <div className="flex flex-wrap gap-1 mb-1">
             {informedRoles.map(r => (
               <span key={r} className="flex items-center gap-1 text-xs bg-violet-50 border border-violet-200 text-violet-700 px-2 py-0.5 rounded">
-                {r}
+                {roleLabel(r)}
                 <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-violet-300 hover:text-red-500 leading-none">×</button>
               </span>
             ))}
@@ -953,11 +975,11 @@ function StepForm({
 
         {/* Observer roles */}
         <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">Observer roles — read-only access, no notifications</label>
+          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.observer_roles} — read-only access, no notifications</label>
           <div className="flex flex-wrap gap-1 mb-1">
             {observerRoles.map(r => (
               <span key={r} className="flex items-center gap-1 text-xs bg-gray-100 border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
-                {r}
+                {roleLabel(r)}
                 <button onClick={() => setObserverRoles(observerRoles.filter(x => x !== r))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
               </span>
             ))}
@@ -1201,7 +1223,7 @@ function ProjectWorkflowsEditor({
       onSaved(saved);
       flash("Workflows saved ✓");
     } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Failed to save workflows");
+      flash(friendlyError(e));
     } finally {
       setSaving(false);
     }
@@ -1403,7 +1425,7 @@ function WorkflowEditor({
     }
     setPublishing(true);
     try { const updated = await publishWorkflow(wf.workflow_id); setWf(updated); onUpdated(updated); flash("Published ✓"); }
-    catch (e: unknown) { flash(e instanceof Error ? e.message : "Publish failed"); }
+    catch (e: unknown) { flash(friendlyError(e)); }
     finally { setPublishing(false); }
   }
 
@@ -1411,7 +1433,7 @@ function WorkflowEditor({
     if (!confirm("Archive this workflow? It won't be used for new tickets.")) return;
     setArchiving(true);
     try { const updated = await archiveWorkflow(wf.workflow_id); setWf(updated); onUpdated(updated); flash("Archived"); }
-    catch (e: unknown) { flash(e instanceof Error ? e.message : "Archive failed"); }
+    catch (e: unknown) { flash(friendlyError(e)); }
     finally { setArchiving(false); }
   }
 
@@ -1449,7 +1471,7 @@ function WorkflowEditor({
       setWf(prev => ({ ...prev, steps: prev.steps.map(s => s.step_id === step.step_id ? { ...s, is_deleted: true } : s) }));
       flash("Step removed");
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Cannot delete step");
+      flash(friendlyError(e));
     }
   }
 
@@ -1463,7 +1485,7 @@ function WorkflowEditor({
       setWf(prev => ({ ...prev, steps: [...prev.steps, newStep] }));
       setExpanded(newStep.step_id);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to add step");
+      flash(friendlyError(e));
     } finally { setAddingStep(false); }
   }
 
@@ -1478,7 +1500,7 @@ function WorkflowEditor({
       const tpl = await saveWorkflowAsTemplate(wf.workflow_id, { display_name: trimmed });
       flash(`Template created: ${tpl.display_name}`);
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : "Failed to save template");
+      flash(friendlyError(e));
     } finally {
       setSavingTemplate(false);
     }
@@ -1570,7 +1592,7 @@ function WorkflowEditor({
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-gray-800 text-sm">{step.display_name}</div>
                 <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
-                  <span>Role: <code>{step.assigned_role_key}</code></span>
+                  <span>{CAST_TIER_LABELS.assigned_role_key}: {roleLabel(step.assigned_role_key)}</span>
                   {step.response_time_hours != null && <span>Response: {step.response_time_hours}h</span>}
                   {step.resolution_time_days != null && <span>Resolution: {step.resolution_time_days}d</span>}
                   {step.response_time_hours == null && step.resolution_time_days == null && <span className="italic">No SLA</span>}
@@ -1686,7 +1708,7 @@ function WorkflowNotificationsPanel({ workflowSlug }: { workflowSlug: "standard"
       await saveNotificationRules(fullValue);
       setSaved(true); setTimeout(() => setSaved(false), 2000);
     } catch (e: unknown) {
-      setErr(e instanceof Error ? e.message : "Failed to save notification rules");
+      setErr(friendlyError(e));
     } finally {
       setSaving(false);
     }
@@ -1827,7 +1849,7 @@ function NewWorkflowModal({
       });
       onCreated(created);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Create failed");
+      setError(friendlyError(e));
       setCreating(false);
     }
   }
@@ -1928,7 +1950,7 @@ function WorkflowsTab({
       setWorkflows(wfRes.items.filter((w) => !w.is_template));
       setTemplates(tplRes.items.filter(t => t.is_template));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load workflows");
+      setError(friendlyError(e));
     } finally { setLoading(false); }
   }, []);
 
@@ -1940,7 +1962,7 @@ function WorkflowsTab({
       const full = await getWorkflow(wf.workflow_id);
       setEditing(full);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to open workflow");
+      setError(friendlyError(e));
     }
   }
 
@@ -1952,7 +1974,7 @@ function WorkflowsTab({
         await archiveWorkflow(wf.workflow_id);
         await load();
       } catch (e: unknown) {
-        setError(e instanceof Error ? e.message : "Archive failed");
+        setError(friendlyError(e));
       }
       return;
     }
@@ -1962,7 +1984,7 @@ function WorkflowsTab({
       setWorkflows((prev) => prev.filter((w) => w.workflow_id !== wf.workflow_id));
       if (editing?.workflow_id === wf.workflow_id) setEditing(null);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Remove failed");
+      setError(friendlyError(e));
     }
   }
 
@@ -2204,7 +2226,7 @@ function LocationsSection() {
       const result = await importLocations(importFile, { country, dry_run: dryRun });
       setImportResult(result);
     } catch (e: unknown) {
-      setImportError(e instanceof Error ? e.message : "Import failed");
+      setImportError(friendlyError(e));
     } finally {
       setImporting(false);
     }
@@ -2441,7 +2463,7 @@ function ProjectsSection({
       setOrgs(o);
       setOrgRoles(r);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed");
+      setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
@@ -2470,7 +2492,7 @@ function ProjectsSection({
       if (editing?.project_id === p.project_id) setEditing(null);
       setProjects((prev) => prev.filter((x) => x.project_id !== p.project_id));
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Remove failed");
+      setError(friendlyError(e));
     }
   }
 
@@ -2621,7 +2643,7 @@ function ProjectCreateModal({
       });
       onCreated(p);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Create failed";
+      const msg = friendlyError(e);
       if (msg.includes("already exists")) {
         try {
           const existing = (await listProjects(undefined, false)).find((p) => p.short_code === code) ?? null;
@@ -2808,7 +2830,7 @@ function ProjectEditor({
       setGoLiveKey((k) => k + 1);
       flash(updated.is_active ? "Project activated ✓" : "Project deactivated");
     } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Could not update status");
+      flash(friendlyError(e));
     }
   }
 
@@ -2861,7 +2883,7 @@ function ProjectEditor({
       setShortCodeVal(updated.short_code);
       flash("Project code updated ✓");
     } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Save failed");
+      flash(friendlyError(e));
       setShortCodeVal(p.short_code);
     }
     setEditingShortCode(false);
@@ -2874,7 +2896,7 @@ function ProjectEditor({
       setP({ ...p, organizations: [...p.organizations, item] });
       flash("Project actor added ✓");
     } catch (e: unknown) {
-      flash(e instanceof Error ? e.message : "Failed");
+      flash(friendlyError(e));
       throw e;
     } finally {
       setWorking(false);
@@ -3177,7 +3199,7 @@ function ProjectEditor({
                     setGoLiveKey((k) => k + 1);
                     flash("Messaging saved ✓");
                   } catch (e: unknown) {
-                    flash(e instanceof Error ? e.message : "Failed to save messaging");
+                    flash(friendlyError(e));
                   } finally {
                     setMessagingSaving(false);
                   }
@@ -3700,7 +3722,7 @@ function PackageCreateModal({
       });
       onCreated(pkg);
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : "Create failed";
+      const msg = friendlyError(e);
       setError(msg.includes("409") ? `Code "${code.trim()}" already exists in this project.` : msg);
       setCreating(false);
     }
@@ -3845,7 +3867,7 @@ function SystemConfigTab() {
       await setOrgRoles(parsed);
       setSaved(true); setTimeout(() => setSaved(false), 2500);
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Invalid JSON");
+      setError(friendlyError(e));
     }
     setSaving(false);
   }
@@ -3863,7 +3885,7 @@ function SystemConfigTab() {
       setLimitsSaved(true);
       setTimeout(() => setLimitsSaved(false), 2500);
     } catch (e: unknown) {
-      setLimitsError(e instanceof Error ? e.message : "Invalid JSON");
+      setLimitsError(friendlyError(e));
     }
     setSavingLimits(false);
   }
@@ -3881,7 +3903,7 @@ function SystemConfigTab() {
       setArchivingSaved(true);
       setTimeout(() => setArchivingSaved(false), 2500);
     } catch (e: unknown) {
-      setArchivingError(e instanceof Error ? e.message : "Invalid JSON");
+      setArchivingError(friendlyError(e));
     }
     setSavingArchiving(false);
   }
@@ -3909,7 +3931,7 @@ function SystemConfigTab() {
       setCategoriesSaved(true);
       setTimeout(() => setCategoriesSaved(false), 2500);
     } catch (e: unknown) {
-      setCategoriesError(e instanceof Error ? e.message : "Invalid JSON");
+      setCategoriesError(friendlyError(e));
     }
     setSavingCategories(false);
   }

@@ -31,7 +31,6 @@ import {
   resendOfficerInvite,
   deactivateOfficer,
   reactivateOfficer,
-  getOfficerOpenCases,
   type OfficerRosterEntry,
   type GrmRole,
   type OrganizationItem,
@@ -76,41 +75,37 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [manageOfficer, setManageOfficer] = useState<OfficerRosterEntry | null>(null);
-  const [lifecycleMsg, setLifecycleMsg] = useState<string>("");
+  const [lifecycleMsg, setLifecycleMsg] = useState<string>("");   // success only (blue notice)
+  const [lifecycleErr, setLifecycleErr] = useState<unknown>(null); // failure → <ErrorNotice>
 
-  // Frame-11: history-preserving deactivate with the open-case guard (backend now shipped).
+  // Frame-11: history-preserving deactivate with the open-case guard (backend shipped).
+  // R5 (BUILD-REVIEW M3b/FE-2#3): errors go through <ErrorNotice> (formatUserFacingError
+  // unwraps the 409 {message, open_count} → friendly copy), so no raw "API 500 …" in a blue
+  // box, and no redundant getOfficerOpenCases round-trip.
   async function handleDeactivate(o: OfficerRosterEntry) {
     setMenuFor(null);
     setLifecycleMsg("");
+    setLifecycleErr(null);
     if (!confirm(`Deactivate ${o.email ?? o.user_id}? They keep their history but lose access until reactivated.`)) return;
     try {
       await deactivateOfficer(o.user_id);
       setLifecycleMsg(`${o.email ?? o.user_id} was deactivated.`);
       void reload();
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
-      if (/409|open case/i.test(msg)) {
-        try {
-          const oc = await getOfficerOpenCases(o.user_id);
-          setLifecycleMsg(`Cannot deactivate: ${oc.open_count} open case(s) must be reassigned first.`);
-        } catch {
-          setLifecycleMsg("Cannot deactivate while the officer owns open cases — reassign them first.");
-        }
-      } else {
-        setLifecycleMsg(msg);
-      }
+      setLifecycleErr(e);
     }
   }
 
   async function handleReactivate(o: OfficerRosterEntry) {
     setMenuFor(null);
     setLifecycleMsg("");
+    setLifecycleErr(null);
     try {
       await reactivateOfficer(o.user_id);
       setLifecycleMsg(`${o.email ?? o.user_id} was reactivated.`);
       void reload();
     } catch (e: unknown) {
-      setLifecycleMsg(e instanceof Error ? e.message : String(e));
+      setLifecycleErr(e);
     }
   }
 
@@ -263,6 +258,7 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
           {lifecycleMsg}
         </div>
       )}
+      <ErrorNotice error={lifecycleErr} />
       {/* Search + filters (client-side for now — see file header TODO) */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex min-w-[16rem] flex-1 items-center gap-1.5 rounded border border-gray-300 bg-white px-2.5 py-1.5">

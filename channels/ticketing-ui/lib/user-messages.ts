@@ -51,6 +51,22 @@ export function parseApiErrorDetail(raw: string): string | null {
           .filter(Boolean);
         if (parts.length) return parts.join(" ");
       }
+      // R5 (BUILD-REVIEW M3a): object detail — FastAPI structured 409/422 like
+      // {"detail":{"message":..,"errors":[..],"holders_count":3}}. Unwrap to prose so it
+      // never raw-dumps (the org CSV import 422 + position-type delete 409).
+      if (d && typeof d === "object") {
+        const obj = d as Record<string, unknown>;
+        const parts: string[] = [];
+        if (typeof obj.message === "string" && obj.message.trim()) parts.push(obj.message.trim());
+        if (Array.isArray(obj.errors)) {
+          for (const e of obj.errors) if (typeof e === "string" && e.trim()) parts.push(e.trim());
+        }
+        const counts = Object.entries(obj)
+          .filter(([k, v]) => k.endsWith("_count") && typeof v === "number" && (v as number) > 0)
+          .map(([k, v]) => `${v} ${k.replace(/_count$/, "").replace(/_/g, " ")}`);
+        if (counts.length) parts.push(`(${counts.join(", ")})`);
+        if (parts.length) return parts.join(" ");
+      }
     } catch {
       /* not JSON */
     }
@@ -210,6 +226,13 @@ export function formatUserFacingError(
   }
   if (context === "task") {
     return { message: "Could not complete the task. Please try again.", kind: "failure" };
+  }
+
+  // R5 (M3a): a cleanly-parsed detail (parseApiErrorDetail already returns null for raw
+  // "API 4xx /api/…" strings) is user-safe — surface it instead of a bare generic so the
+  // unwrapped 409/422 message reaches the user (settings surfaces have no context tag).
+  if (detail && detail.trim()) {
+    return { message: detail.trim(), kind: "failure" };
   }
 
   return { message: GENERIC_FAILURE, kind: "failure" };

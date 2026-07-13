@@ -31,16 +31,23 @@ function extractRowErrors(err: unknown): { message: string | null; errors: strin
       errors?: unknown;
       detail?: unknown;
     };
-    const errors = Array.isArray(parsed.errors)
-      ? parsed.errors.map((e) => String(e))
-      : Array.isArray(parsed.detail)
-        ? parsed.detail.map((e) => String(e))
+    // R5 (BUILD-REVIEW M3a): FastAPI nests the structured 422 under `detail`:
+    // {"detail":{"message":..,"errors":[..]}}. Unwrap it (top-level was never populated).
+    const d = parsed.detail;
+    const src =
+      d && typeof d === "object" && !Array.isArray(d)
+        ? (d as { message?: string; errors?: unknown })
+        : parsed;
+    const errors = Array.isArray(src.errors)
+      ? src.errors.map((e) => String(e))
+      : Array.isArray(d)
+        ? d.map((e) => String(e))
         : [];
     const message =
-      typeof parsed.message === "string"
-        ? parsed.message
-        : typeof parsed.detail === "string"
-          ? parsed.detail
+      typeof src.message === "string"
+        ? src.message
+        : typeof d === "string"
+          ? d
           : null;
     return { message, errors };
   } catch {

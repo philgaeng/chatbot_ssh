@@ -17,8 +17,8 @@
 | R2 | T1 | Donor guarantee: legacy fallback + endpoint scoping | M1 | MAJOR | **done** | ✅ 2 tests | this T1 commit |
 | R3 | T1 | Deactivated officers out of assignment + coverage | M2 | MAJOR | **done** | ✅ 2 tests | this T1 commit |
 | R4 | T1 | project_admin appointment containment | MO2 | MOD | **done** | ✅ 2 tests | this T1 commit |
-| R5 | T2 | Friendly-error contract: unwrap object detail + wire ErrorNotice | M3 | MAJOR | todo | ☐ | — |
-| R6 | T2 | Plain-language labels + owning-level chip in inline clusters | M4, M7 | MAJOR | todo | ☐ | — |
+| R5 | T2 | Friendly-error contract: unwrap object detail + wire ErrorNotice | M3 | MAJOR | **done** | ✅ vitest+guardrails+build | this T2 commit |
+| R6 | T2 | Plain-language labels + owning-level chip in inline clusters | M4, M7 | MAJOR | **done** | ✅ guardrail+build | this T2 commit |
 | R7 | T3 | Invite-by-position for new officers | M5 | MAJOR | todo | ☐ | — |
 | R8 | T3 | Frame 01 Setup & go-live landing (**decision — §R8**) | M6 | MAJOR | todo | ☐ | — |
 | R9 | T3 | Server-side search at scale (directory + org tree) | M8 | MAJOR | todo | ☐ | — |

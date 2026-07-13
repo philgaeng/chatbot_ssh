@@ -30,4 +30,26 @@ describe("formatUserFacingError", () => {
     expect(escalateResult).toEqual({ message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" });
     expect(resolveResult).toEqual({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
   });
+
+  // R5 (BUILD-REVIEW M3a): object-shaped detail must never raw-dump.
+  it("unwraps an object detail with message + errors[] (org CSV import 422)", () => {
+    const err = new Error(
+      'API 422 /api/v1/organizations/import: {"detail":{"message":"Import rejected — nothing written","errors":["country_code \'XX\' not found"]}}',
+    );
+    const result = formatUserFacingError(err);
+    expect(result.message).not.toContain("{");
+    expect(result.message).not.toMatch(/^API \d+/);
+    expect(result.message).toContain("Import rejected");
+    expect(result.message).toContain("country_code 'XX' not found");
+  });
+
+  it("unwraps an object detail with a count field (position-type delete 409)", () => {
+    const err = new Error(
+      'API 409 /api/v1/position-types/abc: {"detail":{"message":"Position type is in use","reports_count":0,"holders_count":3}}',
+    );
+    const result = formatUserFacingError(err);
+    expect(result.message).not.toContain("{");
+    expect(result.message).toContain("Position type is in use");
+    expect(result.message).toContain("3 holders");
+  });
 });
