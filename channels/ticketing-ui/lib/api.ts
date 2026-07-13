@@ -3,7 +3,8 @@
 // the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
 // This avoids CORS issues and means the browser only needs port 3001.
 
-import { handleSessionExpired, isSessionExpiredResponse } from "./auth/session-expired";
+import { handleSessionExpired, isSessionExpiredResponse, isAccessTokenExpiringSoon } from "./auth/session-expired";
+import { refreshTokens } from "./auth/oidc-auth";
 import { projectsForOrganization } from "./officerJurisdiction";
 
 const BASE = "";
@@ -217,7 +218,17 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, opts?: RequestInit, retried = false): Promise<T> {
+  // Proactive refresh: renew a token that expires within 60s *before* the request,
+  // so an officer mid-task never eats an avoidable 401. Single-flight in
+  // refreshTokens() collapses a burst of these into one token-endpoint POST.
+  if (!retried && typeof window !== "undefined") {
+    const token = window.localStorage.getItem("grm_access_token");
+    if (token && isAccessTokenExpiringSoon(token, 60)) {
+      await refreshTokens();
+    }
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...authHeaders(),
@@ -225,10 +236,16 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   };
   const resp = await fetch(`${BASE}${path}`, { ...opts, headers, credentials: "include" });
   if (!resp.ok) {
-    const body = await resp.text();
-    if (isSessionExpiredResponse(resp.status, body)) {
-      handleSessionExpired();
+    // 401 = unauthenticated (expired/invalid token); permission failures are 403.
+    // Try a silent refresh + one retry before bouncing the officer to /login.
+    if (resp.status === 401) {
+      if (!retried) {
+        const refreshed = await refreshTokens();
+        if (refreshed) return apiFetch<T>(path, opts, true);
+      }
+      handleSessionExpired(); // no refresh token, or the retry still 401 — throws
     }
+    const body = await resp.text();
     throw new Error(`API ${resp.status} ${path}: ${body}`);
   }
   if (resp.status === 204) return undefined as T;

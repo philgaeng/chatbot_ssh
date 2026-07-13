@@ -10,7 +10,7 @@ Ordered for **robust single-threaded execution** (see rationale below). Workstre
 
 | Order | ID | Title | WS | Status | Commits | Sequencing rationale |
 |---|---|---|---|---|---|---|
-| 1 | H2-01 | OIDC refresh-grant in apiFetch | C | todo | — | Isolated from the backend; closes the last open headline finding (officer data-loss at token expiry). Bank the highest-value / lowest-risk fix first; unblocks H2-06. |
+| 1 | H2-01 | OIDC refresh-grant in apiFetch | C | **review** | this commit | Code + 9 vitest tests green (tsc/eslint/build clean). Manual Keycloak sweep pending-human. Isolated from the backend; closes the last open headline finding (officer data-loss at token expiry); unblocks H2-06. |
 | 2 | H2-02 | Split tickets.py; perform_action → engine/ | A | todo | — | Keystone refactor — all of B rebases on it. Write the route-snapshot test **first**; land under the existing HR-02 matrix (86) + HR-04 suite before any dependent work. |
 | 3 | H2-07 | Escalation test extension | A | todo | — | Thickens the engine net immediately after the refactor; "direct engine calls, one per action" only works once `perform_action` lives in `engine/`. Verifies H2-02's core move. |
 | 4 | H2-03 | Authz matrix extension | A | todo | — | Broadens authz coverage (all actions × personas + unauthenticated sweep) on the split routers. Locks H2-02's authz behavior before backend behavior changes land. |
@@ -70,13 +70,13 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 - [ ] Invite → first login flips status without TTL wait
 
 ### H2-01 — OIDC refresh
-- [ ] `refreshTokens` + single-flight; apiFetch proactive (60 s) + reactive 401 retry-once
-- [ ] Skew check corrected; status-code-based 401 detection
-- [ ] AuthProvider refreshes instead of redirecting; redirect only on refresh failure
-- [ ] Logout revokes refresh token (incl. sessionStale path)
-- [ ] CSPRNG state + nonce + same-storage state/verifier
-- [ ] Vitest: single-flight, 401-retry, proactive, skew regression
-- [ ] Manual: 1-min token lifespan, 5-min typing, no data loss; replayed refresh token rejected
+- [x] `refreshTokens` + single-flight (module `refreshPromise`); `apiFetch` proactive (60 s) + reactive 401 → refresh → retry-once (`lib/auth/oidc-auth.ts`, `lib/api.ts`)
+- [x] Skew check corrected (`session-expired.ts` `- 30_000` → `+ 30_000`, via new `isAccessTokenExpiringSoon`); 401 detection now status-code-based in `apiFetch` (substring `isSessionExpiredResponse` kept only at the 4 multipart/blob sites — see Deviations)
+- [x] AuthProvider mount check refreshes instead of redirecting; redirects only on refresh failure (`AuthProvider.tsx`)
+- [x] Logout revokes refresh token via back-channel `logout` POST (keepalive), incl. the sessionStale path (`oidc-auth.ts signOut`)
+- [x] CSPRNG `state` + `nonce` (`crypto.getRandomValues`, was `Math.random`); nonce verified in callback; `state`/`verifier`/`nonce` all in sessionStorage (cross-tab login fails cleanly at the state check)
+- [x] Vitest: single-flight (3→1 POST), 401→refresh→retry→success, 401→refresh-fail→`handleSessionExpired` once, proactive near-expiry, skew regression — **9 new tests green** (`lib/auth/session-expired.test.ts`, `lib/auth/oidc-auth.test.ts`, `lib/api.test.ts`); full `npm test` 35/35; `tsc --noEmit` clean; `eslint` 0 errors; `next build` clean
+- [~] Manual: 1-min token lifespan / 5-min typing / no-data-loss + replayed-refresh-token rejected — **PENDING-HUMAN** (no browser + live Keycloak in this env; needs the auth-profile stack per `DOCKER.md`). Record date/tester: —
 
 ### H2-06 — Thread hook
 - [ ] `lib/useTicketThread.ts` + `lib/threadCommands.ts`; both pages consume; ~300+ lines net deleted
@@ -99,7 +99,9 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 
 | Date | Ticket | Deviation / adjacent finding | Action |
 |---|---|---|---|
-| — | — | — | — |
+| 2026-07-13 | H2-01 | **Scope: only `apiFetch` got refresh+retry.** `api.ts` has 4 other fetch sites that hard-logout on 401 via `isSessionExpiredResponse` — a blob GET (`fetchAuthenticatedBlobUrl`), two multipart uploads (attachment, org-import), and the XLSX export. Spec item 3 scoped the change to `apiFetch:214-236`. | Left the 4 sites as-is (behavior unchanged — no regression). `apiFetch`'s proactive 60 s refresh keeps the token fresh during active use, so an upload shortly after JSON activity is unlikely to hit expiry. Deferred: retrying multipart/stream bodies needs care; logged for a follow-up if field data shows upload-time logouts. |
+| 2026-07-13 | H2-01 | **Spec's "AuthProvider periodic check (:309-317)" is actually the mount-time expiry check** — there is no `setInterval` in the provider. | Implemented as refresh-on-mount (try silent refresh before redirecting). No background timer added — `apiFetch`'s proactive refresh already covers active use; a polling timer would be new scope. |
+| 2026-07-13 | H2-01 | **Nonce verification is strict** (throws on id_token `nonce` mismatch) — standard OIDC replay protection, but a new failure path in the callback. | Happy path validated by `next build` + the callback-flow reasoning; the live cross-check lands with the pending-human Keycloak sweep. If a realm quirk drops the nonce claim, the guard only fires when a nonce was *sent* AND an id_token is present. |
 
 ## Sprint close checklist
 - [ ] All tickets `done`, CI green on integration branch

@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { OIDCAuthClient, refreshTokens, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { AUTH_BYPASS, OIDC_ISSUER, OIDC_CLIENT_ID } from "@/lib/auth/runtime-config";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
@@ -312,21 +312,35 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       const existing = client.getCurrentUser();
       if (existing && token) {
         if (isAccessTokenExpired(token)) {
-          clearAuthTokens();
-          setUser(null);
-          setAccessToken(null);
-          setIsAuthenticated(false);
-          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-            window.location.replace("/login?reason=session_expired");
-            return;
-          }
-        } else {
-          clearCookie(BYPASS_COOKIE);
-          clearCookie(LEGACY_MOCK_COOKIE);
-          setUser(existing);
-          setAccessToken(token);
-          setIsAuthenticated(true);
+          // Returning to the tab with an expired token: try a silent refresh
+          // before bouncing to /login (H2-01) — redirect only if refresh fails.
+          void (async () => {
+            const refreshed = await refreshTokens();
+            if (refreshed) {
+              clearCookie(BYPASS_COOKIE);
+              clearCookie(LEGACY_MOCK_COOKIE);
+              setUser(client.getCurrentUser());
+              setAccessToken(refreshed);
+              setIsAuthenticated(true);
+            } else {
+              clearAuthTokens();
+              setUser(null);
+              setAccessToken(null);
+              setIsAuthenticated(false);
+              if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+                window.location.replace("/login?reason=session_expired");
+                return;
+              }
+            }
+            setIsLoading(false);
+          })();
+          return;
         }
+        clearCookie(BYPASS_COOKIE);
+        clearCookie(LEGACY_MOCK_COOKIE);
+        setUser(existing);
+        setAccessToken(token);
+        setIsAuthenticated(true);
       }
     }
     setIsLoading(false);

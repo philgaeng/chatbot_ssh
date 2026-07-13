@@ -24,6 +24,7 @@ export const TOKEN_STORAGE = {
   USER: "grm_user",
   STATE: "grm_oauth_state",
   CODE_VERIFIER: "grm_pkce_verifier",
+  NONCE: "grm_oidc_nonce",
   LOGIN_EMAIL: "grm_login_email",
 } as const;
 
