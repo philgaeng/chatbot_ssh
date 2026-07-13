@@ -566,11 +566,27 @@ def list_tickets(
             select(TicketViewer.ticket_id).where(TicketViewer.user_id == current_user.user_id)
         ).scalars().all()
 
+        # OC-04 §5.3 — supervisor visibility: additionally see reports' tickets (org chart,
+        # bounded by each position's visibility_mode). The SEAH predicate is carried INLINE
+        # on this branch so a non-SEAH supervisor of a SEAH officer sees NONE of their SEAH
+        # tickets (doc 16 §6) — even when the viewer can otherwise see SEAH.
+        from ticketing.models.user import SEAH_ROLES
+        from ticketing.services.chart_behaviors import visible_report_user_ids
+
+        _report_conditions = []
+        _report_uids = visible_report_user_ids(db, current_user.user_id)
+        if _report_uids:
+            _rc = Ticket.assigned_to_user_id.in_(_report_uids)
+            if not (set(current_user.role_keys) & SEAH_ROLES):
+                _rc = and_(_rc, Ticket.is_seah.is_(False))
+            _report_conditions.append(_rc)
+
         if not scopes:
-            # No scope rows → only assigned tickets OR watched tickets
+            # No scope rows → only assigned tickets OR watched tickets OR reports' tickets
             stmt = stmt.where(or_(
                 Ticket.assigned_to_user_id == current_user.user_id,
                 Ticket.ticket_id.in_(viewed_ticket_ids),
+                *_report_conditions,
             ))
         else:
             from ticketing.services.officer_jurisdiction import scope_ticket_filter
@@ -581,6 +597,7 @@ def list_tickets(
             scope_conditions.append(Ticket.assigned_to_user_id == current_user.user_id)
             if viewed_ticket_ids:
                 scope_conditions.append(Ticket.ticket_id.in_(viewed_ticket_ids))
+            scope_conditions.extend(_report_conditions)
             stmt = stmt.where(or_(*scope_conditions))
 
     if tab:
@@ -1121,6 +1138,7 @@ def perform_action(
     _generate_resolved_summary: bool = False
     _translate_resolution_event_id: Optional[str] = None
     _assignment_notify: tuple[str, str | None, str] | None = None
+    _supervisor_notify_from_step = None  # OC-04 §5.5: step a manual escalation came OFF
 
     if action == "ACKNOWLEDGE":
         g_row = fetch_grievance_row(db, ticket.grievance_id)
@@ -1174,6 +1192,7 @@ def perform_action(
                 detail="escalation_notes is required for ESCALATE",
             )
         _old_assigned_escalate = ticket.assigned_to_user_id
+        _supervisor_notify_from_step = get_current_step(ticket, db)  # OC-04 §5.5 (before it moves)
         # Delegate to engine — single code path for manual + auto escalation
         result = escalate_ticket(
             ticket, db,
@@ -1455,6 +1474,17 @@ def perform_action(
 
     db.commit()
     db.refresh(ticket)
+
+    # OC-04 §5.5: notify the escalated step's resolved supervisor after commit (SEAH-
+    # suppressed in the helper). Side-effect only — never alters assignment/target.
+    if _supervisor_notify_from_step is not None:
+        from ticketing.engine.escalation import notify_escalation_supervisor
+
+        try:
+            notify_escalation_supervisor(db, ticket, _supervisor_notify_from_step)
+            db.commit()
+        except Exception:  # pragma: no cover - notify failure must not fail the escalation
+            db.rollback()
 
     if _assignment_notify:
         new_uid, old_uid, assign_event = _assignment_notify

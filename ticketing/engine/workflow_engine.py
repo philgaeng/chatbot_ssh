@@ -659,9 +659,19 @@ def auto_assign_officer(
         ).all()
     )
 
-    # Least-loaded wins; ties broken deterministically by user_id so the choice
-    # never depends on undefined Postgres row order (would be flaky otherwise).
-    return min(candidates, key=lambda uid: (active_counts.get(uid, 0), uid))
+    # OC-04 §5.4 prefer-own-office: among the *already-filtered* candidates, rank first the
+    # officers whose office territory covers the ticket location, then least-loaded. A
+    # preference, never a filter — the candidate set (and province fallback) is unchanged.
+    from ticketing.services.chart_behaviors import territory_covering_user_ids
+
+    covering = territory_covering_user_ids(db, candidates, location_code)
+
+    # (not-covering flag, load, user_id) — ties broken deterministically by user_id so the
+    # choice never depends on undefined Postgres row order (would be flaky otherwise).
+    return min(
+        candidates,
+        key=lambda uid: (0 if uid in covering else 1, active_counts.get(uid, 0), uid),
+    )
 
 
 def auto_assign_for_workflow_step(

@@ -203,6 +203,57 @@ def _apply_step_tier_roles(
                 _ensure_viewer(db, ticket.ticket_id, uid, "supervisor", "system")
 
 
+def notify_escalation_supervisor(db: Session, ticket: Ticket, from_step) -> list[str]:
+    """OC-04 §5.5 — after a ticket escalates off ``from_step``, notify that step's resolved
+    supervisor (the per-(project, step) resolver, OC-03). Side-effect only: a courtesy
+    in-app notice + a ``supervisor`` viewer row — it never changes assignment, the
+    escalation target, or visibility.
+
+    **SEAH leak-proof:** on a SEAH ticket, a supervisor is notified only if they
+    independently hold a SEAH role; a non-SEAH supervisor of a SEAH officer receives
+    **nothing**. Call AFTER the escalation commits (does not re-open that transaction); the
+    caller commits the notify rows. Returns the notified user_ids.
+    """
+    from ticketing.services.chart_behaviors import user_holds_seah_role
+    from ticketing.services.supervisor import resolve_supervisor
+
+    if from_step is None:
+        return []
+    res = resolve_supervisor(db, from_step, project_code=ticket.project_code)
+    if res.user_id:
+        users = [res.user_id]
+    elif res.role_pool:
+        users = _scope_candidates(
+            role_key=res.role_pool,
+            organization_id=ticket.organization_id,
+            location_code=ticket.location_code,
+            project_code=ticket.project_code,
+            db=db,
+        )
+    else:
+        return []
+
+    label = getattr(from_step, "display_name", None) or getattr(from_step, "step_key", "a step")
+    notified: list[str] = []
+    for uid in users:
+        if uid == ticket.assigned_to_user_id:
+            continue  # the new OIC already received the ESCALATED notification
+        if ticket.is_seah and not user_holds_seah_role(db, uid):
+            continue  # SEAH leak-proof — a non-SEAH supervisor receives nothing
+        _add_event(
+            db, ticket, "ESCALATION_SUPERVISOR_NOTICE",
+            step_id=ticket.current_step_id,
+            note=f"A ticket escalated off {label}; you are its supervisor.",
+            seen=False,
+            notify_user_id=uid,
+            created_by="system",
+            actor_role="system",
+        )
+        _ensure_viewer(db, ticket.ticket_id, uid, "supervisor", "system")
+        notified.append(uid)
+    return notified
+
+
 # ── Core escalation ───────────────────────────────────────────────────────────
 
 def escalate_ticket(
@@ -541,6 +592,7 @@ def run_sla_check(db: Session) -> dict:
     final_step = 0
     skipped = 0
     errors = 0
+    escalated_pairs: list = []  # (ticket, from_step) for the post-commit supervisor notify
 
     for ticket in tickets:
         try:
@@ -585,6 +637,7 @@ def run_sla_check(db: Session) -> dict:
             # Savepoint released cleanly — tally only after the nested tx succeeds.
             if outcome == "escalated":
                 escalated += 1
+                escalated_pairs.append((ticket, step))  # step = the step it escalated OFF
             elif outcome == "final":
                 final_step += 1
             else:
@@ -601,6 +654,17 @@ def run_sla_check(db: Session) -> dict:
     else:
         # Release FOR UPDATE locks / any skipped-episode bookkeeping cleanly.
         db.rollback()
+
+    # OC-04 §5.5: notify each escalated step's resolved supervisor AFTER the escalation
+    # commits (courtesy side-effect, SEAH-suppressed in the helper). A fresh transaction —
+    # never re-opens the HR-04-hardened escalation savepoints above.
+    if escalated_pairs:
+        for tkt, from_step in escalated_pairs:
+            try:
+                notify_escalation_supervisor(db, tkt, from_step)
+            except Exception:  # pragma: no cover - a notify failure must not undo escalation
+                logger.exception("supervisor-notify failed for ticket_id=%s", tkt.ticket_id)
+        db.commit()
 
     summary = {
         "checked": len(tickets),

@@ -738,6 +738,9 @@ class OfficerRosterEntry(BaseModel):
     project_codes: list[str] = []
     package_ids: list[str] = []
     scopes: list[OfficerRosterScopeBrief] = []
+    # OC-04 §5.1 — active position titles ("Senior Divisional Engineer · DOR_JHA") for the
+    # roster/directory, in place of raw role keys. Descriptive; no access decision.
+    positions: list[str] = []
     onboarding_status: str = "active"  # invited | active
 
 
@@ -844,6 +847,21 @@ def list_officer_roster(
             if scope_loc:
                 locs_by[uid].add(scope_loc)
 
+    # OC-04 §5.1 — active position titles per officer (position display name + org unit).
+    positions_by: dict[str, list[str]] = defaultdict(list)
+    if order:
+        from ticketing.models.officer_position import OfficerPosition
+        from ticketing.models.position_type import PositionType
+
+        pos_rows = db.execute(
+            select(OfficerPosition.user_id, PositionType.display_name, OfficerPosition.organization_id)
+            .join(PositionType, PositionType.position_type_id == OfficerPosition.position_type_id)
+            .where(OfficerPosition.user_id.in_(order), OfficerPosition.is_active.is_(True))
+            .order_by(PositionType.display_name)
+        ).all()
+        for uid, disp, org_id in pos_rows:
+            positions_by[uid].append(f"{disp} · {org_id}")
+
     def _entry(uid: str) -> OfficerRosterEntry:
         kc = kc_profiles.get(uid.lower()) if "@" in uid else None
         effective_keys: list[str] = []
@@ -867,6 +885,7 @@ def list_officer_roster(
             project_codes=sorted(proj_by.get(uid, set())),
             package_ids=sorted(pkg_by.get(uid, set())),
             scopes=scope_detail_by.get(uid, []),
+            positions=positions_by.get(uid, []),
             onboarding_status=officer_roster_onboarding_status(db, uid),
         )
 
