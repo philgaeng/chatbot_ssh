@@ -1,7 +1,8 @@
 import type { OfficerRosterEntry, OfficerRosterScope, PackageItem, ProjectItem } from "@/lib/api";
 import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 
-const ADMIN_ROLE_KEYS = new Set(["super_admin", "country_admin", "project_admin"]);
+// SH-7 4-tier ladder (country_admin retired → org_admin).
+const ADMIN_ROLE_KEYS = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 type RoleChoice = { key: string; label: string };
 

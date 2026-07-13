@@ -542,7 +542,8 @@ function AdminAccessTab() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [userId, setUserId] = useState("");
-  const [roleKey, setRoleKey] = useState<"country_admin" | "project_admin">("country_admin");
+  // SH-7: country_admin retired → org_admin (org-subtree, any depth). 4-tier ladder.
+  const [roleKey, setRoleKey] = useState<"org_admin" | "project_admin" | "officer_admin">("org_admin");
   const [countryCode, setCountryCode] = useState("NP");
   const [projectId, setProjectId] = useState("KL_ROAD");
   const [track, setTrack] = useState<"standard" | "seah">("standard");
@@ -568,7 +569,7 @@ function AdminAccessTab() {
     if (!userId.trim()) return;
     setResendMsg("");
     const workflow_tracks: ("standard" | "seah")[] =
-      roleKey === "country_admin"
+      roleKey === "org_admin"
         ? (["standard", "seah"] as const).filter((t) => countryTracks[t])
         : [track];
     if (workflow_tracks.length === 0) {
@@ -579,8 +580,9 @@ function AdminAccessTab() {
       const created = await createAdminScope({
         user_id: userId.trim(),
         role_key: roleKey,
-        country_code: roleKey === "country_admin" ? countryCode : undefined,
-        project_id: roleKey === "project_admin" ? projectId : undefined,
+        // org_admin: country-wide subtree (country_code, NULL org). project/officer admin: project-scoped.
+        country_code: roleKey === "org_admin" ? countryCode : undefined,
+        project_id: roleKey === "org_admin" ? undefined : projectId,
         workflow_tracks,
       });
       setUserId("");
@@ -629,7 +631,7 @@ function AdminAccessTab() {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        Appoint scoped country and project administrators. For <span className="font-medium">country_admin</span>,
+        Appoint scoped organisation and project administrators. For <span className="font-medium">org_admin</span>,
         you may assign Standard, SEAH, or both tracks (two scope rows). New officers receive a Keycloak setup email;
         use <span className="font-medium">Send setup email</span> if it does not arrive.
       </p>
@@ -642,10 +644,11 @@ function AdminAccessTab() {
             className="border border-gray-300 rounded px-2 py-1.5 col-span-2" />
           <select value={roleKey} onChange={(e) => setRoleKey(e.target.value as typeof roleKey)}
             className="border border-gray-300 rounded px-2 py-1.5">
-            <option value="country_admin">country_admin</option>
+            <option value="org_admin">org_admin</option>
             <option value="project_admin">project_admin</option>
+            <option value="officer_admin">officer_admin</option>
           </select>
-          {roleKey === "country_admin" ? (
+          {roleKey === "org_admin" ? (
             <div className="flex items-center gap-4 px-1">
               <label className="flex items-center gap-1.5 text-xs text-gray-700">
                 <input
@@ -671,7 +674,7 @@ function AdminAccessTab() {
               <option value="seah">seah</option>
             </select>
           )}
-          {roleKey === "country_admin" ? (
+          {roleKey === "org_admin" ? (
             <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country code"
               className="border border-gray-300 rounded px-2 py-1.5" />
           ) : (

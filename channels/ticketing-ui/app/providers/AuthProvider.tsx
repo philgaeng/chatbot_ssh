@@ -43,8 +43,9 @@ function tokenFromRosterRow(o: OfficerRosterEntry): TokenPayload {
 
 const PRIVILEGED_ROLE_KEYS = new Set([
   "super_admin",
-  "country_admin",
+  "org_admin",          // SH-7: country_admin retired → org_admin
   "project_admin",
+  "officer_admin",
 ]);
 
 function pickDefaultOfficer(roster: OfficerRosterEntry[]): OfficerRosterEntry | null {
@@ -146,23 +147,26 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "country_admin", "project_admin"]);
-const ADMIN_ROLES = new Set(["super_admin", "country_admin", "project_admin"]);
+// SH-7: country_admin retired → org_admin (org-subtree admin, any depth). The derived
+// `isCountryAdmin` flag is kept (many consumers read it) but now sources from org_admin;
+// RB-3 renames it to isOrgAdmin across the tree.
+const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "org_admin", "project_admin"]);
+const ADMIN_ROLES = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
   const fromRoles = {
     canSeeSeah: roleKeys.some((r) => SEAH_CAN_SEE_ROLES.has(r)),
     isAdmin: roleKeys.some((r) => ADMIN_ROLES.has(r)),
     isSuperAdmin: roleKeys.includes("super_admin"),
-    isCountryAdmin: roleKeys.includes("country_admin"),
+    isCountryAdmin: roleKeys.includes("org_admin"),
     isProjectAdmin: roleKeys.includes("project_admin"),
   };
   if (!adminCtx) return fromRoles;
   return {
     canSeeSeah: fromRoles.canSeeSeah || adminCtx.admin_workflow_tracks.includes("seah"),
-    isAdmin: fromRoles.isAdmin || adminCtx.is_country_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
+    isAdmin: fromRoles.isAdmin || adminCtx.is_org_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
     isSuperAdmin: fromRoles.isSuperAdmin || adminCtx.is_super_admin,
-    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_country_admin,
+    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_org_admin,
     isProjectAdmin: fromRoles.isProjectAdmin || adminCtx.is_project_admin,
   };
 }
