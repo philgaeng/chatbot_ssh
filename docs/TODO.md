@@ -311,6 +311,7 @@ H2-01…08: OIDC refresh-grant, `tickets.py` split + engine extraction, authz/es
 | `OfficerScope` seed creates `UserRole` rows but no `OfficerScope` rows | `mock_tickets.py` | Auto-assign returns `None` for API-created tickets; pre-seeded demo unaffected |
 | ~~Cognito user pool not created~~ | — | ✅ Obsolete — Keycloak shipped instead (see `docs/deployment/16_auth_keycloak.md`) |
 | `grievance_sync.py` hardcoded column list | `tasks/grievance_sync.py` | Will break if public schema column names change — add integration test |
+| Portal ESLint debt: 143 warnings, 0 errors (HR-05 downgraded 5 rule families to `warn` to reserve the CI error channel) | `channels/ticketing-ui/` | Tracked ticket: [`sprints/2026-07_hardening/followups/portal-lint-cleanup.md`](sprints/2026-07_hardening/followups/portal-lint-cleanup.md). Endgame: warn → fixed → re-enable as `error`. Includes the 4 unused `eslint-disable` directives (e.g. `AuthProvider.tsx` getUserPreferences effect). |
 
 ---
 

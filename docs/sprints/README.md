@@ -1,5 +1,14 @@
 # Sprints — summaries and archive
 
+## Standing rule — log every deferral (no silent debt)
+
+Whenever a sprint **defers** work rather than doing it — downgrading a lint rule to `warn`, suppressing/`# noqa`-ing a warning, scoping a finding out of a ticket, quarantining a test (`-m "not integration"`), or leaving a `TODO`/`INTEGRATION POINT` — it **must** be recorded in two places, in the same commit that creates the deferral:
+
+1. A tracked follow-up doc under the sprint: `sprints/<sprint>/followups/<slug>.md` (measured inventory + definition of done + endgame). Exemplar: [`2026-07_hardening/followups/portal-lint-cleanup.md`](2026-07_hardening/followups/portal-lint-cleanup.md).
+2. A one-line pointer row in [`../TODO.md`](../TODO.md) under **🔵 TECH DEBT**, linking that follow-up.
+
+A downgrade/suppression/scope-cut that is **not** logged this way is treated as a defect, not a deferral — the whole point is that debt stays visible. These follow-ups accumulate into the TECH DEBT backlog so that, once the main Tier-2/Tier-3 refactors have landed, a dedicated **clean-up sprint** can be launched against a complete, measured list rather than rediscovered by grep.
+
 ## Active & queued sprints
 
 | Sprint | Status | Folder | Focus |
