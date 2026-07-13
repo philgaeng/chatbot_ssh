@@ -278,6 +278,51 @@ def update_position_type(
     return pt
 
 
+class PositionHolder(BaseModel):
+    officer_position_id: str
+    user_id: str
+    organization_id: str
+    reports_to_user_id: str | None = None
+    is_active: bool
+
+
+@router.get(
+    "/position-types/{position_type_id}/holders",
+    response_model=list[PositionHolder],
+    summary="List officers holding a position type (RB frame 06 — review holders)",
+)
+def list_position_type_holders(
+    position_type_id: str,
+    active_only: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> list[PositionHolder]:
+    """The officers who hold this position type, for the Review-holders modal. Read-only;
+    descriptive `officer_positions` rows (never an access-control source)."""
+    if not db.get(PositionType, position_type_id):
+        raise HTTPException(status_code=404, detail="Position type not found")
+    from ticketing.models.officer_position import OfficerPosition
+
+    stmt = (
+        select(OfficerPosition)
+        .where(OfficerPosition.position_type_id == position_type_id)
+        .order_by(OfficerPosition.user_id)
+    )
+    if active_only:
+        stmt = stmt.where(OfficerPosition.is_active.is_(True))
+    rows = db.execute(stmt).scalars().all()
+    return [
+        PositionHolder(
+            officer_position_id=r.officer_position_id,
+            user_id=r.user_id,
+            organization_id=r.organization_id,
+            reports_to_user_id=r.reports_to_user_id,
+            is_active=r.is_active,
+        )
+        for r in rows
+    ]
+
+
 @router.delete(
     "/position-types/{position_type_id}",
     status_code=204,

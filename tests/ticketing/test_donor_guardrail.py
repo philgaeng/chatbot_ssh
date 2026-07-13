@@ -14,7 +14,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from ticketing.engine.escalation import _apply_step_tier_roles
 from ticketing.models.project import Project
@@ -224,6 +224,73 @@ def _donor_is_viewer(db, ticket_id: str, donor_uid: str) -> bool:
         ).scalar_one_or_none()
         is not None
     )
+
+
+# ── Donor CRUD endpoints (doc 13 §3 — the UI-wireable surface) ────────────────
+
+def _super_admin_client(db):
+    from fastapi.testclient import TestClient
+
+    from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db
+    from ticketing.api.main import app
+
+    def override_user():
+        return CurrentUser(user_id="super@grm.local", role_keys=["super_admin"])
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_authenticated_user] = override_user
+    app.dependency_overrides[get_db] = override_db
+    return TestClient(app), app
+
+
+def test_add_and_remove_donor_endpoint(db, kl_road_project):
+    from ticketing.models.organization import Organization
+    from ticketing.models.project import ProjectDonor
+
+    donor_org_id = f"DONOR_{uuid.uuid4().hex[:6].upper()}"
+    db.add(Organization(
+        organization_id=donor_org_id, name="Test Donor Bank", country_code="NP",
+        org_category="donor", unit_type="development_partner",
+    ))
+    db.commit()
+    client, app = _super_admin_client(db)
+    try:
+        # Add — 201 + row created + last-step cast auto-populated.
+        res = client.post(f"/api/v1/projects/{kl_road_project.project_id}/donors/{donor_org_id}")
+        assert res.status_code == 201, res.text
+        assert db.get(ProjectDonor, (kl_road_project.project_id, donor_org_id)) is not None
+        step = last_standard_step(db, kl_road_project)
+        assert donor_informed_role_keys(step), "donor add must auto-populate the informed cast"
+
+        # Listed by GET.
+        got = client.get(f"/api/v1/projects/{kl_road_project.project_id}/donors")
+        assert got.status_code == 200
+        assert donor_org_id in [d["organization_id"] for d in got.json()]
+
+        # Remove — 204 + row gone.
+        rem = client.delete(f"/api/v1/projects/{kl_road_project.project_id}/donors/{donor_org_id}")
+        assert rem.status_code == 204, rem.text
+        assert db.get(ProjectDonor, (kl_road_project.project_id, donor_org_id)) is None
+    finally:
+        app.dependency_overrides.clear()
+        db.execute(delete(ProjectDonor).where(ProjectDonor.organization_id == donor_org_id))
+        org = db.get(Organization, donor_org_id)
+        if org:
+            db.delete(org)
+        db.commit()
+
+
+def test_add_donor_endpoint_rejects_non_donor_org(db, kl_road_project):
+    client, app = _super_admin_client(db)
+    try:
+        # DOR is government — not a valid donor.
+        res = client.post(f"/api/v1/projects/{kl_road_project.project_id}/donors/{ORG_DOR}")
+        assert res.status_code == 422, res.text
+        assert "donor-category" in res.text
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_donor_cast_on_standard_ticket_but_suppressed_on_seah(ctx):

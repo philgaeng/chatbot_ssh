@@ -65,6 +65,18 @@ def validate_implementing_agency(db: Session, org_id: Optional[str]) -> None:
         )
 
 
+def validate_donor_org(db: Session, org_id: str) -> None:
+    """Raise ``ValueError`` unless ``org_id`` is an existing ``donor``-category org."""
+    org = db.get(Organization, org_id)
+    if org is None:
+        raise ValueError(f"Organization '{org_id}' does not exist")
+    if org.org_category != "donor":
+        raise ValueError(
+            "Only a donor-category organization can be added as a project donor "
+            f"(got category '{org.org_category}')"
+        )
+
+
 def project_donor_org_ids(db: Session, project_id: str) -> list[str]:
     """Org ids of every donor on the project (category ``donor``); [] when none."""
     return list(

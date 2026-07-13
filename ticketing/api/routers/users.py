@@ -125,6 +125,7 @@ def _role_to_response(db: Session, role: Role) -> RoleResponse:
         permissions=role.permissions,
         role_kind=role.role_kind,
         role_origin=role.role_origin,
+        owner_organization_id=role.owner_organization_id,
         steps_count=steps,
         officers_count=officers,
         created_at=role.created_at,

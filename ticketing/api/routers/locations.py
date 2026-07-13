@@ -72,7 +72,13 @@ from ticketing.utils.organization_identifier import (
 )
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
-from ticketing.models.project import Project, ProjectActorRole, ProjectLocation, ProjectOrganization
+from ticketing.models.project import (
+    Project,
+    ProjectActorRole,
+    ProjectDonor,
+    ProjectLocation,
+    ProjectOrganization,
+)
 from ticketing.services import project_actor_roles as actor_roles_svc
 from ticketing.api.schemas.project_messaging import (
     ProjectMessagingPatch,
@@ -1648,6 +1654,86 @@ def update_project_organization_role(
     row.org_role = body.org_role
     db.commit()
     return {"organization_id": organization_id, "org_role": row.org_role}
+
+
+# ── Project donors (doc 13 / DECISION 2026-07-10 §3) ──────────────────────────
+
+class DonorItem(BaseModel):
+    organization_id: str
+    name: str | None = None
+
+
+@router.get("/projects/{project_id}/donors", response_model=list[DonorItem])
+def list_project_donors(project_id: str, db: Session = Depends(get_db)):
+    """Donor organizations funding this project (category ``donor``)."""
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    rows = db.execute(
+        select(ProjectDonor).where(ProjectDonor.project_id == project_id)
+    ).scalars().all()
+    out: list[DonorItem] = []
+    for r in rows:
+        org = db.get(Organization, r.organization_id)
+        out.append(DonorItem(organization_id=r.organization_id, name=org.name if org else None))
+    return out
+
+
+@router.post("/projects/{project_id}/donors/{organization_id}", status_code=201,
+             response_model=DonorItem)
+def add_project_donor(
+    project_id: str,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Add a donor to a project (doc 13 §3). Standard-track project mutation.
+
+    Auto-populates the final standard step's "Kept informed" cast with the donor tiers
+    (the admin may later trim to ≥1) so the go-live donor guardrail is satisfiable and
+    donor staff are notified on final escalation. **SEAH-suppressed** at runtime.
+    """
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
+    require_track_for_mutation(current_user, "standard")
+
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        donor_guardrail_svc.validate_donor_org(db, organization_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    existing = db.get(ProjectDonor, (project_id, organization_id))
+    if existing is None:
+        db.add(ProjectDonor(project_id=project_id, organization_id=organization_id))
+        db.flush()
+    # Auto-populate the last standard step's informed cast (idempotent).
+    donor_guardrail_svc.apply_donor_informed_defaults(db, project)
+    db.commit()
+    org = db.get(Organization, organization_id)
+    return DonorItem(organization_id=organization_id, name=org.name if org else None)
+
+
+@router.delete("/projects/{project_id}/donors/{organization_id}", status_code=204)
+def remove_project_donor(
+    project_id: str,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Remove a donor from a project. Leaves the donor roles in the workflow cast (an
+    admin trims those in the workflow editor) — removing the donor only drops the
+    go-live guardrail requirement."""
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
+    require_track_for_mutation(current_user, "standard")
+
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    row = db.get(ProjectDonor, (project_id, organization_id))
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return None
 
 
 # ── Project actor role vocabulary ─────────────────────────────────────────────

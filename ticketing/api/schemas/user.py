@@ -18,6 +18,9 @@ class RoleResponse(BaseModel):
     permissions: Any
     role_kind: str | None = None
     role_origin: str | None = None
+    # SH-7 org-scoped catalog: the owning org node (NULL = global/system). Drives the
+    # "available at DoR & below" owning-level chip in the role picker (RB frame 08).
+    owner_organization_id: str | None = None
     steps_count: int = 0
     officers_count: int = 0
     created_at: datetime
