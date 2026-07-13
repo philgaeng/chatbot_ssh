@@ -13,10 +13,10 @@
 
 | ID | Tier | Title | Closes | Sev | Status | Tests green | Commit |
 |---|---|---|---|---|---|---|---|
-| R1 | T0 | SEAH leak lockdown (notifications + cast whitelist) | B1, B2 | BLOCKER | **done** | ✅ 4 tests | `d…` (next tracker update) |
-| R2 | T1 | Donor guarantee: legacy fallback + endpoint scoping | M1 | MAJOR | todo | ☐ | — |
-| R3 | T1 | Deactivated officers out of assignment + coverage | M2 | MAJOR | todo | ☐ | — |
-| R4 | T1 | project_admin appointment containment | MO2 | MOD | todo | ☐ | — |
+| R1 | T0 | SEAH leak lockdown (notifications + cast whitelist) | B1, B2 | BLOCKER | **done** | ✅ 4 tests | `de48068a` |
+| R2 | T1 | Donor guarantee: legacy fallback + endpoint scoping | M1 | MAJOR | **done** | ✅ 2 tests | this T1 commit |
+| R3 | T1 | Deactivated officers out of assignment + coverage | M2 | MAJOR | **done** | ✅ 2 tests | this T1 commit |
+| R4 | T1 | project_admin appointment containment | MO2 | MOD | **done** | ✅ 2 tests | this T1 commit |
 | R5 | T2 | Friendly-error contract: unwrap object detail + wire ErrorNotice | M3 | MAJOR | todo | ☐ | — |
 | R6 | T2 | Plain-language labels + owning-level chip in inline clusters | M4, M7 | MAJOR | todo | ☐ | — |
 | R7 | T3 | Invite-by-position for new officers | M5 | MAJOR | todo | ☐ | — |

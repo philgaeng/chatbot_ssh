@@ -78,14 +78,32 @@ def validate_donor_org(db: Session, org_id: str) -> None:
 
 
 def project_donor_org_ids(db: Session, project_id: str) -> list[str]:
-    """Org ids of every donor on the project (category ``donor``); [] when none."""
-    return list(
+    """Org ids of every donor on the project; [] when none.
+
+    R2 (BUILD-REVIEW M1a): counts the dedicated ``project_donors`` table **and** the legacy
+    ``project_organizations.org_role='donor'`` link — expand-phase parity with
+    :func:`implementing_agency_org_id` (which also falls back). Without the union, a donor
+    added via the still-live legacy actor path never counts, so the go-live A5 donor
+    guardrail passes vacuously and a project could activate with a donor uninformed.
+    """
+    from ticketing.models.project import ProjectOrganization
+
+    dedicated = set(
         db.execute(
             select(ProjectDonor.organization_id).where(
                 ProjectDonor.project_id == project_id
             )
         ).scalars().all()
     )
+    legacy = set(
+        db.execute(
+            select(ProjectOrganization.organization_id).where(
+                ProjectOrganization.project_id == project_id,
+                ProjectOrganization.org_role == "donor",
+            )
+        ).scalars().all()
+    )
+    return sorted(dedicated | legacy)
 
 
 def project_has_donor(db: Session, project_id: str) -> bool:

@@ -282,6 +282,77 @@ def test_add_and_remove_donor_endpoint(db, kl_road_project):
         db.commit()
 
 
+# ── R2: legacy-donor fallback (M1a) + endpoint project-scope (M1b) ────────────
+
+def test_project_donor_org_ids_counts_legacy_org_role(db, kl_road_project):
+    """M1a: a donor represented ONLY as a legacy org_role='donor' link (no project_donors
+    row) is still counted — otherwise A5 passes vacuously and go-live slips the guardrail."""
+    from ticketing.models.project import ProjectDonor, ProjectOrganization
+
+    # Remove KL Road's dedicated ProjectDonor rows so ADB is present ONLY via the legacy
+    # org_role='donor' link (the seed sets both). No commit — restored in finally.
+    saved = db.execute(
+        select(ProjectDonor).where(ProjectDonor.project_id == kl_road_project.project_id)
+    ).scalars().all()
+    saved_keys = [(r.project_id, r.organization_id) for r in saved]
+    try:
+        for r in saved:
+            db.delete(r)
+        db.flush()
+        # ADB is still linked as org_role='donor' (ProjectOrganization) → must still count.
+        assert ORG_ADB in project_donor_org_ids(db, kl_road_project.project_id)
+        # And the go-live A5 gate stays active (evaluated, not skipped).
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        assert any(c.id == "A5" for c in report.checks)
+    finally:
+        for pid, oid in saved_keys:
+            if db.get(ProjectDonor, (pid, oid)) is None:
+                db.add(ProjectDonor(project_id=pid, organization_id=oid))
+        db.flush()
+
+
+def test_donor_endpoint_rejects_foreign_project_admin(db, kl_road_project):
+    from fastapi.testclient import TestClient
+
+    from ticketing.api.dependencies import CurrentUser, get_authenticated_user, get_db
+    from ticketing.api.main import app
+    from ticketing.services.admin_access import AdminScopeRow
+
+    def scope(project_id: str) -> AdminScopeRow:
+        return AdminScopeRow(
+            admin_scope_id=str(uuid.uuid4()), user_id="pa@grm.local", role_key="project_admin",
+            country_code="NP", project_id=project_id, organization_id=None, package_id=None,
+            workflow_track="standard",
+        )
+
+    def override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = override_db
+    try:
+        # project_admin scoped to a DIFFERENT project → 403 on KL Road's donor endpoint.
+        app.dependency_overrides[get_authenticated_user] = lambda: CurrentUser(
+            user_id="pa@grm.local", role_keys=["project_admin"],
+            admin_scopes=[scope("SOME_OTHER_PROJECT")],
+        )
+        client = TestClient(app)
+        res = client.post(f"/api/v1/projects/{kl_road_project.project_id}/donors/{ORG_ADB}")
+        assert res.status_code == 403, res.text
+        assert "administer this project" in res.text
+
+        # project_admin scoped to KL Road → passes the scope gate (not 403).
+        app.dependency_overrides[get_authenticated_user] = lambda: CurrentUser(
+            user_id="pa@grm.local", role_keys=["project_admin"],
+            admin_scopes=[scope(kl_road_project.project_id)],
+        )
+        client = TestClient(app)
+        res2 = client.post(f"/api/v1/projects/{kl_road_project.project_id}/donors/{ORG_ADB}")
+        assert res2.status_code != 403, res2.text
+    finally:
+        app.dependency_overrides.clear()
+        db.rollback()  # discard any donor mutation the second call committed
+
+
 def test_add_donor_endpoint_rejects_non_donor_org(db, kl_road_project):
     client, app = _super_admin_client(db)
     try:

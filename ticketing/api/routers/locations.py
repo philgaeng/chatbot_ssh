@@ -46,6 +46,8 @@ from ticketing.services.admin_access import (
     SettingsAction,
     can_admin_org,
     can_assign_project_workflow,
+    is_org_admin,
+    is_project_admin,
     is_super_admin,
     require_settings_write,
     require_track_for_mutation,
@@ -1725,6 +1727,21 @@ def update_project_organization_role(
 
 # ── Project donors (doc 13 / DECISION 2026-07-10 §3) ──────────────────────────
 
+def _require_project_scope(current_user: CurrentUser, project_id: str) -> None:
+    """R2 (BUILD-REVIEW M1b): a ``project_admin`` may only mutate a project they administer.
+
+    ``MANAGE_PROJECT`` alone returns True for *any* project_admin (tier predicate, no
+    ``project_id``), so without this a project_admin of project A could edit project B's
+    donors — and trigger ``apply_donor_informed_defaults`` on B's (possibly shared) workflow
+    step. Super/org admins keep the broader access the other project mutations grant.
+    """
+    if is_super_admin(current_user) or is_org_admin(current_user):
+        return
+    if is_project_admin(current_user, project_id, "standard"):
+        return
+    raise HTTPException(status_code=403, detail="You do not administer this project")
+
+
 class DonorItem(BaseModel):
     organization_id: str
     name: str | None = None
@@ -1761,6 +1778,7 @@ def add_project_donor(
     """
     require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
     require_track_for_mutation(current_user, "standard")
+    _require_project_scope(current_user, project_id)
 
     project = db.get(Project, project_id)
     if not project:
@@ -1793,6 +1811,7 @@ def remove_project_donor(
     go-live guardrail requirement."""
     require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
     require_track_for_mutation(current_user, "standard")
+    _require_project_scope(current_user, project_id)
 
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")

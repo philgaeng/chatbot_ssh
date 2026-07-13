@@ -381,6 +381,7 @@ def _scope_country_fallback_candidates(
     Never used for field roles — see assignment_tier='field'.
     """
     from ticketing.models.officer_scope import OfficerScope
+    from ticketing.services.officer_admin import officer_is_active
     from ticketing.services.project_routing import (
         load_project_ref,
         officer_scope_project_code_match,
@@ -393,6 +394,8 @@ def _scope_country_fallback_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                if not officer_is_active(db, uid):  # R3: deactivated officers out of the pool
+                    continue
                 result.append(uid)
 
     base = (
@@ -464,6 +467,7 @@ def _scope_candidates(
     from ticketing.models.officer_scope import OfficerScope
     from ticketing.models.package import PackageLocation, ProjectPackage
     from ticketing.models.project import Project
+    from ticketing.services.officer_admin import officer_is_active
 
     seen: set[str] = set()
     result: list[str] = []
@@ -472,6 +476,11 @@ def _scope_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                # R3 (BUILD-REVIEW M2): a soft-deactivated officer is out of the assignment
+                # pool — the system assignment path never passes through enrich_user, so it
+                # must exclude them here or tickets auto-route to someone who can't log in.
+                if not officer_is_active(db, uid):
+                    continue
                 result.append(uid)
 
     base = (OfficerScope.role_key == role_key,)

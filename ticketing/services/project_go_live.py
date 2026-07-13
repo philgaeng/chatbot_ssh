@@ -92,16 +92,22 @@ def _second_standard_step_role(db: Session, project: Project) -> str | None:
     return _step_role_at_order(db, project.standard_workflow_id, 2)
 
 
+def _any_active_officer(db: Session, user_ids) -> bool:
+    """R3 (BUILD-REVIEW M2): a level is only "covered" by an officer who can still log in —
+    a soft-deactivated officer does not count toward go-live staffing (C1/C5)."""
+    from ticketing.services.officer_admin import officer_is_active
+
+    return any(officer_is_active(db, uid) for uid in set(user_ids))
+
+
 def _has_officer_on_package(db: Session, *, package_id: str, grm_role_key: str) -> bool:
-    return (
-        db.execute(
-            select(OfficerScope.user_id).where(
-                OfficerScope.role_key == grm_role_key,
-                OfficerScope.package_id == package_id,
-            ).limit(1)
-        ).scalar_one_or_none()
-        is not None
-    )
+    uids = db.execute(
+        select(OfficerScope.user_id).where(
+            OfficerScope.role_key == grm_role_key,
+            OfficerScope.package_id == package_id,
+        )
+    ).scalars().all()
+    return _any_active_officer(db, uids)
 
 
 def _has_officer_on_project_wide(
@@ -110,18 +116,14 @@ def _has_officer_on_project_wide(
     project: Project,
     grm_role_key: str,
 ) -> bool:
-    return (
-        db.execute(
-            select(OfficerScope.user_id)
-            .where(
-                OfficerScope.role_key == grm_role_key,
-                OfficerScope.package_id.is_(None),
-                _officer_scope_for_project(project),
-            )
-            .limit(1)
-        ).scalar_one_or_none()
-        is not None
-    )
+    uids = db.execute(
+        select(OfficerScope.user_id).where(
+            OfficerScope.role_key == grm_role_key,
+            OfficerScope.package_id.is_(None),
+            _officer_scope_for_project(project),
+        )
+    ).scalars().all()
+    return _any_active_officer(db, uids)
 
 
 def _has_project_l1_fallback(db: Session, project: Project, l1_role: str) -> bool:

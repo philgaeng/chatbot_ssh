@@ -80,6 +80,21 @@ def _email_hint(user_id: str) -> str | None:
     return user_id if "@" in user_id else None
 
 
+def _org_admin_covers_project(db: Session, user: CurrentUser, project_ref: str, track: str) -> bool:
+    """R4: True if ``user``'s org_admin subtree covers the project's **implementing agency**
+    (the accountable org) on ``track``. Contains project_admin appointment to the accountable
+    agency's admin — a *donor*'s org_admin (a participant, not the IA) may not appoint the
+    funded project's admin. No IA resolvable → not covered (super_admin already returned)."""
+    from ticketing.services.donor_guardrail import implementing_agency_org_id
+    from ticketing.services.project_routing import load_project_ref
+
+    proj = load_project_ref(db, project_ref)
+    if proj is None:
+        return False
+    ia = implementing_agency_org_id(db, proj)
+    return bool(ia) and can_admin_org(db, user, ia, track)
+
+
 # ── Roles ─────────────────────────────────────────────────────────────────────
 
 def _role_usage_counts(db: Session, role_key: str) -> tuple[int, int]:
@@ -421,13 +436,24 @@ def create_admin_scope(
                 status_code=422,
                 detail="project_admin requires exactly one workflow_track",
             )
+        if not body.project_id:
+            raise HTTPException(status_code=422, detail="project_id required for project_admin")
         if not (current_user.is_super_admin or is_org_admin(current_user, tracks[0])):  # type: ignore[arg-type]
             raise HTTPException(
                 status_code=403,
                 detail="org_admin (matching track) or super_admin required",
             )
-        if not body.project_id:
-            raise HTTPException(status_code=422, detail="project_id required for project_admin")
+        # R4 (BUILD-REVIEW MO2): attenuated delegation — an org_admin may only appoint a
+        # project_admin on a project WITHIN its own subtree (the org_admin/officer_admin
+        # branches already contain; this one previously did not → any org_admin could
+        # appoint project_admin on any project).
+        if not current_user.is_super_admin and not _org_admin_covers_project(
+            db, current_user, body.project_id, tracks[0]
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="You may only appoint project_admin on a project within your subtree",
+            )
     elif body.role_key == "officer_admin":
         if len(tracks) != 1:
             raise HTTPException(
