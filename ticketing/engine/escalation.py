@@ -12,7 +12,6 @@ no duplication between manual and auto.
 from __future__ import annotations
 
 import logging
-import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -27,6 +26,7 @@ from ticketing.engine.workflow_engine import (
     is_sla_breached,
     _scope_candidates,
 )
+from ticketing.engine.events import _add_event
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_viewer import TicketViewer
 from ticketing.models.workflow import WorkflowStep
@@ -42,54 +42,8 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _id() -> str:
-    return str(uuid.uuid4())
-
-
-def _case_sensitivity(ticket: Ticket) -> str:
-    return "seah" if ticket.is_seah else "standard"
-
-
-def _add_event(
-    db: Session,
-    ticket: Ticket,
-    event_type: str,
-    *,
-    old_status: Optional[str] = None,
-    new_status: Optional[str] = None,
-    old_assigned: Optional[str] = None,
-    new_assigned: Optional[str] = None,
-    step_id: Optional[str] = None,
-    note: Optional[str] = None,
-    payload: Optional[dict] = None,
-    seen: bool = False,
-    notify_user_id: Optional[str] = None,
-    created_by: Optional[str] = None,
-    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
-    actor_role: Optional[str] = None,
-    case_sensitivity: Optional[str] = None,   # derived from ticket when None
-    summary_regen_required: bool = False,
-) -> TicketEvent:
-    event = TicketEvent(
-        event_id=_id(),
-        ticket_id=ticket.ticket_id,
-        event_type=event_type,
-        old_status_code=old_status,
-        new_status_code=new_status,
-        old_assigned_to=old_assigned,
-        new_assigned_to=new_assigned,
-        workflow_step_id=step_id,
-        note=note,
-        payload=payload,
-        seen=seen,
-        assigned_to_user_id=notify_user_id,
-        created_by_user_id=created_by,
-        actor_role=actor_role,
-        case_sensitivity=case_sensitivity if case_sensitivity is not None else _case_sensitivity(ticket),
-        summary_regen_required=summary_regen_required,
-    )
-    db.add(event)
-    return event
+# _add_event now lives in ticketing/engine/events.py (H2-02 — was duplicated here
+# and in the tickets router); imported at module top.
 
 
 # ── Tier management helpers ───────────────────────────────────────────────────

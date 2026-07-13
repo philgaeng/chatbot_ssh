@@ -88,6 +88,7 @@ from ticketing.engine.escalation import (
     convene_grc, escalate_ticket,
     _apply_step_tier_roles, _ensure_viewer,
 )
+from ticketing.engine.events import _add_event
 from ticketing.tasks.notifications import enqueue_assignment_notifications, notify_complainant
 from ticketing.tasks.llm import (
     generate_findings,
@@ -384,46 +385,8 @@ def _auto_acknowledge_if_assigned_actor(
     )
 
 
-def _add_event(
-    db: Session,
-    ticket: Ticket,
-    event_type: str,
-    *,
-    old_status: Optional[str] = None,
-    new_status: Optional[str] = None,
-    old_assigned: Optional[str] = None,
-    new_assigned: Optional[str] = None,
-    step_id: Optional[str] = None,
-    note: Optional[str] = None,
-    payload: Optional[dict] = None,
-    created_by: Optional[str] = None,
-    seen: bool = False,
-    notify_user_id: Optional[str] = None,
-    # ── SEAH audit fields (seah-privacy-worktree-handoff.md) ──
-    actor_role: Optional[str] = None,
-    case_sensitivity: Optional[str] = None,   # derived from ticket when None
-    summary_regen_required: bool = False,
-) -> TicketEvent:
-    event = TicketEvent(
-        event_id=_new_id(),
-        ticket_id=ticket.ticket_id,
-        event_type=event_type,
-        old_status_code=old_status,
-        new_status_code=new_status,
-        old_assigned_to=old_assigned,
-        new_assigned_to=new_assigned,
-        workflow_step_id=step_id,
-        note=note,
-        payload=payload,
-        seen=seen,
-        assigned_to_user_id=notify_user_id,
-        created_by_user_id=created_by,
-        actor_role=actor_role,
-        case_sensitivity=case_sensitivity if case_sensitivity is not None else ("seah" if ticket.is_seah else "standard"),
-        summary_regen_required=summary_regen_required,
-    )
-    db.add(event)
-    return event
+# _add_event now lives in ticketing/engine/events.py (H2-02 — was duplicated in
+# this router and engine/escalation.py); imported at module top.
 
 
 # ─── POST /tickets — create (chatbot/backend) ─────────────────────────────────
