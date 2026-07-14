@@ -1294,7 +1294,7 @@ def _load_project(db: Session, project_id: str) -> Project | None:
     ).scalar_one_or_none()
 
 
-@router.get("/projects", response_model=list[ProjectResponse])
+@router.get("/projects", response_model=list[ProjectResponse], dependencies=[Depends(get_authenticated_user)])
 def list_projects(
     country: str | None = Query(None),
     active_only: bool = Query(True),
@@ -1391,7 +1391,7 @@ def create_project(
     return _project_to_response(p, db)
 
 
-@router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse)
+@router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
     """Go-live readiness checklist for a project."""
     if not db.get(Project, project_id):
@@ -1416,7 +1416,7 @@ def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse)
+@router.get("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project_messaging(project_id: str, db: Session = Depends(get_db)):
     """Officer SMS/WhatsApp config for a project plus computed max workflow levels."""
     config = msg_svc.get_officer_messaging(db, project_id)
@@ -1453,7 +1453,7 @@ def patch_project_messaging(
     )
 
 
-@router.get("/projects/{project_id}", response_model=ProjectResponse)
+@router.get("/projects/{project_id}", response_model=ProjectResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project(project_id: str, db: Session = Depends(get_db)):
     """Get a single project with all org and location links."""
     p = _load_project(db, project_id)
@@ -1462,7 +1462,11 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
     return _project_to_response(p, db)
 
 
-@router.get("/projects/{project_id}/workflows", response_model=list[ProjectWorkflowItem])
+@router.get(
+    "/projects/{project_id}/workflows",
+    response_model=list[ProjectWorkflowItem],
+    dependencies=[Depends(get_authenticated_user)],
+)
 def list_project_workflow_slots(project_id: str, db: Session = Depends(get_db)):
     """Workflow streams linked on this project (safeguards, hazards, CA, SEAH, custom)."""
     p = db.get(Project, project_id)
@@ -1514,6 +1518,13 @@ def update_project(
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
     """Update project metadata. Admin only."""
+
+    # authz-gaps-h2-03 #3: metadata edits (name/short_code/description/is_active/
+    # implementing_agency) had NO gate despite the docstring — any authenticated officer could
+    # rename or deactivate a project. Gate the whole handler on project management
+    # (super/org/project admin, doc 11 §2.3/§4). The per-track workflow-binding fields keep
+    # their finer `can_assign_project_workflow` sub-gate below.
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
 
     p = _load_project(db, project_id)
     if not p:
@@ -1639,7 +1650,7 @@ def delete_project(
 
 # ── Project ↔ Organizations ───────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/organizations", response_model=list[ProjectOrgItem])
+@router.get("/projects/{project_id}/organizations", response_model=list[ProjectOrgItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_organizations(project_id: str, db: Session = Depends(get_db)):
     """List organizations linked to a project, with their roles."""
     if not db.get(Project, project_id):
@@ -1747,7 +1758,7 @@ class DonorItem(BaseModel):
     name: str | None = None
 
 
-@router.get("/projects/{project_id}/donors", response_model=list[DonorItem])
+@router.get("/projects/{project_id}/donors", response_model=list[DonorItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_donors(project_id: str, db: Session = Depends(get_db)):
     """Donor organizations funding this project (category ``donor``)."""
     if not db.get(Project, project_id):
@@ -1835,7 +1846,7 @@ class ActorRolesReplace(BaseModel):
     roles: list[ActorRoleItem]
 
 
-@router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
+@router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_actor_roles(project_id: str, db: Session = Depends(get_db)):
     """Role vocabulary for this project (donor, CSC, contractor, etc.)."""
     if not db.get(Project, project_id):
@@ -1901,7 +1912,7 @@ def remove_project_organization(
 
 # ── Project ↔ Locations ───────────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/locations")
+@router.get("/projects/{project_id}/locations", dependencies=[Depends(get_authenticated_user)])
 def list_project_locations(
     project_id: str,
     with_details: bool = Query(False, description="Include full location + translations"),
@@ -2070,7 +2081,7 @@ def _get_package_or_404(db: Session, project_id: str, package_id: str) -> Projec
     return pkg
 
 
-@router.get("/projects/{project_id}/packages", response_model=list[PackageResponse])
+@router.get("/projects/{project_id}/packages", response_model=list[PackageResponse], dependencies=[Depends(get_authenticated_user)])
 def list_packages(project_id: str, db: Session = Depends(get_db)):
     """List all packages for a project, ordered by package_code."""
     if not db.get(Project, project_id):

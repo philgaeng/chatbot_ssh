@@ -395,25 +395,66 @@ def kl_road_project_id() -> str:
         db.close()
 
 
-@pytest.mark.xfail(
-    reason=(
-        "H2-03 finding: PATCH /projects/{id} has NO authz gate on metadata fields "
-        "(locations.py:1509-1560) despite its 'Admin only' docstring — any authenticated "
-        "officer can rename/deactivate a project. Logged in PROGRESS; fix is a separate "
-        "authz-hardening ticket. Flips to xpass when gated."
-    ),
-    strict=False,
-)
-def test_project_metadata_patch_should_require_admin(kl_road_project_id):
-    """SPEC (doc 11 §2.3/§4): editing a project is super/org/project-admin only, so a
-    non-admin officer must get 403. Empty body = no-op (nothing mutates)."""
+def test_project_metadata_patch_requires_admin(kl_road_project_id):
+    """authz-gaps-h2-03 #3 (fixed): editing a project is super/org/project-admin only
+    (doc 11 §2.3/§4). A non-admin officer must get 403; an allowed tier passes the gate.
+    Empty body = no-op (nothing mutates)."""
     try:
-        status = _admin_client(LADDER["non_admin"]).patch(
+        denied = _admin_client(LADDER["non_admin"]).patch(
+            f"/api/v1/projects/{kl_road_project_id}", json={}
+        ).status_code
+        allowed = _admin_client(LADDER["project"]).patch(
             f"/api/v1/projects/{kl_road_project_id}", json={}
         ).status_code
     finally:
         app.dependency_overrides.clear()
-    assert status == 403
+    assert denied == 403, f"non-admin must be 403 (got {denied})"
+    assert allowed != 403, f"project_admin must pass the MANAGE_PROJECT gate (got {allowed})"
+
+
+def test_delete_custom_role_requires_operational_role_admin():
+    """authz-gaps-h2-03 #2 (fixed): deleting a custom/operational role needs the same
+    catalog-authoring permission as creating it (super or org_admin on the role's track).
+    A non-admin — and even a mere officer_admin — must be 403, and the role must survive."""
+    from ticketing.models.user import Role
+
+    db = SessionLocal()
+    role = Role(
+        role_key=f"authz-del-{uuid.uuid4().hex[:8]}",
+        display_name="Authz delete probe",
+        workflow_scope="STANDARD",
+        role_kind="operational",
+        role_origin="custom",
+    )
+    db.add(role)
+    db.commit()
+    role_id = role.role_id
+    db.close()
+
+    try:
+        for persona in ("non_admin", "officer"):
+            try:
+                status = _admin_client(LADDER[persona]).delete(
+                    f"/api/v1/roles/{role_id}"
+                ).status_code
+            finally:
+                app.dependency_overrides.clear()
+            assert status == 403, f"{persona} must be 403 deleting a custom role (got {status})"
+
+        check = SessionLocal()
+        try:
+            assert check.get(Role, role_id) is not None, "role must survive the denied deletes"
+        finally:
+            check.close()
+    finally:
+        cleanup = SessionLocal()
+        try:
+            r = cleanup.get(Role, role_id)
+            if r:
+                cleanup.delete(r)
+                cleanup.commit()
+        finally:
+            cleanup.close()
 
 
 @pytest.mark.parametrize("persona_name", ["org_std", "org_seah", "project", "officer", "non_admin"])
@@ -467,29 +508,18 @@ def _is_public(method: str, path: str) -> bool:
     return False
 
 
-# H2-03 FINDING — reference/config GET endpoints on the locations/projects router that
-# currently serve WITHOUT authentication (surfaced by this sweep; see PROGRESS deviations).
-# Quarantined, NOT endorsed: the sweep asserts `served ⊆ this set`, so it (a) fails if any
-# NEW unauthenticated endpoint appears and (b) passes automatically when one of these is
-# locked down. Geography/templates (countries, locations, import templates) are plausibly
-# intended-public; project CONFIG reads (messaging, organizations, donors, workflows) are
-# the questionable ones flagged for the follow-up authz-hardening ticket.
+# authz-gaps-h2-03 #1 — the remaining intentionally-public reads on the locations/projects
+# router: geography reference data + static import templates. The project-CONFIG reads
+# (projects, projects/{id}, and every project sub-resource) were locked to
+# `get_authenticated_user` on 2026-07-15, so they are no longer here. The sweep asserts
+# `served ⊆ this set`: it fails if a NEW unauthenticated endpoint appears, and it would fail
+# if any project-config read regressed to public.
 _KNOWN_UNAUTH_READS = {
     ("GET", "/api/v1/countries"),
     ("GET", "/api/v1/locations"),
     ("GET", "/api/v1/locations/import/template.csv"),
     ("GET", "/api/v1/locations/import/template.json"),
     ("GET", "/api/v1/locations/{location_code}"),
-    ("GET", "/api/v1/projects"),
-    ("GET", "/api/v1/projects/{project_id}"),
-    ("GET", "/api/v1/projects/{project_id}/actor-roles"),
-    ("GET", "/api/v1/projects/{project_id}/donors"),
-    ("GET", "/api/v1/projects/{project_id}/go-live"),
-    ("GET", "/api/v1/projects/{project_id}/locations"),
-    ("GET", "/api/v1/projects/{project_id}/messaging"),
-    ("GET", "/api/v1/projects/{project_id}/organizations"),
-    ("GET", "/api/v1/projects/{project_id}/packages"),
-    ("GET", "/api/v1/projects/{project_id}/workflows"),
 }
 
 

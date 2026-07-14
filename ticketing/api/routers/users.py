@@ -298,8 +298,15 @@ def delete_role(
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
-    if role.role_origin == "system" and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="System roles deletable by super_admin only")
+    if role.role_origin == "system":
+        if not current_user.is_super_admin:
+            raise HTTPException(status_code=403, detail="System roles deletable by super_admin only")
+    else:
+        # authz-gaps-h2-03 #2: a custom/operational role had NO admin gate — any authenticated
+        # officer could delete one. Require the same catalog-authoring permission as creating
+        # it (org_admin on the role's track, or super_admin; doc 11 §3.3).
+        track = "seah" if role.workflow_scope == "SEAH" else "standard"
+        require_settings_write(current_user, SettingsAction.CREATE_OPERATIONAL_ROLE, track=track)
 
     steps, officers = _role_usage_counts(db, role.role_key)
     if steps or officers:
