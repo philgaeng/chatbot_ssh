@@ -1,7 +1,9 @@
 # Follow-up — remove pre-existing dead imports/locals in `routers/tickets.py`
 
-> **Status:** open (unstarted) · **Owner:** backend · **Priority:** low (lint-only; no runtime effect)
+> **Status:** ✅ RESOLVED in H2-02 Pass 4 (2026-07-14) · **Owner:** backend · **Priority:** low (lint-only; no runtime effect)
 > **Origin:** H2-02 Pass 3 (`docs/sprints/2026-08_tier2_quality/PROGRESS.md` deviation, 2026-07-14). Surfaced by a pyflakes pass while extracting `perform_action` into `engine/ticket_actions.py`. All five items were **already present at HEAD** before Pass 3 — left untouched to keep the extraction diff surgical.
+>
+> **Resolution:** Folded into the Pass 4 `routers/tickets/` package split as planned. The single-file import block was partitioned per submodule, importing only what each uses — so the 4 dead imports were never carried across. The `rerouted` binding was dropped (the `maybe_reroute_ticket_workflow` call is kept for its side effect; its bool return has no response field). `pyflakes` is clean on all new modules; full `tests/ticketing` suite green unchanged (408 passed / 5 skipped). The old `routers/tickets.py` no longer exists.
 
 ## The gap
 
@@ -19,7 +21,7 @@ Confirmed pre-existing: `git show HEAD:ticketing/api/routers/tickets.py | python
 
 ## Definition of done
 
-- [ ] Drop the four unused imports (keep `_ensure_viewer`).
-- [ ] Either consume `rerouted` (e.g. surface it in the response / an event note) or drop the assignment — decide which is intended; it reads like a dropped feature, so check `maybe_reroute_ticket_workflow`'s contract before deleting.
-- [ ] `pyflakes ticketing/api/routers/tickets.py` clean; full `tests/ticketing` suite green unchanged.
-- [ ] Fold into the Pass 4 `routers/tickets/` package split if that lands first (the import block gets rewritten there anyway).
+- [x] Drop the four unused imports (keep `_ensure_viewer`). — none carried into the split modules; `_ensure_viewer` lives in `collaboration.py`.
+- [x] Either consume `rerouted` or drop the assignment — **dropped** the binding (`crud.py` `validate_ticket_classification`); the `maybe_reroute_ticket_workflow` call (side-effecting) is preserved. Contract confirmed `-> bool` with no response field to surface it.
+- [x] `pyflakes` clean on every new `routers/tickets/*.py` module; full `tests/ticketing` suite green unchanged (408 passed / 5 skipped).
+- [x] Folded into the Pass 4 `routers/tickets/` package split (the import block was rewritten there).
