@@ -12,7 +12,7 @@ Ordered for **robust single-threaded execution** (see rationale below). Workstre
 |---|---|---|---|---|---|---|
 | 1 | H2-01 | OIDC refresh-grant in apiFetch | C | **review** | this commit | Code + 9 vitest tests green (tsc/eslint/build clean). Manual Keycloak sweep pending-human. Isolated from the backend; closes the last open headline finding (officer data-loss at token expiry); unblocks H2-06. |
 | 2 | H2-02 | Split tickets.py; perform_action → engine/ | A | **review** | pin + passes 1–4 | Keystone refactor — all of B rebases on it. Passes 1–4 landed under the route-snapshot pin + HR-02 matrix (86) + HR-04 suite; 408 passed / 5 skipped unchanged. Only pending-human manual UI click-through remains. |
-| 3 | H2-07 | Escalation test extension | A | todo | — | Thickens the engine net immediately after the refactor; "direct engine calls, one per action" only works once `perform_action` lives in `engine/`. Verifies H2-02's core move. |
+| 3 | H2-07 | Escalation test extension | A | **review** | this commit | Thickens the engine net after the refactor — full L1→L3 chain + SEAH isolation + manual/auto interleaving + per-transition notifications on the seeded workflow. 5 new tests; verifies H2-02's core move. (Run out of numeric order, after H2-03, per user request — independent sibling.) |
 | 4 | H2-03 | Authz matrix extension | A | **review** | this commit | Broadens authz coverage (all actions × personas + admin ladder + unauthenticated sweep) on the split routers. 118 new tests + 1 xfail; surfaced 3 authz discrepancies (logged, not codified). Locks H2-02's authz behavior before backend behavior changes land. |
 | 5 | H2-04 | Grievance sync watermark + paging | B | todo | — | Heaviest recurring query; behavior change now lands on a refactored, maximally-covered backend. Ships with its own crash-safety/paging tests + before/after timing. |
 | 6 | H2-05 | Auth-dependency onboarding cache | B | todo | — | Latency win on the now-stable sync/auth path. Invalidation must hook every onboarding writer — do it after H2-04 settles that area. |
@@ -63,11 +63,16 @@ The numbers above are the **single-threaded** order that keeps every step on ver
   2. **`DELETE /roles/{role_id}`** — non-system roles have no admin gate (`users.py:292-303`); any authenticated officer can delete a custom role. (Documented — destructive to exercise live.)
   3. **`PATCH /projects/{project_id}`** — metadata fields have no authz gate (`locations.py:1509-1560`) despite the "Admin only" docstring. Pinned by `test_project_metadata_patch_should_require_admin` (`xfail`, flips to xpass when fixed).
 
-### H2-07 — Escalation extension
-- [ ] Full L1→L3 chain on seeded workflow
-- [ ] SEAH-track escalation isolation
-- [ ] Manual-then-auto interleaving (API-level)
-- [ ] Notification side-effect assertions (one per transition)
+### H2-07 — Escalation extension  *(review — 5 new tests in `tests/ticketing/test_escalation_engine.py`; suite 11 passed in 3.3s; full ticketing 531 passed / 5 skipped / 1 xfailed)*
+- [x] **Full L1→L2→L3 chain on the seeded KL Road workflow** — watchdog escalates each level on breach with role-based auto-assign (L2 ∈ pd_piu officers, L3 = grc-chair), ESCALATED events accumulate in order (1→2); then GRC convene at L3 (`GRC_HEARING_SCHEDULED`, step unchanged) and resolve (`RESOLVED`). Needs an ACK between transitions (the watchdog candidate query excludes `ESCALATED`) — modelled explicitly.
+- [x] **SEAH-track escalation isolation** — a SEAH ticket advances only within the SEAH workflow (`SEAH_LEVEL_1_NATIONAL`→`SEAH_LEVEL_2_HQ`); assignee is a SEAH officer or unassigned (never a standard officer); no standard-role viewer is cast; `assert_ticket_visibility` (the HR-02 gate) denies a standard officer (403) and admits a SEAH officer.
+- [x] **Manual-then-auto interleaving (API-level)** — a manual `ESCALATE` via TestClient advances L1→L2 and resets the clock; a following `run_sla_check` does NOT double-advance (status `ESCALATED` + `step_started_at=NULL` ⇒ not a breach candidate); exactly one ESCALATED event.
+- [x] **Notification side-effect assertions (one per transition)** — per-path, since the mechanisms differ (see deviation): watchdog path → exactly one unseen ESCALATED `TicketEvent` whose `notify_user_id` = the new assignee (in-app badge); manual/API path → exactly one `enqueue_assignment_notifications` (→ `notify_assignment.delay`) for the new assignee, tagged `event="escalation"`.
+
+**Deviations (H2-07):**
+- **Notification mechanism differs by path — spec's "match however HR-04 stubbed `_enqueue_celery`" premise corrected.** HR-04 stubs *nothing*; it counts `TicketEvent` rows. The batch SLA-watchdog path (`run_sla_check`) enqueues **zero** Celery tasks — it notifies the new officer only via the in-app ESCALATED event badge (`notify_user_id`). Celery `.delay` fires only on the manual/API path and the single-ticket async task. So "one notification per transition" is asserted with each path's real mechanism (event badge for the watchdog, `enqueue_assignment_notifications` count for the API), not a single celery-outbox mock.
+- **Seeded SEAH L2 auto-assign finds no dedicated officer at `P1_MOR`** (the seeded `seah_hq_officer` scope is location-`None`; the auto-assign cascade has no fallback for that role), so the escalated SEAH ticket keeps its L1 SEAH assignee. This is SEAH-capable (not a leak) so the isolation test asserts "SEAH officer or unassigned"; the assignability gap itself is a seed/assignment observation, not in H2-07 scope.
+- **Removed one pre-existing unused import** (`escalate_ticket`, only referenced via the `escalation_mod` module attribute) while extending the file — pyflakes-clean.
 
 ### H2-04 — Sync watermark
 - [ ] Modification column verified on all update paths (gaps listed): —
