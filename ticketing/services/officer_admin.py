@@ -17,6 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
+from ticketing.services import auth_sync_cache
 from ticketing.models.admin_audit_log import AdminAuditLog
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.officer_scope import OfficerScope
@@ -429,6 +430,8 @@ def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
         ob.updated_at = datetime.now(timezone.utc)
     else:
         db.add(OfficerOnboarding(user_id=normalized, status=status))
+    # H2-05: onboarding status changed → the officer's next request must re-sync immediately.
+    auth_sync_cache.invalidate(normalized)
 
 
 def keycloak_onboarding_complete(email: str) -> bool:
@@ -484,8 +487,10 @@ def activate_officer_onboarding(db: Session, email: str) -> bool:
             return False
         row.status = "active"
         row.updated_at = now
+        auth_sync_cache.invalidate(normalized)  # H2-05: bust cache on activation
         return True
     db.add(OfficerOnboarding(user_id=normalized, status="active", updated_at=now))
+    auth_sync_cache.invalidate(normalized)  # H2-05: bust cache on activation
     return True
 
 

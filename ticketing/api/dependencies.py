@@ -289,10 +289,17 @@ def get_current_user(
         and user.user_id
         and "@" in user.user_id
     ):
-        from ticketing.services.officer_admin import sync_officer_onboarding_status
+        # H2-05: throttle the onboarding-status sync to once per TTL per officer. On a cache
+        # hit we skip it entirely — no officer_onboarding read, no Keycloak round-trip, no
+        # write — since the sync is idempotent and any status write invalidates the entry.
+        from ticketing.services import auth_sync_cache
 
-        if sync_officer_onboarding_status(db, user.user_id):
-            db.commit()
+        if not auth_sync_cache.is_fresh(user.user_id):
+            from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+            if sync_officer_onboarding_status(db, user.user_id):
+                db.commit()
+            auth_sync_cache.mark_synced(user.user_id)
     return enrich_user(db, user)
 
 

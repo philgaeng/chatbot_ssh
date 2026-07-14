@@ -87,6 +87,9 @@ class TicketingSettings(BaseSettings):
     ticketing_sync_backfill_grace_seconds: int = 180
     # ── Grievance sync: rows fetched per page in the watermark-incremental scan (H2-04) ──
     ticketing_sync_batch_size: int = 500
+    # ── Auth dependency: TTL (seconds) for the per-request onboarding-status sync cache
+    #    (H2-05). 0 disables caching (per-request behavior, escape hatch). ──
+    ticketing_auth_sync_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
