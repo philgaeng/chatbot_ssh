@@ -32,20 +32,23 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 
 ## Acceptance checklists
 
-### H2-02 — Router split  *(in progress — invariant + passes 1–2 landed, all green at 396 passed / 5 skipped)*
+### H2-02 — Router split  *(in progress — invariant + passes 1–3 landed; 396 baseline unchanged + 12 new engine tests → 408 passed / 5 skipped)*
 - [x] **Invariant**: route-surface snapshot pin (`tests/ticketing/test_route_snapshot.py` + `route_snapshot.txt`, 174 routes via `app.openapi()`) committed on the pre-refactor tree — `799615cf`
 - [x] **Pass 1**: `_add_event` unified in `engine/events.py` (single definition; both former sites import it; orphaned `_id`/`_case_sensitivity`/`uuid` removed from escalation.py) — `b8c5ae31`
 - [x] **Pass 2**: workflow helpers moved — `_find_supervisor_user_id` → `engine/workflow_engine.py`; `_validate_step_assignee` → engine predicate `is_step_assignee_eligible` (router keeps the 422); `_next_step` was dead in the router → deleted — `817128d4`
-- [ ] **Pass 3**: `perform_action` branches → `engine/ticket_actions.py` (typed exceptions/result object, no HTTP in engine)
+- [x] **Pass 3**: `perform_action` branches → `engine/ticket_actions.py` (7 handlers `(db, ticket, actor, payload) → ActionOutcome`; typed `ActionError` — no HTTP in engine). Router is now validate + authz guards → `ACTION_HANDLERS[action]` dispatch → apply outcome (reopen-clears-archive, commit, refresh, enqueue, response). Router −415 net lines. — this commit
 - [ ] **Pass 4**: `routers/tickets/` package; URL surface identical (snapshot green)
-- [ ] In-function imports eliminated in the new modules
-- [ ] Full suite + HR-02 matrix green **unchanged**
-- [ ] `test_ticket_actions_unit.py` — direct engine calls, one per action
-- [ ] Manual UI click-through identical
+- [x] In-function imports eliminated in the new module (`engine/ticket_actions.py` — all imports at module top; pyflakes-clean)
+- [x] Full suite + HR-02 matrix green **unchanged** (396 baseline identical; route-snapshot + 86-row authz matrix + escalation all green)
+- [x] `test_ticket_actions_unit.py` — 12 direct engine calls (happy path per action + `ActionError` guard contract), rolled back per test, no residue
+- [ ] Manual UI click-through identical — **PENDING-HUMAN** (no browser in this env; route surface proven identical by snapshot)
 
 **Deviations (H2-02):**
 - `_next_step` in the router was dead code (no caller; `services/supervisor.py` keeps its own copy) → deleted rather than moved. `_first_step` is likewise unused but left untouched (not in the ticket's named scope).
 - `_validate_step_assignee` moved as a **bool predicate** (`is_step_assignee_eligible`) rather than a typed-exception raiser — simpler for a single validator, keeps HTTP out of the engine; the 422 + message stays at the router call site (behavior-identical).
+- **Pass 3:** `ActionError` carries an explicit `status_code` (default 422). Every current action error is a 422, but the field keeps the router mapping (`ActionError → HTTPException(status_code, detail)`) an exact 1:1, so a future non-422 branch needs no special-casing.
+- **Pass 3:** helpers `_ticket_has_image_attachment`, `_extract_mentions`, `_get_viewer_ids`, `_auto_acknowledge_if_assigned_actor`, `_has_resolution_record_event` moved with the branches into the engine. The router imports two back — `_auto_acknowledge_if_assigned_actor` (used by `reply_to_complainant`) and `_has_resolution_record_event` (used by the two resolved-summary endpoints). `_now`/`_actor_role` are duplicated in the engine per the repo's per-module convention (not shared-imported).
+- **Pass 3 (pre-existing debt, not introduced here):** pyflakes on the touched router flags 5 dead items that are **already present at HEAD** — unused imports `_apply_step_tier_roles`, `auto_assign_for_workflow_step`, `_scope_candidates`, `country.Location`, and an unused `rerouted` local in `validate_ticket_classification`. Left untouched to keep the diff surgical (unrelated to `perform_action`); logged in [`followups/`](followups/) + TODO.md for the cleanup sprint. Pass 3 introduced **no new** pyflakes findings.
 
 ### H2-03 — Authz matrix extension
 - [ ] All action types × personas

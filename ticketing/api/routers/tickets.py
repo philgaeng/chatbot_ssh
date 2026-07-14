@@ -17,7 +17,6 @@ Officer UI (JWT auth — stub for proto):
 from __future__ import annotations
 
 import logging
-import re
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Optional
 import uuid
@@ -62,33 +61,29 @@ from ticketing.api.schemas.ticket import (
 from ticketing.clients.grievance_api import (
     patch_complainant,
     patch_grievance_classification,
-    update_grievance_status,
 )
-from ticketing.constants.classification import OFFICER_CONFIRMED, officer_validation_required
+from ticketing.constants.classification import OFFICER_CONFIRMED
 from ticketing.services.grievance_content import (
     fetch_grievance_row,
     merge_grievance_into_ticket,
     refresh_ticket_cache_from_grievance,
 )
-from ticketing.constants.resolution import (
-    format_resolution_note,
-    resolution_category_label,
-    validate_resolution_category,
-    validate_resolution_note,
-)
 from ticketing.clients.orchestrator import send_message_to_complainant
 from ticketing.models.ticket_overdue_episode import TicketOverdueEpisode
-from ticketing.services.overdue_episodes import close_open_episode, overdue_days_display
+from ticketing.services.overdue_episodes import overdue_days_display
 from ticketing.services.ticket_intake import (
     DuplicateTicketError,
     TicketIntakeError,
     create_ticket_from_intake,
 )
-from ticketing.engine.escalation import (
-    convene_grc, escalate_ticket,
-    _apply_step_tier_roles, _ensure_viewer,
-)
+from ticketing.engine.escalation import _apply_step_tier_roles, _ensure_viewer
 from ticketing.engine.events import _add_event
+from ticketing.engine.ticket_actions import (
+    ACTION_HANDLERS,
+    ActionError,
+    _auto_acknowledge_if_assigned_actor,
+    _has_resolution_record_event,
+)
 from ticketing.tasks.notifications import enqueue_assignment_notifications, notify_complainant
 from ticketing.tasks.llm import (
     generate_findings,
@@ -179,12 +174,6 @@ def _actor_role(current_user: CurrentUser) -> Optional[str]:
     return current_user.role_keys[0] if getattr(current_user, "role_keys", None) else None
 
 
-def _extract_mentions(text: str) -> list[str]:
-    """Return list of @mention targets from note text (e.g. ['piu-l2', 'all'])."""
-    # Supports ids with dots/hyphens and email-style ids like admin@grm.local.
-    return re.findall(r"(?<![\w@])@([A-Za-z0-9][A-Za-z0-9._-]*(?:@[A-Za-z0-9][A-Za-z0-9._-]*)?)", text)
-
-
 def _is_viewer(db: "Session", ticket_id: str, user_id: str) -> bool:
     """True if this user is a viewer of the ticket."""
     return db.execute(
@@ -195,12 +184,9 @@ def _is_viewer(db: "Session", ticket_id: str, user_id: str) -> bool:
     ).scalar_one_or_none() is not None
 
 
-def _get_viewer_ids(db: "Session", ticket_id: str) -> list[str]:
-    """Return list of all viewer user_ids for a ticket."""
-    viewers = db.execute(
-        select(TicketViewer).where(TicketViewer.ticket_id == ticket_id)
-    ).scalars().all()
-    return [v.user_id for v in viewers]
+# _extract_mentions / _get_viewer_ids / _ticket_has_image_attachment /
+# _auto_acknowledge_if_assigned_actor / _has_resolution_record_event now live in
+# ticketing/engine/ticket_actions.py (H2-02 Pass 3 — action logic left the router).
 
 
 def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
@@ -231,44 +217,6 @@ def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -
         if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
             if step and step.assigned_role_key in current_user.role_keys:
                 return True
-    return False
-
-
-_IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif")
-
-
-def _ticket_has_image_attachment(db: Session, ticket: Ticket) -> bool:
-    """True when ≥1 image exists in complainant or officer attachments (TP-11)."""
-    officer_files = db.execute(
-        select(TicketFile).where(TicketFile.ticket_id == ticket.ticket_id)
-    ).scalars().all()
-    for tf in officer_files:
-        if (tf.file_type or "").lower() == "image":
-            return True
-        if tf.file_name and tf.file_name.lower().endswith(_IMAGE_EXTENSIONS):
-            return True
-
-    try:
-        rows = db.execute(
-            text(
-                """
-                SELECT file_type, file_name
-                FROM public.file_attachments
-                WHERE grievance_id = :gid
-                """
-            ),
-            {"gid": ticket.grievance_id},
-        ).mappings().all()
-        for row in rows:
-            ft = (row.get("file_type") or "").lower()
-            fn = (row.get("file_name") or "").lower()
-            if ft == "image" or ft.startswith("image/"):
-                return True
-            if fn.endswith(_IMAGE_EXTENSIONS):
-                return True
-    except Exception as exc:
-        logger.warning("image gate: file_attachments unavailable — %s", exc)
-        db.rollback()
     return False
 
 
@@ -309,40 +257,10 @@ def _media_type_for_path(file_path: str) -> str:
     return False
 
 
-def _auto_acknowledge_if_assigned_actor(
-    db: Session,
-    ticket: Ticket,
-    current_user: CurrentUser,
-) -> Optional[TicketEvent]:
-    """Assigned actor engaging (note, field report, reply) starts the case without a separate ack."""
-    if ticket.status_code not in ("OPEN", "ESCALATED"):
-        return None
-    if not ticket.assigned_to_user_id:
-        return None
-    if not current_user.is_admin and not current_user.matches_assignee(
-        ticket.assigned_to_user_id
-    ):
-        return None
-    old_status = ticket.status_code
-    ticket.status_code = "IN_PROGRESS"
-    ticket.step_started_at = _now()
-    ticket.updated_by_user_id = current_user.user_id
-    return _add_event(
-        db,
-        ticket,
-        "ACKNOWLEDGED",
-        old_status=old_status,
-        new_status="IN_PROGRESS",
-        step_id=ticket.current_step_id,
-        created_by=current_user.user_id,
-        seen=True,
-        actor_role=_actor_role(current_user),
-        summary_regen_required=True,
-    )
-
-
 # _add_event now lives in ticketing/engine/events.py (H2-02 — was duplicated in
 # this router and engine/escalation.py); imported at module top.
+# _auto_acknowledge_if_assigned_actor moved to engine/ticket_actions.py (Pass 3);
+# imported at module top and still called by reply_to_complainant below.
 
 
 # ─── POST /tickets — create (chatbot/backend) ─────────────────────────────────
@@ -1053,348 +971,15 @@ def perform_action(
         )
 
     old_status = ticket.status_code
-    event_step_id = ticket.current_step_id
-    event = None
-    _notify_complainant_text: Optional[str] = None  # set below to trigger async notification
-    _translate_note_event_id: Optional[str] = None  # set for NOTE action → translate_note task
-    _generate_findings: bool = False
-    _generate_resolved_summary: bool = False
-    _translate_resolution_event_id: Optional[str] = None
-    _assignment_notify: tuple[str, str | None, str] | None = None
-    _supervisor_notify_from_step = None  # OC-04 §5.5: step a manual escalation came OFF
 
-    if action == "ACKNOWLEDGE":
-        g_row = fetch_grievance_row(db, ticket.grievance_id)
-        class_status = (g_row or {}).get("grievance_classification_status")
-        if officer_validation_required(class_status):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "Review and confirm the grievance summary and categories "
-                    "before acknowledging this ticket."
-                ),
-            )
-        close_open_episode(db, ticket, "ACKNOWLEDGED")
-        ticket.status_code = "IN_PROGRESS"
-        ticket.step_started_at = _now()
-        ticket.updated_by_user_id = current_user.user_id
-        event = _add_event(
-            db, ticket, "ACKNOWLEDGED",
-            old_status=old_status, new_status="IN_PROGRESS",
-            step_id=event_step_id,
-            note=payload.note,
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
+    handler = ACTION_HANDLERS[action]  # action ∈ VALID_ACTIONS ⇒ always present
+    try:
+        outcome = handler(db, ticket, current_user, payload)
+    except ActionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
 
-    elif action == "ESCALATE":
-        # HR-04: take a row lock on the ticket before mutating so the SLA watchdog
-        # (which selects candidates FOR UPDATE SKIP LOCKED) and any other concurrent
-        # writer cannot double-escalate. populate_existing refreshes the in-session
-        # instance with the freshly-locked row state. Lock is held until db.commit().
-        ticket = db.execute(
-            select(Ticket)
-            .where(Ticket.ticket_id == ticket.ticket_id)
-            .with_for_update()
-            .execution_options(populate_existing=True)
-        ).scalar_one()
-        if not _ticket_has_image_attachment(db, ticket):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "At least one image attachment is required before escalating. "
-                    "Upload a site photo or ask the complainant to send photos via WhatsApp."
-                ),
-            )
-        review_notes = (payload.escalation_notes or payload.note or "").strip()
-        if not review_notes:
-            raise HTTPException(
-                status_code=422,
-                detail="escalation_notes is required for ESCALATE",
-            )
-        _old_assigned_escalate = ticket.assigned_to_user_id
-        _supervisor_notify_from_step = get_current_step(ticket, db)  # OC-04 §5.5 (before it moves)
-        # Delegate to engine — single code path for manual + auto escalation
-        result = escalate_ticket(
-            ticket, db,
-            triggered_by="MANUAL",
-            note=review_notes,
-            created_by_user_id=current_user.user_id,
-            actor_role=_actor_role(current_user),
-            escalation_date=payload.escalation_date,
-            persons_involved=payload.persons_involved or [current_user.user_id],
-            escalation_notes=review_notes,
-        )
-        if result is None:
-            raise HTTPException(
-                status_code=422,
-                detail="No next step available — ticket is already at the final escalation level",
-            )
-        event = result
-        if (
-            ticket.assigned_to_user_id
-            and ticket.assigned_to_user_id != _old_assigned_escalate
-        ):
-            _assignment_notify = (
-                ticket.assigned_to_user_id,
-                _old_assigned_escalate,
-                "escalation",
-            )
-        _notify_complainant_text = (
-            "Your grievance is being reviewed at the next level. "
-            "We will continue to keep you updated."
-        )
-
-    elif action == "RESOLVE":
-        if ticket.status_code not in ("RESOLVED", "CLOSED") and not _ticket_has_image_attachment(db, ticket):
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "At least one image attachment is required before resolving. "
-                    "Upload a site photo or ask the complainant to send photos via WhatsApp."
-                ),
-            )
-        try:
-            category = validate_resolution_category(payload.resolution_category)
-            officer_text = validate_resolution_note(payload.note)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-        # Backfill path: allow officers to add missing resolution details
-        # on already resolved/closed tickets (needed for closure summary generation).
-        if ticket.status_code in ("RESOLVED", "CLOSED"):
-            if _has_resolution_record_event(db, ticket.ticket_id):
-                raise HTTPException(status_code=422, detail="Ticket is already resolved.")
-            formatted_note = format_resolution_note(category, officer_text)
-            resolution_event = _add_event(
-                db,
-                ticket,
-                "NOTE_ADDED",
-                step_id=event_step_id,
-                note=formatted_note,
-                payload={
-                    "internal": True,
-                    "is_resolution_record": True,
-                    "resolution_category": category,
-                    "resolution_backfilled": True,
-                },
-                created_by=current_user.user_id,
-                seen=True,
-                actor_role=_actor_role(current_user),
-                summary_regen_required=True,
-            )
-            _translate_resolution_event_id = resolution_event.event_id
-            ticket.updated_by_user_id = current_user.user_id
-            event = resolution_event
-            _generate_findings = True
-            _generate_resolved_summary = True
-        else:
-            _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
-            close_open_episode(db, ticket, "RESOLVED")
-            formatted_note = format_resolution_note(category, officer_text)
-            resolution_event = _add_event(
-                db,
-                ticket,
-                "NOTE_ADDED",
-                step_id=event_step_id,
-                note=formatted_note,
-                payload={
-                    "internal": True,
-                    "is_resolution_record": True,
-                    "resolution_category": category,
-                },
-                created_by=current_user.user_id,
-                seen=True,
-                actor_role=_actor_role(current_user),
-                summary_regen_required=True,
-            )
-            _translate_resolution_event_id = resolution_event.event_id
-
-            ticket.status_code = "RESOLVED"
-            ticket.updated_by_user_id = current_user.user_id
-            cat_label = resolution_category_label(category)
-            event = _add_event(
-                db,
-                ticket,
-                "RESOLVED",
-                old_status=old_status,
-                new_status="RESOLVED",
-                step_id=event_step_id,
-                note=f"Case resolved — {cat_label}",
-                payload={
-                    "resolution_category": category,
-                    "resolution_event_id": resolution_event.event_id,
-                },
-                created_by=current_user.user_id,
-                seen=True,
-                actor_role=_actor_role(current_user),
-                summary_regen_required=True,
-            )
-            try:
-                update_grievance_status(
-                    ticket.grievance_id,
-                    "RESOLVED",
-                    note=officer_text[:500],
-                )
-            except Exception as exc:
-                logger.warning(
-                    "update_grievance_status failed ticket_id=%s: %s", ticket_id, exc
-                )
-            _notify_complainant_text = (
-                "Your grievance has been resolved. "
-                "Thank you for bringing this to our attention. "
-                "A detailed outcome letter will be sent shortly."
-            )
-            _generate_findings = True
-            _generate_resolved_summary = True
-
-    elif action == "NOTE":
-        if not payload.note:
-            raise HTTPException(status_code=422, detail="note is required for action_type=NOTE")
-        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
-        note_payload: dict = {"internal": True}
-        if payload.is_call_report:
-            note_payload["is_call_report"] = True
-        # Internal note — no status change, not visible to complainant
-        event = _add_event(
-            db, ticket, "NOTE_ADDED",
-            step_id=event_step_id,
-            note=payload.note,
-            payload=note_payload,
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
-        # Fire translation task after commit (7a — translate note to English for supervisors)
-        _translate_note_event_id = event.event_id
-
-        # ── @mention notifications (UI_SPEC.md §2.8) ──────────────────────────
-        # Parse @mentions and create lightweight MENTION notification events.
-        # These events have seen=False (drive badge) but are NOT rendered in the thread.
-        mentions = _extract_mentions(payload.note)
-        if mentions:
-            viewer_ids = _get_viewer_ids(db, ticket_id)
-            assigned_id = ticket.assigned_to_user_id
-            all_participant_ids = list({*viewer_ids, *([assigned_id] if assigned_id else [])})
-
-            notify_set: set[str] = set()
-            for mention in mentions:
-                if mention.lower() == "all":
-                    notify_set.update(all_participant_ids)
-                elif mention != current_user.user_id:
-                    notify_set.add(mention)
-
-            # R1 SEAH leak-proof: on a SEAH ticket, never plant a MENTION event (which carries
-            # the case's existence into the recipient's bell) for a user who can't see SEAH —
-            # covers a stray @mention or an @all that reaches a mis-cast non-SEAH participant.
-            if ticket.is_seah and notify_set:
-                from ticketing.services.chart_behaviors import user_can_see_seah
-                notify_set = {uid for uid in notify_set if user_can_see_seah(db, uid)}
-
-            for target_uid in notify_set:
-                _add_event(
-                    db, ticket, "MENTION",
-                    step_id=event_step_id,
-                    note=f"@mentioned by {current_user.user_id}",
-                    payload={"mentioned_by": current_user.user_id, "source_event_id": event.event_id},
-                    seen=False,
-                    notify_user_id=target_uid,
-                    created_by=current_user.user_id,
-                    actor_role=_actor_role(current_user),
-                    summary_regen_required=False,
-                )
-
-    elif action == "FIELD_REPORT":
-        if not payload.note:
-            raise HTTPException(status_code=422, detail="note is required for action_type=FIELD_REPORT")
-        _auto_acknowledge_if_assigned_actor(db, ticket, current_user)
-        # Officer field report — structured finding, no status change, not visible to complainant.
-        # Stored as NOTE_ADDED with is_field_report=True so the UI can render it distinctly
-        # and the AI findings pipeline picks it up (NOTE_ADDED is already in _FINDINGS_EVENT_TYPES).
-        event = _add_event(
-            db, ticket, "NOTE_ADDED",
-            step_id=event_step_id,
-            note=payload.note,
-            payload={"internal": True, "is_field_report": True},
-            created_by=current_user.user_id,
-            seen=True,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
-        _translate_note_event_id = event.event_id
-
-    elif action == "REASSIGNMENT_REQUESTED":
-        reason = (payload.reassignment_reason_code or "").strip().upper()
-        valid_reasons = {"OUT_OF_PACKAGE_SCOPE", "OUT_OF_LOCATION", "OTHER"}
-        if reason not in valid_reasons:
-            raise HTTPException(
-                status_code=422,
-                detail=f"reassignment_reason_code must be one of {sorted(valid_reasons)}",
-            )
-        if reason == "OTHER" and not (payload.reassignment_notes or "").strip():
-            raise HTTPException(status_code=422, detail="reassignment_notes required when reason is OTHER")
-
-        supervisor_id = _find_supervisor_user_id(db, ticket)
-        if not supervisor_id:
-            raise HTTPException(
-                status_code=422,
-                detail=(
-                    "No supervisor is available for this step. "
-                    "Reassign directly to a teammate at the same level instead."
-                ),
-            )
-
-        old_assigned = ticket.assigned_to_user_id
-        ticket.assigned_to_user_id = supervisor_id
-        ticket.updated_by_user_id = current_user.user_id
-
-        event = _add_event(
-            db, ticket, "REASSIGNMENT_REQUESTED",
-            old_assigned=old_assigned,
-            new_assigned=supervisor_id,
-            step_id=event_step_id,
-            note=(payload.reassignment_notes or "").strip() or None,
-            payload={
-                "reason_code": reason,
-                "reason_notes": (payload.reassignment_notes or "").strip() or None,
-                "requested_by": current_user.user_id,
-            },
-            seen=False,
-            notify_user_id=supervisor_id,
-            created_by=current_user.user_id,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=True,
-        )
-        _add_event(
-            db, ticket, "ASSIGNED",
-            old_assigned=old_assigned,
-            new_assigned=supervisor_id,
-            step_id=event_step_id,
-            note=f"Reassignment routed to supervisor ({reason.replace('_', ' ').lower()})",
-            payload={"reason_code": reason, "via_reassignment_request": True},
-            seen=False,
-            notify_user_id=supervisor_id,
-            created_by=current_user.user_id,
-            actor_role=_actor_role(current_user),
-            summary_regen_required=False,
-        )
-        if supervisor_id != old_assigned:
-            _assignment_notify = (supervisor_id, old_assigned, "reassign")
-
-    elif action == "GRC_CONVENE":
-        # GRC Chair schedules hearing — notifies all GRC members (unseen events → badges)
-        hearing_date = (payload.grc_hearing_date if hasattr(payload, "grc_hearing_date") else None)
-        events = convene_grc(
-            ticket, db,
-            note=payload.note,
-            convened_by_user_id=current_user.user_id,
-            hearing_date=hearing_date,
-            actor_role=_actor_role(current_user),
-        )
-        event = events[0]  # first event is the CONVENED event
+    ticket = outcome.ticket  # ESCALATE re-fetches under a row lock; others echo it back
+    event = outcome.event
 
     # L2: reopen clears archive flags when leaving RESOLVED/CLOSED
     if old_status in ("RESOLVED", "CLOSED") and ticket.status_code not in ("RESOLVED", "CLOSED"):
@@ -1407,17 +992,17 @@ def perform_action(
 
     # OC-04 §5.5: notify the escalated step's resolved supervisor after commit (SEAH-
     # suppressed in the helper). Side-effect only — never alters assignment/target.
-    if _supervisor_notify_from_step is not None:
+    if outcome.supervisor_notify_from_step is not None:
         from ticketing.engine.escalation import notify_escalation_supervisor
 
         try:
-            notify_escalation_supervisor(db, ticket, _supervisor_notify_from_step)
+            notify_escalation_supervisor(db, ticket, outcome.supervisor_notify_from_step)
             db.commit()
         except Exception:  # pragma: no cover - notify failure must not fail the escalation
             db.rollback()
 
-    if _assignment_notify:
-        new_uid, old_uid, assign_event = _assignment_notify
+    if outcome.assignment_notify:
+        new_uid, old_uid, assign_event = outcome.assignment_notify
         enqueue_assignment_notifications(
             ticket.ticket_id,
             new_uid,
@@ -1427,24 +1012,24 @@ def perform_action(
         )
 
     # Fire async complainant notification after commit so the task sees the updated ticket
-    if _notify_complainant_text:
+    if outcome.notify_complainant_text:
         _enqueue_celery(
             notify_complainant,
             ticket.ticket_id,
-            _notify_complainant_text,
+            outcome.notify_complainant_text,
             action,  # event_type label in the notification log
         )
 
     # Fire LLM translation task for NOTE events (7a — translate to English for supervisors)
-    if _translate_note_event_id:
-        _enqueue_celery(translate_note, _translate_note_event_id)
+    if outcome.translate_note_event_id:
+        _enqueue_celery(translate_note, outcome.translate_note_event_id)
 
     # Fire findings generation on RESOLVE (7b — AI summary for GRC/supervisors)
-    if _generate_findings:
+    if outcome.generate_findings:
         _enqueue_celery(generate_findings, ticket.ticket_id)
-    if _translate_resolution_event_id:
-        _enqueue_celery(translate_note, _translate_resolution_event_id)
-    if _generate_resolved_summary:
+    if outcome.translate_resolution_event_id:
+        _enqueue_celery(translate_note, outcome.translate_resolution_event_id)
+    if outcome.generate_resolved_summary:
         _enqueue_celery(generate_resolved_case_summary, ticket.ticket_id)
 
     return TicketActionResponse(
@@ -2078,21 +1663,8 @@ def get_ticket_pii(
 
 
 # ─── Resolved case summary (closure document) ─────────────────────────────────
-
-def _has_resolution_record_event(db: Session, ticket_id: str) -> bool:
-    events = db.execute(
-        select(TicketEvent)
-        .where(
-            TicketEvent.ticket_id == ticket_id,
-            TicketEvent.event_type == "NOTE_ADDED",
-        )
-        .order_by(TicketEvent.created_at.desc())
-    ).scalars().all()
-    for ev in events:
-        payload = ev.payload or {}
-        if payload.get("is_resolution_record"):
-            return True
-    return False
+# _has_resolution_record_event now lives in engine/ticket_actions.py (Pass 3);
+# imported at module top and used by the two resolved-summary endpoints below.
 
 @router.get("/tickets/{ticket_id}/resolved-summary")
 def get_resolved_summary(

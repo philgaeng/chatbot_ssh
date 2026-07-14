@@ -313,6 +313,7 @@ H2-01…08: OIDC refresh-grant, `tickets.py` split + engine extraction, authz/es
 | `grievance_sync.py` hardcoded column list | `tasks/grievance_sync.py` | Will break if public schema column names change — add integration test |
 | Portal ESLint debt: 143 warnings, 0 errors (HR-05 downgraded 5 rule families to `warn` to reserve the CI error channel) | `channels/ticketing-ui/` | Tracked ticket: [`sprints/2026-07_hardening/followups/portal-lint-cleanup.md`](sprints/2026-07_hardening/followups/portal-lint-cleanup.md). Endgame: warn → fixed → re-enable as `error`. Includes the 4 unused `eslint-disable` directives (e.g. `AuthProvider.tsx` getUserPreferences effect). |
 | Silent OIDC refresh not applied to 4 non-`apiFetch` fetch sites (2 uploads can lose a file selection on token expiry) | `channels/ticketing-ui/lib/api.ts` (`:1196/:1278/:1407/:2121`) | H2-01 deferral. Tracked ticket: [`sprints/2026-08_tier2_quality/followups/apifetch-refresh-non-json-sites.md`](sprints/2026-08_tier2_quality/followups/apifetch-refresh-non-json-sites.md). |
+| Pre-existing dead imports/local in `routers/tickets.py` (4 unused imports + unused `rerouted` local) — surfaced by pyflakes during H2-02 Pass 3, present at HEAD, left untouched to keep the extraction diff surgical | `ticketing/api/routers/tickets.py` | H2-02 deferral. Tracked ticket: [`sprints/2026-08_tier2_quality/followups/tickets-router-dead-imports.md`](sprints/2026-08_tier2_quality/followups/tickets-router-dead-imports.md). Fold into the Pass 4 package split. |
 
 ---
 
