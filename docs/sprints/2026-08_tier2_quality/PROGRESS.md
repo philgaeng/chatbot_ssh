@@ -16,7 +16,7 @@ Ordered for **robust single-threaded execution** (see rationale below). Workstre
 | 4 | H2-03 | Authz matrix extension | A | **review** | this commit | Broadens authz coverage (all actions × personas + admin ladder + unauthenticated sweep) on the split routers. 118 new tests + 1 xfail; surfaced 3 authz discrepancies (logged, not codified). Locks H2-02's authz behavior before backend behavior changes land. |
 | 5 | H2-04 | Grievance sync watermark + paging | B | todo | — | Heaviest recurring query; behavior change now lands on a refactored, maximally-covered backend. Ships with its own crash-safety/paging tests + before/after timing. |
 | 6 | H2-05 | Auth-dependency onboarding cache | B | todo | — | Latency win on the now-stable sync/auth path. Invalidation must hook every onboarding writer — do it after H2-04 settles that area. |
-| 7 | H2-06 | Shared useTicketThread hook | C | todo | — | Portal dedup (~350 lines); consumes H2-01's `apiFetch`. Do after H2-01 has soaked so the auth path is stable beneath the refactor. |
+| 7 | H2-06 | Shared useTicketThread hook | C | **review** | this commit | Portal dedup — both thread pages now consume `useTicketThread`/`threadCommands`; −756 lines in the pages; 23 new vitest tests; tsc/eslint/build green. Built in parallel with H2-07 by a background worktree agent, reviewed + landed by the main session. Manual parity pending-human. |
 | 8 | H2-08 | SEAH form mixin + Nepali repair | D | todo | — | **Start the translator packet at sprint open** (long human pole) — generate `translations_seah_review.csv` on day 1. Code merges last, gated on translator sign-off; parity/utterance tests green. |
 
 ### Robust execution order — why this sequence
@@ -98,11 +98,16 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 - [x] Vitest: single-flight (3→1 POST), 401→refresh→retry→success, 401→refresh-fail→`handleSessionExpired` once, proactive near-expiry, skew regression — **9 new tests green** (`lib/auth/session-expired.test.ts`, `lib/auth/oidc-auth.test.ts`, `lib/api.test.ts`); full `npm test` 35/35; `tsc --noEmit` clean; `eslint` 0 errors; `next build` clean
 - [~] Manual: 1-min token lifespan / 5-min typing / no-data-loss + replayed-refresh-token rejected — **PENDING-HUMAN** (no browser + live Keycloak in this env; needs the auth-profile stack per `DOCKER.md`). Record date/tester: —
 
-### H2-06 — Thread hook
-- [ ] `lib/useTicketThread.ts` + `lib/threadCommands.ts`; both pages consume; ~300+ lines net deleted
-- [ ] Drift resolutions (mobile `system` filter; command ordering) logged as intentional deviations
-- [ ] Vitest: parseThreadCommand cases; chip-filter parity
-- [ ] tsc + eslint + build green; side-by-side manual parity check
+### H2-06 — Thread hook  *(review — `lib/useTicketThread.ts` (+`threadCommands.ts`); both pages consume; tsc/eslint/vitest/build green)*
+- [x] `lib/useTicketThread.ts` (614) + `lib/threadCommands.ts` (63, pure `parseThreadCommand`); both `app/tickets/[id]` and `app/m/tickets/[id]` consume them. Each page shed **>300 net lines** (desktop −398, mobile −358 = **−756** in the pages). Aggregate *production* net is **−79** (the shared hook +677 restores a typed public contract + JSDoc that were previously inline/duplicated) — see deviation.
+- [x] Drift resolutions logged as `// H2-06 deviation:` comments (all resolved to desktop/robust): (1) mobile `system` chip filter was missing → `filterThreadEvents` includes it; (2) command parse runs before clearing the input (desktop order); (3) ack-ensure actor flag is admin-inclusive on mobile; plus unified loading flags, stale-response seq-guard on reload (no full-screen flicker), and `error`/`errorIsNotFound` handling.
+- [x] Vitest: 23 new tests (16 `parseThreadCommand` cases + 9 chip-filter parity) → full portal vitest **58 passed / 8 files**.
+- [x] tsc `--noEmit` clean, eslint 0 errors (141 pre-existing warns, 1 fewer than baseline, none new), `next build` clean — **re-verified independently** in the worktree AND in the main tree after landing. Side-by-side manual parity — **PENDING-HUMAN** (no browser in this env; matches the spec's manual note).
+
+**Deviations (H2-06):**
+- **Aggregate net LOC is −79, not the spec's "~300+ net deleted"** — but the *duplication removed* is ~756 lines (each page dropped its copy); the shared `useTicketThread.ts` (+677) is the single source, and its size includes a new **typed `UseTicketThreadResult` contract + JSDoc** that were previously implicit/inline. Kept the explicit interface deliberately (a named, drift-checked contract for a hook consumed by two large pages is worth ~70 lines in a maintainability sprint). The per-page reduction (>300 each) meets the intent.
+- **Auth passed into the hook** (`{ ticketId, user, roleKeys, isAdmin }`) rather than `useAuth()` inside it — keeps `filterThreadEvents` out of the `AuthProvider`/`next/navigation` import graph so the pure helpers stay unit-testable in vitest's node env.
+- **Built by a background worktree agent, reviewed + landed by the main session** (H2-06 ran in parallel with H2-07). Base coherence verified (worktree base blobs for both pages identical to `dev/tier2-quality`); all four gates re-run independently before landing. No backend files touched.
 
 ### H2-08 — SEAH quality
 - [ ] `seah_shared.py` mixin; thresholds preserved exactly (`>3` / `>=8`)
