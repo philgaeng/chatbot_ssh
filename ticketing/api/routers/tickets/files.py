@@ -64,7 +64,6 @@ def _media_type_for_path(file_path: str) -> str:
     if lower.endswith(".ogg"):
         return "audio/ogg"
     return "application/octet-stream"
-    return False
 
 
 @router.get(
