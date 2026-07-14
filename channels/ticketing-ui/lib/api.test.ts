@@ -11,7 +11,6 @@ const handleSessionExpired = vi.fn(() => {
 vi.mock("./auth/oidc-auth", () => ({ refreshTokens }));
 vi.mock("./auth/session-expired", () => ({
   handleSessionExpired,
-  isSessionExpiredResponse: () => false,
   isAccessTokenExpiringSoon: () => false,
 }));
 
@@ -62,5 +61,61 @@ describe("apiFetch 401 handling (H2-01)", () => {
     expect(refreshTokens).toHaveBeenCalledTimes(1);
     expect(handleSessionExpired).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(1); // no retry when refresh yields nothing
+  });
+});
+
+describe("authedFetch — blob/multipart 401 handling (apifetch-refresh followup)", () => {
+  const A_FILE = new File(["x"], "evidence.jpg", { type: "image/jpeg" });
+
+  it("multipart upload: 401 → refresh → retry-once → succeeds, parts re-sent", async () => {
+    const bodies: unknown[] = [];
+    const queue = [unauthorized(), ok({ file_id: "F1" })];
+    fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+      bodies.push(init.body);
+      return queue.shift();
+    });
+    refreshTokens.mockResolvedValue("fresh-access-token");
+
+    const { uploadOfficerAttachment } = await import("./api");
+    const result = await uploadOfficerAttachment("T-1", A_FILE, "at the site");
+
+    expect(result).toEqual({ file_id: "F1" });
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2); // original + one retry
+    expect(handleSessionExpired).not.toHaveBeenCalled();
+    // The retry rebuilt + re-sent a FormData body (not a dropped/consumed one).
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toBeInstanceOf(FormData);
+  });
+
+  it("multipart upload: 401 → refresh fails → handleSessionExpired once, no retry", async () => {
+    fetchMock.mockResolvedValue(unauthorized());
+    refreshTokens.mockResolvedValue(null);
+
+    const { uploadOfficerAttachment } = await import("./api");
+    await expect(uploadOfficerAttachment("T-1", A_FILE, "x")).rejects.toThrow("REDIRECT_LOGIN");
+
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    expect(handleSessionExpired).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // no retry when refresh yields nothing
+  });
+
+  it("blob GET: 401 → refresh → retry-once → succeeds", async () => {
+    const blob = new Blob(["file-bytes"]);
+    const queue = [
+      unauthorized(),
+      { ok: true, status: 200, blob: async () => blob },
+    ];
+    fetchMock.mockImplementation(async () => queue.shift());
+    refreshTokens.mockResolvedValue("fresh-access-token");
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:mock-url" });
+
+    const { fetchAuthenticatedBlobUrl } = await import("./api");
+    const url = await fetchAuthenticatedBlobUrl("/api/v1/files/1");
+
+    expect(url).toBe("blob:mock-url");
+    expect(refreshTokens).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(handleSessionExpired).not.toHaveBeenCalled();
   });
 });

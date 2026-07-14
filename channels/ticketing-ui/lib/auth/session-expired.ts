@@ -45,26 +45,9 @@ export function isAccessTokenExpired(token: string): boolean {
   return isAccessTokenExpiringSoon(token, 30);
 }
 
-/** Detect ticketing API 401 responses that mean re-login is required. */
-export function isSessionExpiredResponse(status: number, body: string): boolean {
-  if (status !== 401) return false;
-  let detail = body;
-  try {
-    const parsed = JSON.parse(body) as { detail?: string | string[] };
-    if (typeof parsed.detail === "string") detail = parsed.detail;
-    else if (Array.isArray(parsed.detail)) detail = parsed.detail.join(" ");
-  } catch {
-    /* use raw body */
-  }
-  const lower = detail.toLowerCase();
-  return (
-    lower.includes("expired") ||
-    lower.includes("invalid token") ||
-    lower.includes("not authenticated") ||
-    lower.includes("could not validate") ||
-    lower.includes("credentials")
-  );
-}
+// isSessionExpiredResponse was retired (2026-07-15): every 401 path now routes through the
+// status-code-based refresh+retry in apiFetch (JSON) or authedFetch (blob/multipart), so the
+// substring body-sniffing heuristic is no longer needed.
 
 export function clearAuthTokens(): void {
   if (typeof window === "undefined") return;

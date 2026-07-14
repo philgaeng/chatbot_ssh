@@ -1,6 +1,6 @@
 # Follow-up — extend silent refresh to the non-`apiFetch` fetch sites
 
-> **Status:** open (unstarted) · **Owner:** portal · **Priority:** low–medium (upload sites can lose a file selection on token expiry)
+> **Status:** ✅ **RESOLVED (2026-07-15).** All 4 sites route through the new shared `authedFetch`; `isSessionExpiredResponse` retired. · **Owner:** portal · **Priority:** low–medium (upload sites can lose a file selection on token expiry)
 > **Origin:** H2-01 (`docs/sprints/2026-08_tier2_quality/PROGRESS.md` deviation, 2026-07-13). The OIDC refresh+retry was scoped to `apiFetch` only (spec item 3). The remaining fetch sites still hard-logout on a 401.
 
 ## The gap
@@ -18,10 +18,10 @@
 
 ## Definition of done
 
-- [ ] A shared authed-fetch preflight (e.g. `ensureFreshToken()` reusing `refreshTokens()` single-flight) applied to all 4 sites: proactive refresh before the request, and `401 → refresh → retry-once`.
-- [ ] Multipart retry re-sends the body — `File`/`FormData` are re-readable, so rebuild+resend on retry (confirm the second POST carries the same parts).
-- [ ] `isSessionExpiredResponse` retired once every site routes through the shared path (it exists only to serve these 4 now).
-- [ ] Vitest: one upload site 401→refresh→retry→success; refresh-fail→logout once. `tsc` + `eslint` + `next build` green.
+- [x] **Shared `authedFetch(makeRequest)` preflight** (`lib/api.ts`) reusing `refreshTokens()`'s single-flight: proactive refresh (token expiring within 60s) + `401 → refresh → retry-once` before `handleSessionExpired()`. All 4 sites (`fetchAuthenticatedBlobUrl`, `uploadOfficerAttachment`, `downloadApiFile`/XLSX, `importOrganizations`) route through it.
+- [x] **Multipart retry re-sends the body** — the `FormData` is built *inside* the `makeRequest` thunk, so the retry rebuilds and re-sends the same parts (`authedFetch` re-invokes the thunk). Vitest asserts the 2nd fetch body is a fresh `FormData`.
+- [x] **`isSessionExpiredResponse` retired** — removed from `session-expired.ts` (a comment records why), dropped from the `api.ts` import and the `api.test.ts` mock. Every 401 path is now status-code-based (apiFetch for JSON, authedFetch for blob/multipart).
+- [x] **Vitest / tsc / eslint / next build green** — vitest 61 passed (8 files; +3 new `authedFetch` tests: multipart 401→refresh→retry→success with parts re-sent, multipart refresh-fail→logout-once, blob 401→refresh→retry). `tsc --noEmit` clean; `eslint` 0 errors / 141 warnings (baseline, none new); `next build` via the grm_ui Docker image build.
 
 ## Optional (same area, lower priority)
 

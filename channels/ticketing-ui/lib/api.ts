@@ -3,7 +3,7 @@
 // the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
 // This avoids CORS issues and means the browser only needs port 3001.
 
-import { handleSessionExpired, isSessionExpiredResponse, isAccessTokenExpiringSoon } from "./auth/session-expired";
+import { handleSessionExpired, isAccessTokenExpiringSoon } from "./auth/session-expired";
 import { refreshTokens } from "./auth/oidc-auth";
 import { projectsForOrganization } from "./officerJurisdiction";
 
@@ -250,6 +250,36 @@ async function apiFetch<T>(path: string, opts?: RequestInit, retried = false): P
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
+}
+
+/**
+ * Give the blob/multipart fetch sites the same OIDC lifecycle apiFetch has.
+ *
+ * These sites can't go through apiFetch: they need the raw `Response` (blob) or a
+ * `FormData` body apiFetch's JSON path doesn't handle. So they used to hard-logout on any
+ * 401 (`isSessionExpiredResponse` → `handleSessionExpired`), losing an in-flight upload's
+ * file selection on a long-idle tab. This wraps a request thunk with:
+ *   1. proactive refresh (token expiring within 60s) — same single-flight as apiFetch;
+ *   2. `401 → refresh → retry-once` before bouncing to /login.
+ *
+ * `makeRequest` is re-invoked on the retry, so it MUST read the token (via `authHeaders()`)
+ * and rebuild any `FormData` at call time — the refreshed token is then applied and the
+ * multipart parts (File/FormData are re-readable) are re-sent intact.
+ */
+async function authedFetch(makeRequest: () => Promise<Response>): Promise<Response> {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("grm_access_token");
+    if (token && isAccessTokenExpiringSoon(token, 60)) {
+      await refreshTokens();
+    }
+  }
+  let resp = await makeRequest();
+  if (resp.status === 401) {
+    const refreshed = await refreshTokens();
+    if (refreshed) resp = await makeRequest();
+    if (resp.status === 401) handleSessionExpired(); // throws (redirects to /login)
+  }
+  return resp;
 }
 
 // ── Ticket endpoints ──────────────────────────────────────────────────────────
@@ -1184,18 +1214,18 @@ export function officerAttachmentPath(fileId: string): string {
 
 /** Fetch a protected file with session cookie + Bearer token; returns a blob URL. */
 export async function fetchAuthenticatedBlobUrl(path: string): Promise<string> {
-  const resp = await fetch(`${BASE}${path}`, {
-    credentials: "include",
-    headers: {
-      Accept: "*/*",
-      ...authHeaders(),
-    },
-  });
+  const resp = await authedFetch(() =>
+    fetch(`${BASE}${path}`, {
+      credentials: "include",
+      headers: {
+        Accept: "*/*",
+        ...authHeaders(),
+      },
+    }),
+  );
   if (!resp.ok) {
+    // 401 already handled by authedFetch (refresh + retry, else logout-throw).
     const text = await resp.text();
-    if (isSessionExpiredResponse(resp.status, text)) {
-      handleSessionExpired();
-    }
     let message = text || `File request failed (${resp.status})`;
     try {
       const parsed = JSON.parse(text) as { detail?: string };
@@ -1264,20 +1294,20 @@ export async function uploadOfficerAttachment(
   file: File,
   caption: string,
 ): Promise<OfficerAttachment> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("caption", caption);
-  // Do NOT set Content-Type — browser sets multipart boundary automatically
-  const resp = await fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: form,
+  // Rebuild FormData inside the thunk so a 401→refresh→retry re-sends the same parts.
+  const resp = await authedFetch(() => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("caption", caption);
+    // Do NOT set Content-Type — browser sets multipart boundary automatically
+    return fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
   });
   if (!resp.ok) {
     const body = await resp.text();
-    if (isSessionExpiredResponse(resp.status, body)) {
-      handleSessionExpired();
-    }
     throw new Error(`Upload failed ${resp.status}: ${body}`);
   }
   return resp.json();
@@ -1393,20 +1423,20 @@ export const exportReport = exportReportUrl;
 /** Download binary export with auth cookie + Bearer token (anchor href cannot send these). */
 async function downloadApiFile(path: string, filename: string, init?: RequestInit): Promise<void> {
   const extraHeaders = (init?.headers as Record<string, string> | undefined) ?? {};
-  const resp = await fetch(`${BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream",
-      ...authHeaders(),
-      ...extraHeaders,
-    },
-  });
+  const resp = await authedFetch(() =>
+    fetch(`${BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream",
+        ...authHeaders(),
+        ...extraHeaders,
+      },
+    }),
+  );
   if (!resp.ok) {
+    // 401 already handled by authedFetch (refresh + retry, else logout-throw).
     const text = await resp.text();
-    if (isSessionExpiredResponse(resp.status, text)) {
-      handleSessionExpired();
-    }
     let message = text || `Export failed (${resp.status})`;
     try {
       const parsed = JSON.parse(text) as { detail?: string };
@@ -2108,19 +2138,19 @@ export async function importOrganizations(
   file: File,
   opts?: { dry_run?: boolean },
 ): Promise<OrgImportResult> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("dry_run", String(opts?.dry_run ?? false));
-  const resp = await fetch(`${BASE}/api/v1/organizations/import`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: form,
+  // Rebuild FormData inside the thunk so a 401→refresh→retry re-sends the same parts.
+  const resp = await authedFetch(() => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("dry_run", String(opts?.dry_run ?? false));
+    return fetch(`${BASE}/api/v1/organizations/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
   });
   if (!resp.ok) {
     const body = await resp.text();
-    if (isSessionExpiredResponse(resp.status, body)) {
-      handleSessionExpired();
-    }
     throw new Error(`Org import failed ${resp.status}: ${body}`);
   }
   return resp.json();
