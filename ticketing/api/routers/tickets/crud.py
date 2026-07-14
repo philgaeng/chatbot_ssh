@@ -37,7 +37,6 @@ from ticketing.constants.classification import OFFICER_CONFIRMED
 from ticketing.services.grievance_content import (
     fetch_grievance_row,
     merge_grievance_into_ticket,
-    refresh_ticket_cache_from_grievance,
 )
 from ticketing.services.overdue_episodes import overdue_days_display
 from ticketing.services.ticket_intake import (
@@ -463,13 +462,13 @@ def get_ticket(
         for v in viewers
     ]
 
+    # H2-04: read-only GET. Grievance fields are live-merged for display below; the ticket
+    # cache write-back (persist + commit) that used to run here was removed so detail reads
+    # are idempotent (no write races between concurrent readers). Cache freshness is owned by
+    # the 2-min grievance_sync task. No UI flow depends on GET-triggered persistence.
     g_row = fetch_grievance_row(db, ticket.grievance_id)
     merged: dict = {}
     if g_row:
-        if refresh_ticket_cache_from_grievance(db, ticket, g_row):
-            ticket.updated_at = _now()
-            db.commit()
-            db.refresh(ticket)
         merged = merge_grievance_into_ticket(ticket, g_row)
 
     payload = TicketDetail.model_validate(ticket, from_attributes=True).model_dump()

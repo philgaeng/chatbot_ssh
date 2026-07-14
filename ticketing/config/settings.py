@@ -85,6 +85,8 @@ class TicketingSettings(BaseSettings):
 
     # ── Grievance sync: wait before backfill CREATE (seconds; webhook is primary path) ──
     ticketing_sync_backfill_grace_seconds: int = 180
+    # ── Grievance sync: rows fetched per page in the watermark-incremental scan (H2-04) ──
+    ticketing_sync_batch_size: int = 500
 
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
