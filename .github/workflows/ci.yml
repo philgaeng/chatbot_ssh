@@ -85,6 +85,38 @@ jobs:
             requirements.grm.txt
             requirements-dev.txt
 
+      # requirements.txt installs pyvips, but pyvips is a binding — without the system
+      # libvips it imports far enough to raise OSError("cannot load library
+      # libvips.so.42"), which is NOT an ImportError, so test_image_compression.py's
+      # `pytest.importorskip("pyvips")` guard does not catch it and the file fails to
+      # COLLECT. That took the whole job down.
+      #
+      # Found the first time this branch was ever pushed. T3-08 added tests/backend to CI
+      # and verified it "on a clean migrate+seed matching CI's steps" — but locally, where
+      # pyvips is not installed at all, so the same 4 tests skipped cleanly and the gap was
+      # invisible. Local simulation of CI is not CI: same lesson as D-25/D-35 (repo-level
+      # reasoning vs infrastructure reality), arriving from a third direction.
+      #
+      # Installing the library rather than broadening the skip guard is deliberate. The
+      # Dockerfile treats libvips as REQUIRED (it fails the build if HEIF support is
+      # missing), so image compression is a real production path — and these 4 tests have
+      # never run in CI. Skipping them would be the quarantine pattern T3-08 removed.
+      # Package names copied from the Dockerfile rather than guessed. The runtime library
+      # is `libvips42` on older Debian but `libvips42t64` since the time64 transition
+      # (verified in the backend image: `dpkg -S` says libvips42t64 owns libvips.so.42), so
+      # naming the runtime package directly would break on some runners and not others.
+      # `libvips-dev` keeps a stable name across both and pulls the runtime in.
+      # The Dockerfile keeps ownership of the HEIF assertion — it is the image that has to
+      # serve HEIF uploads.
+      - name: Install system libraries (libvips — mirrors the Dockerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libvips-dev \
+            libvips-tools \
+            libheif1 \
+            libde265-0
+
       - name: Install Python dependencies
         run: |
           pip install --upgrade pip
