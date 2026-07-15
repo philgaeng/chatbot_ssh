@@ -18,7 +18,7 @@ Weighted by code volume and criticality (backend 45%, portal 25%, conversation l
 | Backend — maintainability | **62 → 74** (67 at Tier-1) | **H2-02** split the 2,414-line ticket router into a 7-module `routers/tickets/` package + `engine/`; dead code and in-function imports removed along the way | 2,303-line `state_machine.py` still carries `run_flow_turn` (Tier 3) |
 | Backend — architecture | **58 → 68** (59 at Tier-1) | **H2-02** God router → package and `perform_action` → `engine/ticket_actions.py` (typed outcomes, no HTTP in the engine), route-surface pinned identical | 2,303-line inline conversation state machine (Tier 3) |
 | Backend — correctness | **55 → 74** | HR-04 savepoint-per-ticket + `FOR UPDATE SKIP LOCKED` + idempotence guard kills the partial-commit class; H2-04 sync is now crash-safe/idempotent; R3 keeps deactivated officers out of assignment | Actions/orchestrator state machine still lightly covered |
-| Backend — security | **55 → 80** (78 at Tier-1) | HR-01 fail-closed auth + HR-02 `require_ticket_access`; **authz-gaps-h2-03** closed 3 least-privilege holes (role-delete, project-metadata PATCH, 10 unauthenticated project-config reads) | PII decryption still dual-pathed in ticketing (Tier 3); project mutations tier-gated not project-scoped |
+| Backend — security | **55 → 80** (78 at Tier-1) | HR-01 fail-closed auth + HR-02 `require_ticket_access`; **authz-gaps-h2-03** closed 3 least-privilege holes (role-delete, project-metadata PATCH, 10 unauthenticated project-config reads) | ~~PII decryption still dual-pathed in ticketing~~ **(corrected 2026-07-15: not dual-pathed — the grievance API omits decryption and ticketing works around it; see the Tier-3 banner)**; project mutations tier-gated not project-scoped |
 | Backend — testing | **42 → 68** (64 at Tier-1) | **H2-03** (118 authz cells) + **H2-07** (escalation L1→L3/SEAH/interleave) + H2-04/05 behavior tests + SEAH parity/integrity | Conversation state machine still thin; `@integration` tests quarantined in CI |
 | Portal — architecture | **50 → 62** (53 at Tier-1) | **H2-01** the OIDC client now actually uses its refresh token; **H2-06** shared `useTicketThread` hook removed ~756 duplicated lines across the two thread pages | 4,372-line settings page (Tier 3) |
 | Portal — robustness/UX | **48 → 76** (65 at Tier-1) | **H2-01** ends officer data-loss at token expiry (proactive refresh + `401→refresh→retry-once`); **apifetch-refresh** extends the same to the blob/multipart upload sites | Coverage still thin; deep flows unexercised in CI |
@@ -40,8 +40,8 @@ Weighted by code volume and criticality (backend 45%, portal 25%, conversation l
 
 **New top findings (what now caps the score):**
 - **God files remaining** — `app/settings/page.tsx` (4,372) and `run_flow_turn` inside a 2,303-line `state_machine.py`. (The 2,414-line `tickets.py` was **split** by H2-02 into a 7-module package + engine.) Tier 3.
-- **PII decryption still dual-pathed** in ticketing — a Tier-3 unification item.
-- **Conversation layer size** — a lightly-tested 1,485-line `run_flow_turn`; broken Nepali *outside* the SEAH flow remains (the SEAH copy was repaired by H2-08). Tier 3.
+- ~~**PII decryption still dual-pathed** in ticketing~~ — **CORRECTED 2026-07-15: it is not dual-pathed.** `pii_vault.py` decrypts ciphertext the grievance API already returned; the real defect is that `get_grievance_by_id` omits server-side decryption. The unification item is real but lives in `backend/`, not ticketing. See [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §3.
+- **Conversation layer size** — a lightly-tested 1,485-line `run_flow_turn` (**CC measured at 189, not ~120**); broken Nepali *outside* the SEAH flow remains (the SEAH copy was repaired by H2-08). Tier 3. **Also: 3 of the 4 stack-introspected utterance call sites raise `ValueError` today** — a live bug, not a refactor item.
 - **Confirmation debt** — Tier-2 is code-complete + locally tested but its browser/Keycloak manual sweeps and CI-on-integration are not yet run.
 
 ---
@@ -83,15 +83,21 @@ All seven tickets landed with tests and CI. This is the ~55% → ~64% movement a
 
 ### Tier 3 — structural (L efforts, schedule deliberately)
 
-| Fix | Effort | Estimated impact |
+> ⚠️ **This table is KNOWN-WRONG as written — do not plan from it.** It was authored in the same pass as Tier 1/Tier 2 and never re-verified after those sprints (plus the org-chart sprint) landed. Re-verified against the tree on **2026-07-15**: **four of its five rows are materially wrong**, two of them in ways that would cause a regression if implemented as written. Corrected findings, with file:line evidence and hand-verification: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md). This table and the related claims in §1–§2 are corrected at Tier-3 close-out, together with the re-score.
+>
+> **The headline: Tier 3 is not five structural refactors — it is three live bugs and two decompositions.** The utterance item, the voice item, and part of `run_flow_turn` are latent user-facing defects, not refactorability work.
+
+| Fix (as originally written) | Effort | 2026-07-15 verdict |
 |---|---|---|
-| Decompose `run_flow_turn` (1,485 lines, CC≈120) into a state→handler table; delete dead branches | L | Highest-risk change surface in the repo becomes reviewable |
-| Split the 4,372-line settings page into per-tab components | L | Kills the hooks-crash class, cuts the settings bundle, unblocks parallel work |
-| Route ticketing's PII decryption through the grievance API only; drop `DB_ENCRYPTION_KEY` | M/L | Restores the single auditable PII boundary |
-| Replace stack-introspection utterance lookup with explicit keys | M | Makes the chatbot refactorable |
-| Serialize voice-chunk uploads behind chunk-0's `upload_id` | M | Flagship patchy-network feature becomes deterministic |
+| Decompose `run_flow_turn` (1,485 lines, CC≈120) into a state→handler table; delete dead branches | L → **M** | **Confirmed, but CC is 189 not ~120** (58% understated), and the emphasis is backwards: the shape is unusually table-friendly (flat chain, zero early returns, 4 shared carriers, handler pattern already in-file). The real risk is one 304-line branch (`status_check_form`) with thin coverage. Also missed: **no terminal `else`** ⇒ unrecognized state returns zero messages (dead air). |
+| Split the 4,372-line settings page into per-tab components | L → **S/M** | **Half-wrong.** The hooks-crash class was **already closed by HR-06** in Tier 1; the org sprint already extracted 7,748 lines and the shell is already a clean 206-line delegator. Purely mechanical now; the honest benefit is bundle/reviewability, not crash-class elimination. |
+| Route ticketing's PII decryption through the grievance API only; drop `DB_ENCRYPTION_KEY` | M/L → **M** | **Misdiagnosed, and the prescribed order causes a silent outage.** It is **not dual-pathed**: `pii_vault.py:49-73` has no `FROM` clause — it decrypts ciphertext the API already returned (a pgcrypto oracle, not a PII read). The real defect is a **backend** omission: `get_grievance_by_id` never calls `_decrypt_sensitive_data`, unlike its sibling. Dropping the key first silently blanks every officer contact card, guarded by **zero tests**. |
+| Replace stack-introspection utterance lookup with explicit keys | M → **S** | **Scope wrong by 50× — and it is a live bug.** 4 call sites, not ~200 (196 already use the explicit path). **3 of the 4 raise `ValueError` today**; one is swallowed into wrong form state. Missed: `get_buttons` has the identical flaw, and the *real* refactorability blocker is `file_name` module-derivation (~200 sites). |
+| Serialize voice-chunk uploads behind chunk-0's `upload_id` | M | ✅ **Correct** — the one row that held up. Real, open, and **not** mitigated by HR-07 (whose lock is text-only). Missed: a second path yields **silently truncated** voice notes. |
 
 **Estimated ceiling after Tier 3: ~85%.**
+
+**Method note for future passes:** the four Tier-3 rows that were wrong all failed the same way — the review reasoned from file size and a grep, without resolving the actual call graph or checking whether a later sprint had already moved the code. The three "structural refactor" framings each concealed a live user-facing bug. Sizing a finding by *lines* rather than by *call sites and blast radius* is what produced both the 50× scope error and the two dangerous prescriptions.
 
 ---
 

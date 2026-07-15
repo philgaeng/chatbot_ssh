@@ -13,7 +13,8 @@ A downgrade/suppression/scope-cut that is **not** logged this way is treated as 
 
 | Sprint | Status | Folder | Focus |
 |---|---|---|---|
-| **July 2026 — Tier-1 Hardening** | Active | [`2026-07_hardening/`](2026-07_hardening/) | HR-01…07: fail-closed auth, ticket-access gates, unique ticket index, escalation locking, CI, portal + webchat robustness. Tracker: [`PROGRESS.md`](2026-07_hardening/PROGRESS.md) |
+| **August 2026 — Tier-3 Structural** | Active | [`2026-08_tier3_structural/`](2026-08_tier3_structural/) | T3-01…05: explicit utterance keys, `run_flow_turn` decomposition, voice-chunk serialization, PII boundary unification, settings extraction. **Start with [`00-reassessment.md`](2026-08_tier3_structural/00-reassessment.md)** — the source review's Tier-3 table was re-verified and 4 of its 5 rows are wrong. Tracker: [`PROGRESS.md`](2026-08_tier3_structural/PROGRESS.md) |
+| **July 2026 — Tier-1 Hardening** | Residual | [`2026-07_hardening/`](2026-07_hardening/) | HR-01…07 all shipped; folder stays open for the pending-human items (HR-07 browser sweep, HR-05 live-failure/branch-protection checks). Tracker: [`PROGRESS.md`](2026-07_hardening/PROGRESS.md) |
 
 ## Completed sprints
 
