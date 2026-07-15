@@ -22,15 +22,45 @@ What shipped, in one line each:
 | **T3-07** | The `ticketing.*` ↔ `public.*` boundary rule amended to as-built and **pinned by tests** — after archaeology found both its goals had been abandoned in code months earlier. |
 | **T3-08** | The `@integration` quarantine ended: **CI 364 → 897 tests (+533), 0 deselected.** Not in the original sprint. |
 
-## Final verification (2026-07-15, CI's exact command)
+## Final verification — CI, green (2026-07-15)
 
-`PYTHONPATH=. pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers`
-⇒ **960 passed / 7 skipped / 0 failed / 0 deselected** at the first close-out; **966 passed / 7 skipped** after the dead-air fix and p4 (+8 new tests, −2 deleted pins).
+**`dev/tier3-structural` pushed; CI run `29424067937`: all four jobs ✅**
+`backend-tests` **970 passed / 6 skipped / 0 failed / 0 deselected** · `ui-checks` ✅ · `webchat-checks` 7/7 ✅ · `docs-links` ✅
 
-For scale: CI ran **364** tests with 390 deselected before T3-08; **897** after it; **960** at
-close-out. **+596 gated tests across the sprint** — and the suites that grew most are the ones
-that had nothing: `channels/REST_webchat/` (0 → 7 + a CI job), `components/settings/` (0 → 27),
-`pii_vault` (0 → 36), and 505 previously-uncharacterized lines of `run_flow_turn` (0 → 12).
+**It took three runs to get there, and the two red ones were worth more than the green one** —
+both were real defects that no amount of local care had exposed, because *the branch had
+never been pushed*:
+
+| Run | Failure | What it actually was |
+|---|---|---|
+| 1 | `test_image_compression.py` fails to **collect** | CI had no system libvips. `requirements.txt` installs `pyvips`, but it is a *binding*: without the library it raises `OSError`, not `ImportError`, so the file's own `importorskip` guard did not catch it (**D-62**). |
+| 2 | `test_the_fixture_really_is_encrypted` **red** | No `DB_ENCRYPTION_KEY` in CI ⇒ `_encrypt_field` returns its input ⇒ the fixture encrypted nothing (**D-64**). |
+
+**Run 1 exposed the sprint's own blind spot (D-63).** T3-08 added `tests/backend` to CI and
+reported it *"measured with the exact command, on a clean migrate+seed matching CI's steps,
+stable over 3 runs"* — **locally**, where `pyvips` isn't installed at all, so the same 4
+tests skipped cleanly and the gap was invisible. **The two environments fail differently and
+the local one fails silently.** Same shape as D-25 and D-35, from a third direction: *a
+faithful local simulation of CI is not CI*, and a branch that is never pushed cannot satisfy
+a "CI green" DoD item however carefully it is simulated.
+
+**Run 2 is why guard-the-guard tests earn their lines (D-64).** Without
+`test_the_fixture_really_is_encrypted`, T3-04's decryption test would have **passed
+vacuously** in CI — plaintext in, plaintext out, assertion satisfied — shipping a decryption
+test that proves nothing in the only environment that gates it. That is **D-09's exact
+failure mode**, reappearing in a new environment one commit after T3-04 closed it in the old
+one. Both were fixed by giving CI what it lacked, never by relaxing a guard.
+
+**Host and CI now reconcile exactly**, which is worth stating because this sprint has an
+unexplained twin (D-58): host **966 passed / 7 skipped**, CI **970 / 6**. The delta is the 4
+image tests — they *run* in CI (libvips now installed) and *skip* on the host (no pyvips
+package): +4 passed, −1 skipped. **D-58's 563-vs-567 is NOT this mechanism** (its skip count
+was identical on both sides) and stays open and unexplained.
+
+For scale: CI ran **364** tests with 390 deselected before T3-08; **970** now — **+606 gated
+tests**, and the suites that grew most are the ones that had nothing: `channels/REST_webchat/`
+(0 → 7 + a CI job), `components/settings/` (0 → 27), `pii_vault` (0 → 36), 505 uncharacterized
+lines of `run_flow_turn` (0 → 12), and image compression (0 → 4, never gated anywhere until now).
 
 ## Scorecard
 

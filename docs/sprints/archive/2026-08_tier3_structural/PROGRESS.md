@@ -1,5 +1,7 @@
 # Tier-3 Structural Sprint — Progress
 
+> ✅ **SPRINT CLOSED — CI GREEN on `dev/tier3-structural`** (run `29424067937`, 2026-07-15): backend-tests **970 passed / 6 skipped / 0 failed / 0 deselected**, ui-checks ✅, webchat-checks ✅, docs-links ✅. **It took three runs; the two red ones (D-62, D-64) were real defects that only a push could reveal — see D-63.** Summary: [`../../2026-08_tier3_structural.md`](../../2026-08_tier3_structural.md).
+>
 > Update at **every commit** on `dev/tier3-structural`. Status values: `todo` · `in_progress` · `blocked` · `review` · `done`.
 > Sprint definition: [README.md](README.md) · **Reassessment (read first): [00-reassessment.md](00-reassessment.md)** · Source review: [`../../reviews/devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md)
 
