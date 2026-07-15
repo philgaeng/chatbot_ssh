@@ -4,11 +4,12 @@ Grievance API router. Same URL surface and behaviour as Flask backend.
 
 import logging
 import os
-from typing import Any, Dict, Optional
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from backend.clients.messaging_api import send_email as send_email_via_api
 from backend.clients.messaging_api import send_sms as send_sms_via_api
 from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
@@ -33,6 +34,107 @@ class GrievanceClassificationPatchBody(BaseModel):
     grievance_classification_status: str = Field(..., max_length=64)
     grievance_summary: Optional[str] = None
     grievance_categories: Optional[Any] = None
+
+
+class GrievanceRecord(BaseModel):
+    """
+    One row of ``get_grievance_by_id`` (T3-06 step 1).
+
+    Fields are ``Any`` rather than ``str`` on purpose. ``_parse_field_from_database``
+    (base_manager.py) runs ``json.loads`` over *every* string column, so a TEXT value
+    that happens to parse ("5", "2024", a JSON array) reaches this model as int/list.
+    ``grievance_categories``/``follow_up_question`` arrive as lists for that reason.
+    Pinning those as ``str`` would turn ordinary data into a 500 under Pydantic v2,
+    which rejects int->str. Only the psycopg2-native types (datetime, bool) are pinned.
+
+    ``extra="allow"`` is load-bearing: the query is ``SELECT g.*`` plus a complainant
+    and grievance_parties join, so the shape is defined by the tables. A model that
+    omits a column would silently drop it from the API response — verified. Adding a
+    column here is safe; removing one is an API change.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    # --- public.grievances (SELECT g.*) ---
+    grievance_id: Optional[str] = None
+    complainant_id: Optional[str] = None
+    grievance_categories: Any = None
+    grievance_categories_alternative: Any = None
+    follow_up_question: Any = None
+    grievance_summary: Any = None
+    grievance_description: Any = None
+    grievance_claimed_amount: Any = None
+    grievance_location: Any = None
+    language_code: Any = None
+    grievance_classification_status: Any = None
+    grievance_creation_date: Optional[datetime] = None
+    grievance_modification_date: Optional[datetime] = None
+    is_temporary: Optional[bool] = None
+    source: Any = None
+    grievance_sensitive_issue: Optional[bool] = None
+    grievance_high_priority: Optional[bool] = None
+    grievance_timeline: Any = None
+    case_sensitivity: Any = None
+    vault_payload_ref: Any = None
+    vault_last_updated_at: Optional[datetime] = None
+    is_archived: Optional[bool] = None
+    archived_at: Optional[datetime] = None
+
+    # --- public.complainants (LEFT JOIN via grievance_parties) ---
+    # NOTE: the four ENCRYPTED_FIELDS below (full_name/phone/email/address) are served
+    # as pgcrypto hex ciphertext today — get_grievance_by_id never decrypts. That is
+    # the T3-04 defect; this model documents the shape as-built, it does not fix it.
+    complainant_full_name: Any = None
+    complainant_phone: Any = None
+    complainant_email: Any = None
+    complainant_address: Any = None
+    complainant_province: Any = None
+    complainant_district: Any = None
+    complainant_municipality: Any = None
+    complainant_ward: Any = None
+    complainant_village: Any = None
+    location_geo: Any = None
+    contact_id: Any = None
+    country_code: Any = None
+    location_code: Any = None
+    location_resolution_status: Any = None
+    level_1_name: Any = None
+    level_2_name: Any = None
+    level_3_name: Any = None
+    level_4_name: Any = None
+    level_5_name: Any = None
+    level_6_name: Any = None
+    level_1_code: Any = None
+    level_2_code: Any = None
+    level_3_code: Any = None
+    level_4_code: Any = None
+    level_5_code: Any = None
+    level_6_code: Any = None
+
+    # --- public.grievance_parties ---
+    party_role: Any = None
+    is_primary_reporter: Optional[bool] = None
+
+
+class GrievanceDetailData(BaseModel):
+    """``data`` block of GET /api/grievance/{id}."""
+
+    model_config = ConfigDict(extra="allow")
+
+    grievance: GrievanceRecord
+    current_status: Optional[Dict[str, Any]] = None
+    status_history: List[Dict[str, Any]] = Field(default_factory=list)
+    files: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class GrievanceDetailResponse(BaseModel):
+    """Envelope of GET /api/grievance/{id} — preserves the Flask response structure."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    message: str
+    data: GrievanceDetailData
 
 
 class ComplainantPatchBody(BaseModel):
@@ -246,7 +348,7 @@ def update_grievance_status(grievance_id: str, body: UpdateStatusBody):
         )
 
 
-@router.get("/api/grievance/{grievance_id}")
+@router.get("/api/grievance/{grievance_id}", response_model=GrievanceDetailResponse)
 def get_grievance(grievance_id: str):
     """Get detailed information about a specific grievance. Same response as Flask."""
     try:
