@@ -62,6 +62,17 @@ jobs:
       TICKETING_SECRET_KEY: ci-test-secret
       APP_ENV: dev
       AUTH_MODE: bypass
+      # pgcrypto passphrase for the four ENCRYPTED_FIELDS on public.complainants. Any value
+      # works — it is a symmetric passphrase, and nothing in CI reads production data.
+      #
+      # Required, not optional: without it `_encrypt_field` returns its input unchanged
+      # (`if not self.encryption_key: return encrypted_value`), so T3-04's decryption tests
+      # would encrypt nothing, decrypt nothing, and **pass vacuously** — plaintext in,
+      # plaintext out, assertion satisfied. That is D-09's exact failure mode, which T3-04
+      # exists to close. `test_the_fixture_really_is_encrypted` is the guard that caught it
+      # here (it failed on the first real CI run, doing precisely its job); the fix is to
+      # give CI the key, not to relax the guard.
+      DB_ENCRYPTION_KEY: ci-test-pgcrypto-passphrase
       # Redis (backend app / celery import requires REDIS_HOST — task_queue/config.py).
       REDIS_HOST: localhost
       REDIS_PORT: "6379"
