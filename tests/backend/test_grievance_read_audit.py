@@ -171,6 +171,25 @@ def test_principal_resolution(env, key, expected):
         assert _principal_for_key(key) == expected
 
 
+def test_non_ascii_key_does_not_raise():
+    """
+    hmac.compare_digest raises TypeError on non-ASCII *str*, and x-api-key is
+    caller-controlled (Starlette decodes headers as latin-1). Comparing as bytes
+    keeps this a clean "unrecognized-key" instead of a 500. Verified red: with
+    str comparison this raises TypeError.
+    """
+    with patch.dict("os.environ", {"TICKETING_SECRET_KEY": "ascii-key"}, clear=True):
+        assert _principal_for_key("café") == "unrecognized-key"
+        assert _principal_for_key("ключ") == "unrecognized-key"
+
+
+def test_non_ascii_configured_key_does_not_raise():
+    """The mirror case: a non-ASCII key in the environment must not crash either."""
+    with patch.dict("os.environ", {"TICKETING_SECRET_KEY": "café-key"}, clear=True):
+        assert _principal_for_key("café-key") == "ticketing"
+        assert _principal_for_key("other") == "unrecognized-key"
+
+
 def test_unset_key_does_not_match_empty_header():
     """
     An unconfigured env var must not make every caller look like 'ticketing'.

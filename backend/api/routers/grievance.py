@@ -200,9 +200,16 @@ def _principal_for_key(x_api_key: Optional[str]) -> str:
     """
     if not x_api_key or not x_api_key.strip():
         return "anonymous"
-    presented = x_api_key.strip()
+    # Compare as bytes, not str: hmac.compare_digest raises TypeError on non-ASCII
+    # str input, and x_api_key is caller-controlled (Starlette decodes headers as
+    # latin-1, so "x-api-key: café" reaches here intact). Unreachable while the
+    # auth dependency rejects first, but this helper is also the natural place to
+    # identify a *rejected* caller — see the audit followup — and it must not raise
+    # there. Real keys are ASCII (secrets.token_urlsafe), so encoding is a no-op for
+    # them; non-ASCII input now falls through to "unrecognized-key" instead of a 500.
+    presented = x_api_key.strip().encode("utf-8")
     for name, env_var in (("ticketing", "TICKETING_SECRET_KEY"), ("messaging", "MESSAGING_API_KEY")):
-        configured = os.environ.get(env_var, "").strip()
+        configured = os.environ.get(env_var, "").strip().encode("utf-8")
         if configured and hmac.compare_digest(presented, configured):
             return name
     return "unrecognized-key"
