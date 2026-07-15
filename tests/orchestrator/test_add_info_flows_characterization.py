@@ -1,12 +1,14 @@
 """
 T3-02 p2 — characterization tests for the three `add_*` branches of `run_flow_turn`.
 
-CHARACTERIZATION, not specification. These record what the code does **today**, bugs
-included, so that p3 (splitting `status_check_form`) and p4 (the handler table) can be
-verified as behaviour-preserving. Where the current behaviour looks wrong, the test pins
-the wrong behaviour and says so in a comment, and the bug is logged in PROGRESS.md ->
-Deviations. Do not "fix" a pinned behaviour here — that would change behaviour under the
-net that exists to detect exactly that.
+CHARACTERIZATION, not specification. These record what the code does **today**, so that p3
+(splitting `status_check_form`) and p4 (the handler table) can be verified as
+behaviour-preserving.
+
+They originally pinned a bug too — D-51's silent turn — because characterization records
+behaviour including bugs rather than fixing it under the net it just created. That bug is
+now fixed by `run_flow_turn`'s postcondition and the pin is gone, on the signal its own
+docstring specified. What remains here is all intended behaviour.
 
 Why these three: `add_more_info_flow` (47 lines), `add_missing_info_otp_flow` (102) and
 `add_missing_info_flow` (53) had **zero state references in any test** — 202 lines of the
@@ -91,8 +93,8 @@ def test_add_more_info_submit_returns_to_status_check_and_reshows_the_step(clien
     re-showing the story step via action_ask_story_step.
 
     story_route is set here because that is what the real status-check flow sets before
-    ever reaching this branch — and without it this same path goes silent (see
-    test_..._is_silent_when_story_route_is_unset below).
+    ever reaching this branch. Without it this same path used to go silent (D-51) — now
+    caught by run_flow_turn's postcondition; see tests/orchestrator/test_no_silent_turns.py.
     """
     uid = "t3-02-p2-more-info-submit"
     _seed(
@@ -113,41 +115,15 @@ def test_add_more_info_submit_returns_to_status_check_and_reshows_the_step(clien
     assert _texts(body), "completing the form must not produce a silent turn"
 
 
-def test_add_more_info_submit_is_silent_when_story_route_is_unset(client):
-    """
-    ⚠️ CHARACTERIZES A BUG — pinned deliberately, NOT fixed (spec: record, don't fix).
-
-    On the same completion path, if `story_route` is unset the turn returns **zero
-    messages**: state_machine.py:1920 invokes action_ask_story_step, whose entire body is
-    guarded by `if story_route in [route_status_check_grievance_id, route_status_check_phone]`
-    (action_ask_commons.py:29) and otherwise dispatches nothing and returns []. The user
-    submits their extra detail and the chatbot says nothing.
-
-    This is D-08's class again — dead air — but one level down, *inside* a recognized
-    branch, so T3-02 p1's terminal `else` cannot catch it: `status_check_form` IS a known
-    state. Reachability in production is unproven (the real status-check flow sets
-    story_route before this branch is reachable), which is exactly why it is logged rather
-    than fixed here. See PROGRESS.md -> Deviations.
-
-    If a future change makes this path speak, this test SHOULD fail — that is the signal
-    to delete it and record the fix, not to relax it.
-    """
-    uid = "t3-02-p2-more-info-submit-no-route"
-    _seed(
-        uid,
-        "add_more_info_flow",
-        slots={**BASE_SLOTS, "modify_grievance_new_detail": "the dust is worse now"},
-        active_loop="form_modify_grievance_details",
-        requested_slot="modify_grievance_new_detail",
-    )
-
-    body = post_turn(client, uid, payload="/submit_details")
-
-    assert body["next_state"] == "status_check_form"
-    assert _texts(body) == [], (
-        "current behaviour is a silent turn; if this now speaks, the bug was fixed — "
-        "record it and drop this characterization"
-    )
+# NOTE: `test_add_more_info_submit_is_silent_when_story_route_is_unset` lived here. It
+# pinned D-51 — the completion path returning zero messages when `story_route` was unset —
+# and its docstring said: "If a future change makes this path speak, this test SHOULD fail
+# — that is the signal to delete it and record the fix, not to relax it."
+#
+# That is exactly what happened. The fix is the `run_flow_turn` postcondition (no turn
+# returns zero messages), which closed D-08/D-51/D-52/D-59 at once. The behaviour is now
+# owned by tests/orchestrator/test_no_silent_turns.py, which asserts the *opposite* —
+# so keeping a pin of the old behaviour here would simply be a failing test.
 
 
 # ── add_missing_info_flow (state_machine.py:2145-2197) ────────────────────────────────

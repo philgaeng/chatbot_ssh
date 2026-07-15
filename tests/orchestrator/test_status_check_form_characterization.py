@@ -1,11 +1,13 @@
 """
 T3-02 p2 — characterization tests for `status_check_form`, the 303-line branch p3 splits.
 
-CHARACTERIZATION, not specification: these record what the code does **today**, bugs
-included, so p3 can be shown to preserve behaviour. Where the behaviour looks wrong the
-test pins the wrong behaviour and says so; the bug is logged in PROGRESS.md -> Deviations
-rather than fixed (T3-02's spec: "you would be changing behavior under a test net you just
-wrote").
+CHARACTERIZATION, not specification: these record what the code does **today**, so p3 can
+be shown to preserve behaviour.
+
+They originally pinned D-52's silent `active_loop` fallback as well — characterization
+records bugs rather than fixing them under a net it just wrote. That bug is now fixed by
+`run_flow_turn`'s postcondition and the pin is gone, on the signal its docstring specified.
+What remains here is all intended behaviour.
 
 Why this branch: 303 lines at nesting depth 9, and today it is touched only at *entry*
 level by `test_form_loop.py` / `test_modify_grievance_flow.py` — nothing exercises its
@@ -94,8 +96,9 @@ def test_unrecognized_input_reshows_the_choices_and_stays(client):
     convention (:1629). Free text neither routes nor is swallowed: the step is re-shown and
     the state holds.
 
-    This is the convention the sprint keeps citing as the file's own answer to dead air.
-    It is worth pinning precisely because two *other* paths fail to honour it (D-51, D-52).
+    This is the convention the sprint keeps citing as the file's own answer to dead air —
+    and the one three *other* paths failed to honour (D-51, D-52, D-59) until the postcondition
+    made it an enforced invariant rather than a habit.
     """
     uid = "t3-02-p2-scf-unknown"
     _seed(uid, slots=BASE_SLOTS)
@@ -123,30 +126,13 @@ def test_active_loop_form_otp_runs_the_otp_form_and_holds_state(client):
     assert "/skip" in all_button_payloads(body)
 
 
-def test_unknown_active_loop_falls_back_to_status_form_1_silently(client):
-    """
-    ⚠️ CHARACTERIZES A BUG — pinned deliberately, NOT fixed (D-52).
-
-    The form-selection chain at :1674-1683 ends in a bare `else: form = _get_status_form_1()`.
-    An unrecognized active_loop therefore silently runs status form 1, which on an
-    already-filled session dispatches **nothing** — the turn returns zero messages and the
-    session keeps its bogus active_loop, so every subsequent turn does the same.
-
-    Third instance of D-08's dead-air class this sprint (with D-51), and again invisible to
-    T3-02 p1's terminal `else`: the *state* is recognized, only the *loop* is not. The
-    fallback is silent where it should be loud — an unknown active_loop is a bug, and the
-    file's own convention two hundred lines up (:1629) says never return empty messages.
-
-    If a future change makes this speak or log, this test SHOULD fail — delete it and
-    record the fix rather than relaxing it.
-    """
-    uid = "t3-02-p2-scf-bogus-loop"
-    _seed(uid, slots=BASE_SLOTS, active_loop="totally_unknown_loop")
-
-    body = post_turn(client, uid, text="")
-
-    assert body["next_state"] == "status_check_form"
-    assert _texts(body) == [], (
-        "current behaviour is a silent turn on an unknown active_loop; if this now speaks "
-        "or logs, the bug was fixed — record it and drop this characterization"
-    )
+# NOTE: `test_unknown_active_loop_falls_back_to_status_form_1_silently` lived here. It
+# pinned D-52 — an unrecognized `active_loop` silently running status form 1, returning zero
+# messages and wedging the session — and said: "If a future change makes this speak or log,
+# this test SHOULD fail — delete it and record the fix rather than relaxing it."
+#
+# Deleted on exactly that signal. Fixed by the `run_flow_turn` postcondition (recovers the
+# user and clears the bogus loop, so the session no longer wedges) plus an error log at the
+# form-selection `else` that names the offending loop — because `status_check_form` is a
+# valid state, so the postcondition's log alone would send an operator to the wrong place.
+# Now owned by tests/orchestrator/test_no_silent_turns.py.

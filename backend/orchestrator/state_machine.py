@@ -992,9 +992,7 @@ async def _status_check_run_active_form(
     status_check_form with a form in flight: pick the form from `active_loop`, run one
     turn, and handle completion.
 
-    Extracted verbatim from run_flow_turn by T3-02 p3. NOTE the form-selection chain
-    ends in a bare `else` that silently treats an unknown active_loop as status form 1
-    (D-52) — preserved as-is; characterization pins it, a followup tracks it.
+    Extracted verbatim from run_flow_turn by T3-02 p3.
     """
     if active_loop == "form_status_check_1":
         form = _get_status_form_1()
@@ -1005,6 +1003,21 @@ async def _status_check_run_active_form(
     elif active_loop == "form_status_check_skip":
         form = _get_status_form_skip()
     else:
+        # D-52: this used to be a silent default. An unrecognized active_loop is a bug — a
+        # session persisted under a loop name this version no longer serves — and mapping it
+        # to status form 1 without a word made it read as normal operation.
+        #
+        # The turn postcondition in run_flow_turn catches the *symptom* (this form
+        # dispatches nothing on an already-filled session, so the user is recovered and the
+        # bogus loop cleared). This names the *cause*, which is the actionable half:
+        # `status_check_form` is a perfectly valid state, so an operator reading only the
+        # postcondition's log would go looking in the wrong place entirely.
+        _log_sm.error(
+            "status_check_form: unrecognized active_loop %r (user_id=%s) — falling back "
+            "to form_status_check_1",
+            active_loop,
+            session.get("user_id", "default"),
+        )
         form = _get_status_form_1()
 
     msgs, form_updates, completed = await run_form_turn(
@@ -2370,6 +2383,45 @@ async def run_flow_turn(
             state,
             session.get("user_id", "default"),
         )
+        next_state = await _recover_from_unknown_state(
+            session, dispatcher, domain, slot_updates, latest_message
+        )
+
+    # ── POSTCONDITION: a turn never returns zero messages ────────────────────────────
+    #
+    # The user spoke; the chatbot answers. This file has always *said* so — see the
+    # "re-show choices so we never return empty messages" comment in the status-check
+    # branch — but nothing enforced it, so it failed at each site separately and was found
+    # at each site separately: D-08 (unrecognized state), D-51 (a recognized branch invoking
+    # an action that no-ops), D-52 (an unrecognized active_loop), D-59 (the SEAH flag-off
+    # arm setting next_state and dispatching nothing). The terminal `else` above catches
+    # only D-08; in the other three the *state* is recognized, so it never runs.
+    #
+    # Hence the guard sits at the turn boundary, which is where the invariant actually
+    # lives. Silence here is always a bug — never a design — so it is logged at error with
+    # everything needed to locate it, and the user is recovered rather than left staring at
+    # nothing.
+    #
+    # Safe to recover (rather than merely log) because the blast radius is exactly "turns
+    # that are already broken": instrumenting all three returns and running the whole suite
+    # found **three** zero-message turns out of 208 tests, and all three were bugs. The
+    # `/introduce` restart and attachment_ids_sync never return empty. Measured, not assumed
+    # — if that ever stops holding, this fires on a legitimate path and the control tests in
+    # tests/orchestrator/test_no_silent_turns.py go red, which is the point.
+    if not dispatcher.messages:
+        _log_sm.error(
+            "run_flow_turn: zero-message turn — state=%r intent=%r active_loop=%r "
+            "next_state=%r (user_id=%s). The branch that ran dispatched nothing; recovering. "
+            "This is a bug in that branch, not in the recovery.",
+            state,
+            intent,
+            session.get("active_loop"),
+            next_state,
+            session.get("user_id", "default"),
+        )
+        # Reuses p1's terminal-else recovery: bilingual, re-shows the menu, and clears
+        # active_loop/requested_slot — which is also what un-wedges D-52, whose bogus loop
+        # would otherwise survive and re-silence every later turn.
         next_state = await _recover_from_unknown_state(
             session, dispatcher, domain, slot_updates, latest_message
         )

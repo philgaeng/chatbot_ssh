@@ -1,6 +1,42 @@
 # `add_more_info_flow` completes into a silent turn when `story_route` is unset
 
-**Status:** OPEN · **Opened:** 2026-07-15 by **T3-02 p2** (D-51) · **Size:** S · **Severity:** low-to-medium (reachability unproven)
+**Status:** ✅ **CLOSED 2026-07-15** — fixed by the `run_flow_turn` postcondition, which is the option this doc recommended over the point fix.
+> **Opened:** 2026-07-15 by **T3-02 p2** (D-51) · **Size:** S · **Severity:** low-to-medium (reachability unproven)
+
+## Outcome
+
+Fixed by DoD item 3 — **the general guard, not the point fix.** `run_flow_turn` now asserts
+its own postcondition: no turn returns zero messages. It logs at error with state, intent,
+`active_loop` and `next_state`, then recovers the user via p1's `_recover_from_unknown_state`.
+
+**One guard closed four instances** — D-08, D-51, D-52 and D-59 — which is what this doc
+argued for: *"That subsumes D-08, this, and the next one."* There was a next one.
+
+**The precondition this doc flagged was answered by measurement, not assumption.** It said to
+"weigh against the legitimately-silent turns (if any — `attachment_ids_sync` is worth checking
+first)". Instrumenting all three of `run_flow_turn`'s returns and running the whole suite:
+**3 zero-message turns out of 208 tests, and all 3 were bugs.** `attachment_ids_sync` and the
+`/introduce` restart never return empty. **There was no legitimate silence to protect** — which
+is what made recovering (rather than merely logging) safe: the blast radius is exactly the set
+of turns that were already broken.
+
+**And the measurement paid for itself:** it found **D-59**, a fourth instance nobody had
+spotted — `main_menu` + `/seah_intake` with the SEAH flag off sets `next_state` and dispatches
+nothing. Its test had been green for months because it asserts `next_state` and never looks at
+the messages. Reading would not have found it; measuring did.
+
+Reachability (DoD item 1) was **not** traced and did not need to be: the general guard makes the
+class extinct whether or not any individual instance is reachable. The reachability question is
+therefore moot rather than answered — recorded here so nobody later mistakes it for settled.
+
+Now owned by `tests/orchestrator/test_no_silent_turns.py` (8 tests, all verified red pre-fix).
+The characterization test that pinned the wrong behaviour was **deleted**, on the signal its own
+docstring specified.
+
+---
+
+### Original finding (kept for the record)
+
 
 ## The finding
 

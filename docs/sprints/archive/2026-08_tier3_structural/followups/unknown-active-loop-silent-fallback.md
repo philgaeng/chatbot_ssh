@@ -1,6 +1,38 @@
 # `status_check_form`'s unknown-`active_loop` fallback is silent
 
-**Status:** OPEN · **Opened:** 2026-07-15 by **T3-02 p2** (D-52) · **Size:** XS-S · **Severity:** low (reachability unproven)
+**Status:** ✅ **CLOSED 2026-07-15** — fixed by the `run_flow_turn` postcondition **plus** the point fix, i.e. both halves this doc asked for.
+> **Opened:** 2026-07-15 by **T3-02 p2** (D-52) · **Size:** XS-S · **Severity:** low (reachability unproven)
+
+## Outcome
+
+Both DoD items 1 and 2, because they fix different halves and this bug needed both:
+
+1. **The postcondition** (`run_flow_turn`) catches the **symptom**: the turn dispatched nothing,
+   so the user is recovered and — critically — `_recover_from_unknown_state` clears
+   `active_loop`/`requested_slot`, which is what **un-wedges** the session. A message alone
+   would have left the bogus loop in place to re-silence every later turn.
+2. **The point fix** names the **cause**: the form-selection `else` now logs at error with the
+   offending `active_loop`. This is not redundant with (1) — `status_check_form` is a perfectly
+   *valid* state, so an operator reading only the postcondition's log would go looking in the
+   wrong place entirely. The postcondition says "this turn went silent"; this says "because the
+   loop was `totally_unknown_loop`".
+
+**One guard closed four instances** (D-08/D-51/D-52/D-59), as this doc predicted: *"a single
+postcondition … subsumes all three and any future sibling."*
+
+A trap worth recording for the next person: `story_route` is the hinge, and **D-51 and D-52 need
+opposite values of it**. D-52 only reproduces when it is *set* (`form_status_check_1` collects it,
+so unset ⇒ the form prompts and the turn is not silent); D-51 only reproduces when it is *unset*.
+Getting this wrong made two of the new tests pass pre-fix for the wrong reason — caught only by
+red-verification, which is exactly what that discipline is for.
+
+Now owned by `tests/orchestrator/test_no_silent_turns.py`. The characterization pin was
+**deleted**, on the signal its docstring specified.
+
+---
+
+### Original finding (kept for the record)
+
 
 ## The finding
 
