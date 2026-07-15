@@ -118,20 +118,21 @@ ops/                       → platform monitoring/health/backup/reporting (own 
 
 ### APIs to call (never reimplement):
 
-**Grievance API** — primary data source for complainant PII:
+**Grievance API** — primary data source for complainant PII, and it **decrypts server-side** (T3-04):
 
 ```
-GET  /api/grievance/{grievance_id}    ← auth: x-api-key (T3-06)
+GET  /api/grievance/{grievance_id}    ← auth: x-api-key (T3-06) · returns PLAINTEXT PII (T3-04)
 POST /api/grievance/{grievance_id}/status  ← auth: x-api-key (T3-06)
 GET  /api/grievance/statuses          ← public
 ```
 
-> ⚠️ **It does not decrypt PII today** — this line used to claim it did, and that was never true.
-> `get_grievance_by_id` returns pgcrypto hex ciphertext for the four encrypted fields, and
-> `ticketing/services/pii_vault.py` decrypts client-side as a workaround. Evidence:
+> This line claimed decryption for months before it was true. `get_grievance_by_id` returned
+> pgcrypto hex, and `ticketing/services/pii_vault.py` decrypted client-side as a workaround —
+> which is the *only* reason ticketing ever held `DB_ENCRYPTION_KEY`. **T3-04 made the claim
+> true** (`grievance_manager.py`), deleted the workaround, and removed the key from ticketing's
+> settings. The key is now owned solely by `backend`. **Ticketing decrypts nothing, and cannot:
+> there is no accessor** — pinned by `tests/ticketing/test_pii_boundary.py`. History:
 > [`00-reassessment.md`](docs/sprints/2026-08_tier3_structural/00-reassessment.md) §3.
-> **T3-04 makes the claim true — delete this caveat when it lands** (and leave §Data rules' §6
-> pointer alone).
 
 **Messaging API** — for complainant SMS fallback + quarterly reports:
 
@@ -192,7 +193,7 @@ grievance_db
 3. **No complainant PII columns in `ticketing.*`** (`complainant_full_name` / `complainant_phone` / `complainant_email` / `complainant_address`), and **`public.complainants` is not a PII source for ticketing**. Kept, sharpened back to its original 2026-03 form. This is the one PII rule that stands on its own merits, independent of everything above. **Pinned by a test.**
 4. `ticketing.tickets` caches non-PII at creation: `grievance_summary`, `grievance_categories`, `grievance_location`, `priority`
    > **Honest caveat:** `grievance_summary` is free text and *can* contain self-disclosed PII. It is cached by design (`models/ticket.py`); `grievance_description` — the raw narrative — deliberately is **not** (`services/grievance_content.py` writes only summary/categories/location). **The asymmetry is intentional. Do not "fix" it** by caching the description.
-5. **Complainant PII** is fetched fresh via `GET /api/grievance/{id}` and never cached in `ticketing.*`. (Fully true when T3-04 lands: today the endpoint returns ciphertext that `services/pii_vault.py` decrypts client-side.) **This does not extend to grievance content** — ticketing reads `grievance_description` and file metadata directly, per rule 1.
+5. **Complainant PII** is fetched fresh via `GET /api/grievance/{id}` and never cached in `ticketing.*`. The endpoint returns **plaintext** — the backend decrypts server-side (T3-04) and ticketing holds no encryption key. **This does not extend to grievance content** — ticketing reads `grievance_description` and file metadata directly, per rule 1.
 6. Complainant name: shown by default. Phone: hidden, revealed via "Reveal contact" button (action logged, no OTP for proto)
 
 ### SQLAlchemy — ALL models must use:

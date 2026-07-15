@@ -92,7 +92,7 @@ Detailed policy: [09_privacy.md](09_privacy.md).
 
 | Feature | Where | Notes |
 |---|---|---|
-| **Field-level DB encryption** | Backend grievance/complainant data | `DB_ENCRYPTION_KEY` + pgcrypto model |
+| **Field-level DB encryption** | Backend grievance/complainant data | `DB_ENCRYPTION_KEY` + pgcrypto model. **`backend` is the sole holder** — it decrypts server-side in `get_grievance_by_id`, so `GET /api/grievance/{id}` serves plaintext and ticketing needs no key (T3-04). Ticketing has no accessor for it and must not regain one; pinned by `tests/ticketing/test_pii_boundary.py`. |
 | **Envelope/key split by sensitivity** | Vault architecture | Separate handling for standard vs SEAH-sensitive content (policy) |
 | **Secrets via environment** | All services | No credentials in repo; `.env` / deployment env vars |
 | **Webhook/API shared secrets** | Ticketing + messaging + Keycloak | `TICKETING_SECRET_KEY`, `MESSAGING_API_KEY`, `KEYCLOAK_WEBHOOK_SECRET` |

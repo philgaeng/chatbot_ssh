@@ -219,6 +219,61 @@ def test_officer_card_passes_through_missing_fields():
         assert card[field] is None
 
 
+# ── the key is gone from ticketing, structurally ──────────────────────────────────────
+
+
+def test_ticketing_settings_has_no_db_encryption_key():
+    """
+    T3-04 step 4. Ticketing decrypts nothing, so it must not be able to read the key at
+    all. Asserting on the settings object (not just a grep) is what makes this real: the
+    accessor's absence is a structural fact, not a convention.
+
+    The key legitimately stays on `backend`, which owns it.
+    """
+    from ticketing.config.settings import get_settings
+
+    settings = get_settings()
+    assert not hasattr(settings, "db_encryption_key"), (
+        "ticketing can read DB_ENCRYPTION_KEY again — T3-04 removed it because ticketing "
+        "no longer decrypts anything. Re-adding it re-opens the workaround that made the "
+        "PII boundary look split."
+    )
+
+
+def test_ticketing_source_does_not_reference_the_encryption_key():
+    """
+    The creep-back guard, mirroring the _KNOWN_UNAUTH_READS sweep pattern from
+    authz-gaps-h2-03. Scans ticketing/ source for a live reference. Comments and
+    docstrings are allowed — pii_vault.py's history is explained in prose, and that
+    prose is the thing stopping someone re-adding it.
+    """
+    import ast
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[2] / "ticketing"
+    offenders: list[str] = []
+
+    for path in root.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:  # pragma: no cover
+            continue
+        for node in ast.walk(tree):
+            # settings.db_encryption_key / self.db_encryption_key
+            if isinstance(node, ast.Attribute) and node.attr == "db_encryption_key":
+                offenders.append(f"{path.relative_to(root.parent)}:{node.lineno}")
+            # a bare name, or an os.environ["DB_ENCRYPTION_KEY"] style constant
+            elif isinstance(node, ast.Name) and node.id == "db_encryption_key":
+                offenders.append(f"{path.relative_to(root.parent)}:{node.lineno}")
+            elif isinstance(node, ast.Constant) and node.value == "DB_ENCRYPTION_KEY":
+                offenders.append(f"{path.relative_to(root.parent)}:{node.lineno}")
+
+    assert not offenders, (
+        "ticketing/ references the DB encryption key again — T3-04 deleted it. "
+        f"Sites: {offenders}"
+    )
+
+
 # ── the reveal path — also entirely uncovered before this file ────────────────────────
 
 

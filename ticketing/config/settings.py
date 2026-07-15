@@ -43,8 +43,12 @@ class TicketingSettings(BaseSettings):
     orchestrator_base_url: str = "http://localhost:8000"
     # Optional legacy alias; prefer TICKETING_SECRET_KEY everywhere.
     messaging_api_key: str = ""
-    # Same key as chatbot backend — used only to decrypt vault fields for reveal broker.
-    db_encryption_key: str = ""
+    # NOTE: db_encryption_key was removed by T3-04. Ticketing does not decrypt anything:
+    # the grievance API returns plaintext (backend decrypts server-side), so the key is
+    # owned solely by `backend` (base_manager.py:57, complainant_manager.py:43,
+    # scripts/database/init.py:203). Do not re-add it here — the accessor's absence is
+    # what makes "ticketing holds no PII key" a structural fact rather than a promise.
+    # Pinned by tests/ticketing/test_pii_boundary.py.
     # User-facing webchat URL — embedded in QR codes so complainants reach the chatbot.
     # Override via CHATBOT_WEBCHAT_URL env var in production.
     chatbot_webchat_url: str = "https://grm.facets-ai.com/chat"
