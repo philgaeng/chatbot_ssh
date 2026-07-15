@@ -1,6 +1,47 @@
 # `run_flow_turn` handler table (T3-02 p4) — not done, and cheaper to size honestly
 
-**Status:** OPEN · **Opened:** 2026-07-15 by **T3-02 p3** (D-53) · **Size:** M (**not** the S the spec assumed) · **Priority:** low — reviewability, not correctness
+**Status:** ✅ **CLOSED 2026-07-15** — done, and the re-sizing was settled by doing it: it was an **M**.
+> **Opened:** 2026-07-15 by **T3-02 p3** (D-53) · **Size:** M (**not** the S the spec assumed) · **Priority:** low — reviewability, not correctness
+
+## Outcome
+
+Shipped. `run_flow_turn`: **1,485 lines at sprint start → 150 (−90%)**; the 20-arm chain is
+gone, 1,077 lines of it replaced by a dict lookup, a default and one call. 20 handlers, 20
+table entries, p1's `_recover_from_unknown_state` as the default via a thin adapter.
+
+**The re-sizing held.** Every one of this doc's DoD items had to happen before the "22
+one-line entries" existed to write: 19 arms and ~1,058 lines extracted first. The spec's
+"S / cheap, safe part" was measuring the last 5% of the job.
+
+**The gate paid for itself.** p2's characterization net passed **unchanged** — 214 passed /
+1 skipped before and after. A 1,025-line restructuring with zero behaviour change, and the
+proof is the net, not the reviewer's confidence.
+
+**Extraction proven verbatim**, per DoD item 2: all **1,025 non-blank moved lines reappear
+verbatim** (modulo the 4-space dedent), 0 missing.
+
+**A trap worth recording, because I walked into it.** DoD item 2 says resolve dependencies
+by parsing (D-50). I did — but through a **hand-listed whitelist** of interesting names,
+which silently hid three real dependencies (`msg_text`, `payload_raw`, `tracker`). A
+whitelist is a hand-list wearing a parser's clothes; the second pass resolved free variables
+against real module globals and found them. **D-50, fourth instance.**
+
+**The real win is not the table.** Each handler now declares exactly the inputs its body
+reads, which the chain structurally could not record — every arm had the whole of
+`run_flow_turn`'s scope in reach whether it used it or not. Nothing said that
+`_h_location_method` reads only `intent`, or that `_h_map_location` is the sole branch
+depending on `msg_text`/`payload_raw`. Now the signatures do.
+
+**And what it did NOT buy** (DoD item 5, honoured): no behaviour change, no correctness win,
+no bundle/perf claim. In particular the table is blind to D-51/D-52/D-59 — a *recognized*
+state that dispatches nothing passes the lookup and never reaches the default. That class is
+owned by the turn postcondition, which landed first for exactly that reason. This doc
+predicted it; it is now stated in the code so nobody re-derives it the hard way.
+
+---
+
+### Original finding (kept for the record)
+
 
 ## What was planned
 

@@ -2,7 +2,8 @@
 
 > Branch `dev/tier3-structural` · Source: [`../reviews/devils_advocate_codebase.md`](../reviews/devils_advocate_codebase.md) §3 Tier 3
 > Working docs archived at [`archive/2026-08_tier3_structural/`](archive/2026-08_tier3_structural/) — reassessment, 6 specs, PROGRESS (58 deviations), followups.
-> **Score: ~76% → ~81%.** Target was "low-80s". Landed in band, but **not** by hitting every target — see §Scorecard.
+> **Score: ~76% → ~83%.** Target was "low-80s". **All five dimension targets met or beaten** — after a second pass closed the two that were short.
+> The first close-out reported ~81% with two targets missed; both were then fixed rather than argued down. That history is kept below, because a sprint that grades itself should show the failing grade it started with.
 
 ## The headline, and it is not the refactors
 
@@ -13,7 +14,7 @@ What shipped, in one line each:
 | | |
 |---|---|
 | **T3-01** | An **HTTP 500 on SEAH intake** and a silent mainline failure with wrong slot state — both repaired. Introspection deleted; `get_buttons` was **dead code**, not a twin bug, so it was deleted rather than fixed. |
-| **T3-02** | `run_flow_turn` **1,485 → 1,175 lines (−21%)**; the dead-air bug closed; two dead branches deleted; the 303-line monster split. **p4 (the table) not done** — its estimate does not survive measurement. |
+| **T3-02** | `run_flow_turn` **1,485 → 150 lines (−90%)**; the `if/elif` chain replaced by a dict table; the 303-line monster split; two dead branches deleted. **The whole dead-air class closed by one postcondition** — 4 instances, one of which the fix's own groundwork discovered. |
 | **T3-03** | The voice-chunk race and a **silent truncation** path both killed. `channels/REST_webchat/` gained **a test suite where none existed**, plus CI, in the same commit. |
 | **T3-04** | The PII boundary unified **in `backend/`, where the review said it wasn't**. Ticketing now has **no accessor** for the encryption key. |
 | **T3-05** | Settings `page.tsx` **4,372 → 301 lines**. Its headline benefit — bundle size — **is measured dead.** |
@@ -24,38 +25,63 @@ What shipped, in one line each:
 ## Final verification (2026-07-15, CI's exact command)
 
 `PYTHONPATH=. pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers`
-⇒ **960 passed / 7 skipped / 0 failed / 0 deselected** (4m00s).
+⇒ **960 passed / 7 skipped / 0 failed / 0 deselected** at the first close-out; **966 passed / 7 skipped** after the dead-air fix and p4 (+8 new tests, −2 deleted pins).
 
 For scale: CI ran **364** tests with 390 deselected before T3-08; **897** after it; **960** at
 close-out. **+596 gated tests across the sprint** — and the suites that grew most are the ones
 that had nothing: `channels/REST_webchat/` (0 → 7 + a CI job), `components/settings/` (0 → 27),
 `pii_vault` (0 → 36), and 505 previously-uncharacterized lines of `run_flow_turn` (0 → 12).
 
-## Scorecard — including what was missed
+## Scorecard
 
-| Dimension | Target | Landed | Why |
+| Dimension | Target | Landed | Note |
 |---|---|---|---|
-| REST webchat | 82 | **82** ✅ | The one target beaten on merit — it gained a test suite it never had. |
+| REST webchat | 82 | **82** ✅ | Gained a test suite it never had. |
 | Backend security | 85 | **85** ✅ | T3-04 + T3-06. Authz and rate-limit remain **deliberately visible** holes. |
 | Portal architecture | 70 | **70** ✅ | 4,372 → 301 lines. The bundle claim is dead and credited at zero. |
-| Conversation layer | 72 | **70** ❌ | Characterizing **found two more dead-air bugs** (D-51/D-52), pinned not fixed. |
-| Backend architecture | 76 | **73** ❌ | p4 did not land; the chain is still 20 inline `elif`s. |
+| Conversation layer | 72 | **74** ✅ | Was **70** and short. The postcondition closed the dead-air class outright — 4 instances, not the 2 that were known. |
+| Backend architecture | 76 | **76** ✅ | Was **73** and short. p4 landed: `run_flow_turn` −90%, the chain gone. |
 
-**A dimension is not credited for work that was logged rather than done.** Two targets missed, stated as missed.
+**Both misses were fixed, not argued down.** The first close-out graded this sprint at ~81%
+with conversation layer and backend architecture short, and said so plainly. That grade is
+what identified the work; the work is what moved it. **A dimension is still not credited for
+anything logged rather than done** — the authz gap (D-38) and the rate limit (D-31) remain
+uncredited and visible.
 
 ## The five findings worth carrying forward
 
-### 1. "Never return empty messages" is a convention this codebase states and never enforces
+### 1. An invariant a codebase only *states* will fail once per site — and be found once per site
 
-Three instances of one class surfaced this sprint. **Only the first is fixed.**
+This is the sprint's most transferable finding, and it took four instances to see it.
 
-| | Where | Caught by the terminal `else`? |
-|---|---|---|
-| D-08 | unrecognized **state** falls off the chain | ✅ that is what p1 fixed |
-| D-51 | `add_more_info_flow` completes; the action no-ops on an unset `story_route` | ❌ the state is *recognized* |
-| D-52 | unrecognized **`active_loop`** silently runs status form 1; session wedges | ❌ the state is *recognized* |
+| | Where | Caught by p1's terminal `else`? | By p4's table? |
+|---|---|---|---|
+| D-08 | unrecognized **state** falls off the chain | ✅ that is what p1 fixed | ✅ (it is the default) |
+| D-51 | `add_more_info_flow` completes; the action no-ops on an unset `story_route` | ❌ state *recognized* | ❌ lookup succeeds |
+| D-52 | unrecognized **`active_loop`**; the session wedges | ❌ state *recognized* | ❌ lookup succeeds |
+| D-59 | SEAH flag off: `next_state` set, nothing dispatched | ❌ state *recognized* | ❌ lookup succeeds |
 
-`state_machine.py:1629` *states* the convention. Nothing enforces it, so each site fails separately and is found separately — and **p4's handler table cannot catch D-51/D-52 either**: the dict lookup succeeds, the default never fires. **A `run_flow_turn` postcondition — no turn returns zero messages — subsumes all three, and is cheaper than p4 and worth more.** If one thing from this sprint gets done next, make it that.
+`state_machine.py:1629` *states* the rule — "re-show choices so we never return empty
+messages" — and enforces it nowhere. So it failed at four sites and was found at four sites,
+by four different routes, over two sprints. **It was never four bugs. It was one unenforced
+invariant.**
+
+**Fixed at the boundary that owns it:** `run_flow_turn` now asserts its own postcondition —
+no turn returns zero messages; log at error with everything needed to locate it, then
+recover. One guard, four instances, and the next one is caught by construction.
+
+**Two things made it safe, and both were process, not cleverness:**
+
+- **The precondition was measured.** Both followups demanded it before anyone wrote the
+  guard: *weigh this against the legitimately-silent turns*. Instrumenting all three of
+  `run_flow_turn`'s returns across 208 tests found **3 zero-message turns, all 3 bugs**;
+  `attachment_ids_sync` and the `/introduce` restart never return empty. **There was no
+  legitimate silence to protect** — which is what made *recovering*, not merely logging, safe:
+  the blast radius is exactly the set of turns already broken.
+- **That measurement found D-59** — an instance in shipped code that nobody knew about,
+  whose test had been green for months because it asserts `next_state` and never looks at
+  the messages, while its sibling two functions below does. **Reading would not have found
+  it. Measuring did.** Which is the same lesson as §3, arriving from a new direction.
 
 ### 2. The engineering held; the bookkeeping did not
 
@@ -94,8 +120,8 @@ T3-06 spent four commits authenticating `:5001` — which the firewall already c
 
 | Item | Why it is not done |
 |---|---|
-| [`run-flow-turn-handler-table`](archive/2026-08_tier3_structural/followups/run-flow-turn-handler-table.md) (p4) | STRETCH; **re-sized S → M** — 19 arms / ~1,058 lines still inline. The table is its last 5%. |
-| [`add-more-info-silent-turn`](archive/2026-08_tier3_structural/followups/add-more-info-silent-turn.md) (D-51) · [`unknown-active-loop-silent-fallback`](archive/2026-08_tier3_structural/followups/unknown-active-loop-silent-fallback.md) (D-52) | Characterization **records** behaviour; fixing under a net you just wrote is how you change what you meant to measure. **Fix both with the postcondition.** |
+| ~~[`run-flow-turn-handler-table`](archive/2026-08_tier3_structural/followups/run-flow-turn-handler-table.md) (p4)~~ | ✅ **DONE.** `run_flow_turn` −90%, the chain gone. The re-sizing was settled by doing it: an **M**, not the spec's S. |
+| ~~[`add-more-info-silent-turn`](archive/2026-08_tier3_structural/followups/add-more-info-silent-turn.md) (D-51) · [`unknown-active-loop-silent-fallback`](archive/2026-08_tier3_structural/followups/unknown-active-loop-silent-fallback.md) (D-52)~~ | ✅ **DONE** — plus D-59, which the fix's own groundwork found. One postcondition, four instances. Both followups recommended exactly this over point fixes; both were right. |
 | [`grievance-api-rate-limiting`](archive/2026-08_tier3_structural/followups/grievance-api-rate-limiting.md) (D-31 + D-39) | No reusable limiter reaches `:5001` (nginx does not proxy it). Unthrottled **and** unaudited on rejection is what makes key brute-force cheap *and* invisible. |
 | [`orchestrator-port-8000-open`](archive/2026-08_tier3_structural/followups/orchestrator-port-8000-open.md) (D-35) | Out of T3-06's scope. Lower severity than it reads — `/message` is the public chatbot entry — but it bypasses nginx: **no TLS, no rate limit, on a path that triggers LLM spend.** |
 | [`utterance-file-name-derivation`](archive/2026-08_tier3_structural/followups/utterance-file-name-derivation.md) (D-02) | ~200 sites. **The real refactorability blocker** the review's utterance row was actually aiming at. |
@@ -115,4 +141,6 @@ D-24 (T3-01 EN/NE re-prompts) · D-17 (T3-03 Slow-3G) · D-33 (T3-06 rendered UI
 - **Move code by line range, never retype it** (D-50), and prove it: T3-02 p3's extraction is verified by a line-multiset diff — 288/288 moved lines reappear verbatim.
 - **A guard that cannot go red is not a guard.** Every guard this sprint ships is mutation-verified against the real tree (D-41), and the ones that read a file assert they found their anchor — a guard that silently finds nothing is worse than none.
 - **Report the measurement, not the hope** (D-46). The settings bundle did not move; the sprint says so, three times, and credits it at zero.
+- **When you delete a bug, delete its pin — and leave a pointer where it stood.** Both characterization tests said in their own docstrings: *if this fails, the bug was fixed; delete it, don't relax it.* Both were deleted on exactly that signal. A pin that outlives its bug is just a failing test with a story.
+- **A whitelist is a hand-list wearing a parser's clothes.** p4's first dependency pass *did* use the AST — and still missed three real dependencies, because it filtered through a set of names I typed from memory. D-50's fourth instance, and it caught me. Resolve against real globals, not against what you expect to matter.
 - **A deferral needs all three: PROGRESS row + `followups/<slug>.md` + TODO row, in the same commit** — and `git ls-files` it, because two of this sprint's followups passed all three checks while being untracked.
