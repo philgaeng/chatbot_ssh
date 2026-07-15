@@ -114,16 +114,12 @@ import { OrganisationTab } from "@/components/settings/org/OrganisationTab";
 import { OfficersTabV2 } from "@/components/settings/officers-v2/OfficersTabV2";
 import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
 import { SetupOverview } from "@/components/settings/overview/SetupOverview";
-// R5 (BUILD-REVIEW M3): the friendly-error contract — inline clusters route caught errors
-// through formatUserFacingError (unwraps object 4xx detail) instead of raw messages or browser dialogs.
-import { formatUserFacingError } from "@/lib/user-messages";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 // R6 (BUILD-REVIEW M4/M7): plain-language labels in the still-inline clusters (labels not slugs).
 import { roleLabel, CAST_TIER_LABELS } from "@/lib/labels";
-
-function friendlyError(e: unknown): string {
-  return formatUserFacingError(e).message;
-}
+// R5 (BUILD-REVIEW M3): the friendly-error contract — inline clusters route caught errors
+// through formatUserFacingError (unwraps object 4xx detail) instead of raw messages or browser dialogs.
+import { friendlyError } from "@/components/settings/lib/friendlyError";
 
 // ── GRM roles (ticketing.roles) ───────────────────────────────────────────────
 
