@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|---|
 | T3-01 | Explicit utterance keys + repair 3 non-resolving keys + delete dead `get_buttons` | A | **1?** | todo | — | 3 of 4 call sites derive keys that don't resolve ⇒ `ValueError`; one wrapped in a bare `except` at `form_grievance_complainant_review.py:525`. **⚠️ Phase is GATED on the §0 reachability trace (D-13) — ~10 min, do it first.** Reachable ⇒ Phase 1 bug fix; dead/swallowed ⇒ Phase 3 refactor. Deliverable identical either way. Spec [01](01-conversation-layer-spec.md) §1. |
 | T3-02 p1 | `run_flow_turn`: delete `form_dust` + `submit_grievance`, add terminal `else` | B | 1 | todo | — | **Severable — land in Phase 1 even if p2-4 slip.** 31 deleted lines + 1 `else`. Terminal-`else` absence = dead-air bug. Spec [01](01-conversation-layer-spec.md) §2. |
-| T3-03 | Serialize voice-chunk uploads behind chunk-0's `upload_id` | C | 1 | todo | — | **Live bug**: whole recording aborts when RTT > 1 s. HR-07's lock is text-only — does NOT cover this. Spec [02](02-webchat-voice-spec.md). |
+| T3-03 | Serialize voice-chunk uploads behind chunk-0's `upload_id` | C | 1 | **done** | `dev/tier3-structural` | **Live bug — fixed.** Queue serialized; `FormData` rebuilt per attempt; `"out of order"` swallow gated on `isStopping`. Server untouched. Harness decision: **(a)** — vitest seeded for `channels/REST_webchat/` + wired into CI (closes D-11). 7 client tests (4 verified red pre-fix) + server contract test. Manual Slow-3G sweep **pending-human** (D-17). Spec [02](02-webchat-voice-spec.md). |
 | T3-04 | Unify the PII boundary (backend decrypt → delete workaround → drop key) | D | 2 | todo | — | **⚠️ STRICT ORDER — see spec [03](03-pii-boundary-spec.md) §Order.** Review misdiagnosed; fix is in `backend/`, not `ticketing/`. Touches a stable shared service (~20 callers). |
 | T3-06 | Harden the grievance API: authn + authz + read audit + `response_model` | F | **2** | todo | — | **Opened by the §6 boundary reassessment (2026-07-15).** `GET /api/grievance/{id}` has **no authn, no authz, no audit, no contract**; `POST /api/grievance/{id}/status` is unauthenticated **and fires SMS/email to complainants**. **Phase gate: if EC2 :5001 is internet-open, this is Phase 1 / an incident — check first.** Prerequisite for ever routing reads through the API. Spec [05](05-grievance-api-hardening-spec.md). |
 | T3-07 | Amend the data rules to as-built; pin no-FK + no-PII-columns with tests | F | 3 | todo | — | **Docs + tests only — no runtime changes.** Implements the §6 boundary DECISION: drop "no joins into `public.*`" (false for months, unenforceable, honoring it would degrade security); keep + pin the two rules that hold. Absorbs the `grievance_sync.py` column-list TODO row. Spec [06](06-boundary-policy-spec.md). |
@@ -63,16 +63,31 @@ Record these now so regressions are attributable:
 - [ ] Dead-air test — verified red pre-fix
 - [ ] Full `tests/orchestrator` green vs baseline
 
-### T3-03 — Voice-chunk serialization
-- [ ] Chunk queue serialized (chunk N chains on N-1) in `voiceNote.js`
-- [ ] `FormData` built **inside** the retry closure (`voiceChunkUpload.js:65-76`) — follows the `authedFetch` precedent
-- [ ] `"out of order"` swallow gated on `isStopping`/`uploadFinalized` (`voiceNote.js:32-34`) — kills the silent-truncation path
-- [ ] Server **not** changed (it is correct)
-- [ ] Test-harness decision recorded (a: JS harness / b: server-only + manual) — **recommendation is (a)**
-- [ ] Race test — verified red pre-fix
-- [ ] Ordering / retry-heals / truncation-guard / fast-network-no-regression tests
-- [ ] `tests/backend/test_fastapi_files.py` extended: id-less chunk > 0 ⇒ 400
-- [ ] Manual: Slow 3G ≥5 s recording completes (**confirm red pre-fix first**) + plays back full length
+### T3-03 — Voice-chunk serialization ✅ DONE
+
+- [x] Chunk queue serialized (chunk N chains on N-1) in `voiceNote.js` — `enqueueRecordingChunk` chains on the previous chunk's **settlement** (`uploadChain`), so one failed chunk is not re-reported once per queued chunk. `resetUploadState` resets the chain. `Promise.all(pendingChunkUploads)` join at stop preserved.
+- [x] `FormData` built **inside** the retry closure (`voiceChunkUpload.js`) — follows the `authedFetch` precedent. **`uploadId` value → `getUploadId` resolver**: rebuilding the body alone was *not* enough — the param was captured at call time, so a rebuilt body would have re-read the same stale `null`. Only caller was `voiceNote.js:74`, so the signature change is contained.
+- [x] `"out of order"` swallow gated on `isStopping` (`voiceNote.js`) — kills the silent-truncation path
+- [x] Server **not** changed (it is correct)
+- [x] **Test-harness decision: (a)** — `channels/REST_webchat/{package.json,vitest.config.js,.gitignore}` + `modules/__tests__/`. Node-env vitest, hand-rolled fakes, **no jsdom** (the modules are transport/ordering logic, not DOM). The fake server mirrors `files.py`'s real contract so a client bug fails here the way it fails in prod. **CI wired in the same commit** (`webchat-checks` job) ⇒ **D-11 closed, no followup owed.**
+- [x] Race test — **verified red pre-fix**
+- [x] Ordering / retry-heals / truncation-guard / fast-network-no-regression tests
+- [x] `tests/backend/test_fastapi_files.py` extended: id-less chunk > 0 ⇒ 400 (`test_upload_voice_chunk_without_upload_id_after_first_is_rejected`)
+- [ ] Manual: Slow 3G ≥5 s recording completes + plays back full length — **PENDING-HUMAN (D-17)**: no browser in the build env. Do together with HR-07's webchat sweep.
+
+**Red-pre-fix evidence (HR-04 standard).** Final tests run against pre-fix source via `git stash push -- <the 2 modules>` ⇒ **4 failed / 3 passed**; restored ⇒ **7 passed**. The 3 that pass pre-fix are the guard tests — they are what proves the suite isn't just failing on everything:
+
+| Test | Pre-fix | Evidence |
+|---|---|---|
+| Race — every chunk > 0 carries an `upload_id` | 🔴 | later chunks id-less ⇒ 400 |
+| Ordering — one at a time, in index order | 🔴 | `[0,1,2,1,2,1,2]` — the concurrent retry storm, caught verbatim |
+| Mid-recording 409 surfaces | 🔴 | `['recording']` only — no `upload_error`; the silent truncation |
+| Retry re-reads `upload_id` | 🔴 | `[null, null]` — the frozen body, caught verbatim |
+| Late 409 **after** stop still ignored | 🟢 | guard: the legitimate swallow still works |
+| Fast network unchanged | 🟢 | no-regression baseline |
+| Retry exhaustion surfaces server status | 🟢 | existing behavior pinned |
+
+**Suites:** webchat vitest **7/7** (new baseline) · `tests/backend/test_fastapi_files.py` **20 passed** (was 19 + 1 new).
 
 ### T3-04 — PII boundary
 - [ ] **Commit 1** — `tests/ticketing/test_pii_boundary.py` green on **today's** code (plaintext officer card, parametrized ciphertext/plaintext at the client boundary)
@@ -154,7 +169,7 @@ Record these now so regressions are attributable:
 | D-08 | `run_flow_turn` has **no terminal `else`** → unrecognized state returns zero messages (dead air). | **In scope for T3-02 p1.** |
 | D-09 | **No test imports `pii_vault`**; `test_ticket_access_matrix.py:68` asserts against the `_backend_unavailable` branch and would pass whether decryption works or is deleted. | **In scope for T3-04 commit 1** (the test net is the first commit). |
 | D-10 | `CLAUDE.md:121` — "Grievance API … handles PII decryption" is **factually false today**. | Fixed by T3-04 step 2; doc corrected in T3-04 step 4. |
-| D-11 | No JS test suite exists for `channels/REST_webchat/` at all. | Decision point in T3-03 (§Tests). If (b) is chosen, log the harness as a followup. |
+| D-11 | No JS test suite exists for `channels/REST_webchat/` at all. | ✅ **CLOSED by T3-03 (2026-07-15).** Path **(a)** taken: vitest harness seeded at `channels/REST_webchat/` + `webchat-checks` CI job, both in the same commit. No followup owed — the CI wiring the spec allowed deferring was completed. The webchat now has a test suite where it had none. |
 | D-12 | `app/settings/page.tsx` has **zero** direct test coverage (portal vitest = 61 tests, none on settings). | T3-05 adds smoke tests, or logs the deferral. |
 
 ### During execution
@@ -163,7 +178,9 @@ Record these now so regressions are attributable:
 
 | # | Finding | Ticket | Disposition |
 |---|---|---|---|
-| — | — | — | — |
+| D-16 | **Voice-chunk upload sessions live in a process-local dict** (`file_server_core.py:29-31`), and the `.part` file is a local path. The protocol is stateful across requests, so every chunk must hit the same process. Works today — `docker-compose.yml:48` runs uvicorn with **no `--workers`** (verified) — but adding workers/replicas silently breaks voice notes: chunk 1 gets a 404, which the client **swallows** (`voiceNote.js:31` matches `"not found"`), so it reads as a flaky feature, not a misconfiguration. Same "invisible on dev, deterministic in prod" shape as T3-03 itself. | T3-03 | **Deferred — spec §Out of scope says log, don't fix** (`file_server_core.py` session lifecycle). → [`followups/voice-chunk-session-store-is-process-local.md`](followups/voice-chunk-session-store-is-process-local.md) + TODO.md. **Not a live bug** — do not report it as one. |
+| D-17 | T3-03's manual Slow-3G browser sweep not executed — no browser in the build env. | T3-03 | **Pending-human.** Overlaps HR-07's webchat sweep — do both in one session. Automated coverage is the mitigation: the race is now guarded by a test that is verified red pre-fix, which is stronger than the manual check it substitutes for. |
+| D-18 | **Scope note — the spec's change 2 was insufficient as written.** It prescribed moving `FormData` construction inside the retry closure. That alone would **not** have healed the retry: `uploadId` was a *parameter*, captured at call time, so a rebuilt body would re-read the same stale `null`. The fix required changing the param to a `getUploadId` resolver. | T3-03 | **Fixed in scope** (single caller, contained). Recorded because the spec's own acceptance test ("retry re-reads a now-populated `uploadId`") could not have passed against the change as literally specified. |
 | D-19 | **The `ticketing.*` ↔ `public.*` boundary is vestigial, and D-03's framing of it was wrong.** Measured: **11 statements / 5 tables / 3 writes** ticketing→`public.*` (incl. `DELETE FROM public.grievance_classification_taxonomy`, unqualified), **~12 sites** backend→`ticketing.*` (chatbot intake location validation reads `ticketing.locations` via its own `psycopg2.connect`), **one DB, one role**, zero enforcement. Both goals the March-2026 rule was written to serve are already dead. `public.complainants` — the one table marked *"never touch"* — is joined by a Celery beat job **every 2 min** (`grievance_sync.py:178`, non-PII column only). Archaeology: rules #1/#2 are **genuine architecture** (2026-03-11, pre-dating any AI split, rationale deleted by doc reorg `21631051`); rules #3/#4/#5 have **no recorded rationale ever** and trace to a `.claudeignore` that forbade Claude from reading `backend/services/` plus a hand-written context doc that **falsely** claimed the API decrypts PII — `pii_vault.py` is the workaround that fell out of it. Full evidence: [00-reassessment.md](00-reassessment.md) §6. | T3-07 | **DECIDED 2026-07-15 by the project owner** (§6 → DECISION): drop rule #1, keep + **pin** no-FK and no-PII-columns, amend the docs to as-built. Supersedes D-03. Closes the followup's DoD item 1. |
 | D-20 | **`GET /api/grievance/{id}` and `POST /api/grievance/{id}/status` are unauthenticated** (`backend/api/routers/grievance.py:249`, `:202`) — no `Depends`, while the two `PATCH`es beside them have `Depends(_ticketing_auth_check)`. The GET returns the full record incl. `grievance_description`; the POST **mutates state and fires SMS + email to the complainant** (`:227`). No read audit exists in `backend/` at all. Both bound to the host via `docker-compose.grm.yml:117` (`5001:5001`); **not** proxied by prod nginx. | **T3-06** | **New ticket** → [`05-grievance-api-hardening-spec.md`](05-grievance-api-hardening-spec.md). **⚠️ Phase gate: EC2 :5001 inbound is UNVERIFIED from the repo.** If open ⇒ Phase 1 / incident. **Check the security groups first.** |
 | D-21 | **The followup doc's load-bearing justification is inverted.** [`followups/ticketing-cross-schema-direct-reads.md:50`](followups/ticketing-cross-schema-direct-reads.md) asserts reads via `GET /api/grievance/{id}` *"**are** loggable, authorizable, and rate-limitable at one place."* **None of the three is implemented** (D-20) — the verb should be *"could be"*. The direct SQL it condemns sits behind Keycloak JWT + a jurisdiction gate + an audit model; the API has none. Its DoD item 2 ("extend the API to serve what `grievance_content.py` needs") is **already satisfied** — 9/9 fields ship via `SELECT g.*`, and `resolved_summary_builder.py:139-150` already reads `grievance_description` over HTTP. Its unpriced cost: `grievance_sync.py` pages 500 rows/2 min and the API has **no bulk endpoint**. | T3-07 | **Doc corrected in T3-07 step 3**; the followup is closed with the decision rather than executed. Recorded because it was 1 sprint away from being implemented as written. |

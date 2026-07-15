@@ -16,6 +16,7 @@ let uploadId = null;
 let chunkIndex = 0;
 let totalBytes = 0;
 let pendingChunkUploads = [];
+let uploadChain = Promise.resolve();
 let plannedFileName = null;
 let plannedMimeType = null;
 let getUploadContext = () => ({});
@@ -27,11 +28,13 @@ function isIgnorableLateChunkError(error) {
   const status = error?.status;
   if (isStopping && (status === 404 || status === 409)) return true;
   const message = String(error?.message || "").toLowerCase();
-  return (
-    message.includes("upload session expired") ||
-    message.includes("not found") ||
-    message.includes("out of order")
-  );
+  if (message.includes("upload session expired") || message.includes("not found")) {
+    return true;
+  }
+  // Only ignorable once we're stopping. Mid-recording it means the server's .part file
+  // is permanently behind: the chunk is gone, every later chunk will also be rejected,
+  // and finalize would still succeed — yielding a silently truncated note.
+  return isStopping && message.includes("out of order");
 }
 
 export function initVoiceNote({
@@ -63,6 +66,7 @@ function resetUploadState() {
   chunkIndex = 0;
   totalBytes = 0;
   pendingChunkUploads = [];
+  uploadChain = Promise.resolve();
   plannedFileName = null;
   plannedMimeType = null;
   uploadFinalized = false;
@@ -71,8 +75,9 @@ function resetUploadState() {
 async function uploadRecordingChunk(blob, index) {
   if (uploadFinalized) return null;
   const ctx = getUploadContext();
-  const promise = uploadVoiceChunk({
-    uploadId,
+  return uploadVoiceChunk({
+    // Resolved per attempt, not captured: chunk 0's response is what assigns uploadId.
+    getUploadId: () => uploadId,
     chunkIndex: index,
     blob,
     fileName: index === 0 ? plannedFileName : undefined,
@@ -83,7 +88,7 @@ async function uploadRecordingChunk(blob, index) {
     rasaSessionId: ctx.rasaSessionId,
   })
     .then((result) => {
-      if (!uploadId && result.upload_id) {
+      if (!uploadId && result?.upload_id) {
         uploadId = result.upload_id;
       }
       return result;
@@ -95,6 +100,30 @@ async function uploadRecordingChunk(blob, index) {
       }
       throw error;
     });
+}
+
+/**
+ * Queue one chunk behind the previous one.
+ *
+ * The server appends to a single .part file and is strict-sequential, and only chunk 0
+ * mints the upload_id that chunks 1..N must carry. Firing uploads concurrently means
+ * that on any link slower than CHUNK_TIMESLICE_MS, chunk 1 is built before chunk 0 has
+ * answered — no upload_id, 400, recording aborted. Chaining each chunk on its
+ * predecessor's settlement makes both hazards structurally impossible.
+ *
+ * The 1 s timeslice means this costs no throughput below 1 s RTT, and above it the
+ * queue applies backpressure instead of stampeding. That is intended — do not
+ * reintroduce concurrency here.
+ */
+function enqueueRecordingChunk(blob, index) {
+  // Chain on settlement, not success: a rejected predecessor must not turn into a
+  // second rejection here, or one failed chunk would be reported once per queued chunk.
+  const runNext = () => uploadRecordingChunk(blob, index);
+  const promise = uploadChain.then(runNext, runNext);
+  uploadChain = promise.then(
+    () => undefined,
+    () => undefined
+  );
   pendingChunkUploads.push(promise);
   return promise;
 }
@@ -120,7 +149,7 @@ async function startRecording(button, onStatus, onUploadComplete, onUploadError,
       }
       const index = chunkIndex;
       chunkIndex += 1;
-      void uploadRecordingChunk(event.data, index).catch((error) => {
+      void enqueueRecordingChunk(event.data, index).catch((error) => {
         if (isIgnorableLateChunkError(error)) return;
         console.error("Voice chunk upload failed:", error);
         void stopRecording(button, onUploadComplete, onUploadError, onStatus, "upload_error");
