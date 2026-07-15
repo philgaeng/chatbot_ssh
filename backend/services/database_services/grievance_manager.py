@@ -169,8 +169,27 @@ class GrievanceDbManager(BaseDatabaseManager):
             results = self.execute_query(query, (grievance_id,), "get_grievance_by_id")
             if results:
                 parsed_result = self._parse_database_result(results[0])
-                self.logger.debug("get_grievance_by_id: %s", grievance_row_summary(parsed_result))
-                return parsed_result
+                # T3-04: decrypt the joined complainant columns here, mirroring
+                # get_grievance_by_complainant_phone:537. Without this the method returns
+                # pgcrypto hex for the four ENCRYPTED_FIELDS, which is why ticketing grew a
+                # client-side decrypt (ticketing/services/pii_vault.py) and needed its own
+                # DB_ENCRYPTION_KEY. The JOIN's column names ARE the ENCRYPTED_FIELDS names,
+                # which is what makes the shared helper work on this row unchanged.
+                #
+                # Order matters: decrypt AFTER _parse_database_result, not before.  The parser
+                # json-parses every string value, so decrypting first would hand it plaintext
+                # PII and a name like "123" would come back as an int.  Ciphertext is never
+                # valid JSON, so parsing it first is inert.
+                #
+                # The fallback below (get_grievance_core_by_id) needs no equivalent: it reads
+                # `SELECT * FROM grievances`, and none of the four encrypted columns live on
+                # that table — they are all on public.complainants (verified against the live
+                # schema, not assumed).
+                decrypted_result = self._decrypt_sensitive_data(parsed_result)
+                self.logger.debug(
+                    "get_grievance_by_id: %s", grievance_row_summary(decrypted_result)
+                )
+                return decrypted_result
             return None
         except Exception as e:
             self.logger.error(
