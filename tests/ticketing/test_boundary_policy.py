@@ -479,3 +479,84 @@ def test_column_resolver_ignores_keywords_aliases_and_params(baseline):
         "complainant_id",
         "grievance_modification_date",
     }
+
+
+# ── the doc is the policy, so pin the doc too ───────────────────────────────
+#
+# Added 2026-07-15 by the sprint's own devil's-advocate pass, which refuted a published
+# claim. CLAUDE.md rule 1 says the contract is "Pinned by tests/ticketing/
+# test_boundary_policy.py, which fails when the code and this list disagree". It was not:
+# nothing here opened CLAUDE.md. What was pinned is code <-> CONTRACT (above); CLAUDE.md's
+# table was a hand-maintained mirror kept in step by a *comment* ("keep them in step").
+# Edit the table alone — add a table, flip a write — and all 13 guards still passed.
+#
+# That is a milder recurrence of exactly what §6 diagnosed: a rule whose enforcement is
+# convention. And CLAUDE.md is where the rule actually lives for every human and agent on
+# this repo — the CONTRACT dict is an implementation detail of the guard. Pinning the code
+# to a dict nobody reads, while the document everybody reads drifts free, guards the wrong
+# artifact. The chain is now closed: CLAUDE.md's table <-> CONTRACT <-> the code.
+
+_CLAUDE_MD = REPO_ROOT / "CLAUDE.md"
+
+# The rule-1 table: | `table` | access | where |
+_RULE1_ROW_RE = re.compile(r"^\s*\|\s*`(\w+)`\s*\|([^|]*)\|", re.MULTILINE)
+
+
+def _claude_md_rule1_table() -> dict[str, bool]:
+    """Parse CLAUDE.md rule 1's table -> {table_name: declares_a_write}."""
+    text = _CLAUDE_MD.read_text(encoding="utf-8")
+
+    start = text.find("| `public.*` table | Ticketing's access | Where |")
+    assert start != -1, (
+        "CLAUDE.md rule 1's table header moved or was reworded — this guard cannot find "
+        "it, and a guard that silently finds nothing is worse than no guard. Re-anchor it."
+    )
+    # The table ends at the first blank-ish line that is not a table row.
+    end = text.find("\n\n", start)
+    block = text[start:end if end != -1 else len(text)]
+
+    rows: dict[str, bool] = {}
+    for name, access in _RULE1_ROW_RE.findall(block):
+        rows[name] = "write" in access.lower()
+    return rows
+
+
+def test_claude_md_rule1_table_matches_the_contract():
+    """
+    The table in CLAUDE.md must name exactly the tables CONTRACT allows. This is the claim
+    CLAUDE.md makes about itself; now it is true.
+    """
+    documented = _claude_md_rule1_table()
+
+    assert documented, "parsed zero rows out of CLAUDE.md rule 1 — the guard is vacuous"
+    assert set(documented) == set(CONTRACT), (
+        "CLAUDE.md rule 1's table and the CONTRACT set disagree.\n"
+        f"  in CLAUDE.md but not CONTRACT: {sorted(set(documented) - set(CONTRACT))}\n"
+        f"  in CONTRACT but not CLAUDE.md: {sorted(set(CONTRACT) - set(documented))}\n"
+        "Adding a public.* table is a deliberate architectural decision — update the code, "
+        "CONTRACT, and CLAUDE.md rule 1's table together, in the same commit."
+    )
+
+
+def test_claude_md_rule1_documents_exactly_the_three_writes(statements):
+    """
+    The 3 writes are the load-bearing detail of rule 1 — they are what makes it a
+    read/write contract rather than a read one. Pin that the doc names the same tables the
+    code actually writes, so a fourth write cannot land while the doc still says "read".
+    """
+    documented = _claude_md_rule1_table()
+    doc_writes = {t for t, is_write in documented.items() if is_write}
+
+    code_writes = {
+        table
+        for _site, sql in statements
+        for table in _PUBLIC_TABLE_RE.findall(sql)
+        if re.search(r"\b(UPDATE|INSERT|DELETE)\b", sql, re.IGNORECASE)
+    }
+
+    assert doc_writes == code_writes, (
+        "CLAUDE.md rule 1 and the code disagree about which public.* tables ticketing WRITES.\n"
+        f"  documented as written: {sorted(doc_writes)}\n"
+        f"  actually written     : {sorted(code_writes)}\n"
+        "A write to public.* that the doc calls a read is how the boundary rots quietly."
+    )

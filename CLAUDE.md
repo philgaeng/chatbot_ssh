@@ -178,7 +178,7 @@ grievance_db
 > why it read as arbitrary fiat ever since. **If you amend a rule here, move its reason with it —
 > a rule without its reason decays into cargo cult.**
 
-1. **Ticketing may read and write `public.*` through its own session — but only the enumerated set below.** The set is **closed**: adding a table is a deliberate decision, not a default. Pinned by `tests/ticketing/test_boundary_policy.py`, which fails when the code and this list disagree.
+1. **Ticketing may read and write `public.*` through its own session — but only the enumerated set below.** The set is **closed**: adding a table is a deliberate decision, not a default. **The table below is itself pinned** by `tests/ticketing/test_boundary_policy.py`, which parses it and fails when it and the code disagree — on the table set *or* on which tables are written. (Until 2026-07-15 this line claimed that and was false: the test pinned the code against a dict *inside the test*, and this table was a hand-maintained mirror. Editing it alone changed nothing. Now the chain is closed: this table ↔ the test's `CONTRACT` ↔ the code.)
 
    | `public.*` table | Ticketing's access | Where |
    | --- | --- | --- |
