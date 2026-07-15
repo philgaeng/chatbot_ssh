@@ -1,6 +1,49 @@
 # Follow-up — Integration seed↔test reconciliation
 
-> **Status: OPEN** · Model: **Opus** · Created from the CL-01 CI-green work (July 2026).
+> # ✅ CLOSED 2026-07-15 by T3-08 — integration is running in CI
+>
+> **The reconciliation was already done; nobody re-enabled the gate.** Most of the work below
+> landed in `4f0140dd` ("test/seed reconciliation: full ticketing suite green, 360 passed from
+> 34 failed"), which is why the acceptance list checks out almost entirely as *already fixed*
+> rather than *fixed by T3-08*. The quarantine outlived its reason by ~6 weeks.
+>
+> **Measured on a clean migrate+seed matching CI's steps exactly, stable across three runs:**
+>
+> | | before | after |
+> |---|---|---|
+> | `backend-tests` | 364 passed / 3 skipped / **390 deselected** — 3m16s | **897 passed** / 7 skipped / 0 deselected — 3m32s |
+> | `tests/ticketing` alone (incl. `@integration`) | — | **563 passed / 5 skipped / 0 failed** |
+>
+> ⇒ **+533 tests gated for +16 seconds.**
+>
+> ## Acceptance — outcome
+>
+> | Item | Outcome |
+> |---|---|
+> | Product decision on `l1-officer-2@Jhapa` recorded and applied | ✅ **Already decided: YES, it is intended demo data**, and the 7 tests were updated — via the opt-in `without_seeded_jhapa_l1` fixture (`tests/ticketing/conftest.py:148-152`), which removes only that scope for tests that need Jhapa unstaffed. Decision recorded here retroactively; it was applied in code without ever being written down. |
+> | `seah_workflow_id` seed-ordering bug fixed | ✅ **Already fixed** — `test_seah_grievance_uses_seah_workflow` passes on a fresh `--reset`. |
+> | P2 L2 + package coverage added to the seed | ✅ **Already fixed** — the P2-supervisor and package tests pass on a pristine seed. |
+> | Test-isolation teardown so the suite is stable when re-run without reseeding | ✅ **Holds** — 3 consecutive runs against one DB with no reseed: 563/5/0 every time, officer load unchanged. The suite cleans up after itself. |
+> | `tests/ticketing` (incl. `@integration`) 0 failures, stable across two runs | ✅ **Verified** (three runs). |
+> | Remove `-m "not integration"` from `ci.yml`; CI green with full coverage | ✅ **Done** (T3-08 commit 3), plus `tests/backend` added (D-37) — it was never gated at all. |
+>
+> **One genuine bug survived and was fixed by T3-08:** three assertions in
+> `test_officer_assignment.py` named a hardcoded 2-officer pair as the acceptable province-fallback
+> result. The seed staffs **four** L1s in province 1, and assignment ranks by active ticket load, so
+> the pair held on a pristine DB only by luck of the `user_id` tie-break and failed on any developer
+> DB with accumulated tickets (D-44). They now assert the province **pool**, sourced from
+> `ticketing.constants.demo_officers`. This is the row below that reads *"tests assume Jhapa has no
+> local L1"* — the residue of the same 2→4 roster growth (`b8cab274`).
+>
+> **The lesson worth keeping:** this quarantine is *why* that bug lived. CI seeded the DB
+> specifically for these tests and then deselected them — paying the cost, gating nothing. See
+> `pytest.ini`: the `integration` marker is a **dependency, not a quarantine**.
+>
+> ---
+>
+> **Original, retained below.**
+
+> **Status:** ~~OPEN~~ **CLOSED — see above** · Model: **Opus** · Created from the CL-01 CI-green work (July 2026).
 > **Why this exists:** CI's `backend-tests` gates on `-m "not integration"` (`.github/workflows/ci.yml`) — the `@integration` ticketing tests are quarantined because they fail on a pristine DB for reasons **unrelated to the schema**. This ticket fixes them and **re-enables integration in CI**.
 
 ## Context
