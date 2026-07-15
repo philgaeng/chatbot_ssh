@@ -14,6 +14,12 @@ import pytest
 from sqlalchemy import select
 
 from ticketing.constants.assignment import COUNTRY_L1_FALLBACK_ROLE
+from ticketing.constants.demo_officers import (
+    OFFICER_SITE_L1,
+    OFFICER_SITE_L1_2,
+    OFFICER_SITE_L1_3,
+    OFFICER_SITE_L1_4,
+)
 from ticketing.engine.workflow_engine import (
     _location_and_ancestors,
     _province_code_for_location,
@@ -41,6 +47,23 @@ from tests.ticketing.conftest import (
 )
 
 SEEDED_SITE_L1 = "l1-officer@grm.local"
+
+# Every L1 the demo seed staffs in Province 1 — the province-fallback pool.
+# Morang: l1-officer, l1-officer-4 · Jhapa: l1-officer-2 · Sunsari: l1-officer-3.
+#
+# NEVER assert a specific officer out of this pool. `auto_assign_officer` ranks by
+# (territory-covering, active ticket count, user_id), so *which* member wins is decided
+# by live ticket load — data, not the code under test. These tests previously named a
+# hardcoded pair (l1-officer, l1-officer-2); that pair is 2 of 4 and only wins while the
+# other two happen to be no less loaded. It held on a freshly-seeded DB by luck of the
+# user_id tie-break, and broke on any developer DB that had accumulated tickets (D-44).
+# The property under test is the *scope* the fallback widens to, so assert the pool.
+#
+# Sourced from ticketing.constants.demo_officers so growing the roster (as b8cab274 did,
+# 2→4, silently breaking these) updates the expectation instead of rotting it.
+PROVINCE_L1_POOL = frozenset(
+    {OFFICER_SITE_L1, OFFICER_SITE_L1_2, OFFICER_SITE_L1_3, OFFICER_SITE_L1_4}
+)
 
 pytestmark = pytest.mark.integration
 
@@ -335,7 +358,7 @@ class TestPackageRouting:
             ctx.db,
             ticket_package_id=jhapa_lot_package_id,
         )
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
 
     def test_location_linked_package_officer_without_ticket_package_id(self, ctx, jhapa_lot_package_id):
         """
@@ -431,7 +454,7 @@ class TestCountryFallback:
         assigned = auto_assign_for_workflow_step(
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, ctx.db
         )
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
         assert assigned != national
 
     def test_country_fallback_not_used_when_local_district_exists(self, ctx, without_seeded_jhapa_l1):
@@ -472,7 +495,7 @@ class TestEndToEndSimulation:
     def test_full_standard_intake_jhapa_birtamod(self, db):
         """Regression anchor for B-GR-20260519-KOJH-F6D0 allocation path."""
         assigned = _simulate_create_assignment(db, location_code=LOC_P1_JHA_BIR)
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
 
     def test_full_intake_with_local_jhapa_officer(self, ctx, without_seeded_jhapa_l1):
         jhapa_officer = _uid("jhapa-e2e")
