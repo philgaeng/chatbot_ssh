@@ -26,18 +26,40 @@ logger = logging.getLogger(__name__)
 
 
 def _client(base_url: str | None = None) -> httpx.Client:
-    """Return an httpx client.  base_url overrides settings (per-project chatbot URL)."""
+    """
+    Return an httpx client.  base_url overrides settings (per-project chatbot URL).
+
+    The x-api-key is attached here rather than per-call so authentication is a
+    property of the client: every request through this module authenticates by
+    default, and a function added later cannot silently forget the key. That
+    omission is exactly what T3-06 found — the GET and POST /status sent no key
+    while the two PATCHes did.
+
+    Per-request headers still win (httpx merges), so the explicit headers in
+    patch_grievance_classification/patch_complainant are unaffected.
+    """
     settings = get_settings()
+    headers: dict[str, str] = {}
+    api_key = service_integration_api_key()
+    if api_key:
+        headers["x-api-key"] = api_key
     return httpx.Client(
         base_url=base_url or settings.backend_grievance_base_url,
         timeout=10.0,
+        headers=headers,
     )
 
 
 def get_grievance_detail(grievance_id: str) -> dict[str, Any]:
     """
-    Fetch full grievance detail from the backend, including PII fields
-    (name, phone, email) decrypted server-side.
+    Fetch full grievance detail from the backend.
+
+    NOTE: PII fields (name, phone, email, address) come back as pgcrypto hex
+    ciphertext — get_grievance_by_id does NOT decrypt server-side, which is why
+    ticketing/services/pii_vault.py exists. The previous claim here that they were
+    "decrypted server-side" was false; see 00-reassessment.md §3. T3-04 owns the fix.
+
+    Authenticated via the x-api-key attached in _client().
 
     Returns the raw JSON dict from GET /api/grievance/{grievance_id}.
     Raises httpx.HTTPError on failure — callers should handle gracefully.
