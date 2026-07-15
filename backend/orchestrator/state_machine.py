@@ -816,6 +816,64 @@ async def _restart_intake_from_done(
     return "done"
 
 
+async def _recover_from_unknown_state(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> str:
+    """
+    Terminal fallback for a session state no branch of run_flow_turn serves.
+
+    Nothing outside this module assigns session["state"], so this is reachable only by
+    a session persisted under a state name this version no longer serves — a rename, or
+    a deleted branch, across a deploy. Returning the state unchanged would dispatch zero
+    messages: the user speaks, the chatbot says nothing, and nothing is logged. Recover
+    to a state the machine can actually serve.
+
+    No language yet => intro; otherwise => main menu. That split, and the bilingual
+    inline copy, follow _handle_attachment_ids_sync's answer to the same question.
+    """
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    language_code = session.get("slots", {}).get("language_code")
+
+    if not language_code:
+        dispatcher.utter_message(
+            text=(
+                "Sorry, something went wrong. Please choose your language to continue.\n\n"
+                "माफ गर्नुहोस्, केही त्रुटि भयो। जारी राख्न कृपया भाषा छान्नुहोस्।"
+            )
+        )
+        return "intro"
+
+    if language_code == "ne":
+        dispatcher.utter_message(
+            text="माफ गर्नुहोस्, केही त्रुटि भयो। कृपया अगाडि बढ्न एउटा विकल्प छान्नुहोस्।"
+        )
+    else:
+        dispatcher.utter_message(
+            text="Sorry, something went wrong. Please choose how you would like to proceed."
+        )
+
+    menu_dispatcher = CollectingDispatcher()
+    await invoke_action(
+        "action_main_menu",
+        menu_dispatcher,
+        SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        ),
+        domain,
+    )
+    dispatcher.messages.extend(menu_dispatcher.messages)
+    return "main_menu"
+
+
 async def run_flow_turn(
     session: Dict[str, Any],
     text: str,
@@ -1025,18 +1083,6 @@ async def run_flow_turn(
                 next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
 
     elif state == "form_road_hazard":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_road_hazard()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
-
-    elif state == "form_dust":
         user_input = latest_message if (text or payload) else None
         form = _get_form_road_hazard()
         msgs, form_updates, completed = await run_form_turn(
@@ -1518,25 +1564,6 @@ async def run_flow_turn(
                 next_state = await _start_grievance_review_after_submit(
                     session, dispatcher, domain, slot_updates, latest_message
                 )
-
-    elif state == "submit_grievance":
-        ask_dispatcher = CollectingDispatcher()
-        submit_action = "action_submit_seah" if session.get("slots", {}).get("story_main") == "seah_intake" else "action_submit_grievance"
-        events = await invoke_action(
-            submit_action,
-            ask_dispatcher,
-            tracker,
-            domain,
-        )
-        slot_updates = events_to_slot_updates(events)
-        dispatcher.messages.extend(ask_dispatcher.messages)
-        session["slots"].update(slot_updates)
-        await _append_seah_outro_after_submit_if_applicable(
-            dispatcher, session, latest_message, domain, slot_updates
-        )
-        next_state = await _start_grievance_review_after_submit(
-            session, dispatcher, domain, slot_updates, latest_message
-        )
 
     elif state == "grievance_review":
         user_input = latest_message if (text or payload) else None
@@ -2289,6 +2316,16 @@ async def run_flow_turn(
             )
         else:
             pass
+
+    else:
+        _log_sm.error(
+            "run_flow_turn: unrecognized state %r (user_id=%s) — recovering",
+            state,
+            session.get("user_id", "default"),
+        )
+        next_state = await _recover_from_unknown_state(
+            session, dispatcher, domain, slot_updates, latest_message
+        )
 
     session["slots"].update(slot_updates)
     session["state"] = next_state
