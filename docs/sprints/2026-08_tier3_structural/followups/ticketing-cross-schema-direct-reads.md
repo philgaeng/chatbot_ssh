@@ -18,6 +18,18 @@
 > 3. **DoD item 2 is already done.** The API serves **9/9** of the fields `grievance_content.py` selects (`SELECT g.*`), and `services/resolved_summary_builder.py:139-150` **already** reads `grievance_description` over HTTP. Nothing needed building. What is actually missing is a `response_model` — so migrating would have *weakened* drift protection.
 >
 > **Retained below, unedited, as the record of a finding that was right to raise and wrong in its prescription.** The instinct — "the docs say one thing and the code does another" — was correct; §Endgame called the resolution exactly right, and it resolved toward *amend*, not *enforce*.
+>
+> ## ✅ T3-07 landed 2026-07-15 — what this document's DoD became
+>
+> | This doc's DoD | Outcome |
+> |---|---|
+> | **1.** Decide the boundary policy — "escalate before starting" | ✅ **Escalated and decided** by the project owner (§6 → DECISION). Outcome was **(b)**, not the recommended **(c)**: option (c) would have routed `grievance_description` through an API with **no authz** — a downgrade, not the hardening it was meant to be. **This item was the doc's best call.** |
+> | **2.** If (a)/(c): extend the API, migrate callers, delete `_GRIEVANCE_SELECT` | ❌ **Not done — correctly.** Already satisfied (9/9 fields ship), and not desirable: see D-38. `_GRIEVANCE_SELECT` stays. |
+> | **3.** If (b)/(c): document the contract, add a schema-drift test, amend CLAUDE.md | ✅ **Done.** Contract → [`../../../ticketing_system/03_ticketing_api_integration.md`](../../../ticketing_system/03_ticketing_api_integration.md) §3b + CLAUDE.md §Data rules rule 1. Drift test → `tests/ticketing/test_boundary_policy.py`, mutation-verified in both directions. **"An undocumented exception to a LOCKED rule is worse than a documented one" — this doc's own line, and the reason the ticket existed.** |
+> | **4.** Fold in the `grievance_sync.py` column-list TODO row | ✅ **Done** — absorbed by the same drift guard; TODO row closed. |
+> | **5.** Re-verify HR-02's authz matrix if the `file_attachments` path moves | ➖ **Moot** — the path did not move. HR-02's `require_file_access` gate is untouched, which is precisely what option (b) preserves. |
+>
+> **The rules that survived are now enforced rather than asserted:** no cross-schema FK and no complainant PII columns, both pinned by tests that are proven to go red.
 
 ---
 

@@ -1,9 +1,14 @@
 # Ticketing System – API Reference (as-built, July 2026)
 
-All integration with the ticketing system is API-only. This document covers:
+Integration with the ticketing system is API-first. This document covers:
 1. **Inbound** — chatbot/backend calls ticketing
 2. **Outbound** — ticketing calls chatbot, messaging, grievance API
-3. **Full endpoint reference** — all implemented ticketing API routes
+3. **Direct `public.*` access** — the enumerated exception to "API-only" (§3b)
+4. **Full endpoint reference** — all implemented ticketing API routes
+
+> **"API-only" was never true and is no longer claimed** (amended 2026-07-15). Ticketing reads
+> and writes a closed set of `public.*` tables directly — see **§3b** for the contract, and
+> CLAUDE.md §Data rules rule 1. Complainant PII *is* API-only; grievance content is not.
 
 ---
 
@@ -124,10 +129,37 @@ Body: { "phone": "...", "message": "..." }
 ## 3. Ticketing → Grievance API (Outbound)
 
 ```
-GET {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}
+GET  {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}          → x-api-key
+POST {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}/status   → x-api-key
 ```
 
-Called from ticket detail view to fetch PII (name, phone) on-demand. Never cached in `ticketing.*`.
+Called from ticket detail view to fetch **complainant PII** (name, phone) on-demand. Never cached in `ticketing.*`. Both endpoints require `x-api-key: $TICKETING_SECRET_KEY` as of T3-06; every call funnels through `ticketing/clients/grievance_api.py`.
+
+**Grievance *state* changes go over this API, never over SQL.** That is a real invariant — keep it.
+
+> ⚠️ The GET does **not** decrypt PII today; it returns pgcrypto hex ciphertext, which `ticketing/services/pii_vault.py` decrypts client-side. T3-04 fixes this at the backend. See CLAUDE.md §APIs to call.
+
+---
+
+## 3b. Ticketing → `public.*` direct access (NOT via the API)
+
+**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The full decision and evidence: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
+
+Measured surface — **11 statements, 5 tables, 3 writes**:
+
+| `public.*` table | Access | Callers |
+| --- | --- | --- |
+| `grievances` | read | `services/grievance_content.py` (9 cols incl. `grievance_description`), `tasks/grievance_sync.py` (10 cols) |
+| `file_attachments` | read + **`UPDATE`** (archive tier) | `api/ticket_access.py`, `api/routers/tickets/files.py`, `engine/ticket_actions.py`, `services/archiving.py` |
+| `grievance_classification_taxonomy` | read + **`DELETE`+`INSERT`** (catalog resync) | `services/grievance_categories_catalog.py`, `seed/kl_road_standard.py` |
+| `complainants` | read — join-only, **non-PII** (`location_code`) | `tasks/grievance_sync.py` |
+| `grievance_parties` | read — join-only | `tasks/grievance_sync.py` |
+
+**The contract is enforced, not aspirational.** `tests/ticketing/test_boundary_policy.py` fails when the code and this list disagree, in both directions, and when a column ticketing names disappears from the `public.*` schema baseline.
+
+**Why not route these through the grievance API?** Because it would be a **security downgrade**. The direct read is behind a Keycloak JWT and `assert_ticket_visibility`'s SEAH + jurisdiction gate; `GET /api/grievance/{id}` has **no authz** even after T3-06 hardened it (D-38) — an `x-api-key` says *"this is ticketing"*, not *"this is officer X in district Y"*. Routing would also turn a PII-free query into a PII-bearing one, and `grievance_sync.py` pages 500 rows every 2 minutes against an API with no bulk endpoint. **Do not cite T3-06 as having made this viable** — it made the API a credible *authn + audit* boundary, not an *authorization* one.
+
+**Two rules still hold and are pinned by the same test:** no cross-schema FK, and no complainant PII columns in `ticketing.*`.
 
 ---
 

@@ -5,15 +5,43 @@ No cross-schema FK from `ticketing.*` into `public.*`.
 All SQLAlchemy models use `__table_args__ = {"schema": "ticketing"}`.
 Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
 
+> **Why isolation — the March 2026 rationale, restored 2026-07-15.** This section carried the
+> bare rule for a year after a doc reorg (`21631051`, 2026-06-02) deleted its reason, which is
+> why it came to read as arbitrary fiat. The original (`7b696559`, 2026-03-11) said:
+>
+> > - **Isolation**: keep ticketing data in its **own schema / table group** (no cross-FKs into
+> >   existing grievance tables).
+> >
+> > This makes it easy later to:
+> > - Move ticketing to a **separate database** by copying only the ticketing schema and
+> >   changing the connection string, and
+> > - Keep the chatbot working if ticketing is offline or removed.
+>
+> **Which half retired, and why.** Both goals above are **dead in the code, in both
+> directions** — ticketing issues 11 statements against `public.*` (3 writes), and the
+> chatbot's intake location validation reads `ticketing.locations` through its own
+> connection. So the *"no joins into `public.*`"* half was **dropped on 2026-07-15**: it had
+> been false for months, had no enforcement (one DB, one role), and honoring it today would
+> *degrade* security. It is replaced by an enumerated read/write contract — CLAUDE.md §Data
+> rules rule 1, gated by `tests/ticketing/test_boundary_policy.py`.
+>
+> **The no-cross-FK half above is KEPT and is now pinned by a test.** It is the part that
+> actually preserves the extraction option and keeps the three migration streams
+> independent, and it costs nothing.
+>
+> Full evidence and the decision: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
+> **If you amend a rule here, move its reason with it.**
+
 **Location codes:** Canonical rules for `location_code` → `LOCATION_CODES.md`.
 
 ---
 
 ## 1. Design rules
 
-1. No FK from `ticketing.*` into `public.*`.
-2. PII (`name`, `phone`, `email`, `address`) never stored in `ticketing.*`.
+1. No FK from `ticketing.*` into `public.*`. — **pinned by `tests/ticketing/test_boundary_policy.py`**
+2. PII (`name`, `phone`, `email`, `address`) never stored in `ticketing.*`. — **pinned by the same file.** Precisely: no complainant PII *columns*, and `public.complainants` is not a PII source for ticketing. (`ticketing.tickets.grievance_summary` is free text and *can* carry self-disclosed PII — cached by design; `grievance_description` deliberately is not. That asymmetry is intentional — CLAUDE.md §Data rules rule 4.)
 3. Grievance/complainant referenced by `grievance_id` (String), `complainant_id` (String) only.
+   - Ticketing **does** read (and in 3 places write) an enumerated set of `public.*` tables through its own session — see CLAUDE.md §Data rules rule 1 for the closed list. That is deliberate as of 2026-07-15, not a violation.
 4. Every model: `__table_args__ = {"schema": "ticketing"}`.
 5. Alembic `include_object` scoped to `ticketing` schema only; `version_table_schema="ticketing"`.
 

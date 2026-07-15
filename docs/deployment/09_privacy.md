@@ -22,21 +22,29 @@ This spec is implementation-facing and aligned with:
 4. Officer default experience is summary-first (redacted and policy-safe).
 5. Original vault reveal is permitted for officers, but controlled, audited, and time-bounded.
 
-## Worktree and schema ownership (LOCKED)
+## Schema ownership (LOCKED)
 
-To support parallel development in separate worktrees:
+> **Re-motivated 2026-07-15 (T3-07).** This section was headed *"Worktree and schema
+> ownership"* and justified by *"to support parallel development in separate worktrees"* — a
+> workflow **retired in June 2026** (`a371e4a4`; CLAUDE.md §Single-agent workflow). The
+> ownership split below is kept because **schema ownership is real architecture** — it is what
+> keeps the three migration streams from fighting over the same DDL — but it does not depend on
+> worktrees, and never really did. Rule 4 below was also **factually false** and is corrected.
+> Evidence: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
 
-| Ownership | Worktree/branch | Schema/tables | Responsibilities |
+| Ownership | Owner | Schema/tables | Responsibilities |
 |---|---|---|---|
-| Public/chatbot domain | chatbot/public worktree | `public.*` | intake, canonical grievance identity, vault storage, policy gate, reveal authorization, immutable security audit of sensitive reads |
-| Ticketing domain | ticketing worktree | `ticketing.*` | operational metadata/events, officer workflow state, derived summaries/anomaly signals, UI consumption, ticket-level interaction audit |
+| Public/chatbot domain | chatbot/public migration stream (`migrations/public/`) | `public.*` | intake, canonical grievance identity, vault storage, policy gate, reveal authorization, immutable security audit of sensitive reads |
+| Ticketing domain | ticketing migration stream (`ticketing/migrations/`) | `ticketing.*` | operational metadata/events, officer workflow state, derived summaries/anomaly signals, UI consumption, ticket-level interaction audit |
 
 Rules:
 
-1. `ticketing.*` never stores raw original grievance narrative or direct PII.
+1. `ticketing.*` never stores raw original grievance narrative or direct PII. **Pinned by `tests/ticketing/test_boundary_policy.py`.** (Caveat: `grievance_summary` is cached and is free text — see CLAUDE.md §Data rules rule 4.)
 2. `public.*` remains system of record for original grievance/vault content.
-3. Access to original content always goes through brokered API policy checks.
-4. No direct `ticketing.*` -> `public.*` joins; integrate through API/event contracts.
+3. Access to **complainant PII and vault content** always goes through brokered API policy checks. **This does not extend to non-PII grievance content or file metadata** — ticketing reads those directly (rule 4).
+4. **Ticketing reads and writes an enumerated, closed set of `public.*` tables** through its own session — the list is in CLAUDE.md §Data rules rule 1, gated by `tests/ticketing/test_boundary_policy.py`. Adding to it is a deliberate decision.
+   > This replaces *"No direct `ticketing.*` -> `public.*` joins; integrate through API/event contracts"*, which had been **false for months** when it was written down here. Ticketing issues 11 statements against `public.*`, 3 of them writes. Routing them through `GET /api/grievance/{id}` as this rule implied would be a **security downgrade**: the direct read carries a Keycloak JWT and a jurisdiction gate that the API still lacks even after T3-06 (§6; D-38).
+5. **No cross-schema FK** from `ticketing.*` into `public.*`. Kept, and pinned by a test — this is what preserves the option to extract ticketing later.
 
 ## Data domains
 
