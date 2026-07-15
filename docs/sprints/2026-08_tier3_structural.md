@@ -21,6 +21,16 @@ What shipped, in one line each:
 | **T3-07** | The `ticketing.*` ↔ `public.*` boundary rule amended to as-built and **pinned by tests** — after archaeology found both its goals had been abandoned in code months earlier. |
 | **T3-08** | The `@integration` quarantine ended: **CI 364 → 897 tests (+533), 0 deselected.** Not in the original sprint. |
 
+## Final verification (2026-07-15, CI's exact command)
+
+`PYTHONPATH=. pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers`
+⇒ **960 passed / 7 skipped / 0 failed / 0 deselected** (4m00s).
+
+For scale: CI ran **364** tests with 390 deselected before T3-08; **897** after it; **960** at
+close-out. **+596 gated tests across the sprint** — and the suites that grew most are the ones
+that had nothing: `channels/REST_webchat/` (0 → 7 + a CI job), `components/settings/` (0 → 27),
+`pii_vault` (0 → 36), and 505 previously-uncharacterized lines of `run_flow_turn` (0 → 12).
+
 ## Scorecard — including what was missed
 
 | Dimension | Target | Landed | Why |
