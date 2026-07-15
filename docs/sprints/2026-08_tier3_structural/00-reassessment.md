@@ -10,6 +10,8 @@ The Tier-3 table was written in the same pass as Tier-1 and Tier-2. Tier-1 and T
 
 Scoring the review honestly: it was **right about the code being bad** in all five places. It was wrong about *why*, *how much*, and — critically — *in what order*.
 
+> **§6 was added later (2026-07-15) and is not about the review** — the review never examined the `ticketing.*` ↔ `public.*` boundary at all. It is here because §3's own follow-up finding did not survive the same scrutiny this document applies to everything else. **It carries a DECISION that supersedes `CLAUDE.md` §Data rules #1/#5, and a security finding (two unauthenticated grievance endpoints) that no review has ever caught.** If you are here for the boundary, the data rules, `grievance_content.py`, or the "single auditable PII boundary", **read §6 and ignore §3's closing paragraph.** New tickets: **T3-06** ([`05`](05-grievance-api-hardening-spec.md)), **T3-07** ([`06`](06-boundary-policy-spec.md)).
+
 ## Verdict table
 
 | # | Review's claim | Verdict | Corrected finding |
@@ -143,6 +145,8 @@ The review sized M/L. The *fix* is ~1 line. The **work** is the blast radius: `g
 **⇒ M**, and it lives in `backend/`, not `ticketing/`.
 
 ### Also found — a genuine violation the review missed
+
+> **⚠️ SUPERSEDED BY §6 (2026-07-15). Read §6 before acting on this paragraph.** The framing below — "violation", to be fixed by routing reads through the API — **does not survive scrutiny**. Measured: the rule it cites protects a goal both sides of the codebase abandoned long ago; the API it would route to is unauthenticated, unlogged and unaudited; and the migration would be a *security downgrade* that converts a PII-free query into a PII-bearing one. The surface is also **11 statements across 5 tables including 3 writes**, not the 3 reads listed here. The boundary policy was decided on 2026-07-15 — see §6 → *DECISION*.
 
 `ticketing/services/grievance_content.py:22-38` reads `public.grievances` **directly via ticketing's own DB session**, selecting `grievance_description` (the raw narrative). Callers: `engine/ticket_actions.py:210`, `routers/tickets/crud.py:469`. Ticketing also directly reads `public.file_attachments` (`routers/tickets/files.py:91`, `api/ticket_access.py:167`).
 
@@ -342,6 +346,98 @@ Id-less chunk>0 is rejected before session creation (`files.py:423-428`); out-of
 ### Tests
 
 Happy-path only, sequential, single-threaded: `tests/backend/test_fastapi_files.py:251` (`test_upload_voice_chunk_and_complete`), `:313` (`test_upload_voice_chunk_duplicate_is_idempotent`). **No test sends chunk 1 without an `upload_id`; none exercises concurrency or out-of-order. There is no JS test suite for `channels/REST_webchat/` at all.**
+
+---
+
+## 6. The boundary itself — reassessed (added 2026-07-15, after §3)
+
+> **Why this section exists.** §3 closed by flagging `ticketing/services/grievance_content.py` as *"a genuine violation the review missed"* and deferring it to [`followups/ticketing-cross-schema-direct-reads.md`](followups/ticketing-cross-schema-direct-reads.md). Both took for granted that the rule being violated is sound, and that routing the read through the grievance API would improve matters. **Neither holds.** This section supersedes §3's "Also found" paragraph and the followup's stated justification.
+>
+> **Trigger:** the observation that this repo was built by *two* AI systems in parallel — Claude on `ticketing/`, Cursor on the chatbot — and that some boundaries might be artifacts of that split rather than architecture.
+> **Method:** three independent assessments (git/doc archaeology · a full measured inventory of every cross-boundary touch · deployment + API reality), each required to produce file:line evidence. Every decisive claim below was **re-verified by hand**. Two agent claims were refuted and are recorded in §Corrections rather than carried.
+
+### The hypothesis is half right — and the half it gets wrong matters more
+
+**Rules #1/#2 (no joins, no cross-schema FK) are NOT an artifact.** They predate `CLAUDE.md` by 5.5 weeks. `docs/ticketing_system/04_ticketing_schema.md` @ `7b696559` (**2026-03-11**), verbatim:
+
+> - **Isolation**: keep ticketing data in its **own schema / table group** (no cross-FKs into existing grievance tables).
+>
+> This makes it easy later to:
+> - Move ticketing to a **separate database** by copying only the ticketing schema and changing the connection string, and
+> - Keep the chatbot working if ticketing is offline or removed.
+
+That is real architecture — future service/DB extraction plus blast-radius containment — written when the only agent in the room was human. **The decisive disconfirmation:** when the two-tool split was retired (`a371e4a4`, 2026-06-23), that commit dissolved the DO-NOT-TOUCH directory walls and rewrote the worktree model to *"no longer required"* — and **left the data rules untouched**. A pure coordination device would have been relaxed in that same commit. The rules read as arbitrary fiat today only because a doc reorg (`21631051`, 2026-06-02) **deleted the rationale** and left the bare rule behind.
+
+**Rules #3/#4/#5 (the PII rules) ARE an artifact, and `pii_vault.py` is their scar.** They appear fully-formed in the first `CLAUDE.md` (`09140c02`, 2026-04-20) with **no rationale — and none was ever written anywhere in the repo's history.** That same commit shipped two things that explain them:
+
+- **`.claudeignore`** — *"Claude Code must not read or modify any file listed here"* — listing `backend/api/`, `backend/services/`, `backend/task_queue/`, `scripts/database/`.
+- **`docs/claude-tickets/context/existing-services.md:9`** — a **hand-written** substitute for the code Claude was forbidden to read: *"Primary data source. **Handles pgcrypto decryption of PII.** Never query `public.complainants` directly from ticketing."*
+
+**That sentence was false when written and is still false** (§3 proves it: `get_grievance_by_id` never decrypts). It is the direct ancestor of `CLAUDE.md:121`. The causal chain is complete: Claude built against a *described* contract → hit ciphertext at runtime → could not fix `backend/services/`, which `.claudeignore` forbade it to open → wrote `pii_vault.py`, a client-side decrypt using the shared DB as a pgcrypto oracle. **`pii_vault.py` is not a design decision. It is scar tissue from a tool-access boundary.** T3-04 is still right to remove it — but it removes a *workaround*, not an architectural choice.
+
+Note the original rule was also **narrower and better**: *"never query `public.complainants`"* — the PII table specifically. `CLAUDE.md`'s *"No SQL joins from `ticketing.*` into `public.*`"* is an over-generalization of it, and it is that broadened rule — not the PII-scoped one — that `grievance_content.py` violates.
+
+### The finding that outranks the archaeology: the rules are vestigial
+
+The March rationale states two goals. **Both are already dead in the code, in both directions, and neither death was noticed:**
+
+| March 2026 goal | Status | Evidence (hand-verified) |
+|---|---|---|
+| "Move ticketing to a separate database by … changing the connection string" | **Impossible** | Ticketing issues **11 statements against `public.*` across 5 tables — 3 of them writes**: `UPDATE public.file_attachments` (`services/archiving.py:198`), `DELETE FROM public.grievance_classification_taxonomy` (`services/grievance_categories_catalog.py:147` — unqualified full-table wipe), `INSERT INTO …` (`:150`). |
+| "Keep the chatbot working if ticketing is offline or removed" | **False** | The chatbot's **intake location validation** reads `ticketing.locations` + `ticketing.location_translations` — `backend/shared_functions/location_validator.py:100` (via its **own** `psycopg2.connect`), plus ~10 sites in `location_mapping.py` (`:69,85,123,141,224,…`). Remove ticketing and chatbot intake breaks. |
+
+And the rule with the most teeth — *"`public.complainants` … never touch"* — is violated by a **Celery beat job every 2 minutes**: `ticketing/tasks/grievance_sync.py:178` `LEFT JOIN public.complainants c`. (In fairness, it extracts only `c.location_code`, not PII.) Neither the review nor the followup noticed.
+
+**There is no enforcement mechanism of any kind.** One Postgres, one database (`app_db` — the `grievance_db` in `env.local` is dead config, overridden by every compose `environment:` block), and **one role (`user`) shared by backend, ticketing, and every Celery worker**. Only `ops` is privilege-separated (`ops_app`). `scripts/ops/create_scoped_roles.sql` is opt-in and inactive — and as written would grant ticketing `SELECT` on `public.grievances` only, i.e. **1 of the 5 tables it actually touches**, breaking the other four paths. The boundary's entire enforcement is comment headers on migration files.
+
+**⇒ The rules were genuine architecture serving a real goal. The goal was abandoned in the code, by both sides, without anyone amending the rules.** That — not the AI split — is the actual finding.
+
+### The followup's justification is inverted — do not execute it as written
+
+[`followups/ticketing-cross-schema-direct-reads.md:50`](followups/ticketing-cross-schema-direct-reads.md) rests its option (a)/(c) on:
+
+> *"**Auditability:** reads that go through `GET /api/grievance/{id}` **are** loggable, authorizable, and rate-limitable at one place."*
+
+**Measured: none of the three is implemented.** The verb should be *"could be"*.
+
+| | `GET /api/grievance/{id}` | Ticketing's "violating" direct read |
+|---|---|---|
+| **Authn** | **None** — `def get_grievance(grievance_id: str):` (`backend/api/routers/grievance.py:249-250`), no `Depends`. The `PATCH` 30 lines below **does** have `Depends(_ticketing_auth_check)` (`:283-288`). | Keycloak JWT — `Depends(get_authenticated_user)` (`routers/tickets/crud.py:430`) |
+| **Authz** | **None** | `assert_ticket_visibility` — HR-02 SEAH + jurisdiction gate (`crud.py:446`) |
+| **Audit** | **None.** No read-audit table exists in `backend/`; the success path has zero logger calls. | `REVEAL_ORIGINAL` / admin audit events (`routers/tickets/pii.py:124-141`) |
+
+**⇒ Routing `grievance_content.py` through the API *as it exists today* is a security DOWNGRADE** — it replaces an authenticated, jurisdiction-gated read with an anonymous HTTP call, and discards the caller identity any future audit record would need. It would also turn a **PII-free** query (`_GRIEVANCE_SELECT` touches zero complainant columns) into a **PII-bearing** one, since the API response carries name/phone/email/address ciphertext. That is the opposite of the stated goal.
+
+Two further corrections to the followup:
+- **Its DoD item 2 is already done.** The API serves **9/9** of the fields `grievance_content.py` selects (via `SELECT g.*`, `grievance_manager.py:154-167`), and ticketing **already** reads `grievance_description` over HTTP today (`services/resolved_summary_builder.py:139-150`). Nothing needs building. What is missing is a **contract**: the endpoint has no `response_model`, so migrating would trade a pinned 9-column list for an untyped dict — *weaker* drift protection, not stronger.
+- **The unpriced cost is `grievance_sync.py`.** It pages `public.grievances` 500 rows at a time every 2 minutes; the grievance API has **no list or bulk endpoint at all**. Folding it in (as the followup suggests at `:67`) means building one.
+
+### DECISION (2026-07-15) — boundary policy
+
+Taken by the project owner on the evidence above. **Supersedes CLAUDE.md §Data rules #1 and #5 as written.** This resolves the followup's DoD item 1, which correctly escalated it as *"a locked-architecture question — it needs an explicit decision, not an implementer's judgment call."* Implemented by **T3-07** ([`06-boundary-policy-spec.md`](06-boundary-policy-spec.md)) and **T3-06** ([`05-grievance-api-hardening-spec.md`](05-grievance-api-hardening-spec.md)).
+
+1. **Drop the "no joins into `public.*`" rule.** It has been false for months, it protects a goal both sides abandoned, it has no enforcement, and honoring it today would *degrade* security. `grievance_content.py`, `files.py`, `ticket_access.py`, `archiving.py`, `grievance_categories_catalog.py` and `grievance_sync.py` are **legitimized as-built** — to be re-expressed as a documented, drift-guarded read/write contract rather than prosecuted as violations. → **T3-07**
+2. **Keep "no cross-schema FK."** Verified zero today across `ticketing/models/` and `ticketing/migrations/versions/` — the only link is the soft `String(64)` `grievance_id` plus the `uq_tickets_grievance_id_active` partial index (HR-03). Cheap, holds, and it is the part that actually preserves extraction optionality and keeps the three migration streams independent. → guard test in **T3-07**
+3. **Keep "no complainant PII columns in `ticketing.*`."** Verified zero today. This is the one PII rule that earns its keep on its own merits, independent of all the above. → guard test in **T3-07**
+4. **Keep T3-04 unchanged.** Key custody — `DB_ENCRYPTION_KEY` in exactly one process — is real and independent of the retrieval-path question. The spec's four-commit order stands.
+5. **New: T3-06 — harden `GET /api/grievance/{id}`.** authn + authz + read audit + `response_model`, plus authn on `POST /api/grievance/{id}/status`. This is the **prerequisite** for the API ever being a credible audit chokepoint; until it lands, "route reads through the API" is not on the table. → [`05-grievance-api-hardening-spec.md`](05-grievance-api-hardening-spec.md)
+
+**The endgame the followup asked for is met by amendment, not by enforcement:** CLAUDE.md and the code will agree because the docs are corrected to describe what is actually built, with the two rules that genuinely hold pinned by tests.
+
+### Security finding — surfaced by this pass, in no review
+
+`POST /api/grievance/{grievance_id}/status` (`backend/api/routers/grievance.py:202-203`) is **unauthenticated**, mutates grievance state, and fires SMS + email to the complainant (`:227` → `_send_status_update_notifications`). `GET /api/grievance/{grievance_id}` (`:249`) is unauthenticated and returns the full record including `grievance_description`. Both are bound to the host at `docker-compose.grm.yml:117` (`5001:5001`). They are **not** proxied by prod nginx (no `location /api/grievance` block — only `/api/v1/` for ticketing), so internet reachability depends on the EC2 security group — **unverified from the repo, and worth checking directly.** → T3-06.
+
+### Corrections — agent claims refuted by hand-verification
+
+Recorded per this document's standing practice. Both would otherwise have shipped as facts.
+
+| # | Claim as reported | Verdict |
+|---|---|---|
+| C-4 | "`env.local` is committed and contains a live OpenAI key, AWS access key/secret, `DB_ENCRYPTION_KEY`, and SMTP password." | **FALSE — not carried.** `git ls-files env.local` → not tracked; `.gitignore:105` ignores it. The agent read the local working-tree file and inferred it was in git. **No secrets are in the repo.** |
+| C-5 | "`GET /api/grievance/{id}` — PII decrypted server-side." | **FALSE — not carried.** Contradicted by the third assessment *and* by §3's hand-trace: `_parse_database_result` (`base_manager.py:729-734`) parses JSON and never decrypts. The agent read a client-side docstring, not the code. |
+
+---
 
 ## Consequences for the review document
 

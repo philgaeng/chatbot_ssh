@@ -11,6 +11,8 @@
 | T3-02 p1 | `run_flow_turn`: delete `form_dust` + `submit_grievance`, add terminal `else` | B | 1 | todo | — | **Severable — land in Phase 1 even if p2-4 slip.** 31 deleted lines + 1 `else`. Terminal-`else` absence = dead-air bug. Spec [01](01-conversation-layer-spec.md) §2. |
 | T3-03 | Serialize voice-chunk uploads behind chunk-0's `upload_id` | C | 1 | todo | — | **Live bug**: whole recording aborts when RTT > 1 s. HR-07's lock is text-only — does NOT cover this. Spec [02](02-webchat-voice-spec.md). |
 | T3-04 | Unify the PII boundary (backend decrypt → delete workaround → drop key) | D | 2 | todo | — | **⚠️ STRICT ORDER — see spec [03](03-pii-boundary-spec.md) §Order.** Review misdiagnosed; fix is in `backend/`, not `ticketing/`. Touches a stable shared service (~20 callers). |
+| T3-06 | Harden the grievance API: authn + authz + read audit + `response_model` | F | **2** | todo | — | **Opened by the §6 boundary reassessment (2026-07-15).** `GET /api/grievance/{id}` has **no authn, no authz, no audit, no contract**; `POST /api/grievance/{id}/status` is unauthenticated **and fires SMS/email to complainants**. **Phase gate: if EC2 :5001 is internet-open, this is Phase 1 / an incident — check first.** Prerequisite for ever routing reads through the API. Spec [05](05-grievance-api-hardening-spec.md). |
+| T3-07 | Amend the data rules to as-built; pin no-FK + no-PII-columns with tests | F | 3 | todo | — | **Docs + tests only — no runtime changes.** Implements the §6 boundary DECISION: drop "no joins into `public.*`" (false for months, unenforceable, honoring it would degrade security); keep + pin the two rules that hold. Absorbs the `grievance_sync.py` column-list TODO row. Spec [06](06-boundary-policy-spec.md). |
 | T3-02 p2 | `run_flow_turn`: characterization tests (`status_check_form` + 3 `add_*` branches) | B | 3 | todo | — | **Gate for p3/p4.** 509 lines of thinly/un-tested code. |
 | T3-05 | Extract the 6 remaining settings tab clusters | E | 3 | todo | — | Mechanical. Shell already clean; hooks-crash already fixed by HR-06. Spec [04](04-portal-settings-spec.md). |
 | T3-02 p3 | `run_flow_turn`: split `status_check_form` (304 lines, depth 9) | B | 3 | todo | — | Blocked on p2. |
@@ -85,6 +87,33 @@ Record these now so regressions are attributable:
 - [ ] Docs updated: `13_security.md`, `seah/02_vault_privacy_and_reveal.md:58`, **`CLAUDE.md:121`** (currently false)
 - [ ] Manual: standard card shows real PII; SEAH masked + reveal works; chatbot status-check still renders; ticketing serves with the key absent
 
+### T3-06 — Grievance API hardening
+- [ ] **§0 FIRST — EC2 :5001 inbound checked** (staging + prod security groups). **Verdict recorded in Deviations (D-20).** Open ⇒ this is Phase 1 / an incident, not Phase 2. Cannot be answered from the repo.
+- [ ] Full HTTP caller inventory recorded in PROGRESS.md **before** commit 1 (spec's table is a starting point, not an inventory); confirmed no browser/webchat JS calls `/api/grievance/*` directly
+- [ ] **Commit 1** — `response_model` on the GET; **payload not narrowed** (~20 in-process callers + the portal read this shape); the 9 fields `grievance_content.py:22-35` needs are present
+- [ ] Schema-drift test: model fields exist in `public.grievances`
+- [ ] **Commit 2** — read audit incl. **caller identity**; emits at the **deployed** log level (`LOG_LEVEL=INFO` — `debug` is invisible in prod); log-vs-table decision recorded
+- [ ] **Commit 3** — `Depends(_ticketing_auth_check)` on **`GET /api/grievance/{id}`** and **`POST /api/grievance/{id}/status`**; every caller confirmed sending the key first; `AUTH_MODE=bypass` dev loop still works
+- [ ] 401-without-key / 200-with-key tests on **both** endpoints — **verified red pre-fix** (today they return 200)
+- [ ] Rate limit added, or deferral logged (`followups/` + TODO.md) — §6's audit-chokepoint argument cites it, so its absence must stay visible
+- [ ] Full `tests/backend` + `tests/actions` + `tests/orchestrator` + `tests/ticketing` green vs baselines
+- [ ] Manual: chatbot file + status-check end-to-end; portal acknowledge + resolve; `curl` GET without key ⇒ **401**
+- [ ] Prod `5001:5001` host mapping dropped if nothing needs it, or its necessity recorded
+
+### T3-07 — Boundary policy amendment
+- [ ] **Commit 1** — `CLAUDE.md` §Data rules amended: rule 1 → enumerated read/write contract (5 tables); rules 2/3 kept + marked pinned; rule 4's free-text caveat stated; rule 5 scoped to PII only
+- [ ] `CLAUDE.md:121` fixed — **coordinate with T3-04 step 4, which also owns this line** (whichever lands second must not revert the other)
+- [ ] **Dated pointer to §6 added so the rationale survives** — this is the ticket's whole point; `21631051` deleting the March rationale is why the rule read as fiat for a year
+- [ ] **Commit 2** — no-cross-schema-FK guard test (**green today** — pins an invariant, not a bug fix; say so in the docstring)
+- [ ] No-complainant-PII-columns guard test (green today)
+- [ ] Contract-drift guard over the enumerated `public.*` reads; **proven to go red** when a column is renamed in a scratch DB
+- [ ] `grievance_sync.py` hardcoded-column-list TODO row **closed** by the drift guard (same family)
+- [ ] **Commit 3** — `04_ticketing_schema.md:4` (restore the March rationale), `09_privacy.md:25-27` (motivated by a retired worktree model), `03_ticketing_api_integration.md` (document the contract), `00_ticketing_overview_and_questions.md:42`
+- [ ] `followups/ticketing-cross-schema-direct-reads.md` closed with the decision + §6 pointer; its TODO.md row retired
+- [ ] `scripts/ops/create_scoped_roles.sql:50` — comment is factually wrong (3 writes exist) and grants cover **1 of 5** tables; fixed or marked unsafe-as-written
+- [ ] Full `tests/ticketing` green vs baseline
+- [ ] **`git diff --stat` shows docs + tests only** — no runtime file changed
+
 ### T3-02 p2 — Characterization tests
 - [ ] `status_check_form` interior (`1562`–`1858`) characterized
 - [ ] `add_more_info_flow` / `add_missing_info_otp_flow` / `add_missing_info_flow` characterized (205 lines, currently zero refs)
@@ -114,7 +143,7 @@ Record these now so regressions are attributable:
 |---|---|---|
 | D-01 | **The source review's Tier-3 table is wrong in 4 of 5 rows.** Full evidence in [00-reassessment.md](00-reassessment.md). | Corrections owed to `devils_advocate_codebase.md` at close-out (listed in 00-reassessment.md §Consequences). Sprint tickets follow the **corrected** findings. |
 | D-02 | `file_name` derived from module name (`base_mixins.py:63`) — affects **~200** sites; the *real* refactorability blocker T3-01 was nominally aimed at. M+. | **Deferred** → [`followups/utterance-file-name-derivation.md`](followups/utterance-file-name-derivation.md) + TODO.md |
-| D-03 | Ticketing reads `public.grievances` (`services/grievance_content.py:22-38`, incl. the raw narrative) and `public.file_attachments` (`routers/tickets/files.py:91`, `api/ticket_access.py:167`) **directly via its own session** — violates data rules #1/#5. | **Deferred** → [`followups/ticketing-cross-schema-direct-reads.md`](followups/ticketing-cross-schema-direct-reads.md) + TODO.md. **T3-04 must not claim the boundary is fully unified.** |
+| D-03 | ~~Ticketing reads `public.grievances` + `public.file_attachments` **directly via its own session** — violates data rules #1/#5.~~ → **SUPERSEDED 2026-07-15 by D-19.** The framing was wrong on three counts: the surface is **11 statements / 5 tables / 3 writes**, not 3 reads; the rule violated protects a goal both sides of the codebase abandoned; and the prescribed fix (route via the API) is a **security downgrade**. | **Reclassified, not deferred.** Rule dropped per the §6 DECISION → **T3-07**. The reads are **legitimized as-built**. **T3-04 must still not claim the boundary is fully unified** — that part stands. |
 | D-04 | `run_flow_turn` CC measured at **189**, not the reviewed ~120. Line counts (1,485 / 2,303) exact. | Recorded; correction owed to the review at close-out. |
 | D-05 | `check_form_function_name` (`base_mixins.py:313`) is defined and **never called** — a guard built for exactly the T3-01 bug class, never wired up. | **In scope for T3-01** (wire up or delete). |
 | D-06 | ~~`get_buttons` (`base_classes.py:126`) has the identical introspection flaw~~ → **CORRECTED 2026-07-15: it is DEAD CODE.** AST+MRO shows 0 of 200 call sites reach it; all 76 `get_buttons` calls go through `ActionHelpersMixin`'s explicit path. The `get_buttons` calls in the same files live in sibling `Ask*` classes. | **In scope for T3-01 — but DELETE, not fix.** Free win. |
@@ -135,6 +164,9 @@ Record these now so regressions are attributable:
 | # | Finding | Ticket | Disposition |
 |---|---|---|---|
 | — | — | — | — |
+| D-19 | **The `ticketing.*` ↔ `public.*` boundary is vestigial, and D-03's framing of it was wrong.** Measured: **11 statements / 5 tables / 3 writes** ticketing→`public.*` (incl. `DELETE FROM public.grievance_classification_taxonomy`, unqualified), **~12 sites** backend→`ticketing.*` (chatbot intake location validation reads `ticketing.locations` via its own `psycopg2.connect`), **one DB, one role**, zero enforcement. Both goals the March-2026 rule was written to serve are already dead. `public.complainants` — the one table marked *"never touch"* — is joined by a Celery beat job **every 2 min** (`grievance_sync.py:178`, non-PII column only). Archaeology: rules #1/#2 are **genuine architecture** (2026-03-11, pre-dating any AI split, rationale deleted by doc reorg `21631051`); rules #3/#4/#5 have **no recorded rationale ever** and trace to a `.claudeignore` that forbade Claude from reading `backend/services/` plus a hand-written context doc that **falsely** claimed the API decrypts PII — `pii_vault.py` is the workaround that fell out of it. Full evidence: [00-reassessment.md](00-reassessment.md) §6. | T3-07 | **DECIDED 2026-07-15 by the project owner** (§6 → DECISION): drop rule #1, keep + **pin** no-FK and no-PII-columns, amend the docs to as-built. Supersedes D-03. Closes the followup's DoD item 1. |
+| D-20 | **`GET /api/grievance/{id}` and `POST /api/grievance/{id}/status` are unauthenticated** (`backend/api/routers/grievance.py:249`, `:202`) — no `Depends`, while the two `PATCH`es beside them have `Depends(_ticketing_auth_check)`. The GET returns the full record incl. `grievance_description`; the POST **mutates state and fires SMS + email to the complainant** (`:227`). No read audit exists in `backend/` at all. Both bound to the host via `docker-compose.grm.yml:117` (`5001:5001`); **not** proxied by prod nginx. | **T3-06** | **New ticket** → [`05-grievance-api-hardening-spec.md`](05-grievance-api-hardening-spec.md). **⚠️ Phase gate: EC2 :5001 inbound is UNVERIFIED from the repo.** If open ⇒ Phase 1 / incident. **Check the security groups first.** |
+| D-21 | **The followup doc's load-bearing justification is inverted.** [`followups/ticketing-cross-schema-direct-reads.md:50`](followups/ticketing-cross-schema-direct-reads.md) asserts reads via `GET /api/grievance/{id}` *"**are** loggable, authorizable, and rate-limitable at one place."* **None of the three is implemented** (D-20) — the verb should be *"could be"*. The direct SQL it condemns sits behind Keycloak JWT + a jurisdiction gate + an audit model; the API has none. Its DoD item 2 ("extend the API to serve what `grievance_content.py` needs") is **already satisfied** — 9/9 fields ship via `SELECT g.*`, and `resolved_summary_builder.py:139-150` already reads `grievance_description` over HTTP. Its unpriced cost: `grievance_sync.py` pages 500 rows/2 min and the API has **no bulk endpoint**. | T3-07 | **Doc corrected in T3-07 step 3**; the followup is closed with the decision rather than executed. Recorded because it was 1 sprint away from being implemented as written. |
 
 ---
 

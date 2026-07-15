@@ -1,6 +1,27 @@
 # Follow-up — ticketing reads `public.*` directly via its own DB session
 
-> **Status:** 🔴 **OPEN — deferred out of T3-04 (2026-07-15).** · **Owner:** ticketing · **Priority:** medium (architectural/auditability, not a live defect — the reads are correct and parameterized; they violate the locked data rules and defeat the "single auditable boundary" goal)
+> # ✅ CLOSED 2026-07-15 — RESOLVED BY DECISION, NOT BY FIX
+>
+> **The rule this document prosecutes was retired.** The reads are **legitimized as-built**. Do not implement anything below.
+>
+> **This document's DoD item 1 asked for an explicit locked-architecture decision. It was taken** (project owner, 2026-07-15), on evidence gathered after this doc was written: [`../00-reassessment.md`](../00-reassessment.md) **§6**. Outcome:
+> 1. **"No SQL joins from `ticketing.*` into `public.*`" is DROPPED** → re-expressed as an enumerated, drift-guarded read/write contract.
+> 2. **"No cross-schema FK" is KEPT** and pinned by a test.
+> 3. **"No complainant PII columns in `ticketing.*`" is KEPT** and pinned by a test.
+>
+> → Implemented by **T3-07** ([`../06-boundary-policy-spec.md`](../06-boundary-policy-spec.md)). Prerequisite for ever revisiting option (a)/(c): **T3-06** ([`../05-grievance-api-hardening-spec.md`](../05-grievance-api-hardening-spec.md)).
+>
+> ## Three things this document got wrong — read before trusting any of it
+>
+> 1. **The inventory is short by 8.** Measured surface is **11 statements / 5 tables / 3 writes**, not 3 reads. It missed `services/archiving.py:168,196` (incl. an `UPDATE public.file_attachments`), `engine/ticket_actions.py:134`, `services/grievance_categories_catalog.py:90,147,148` (incl. an **unqualified `DELETE FROM public.grievance_classification_taxonomy`**), and — most tellingly — that `tasks/grievance_sync.py:178` **`LEFT JOIN`s `public.complainants`**, the one table the original spec marked *"never touch"*, every 2 minutes.
+> 2. **§Why this matters → "Auditability" is inverted.** It asserts reads via `GET /api/grievance/{id}` *"**are** loggable, authorizable, and rate-limitable at one place."* **None of the three is implemented.** That endpoint has **no authn, no authz, no audit** (`backend/api/routers/grievance.py:249-250`); the direct SQL it condemns sits behind Keycloak JWT + `assert_ticket_visibility`'s jurisdiction gate + an audit event model. **Executing option (a) or (c) as written would have been a security downgrade** — and would have converted a PII-free query into a PII-bearing one.
+> 3. **DoD item 2 is already done.** The API serves **9/9** of the fields `grievance_content.py` selects (`SELECT g.*`), and `services/resolved_summary_builder.py:139-150` **already** reads `grievance_description` over HTTP. Nothing needed building. What is actually missing is a `response_model` — so migrating would have *weakened* drift protection.
+>
+> **Retained below, unedited, as the record of a finding that was right to raise and wrong in its prescription.** The instinct — "the docs say one thing and the code does another" — was correct; §Endgame called the resolution exactly right, and it resolved toward *amend*, not *enforce*.
+
+---
+
+> **Status:** ~~🔴 OPEN — deferred out of T3-04 (2026-07-15).~~ **CLOSED — see above.** · **Owner:** ticketing · **Priority:** ~~medium~~ n/a
 > **Origin:** Tier-3 reassessment ([`../00-reassessment.md`](../00-reassessment.md) §3). Surfaced while refuting the review's "PII decryption still dual-pathed" claim. **The review never flagged these — and they violate the data rules more than the `pii_vault` it did flag.**
 
 ## The finding

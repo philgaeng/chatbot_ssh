@@ -30,6 +30,10 @@ Those land first. They are also the smallest.
 | T3-03 | Serialize voice-chunk uploads behind chunk-0's `upload_id` | REST_webchat | M | [02-webchat-voice-spec.md](02-webchat-voice-spec.md) |
 | T3-04 | Unify the PII boundary: decrypt server-side, delete ticketing's vault workaround | backend + ticketing | M | [03-pii-boundary-spec.md](03-pii-boundary-spec.md) |
 | T3-05 | Extract the six remaining settings tab clusters out of `page.tsx` | ticketing-ui | S/M | [04-portal-settings-spec.md](04-portal-settings-spec.md) |
+| T3-06 | Harden the grievance API: authn + authz + read audit + `response_model` | backend | M | [05-grievance-api-hardening-spec.md](05-grievance-api-hardening-spec.md) |
+| T3-07 | Amend the data rules to as-built; pin no-FK + no-PII-columns with tests | docs + tests | S | [06-boundary-policy-spec.md](06-boundary-policy-spec.md) |
+
+> **T3-06 and T3-07 were opened mid-sprint (2026-07-15)** by a reassessment of the `ticketing.*` ↔ `public.*` boundary itself — [`00-reassessment.md`](00-reassessment.md) §6. They are not from the source review, which never examined the boundary. The trigger was a question about whether it was an artifact of this repo's former two-AI-agent split; the answer is **partly** — but the load-bearing finding is that the boundary's own goals were abandoned in the code years ago, and that the API it was supposed to protect is the least-protected path to grievance data in the system. **T3-06 carries a live security question that gates its phase** (see below).
 
 ## Execution order & workstreams
 
@@ -44,9 +48,14 @@ Phase 1 — the live bugs (land first, smallest, highest user value)
 Phase 2 — PII boundary
   D: T3-04                  ← STRICT ORDER: backend decrypt + test FIRST, then delete
                                ticketing's workaround, then drop the key. See spec §Order.
+  F: T3-06 grievance API    ← authn/authz/audit/contract. Independent of T3-04; same file
+                               (grievance_manager.py / grievance.py), expect a trivial merge.
+                               ⚠️ Check EC2 :5001 inbound FIRST — if open, this is Phase 1.
 
 Phase 3 — the decompositions
   E: T3-05 settings         ← independent (mechanical, low risk)
+  F: T3-07 boundary policy  ← docs + guard tests only, no runtime changes. Land after T3-04
+                               (both edit CLAUDE.md:121 — don't revert each other).
   B: T3-02 parts 2-4        ← characterization tests → status_check_form → handler table
                                STRETCH GOAL. Do not start before parts 2's tests are green.
 ```
@@ -95,6 +104,7 @@ The review sized this sprint at 3×M + 2×L. Measured against the tree:
 | Item | Follow-up |
 |---|---|
 | `file_name` derived from module name — the *real* refactorability blocker, ~200 sites, M+ | [`followups/utterance-file-name-derivation.md`](followups/utterance-file-name-derivation.md) |
-| Ticketing reads `public.grievances` / `public.file_attachments` directly via its own session — violates data rules #1/#5 | [`followups/ticketing-cross-schema-direct-reads.md`](followups/ticketing-cross-schema-direct-reads.md) |
+| ~~Ticketing reads `public.grievances` / `public.file_attachments` directly — violates data rules #1/#5~~ → **not debt; the rule was retired.** Reads legitimized as-built per the §6 DECISION | Closed by **T3-07** ([`06-boundary-policy-spec.md`](06-boundary-policy-spec.md)); followup closed with the decision |
+| Real DB privilege separation (`scripts/ops/create_scoped_roles.sql` is opt-in, inactive, and as written grants ticketing **1 of the 5** `public.*` tables it touches — adopting it would break 4 paths) | Out of scope for T3-07 (docs+tests only); log as a followup if wanted on the board |
 
 Plus the inherited Tier-1/Tier-2 pending-human items (browser/Keycloak sweeps, CI-on-integration) — see [`../2026-08_tier2_quality.md`](../2026-08_tier2_quality.md) §Leftovers. **This sprint does not clear those.**
