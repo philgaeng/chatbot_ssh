@@ -363,8 +363,18 @@ def get_available_statuses():
 
 
 @router.post("/api/grievance/{grievance_id}/status")
-def update_grievance_status(grievance_id: str, body: UpdateStatusBody):
-    """Update the status of a specific grievance. Same behaviour as Flask."""
+def update_grievance_status(
+    grievance_id: str,
+    body: UpdateStatusBody,
+    _: None = Depends(_ticketing_auth_check),
+):
+    """
+    Update the status of a specific grievance. Same behaviour as Flask.
+
+    T3-06: authenticated. Unauthenticated, this endpoint mutated grievance state and
+    fired SMS + email to the complainant (_send_status_update_notifications), letting
+    an anonymous caller drive a complainant's notification stream.
+    """
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
@@ -414,8 +424,15 @@ def get_grievance(
     grievance_id: str,
     request: Request,
     x_api_key: Optional[str] = Header(default=None),
+    _: None = Depends(_ticketing_auth_check),
 ):
-    """Get detailed information about a specific grievance. Same response as Flask."""
+    """
+    Get detailed information about a specific grievance. Same response as Flask.
+
+    T3-06: authenticated. This returns the full record including grievance_description
+    and complainant contact fields; it was previously readable by anyone who could
+    reach the port.
+    """
     principal = _principal_for_key(x_api_key)
     client_host = request.client.host if request.client else None
     try:

@@ -26,10 +26,22 @@ DEPLOYED_LEVEL = logging.INFO  # env.local:23
 
 GRIEVANCE = {"grievance_id": "B-GR-AUDIT-TEST", "grievance_summary": "s"}
 
+# The GET requires x-api-key since T3-06 step 3. Pin a key and send it so these
+# assert auditing rather than auth, and stay deterministic regardless of ambient
+# config — un-pinned they pass on a host via the env.local dev bypass but 401 in CI.
+KEY = "audit-test-key"
+AUTH = {"x-api-key": KEY}
+
 
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def keyed():
+    with patch.dict("os.environ", {"TICKETING_SECRET_KEY": KEY, "MESSAGING_API_KEY": ""}):
+        yield
 
 
 def _audit_records(caplog):
@@ -57,7 +69,7 @@ def test_successful_read_emits_audit_at_deployed_level(client, caplog):
             "backend.api.routers.grievance.grievance_manager.get_grievance_status",
             return_value=None,
         ):
-            r = client.get("/api/grievance/B-GR-AUDIT-TEST")
+            r = client.get("/api/grievance/B-GR-AUDIT-TEST", headers=AUTH)
 
     assert r.status_code == 200
     records = _audit_records(caplog)
@@ -77,7 +89,7 @@ def test_audit_record_is_not_debug_level(client, caplog):
             "backend.api.routers.grievance.grievance_manager.get_grievance_by_id",
             return_value=None,
         ):
-            client.get("/api/grievance/B-GR-MISSING")
+            client.get("/api/grievance/B-GR-MISSING", headers=AUTH)
 
     records = [r for r in caplog.records if r.name == AUDIT_LOGGER]
     assert records, "no audit record emitted at the deployed LOG_LEVEL=INFO"
@@ -125,7 +137,7 @@ def test_not_found_read_is_audited(client, caplog):
             "backend.api.routers.grievance.grievance_manager.get_grievance_by_id",
             return_value=None,
         ):
-            r = client.get("/api/grievance/B-GR-NOPE")
+            r = client.get("/api/grievance/B-GR-NOPE", headers=AUTH)
 
     assert r.status_code == 404
     assert _audit_records(caplog)[0]["outcome"] == "not_found"
@@ -138,7 +150,7 @@ def test_failed_read_is_audited(client, caplog):
             "backend.api.routers.grievance.grievance_manager.get_grievance_by_id",
             side_effect=RuntimeError("db down"),
         ):
-            r = client.get("/api/grievance/B-GR-BOOM")
+            r = client.get("/api/grievance/B-GR-BOOM", headers=AUTH)
 
     assert r.status_code == 500
     assert _audit_records(caplog)[0]["outcome"] == "error"

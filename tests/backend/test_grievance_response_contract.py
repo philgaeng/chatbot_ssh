@@ -13,6 +13,7 @@ DB-free while still being pinned to real DDL.
 
 import re
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -158,6 +159,12 @@ def test_get_grievance_404_is_unchanged_by_the_response_model():
     Commit 1 must stay inert.
     """
     client = TestClient(app)
-    r = client.get("/api/grievance/nonexistent-id-12345")
+    # The GET requires x-api-key since T3-06 step 3; pin and send one so this
+    # asserts the 404 contract rather than auth.
+    with patch.dict("os.environ", {"TICKETING_SECRET_KEY": "contract-key"}):
+        r = client.get(
+            "/api/grievance/nonexistent-id-12345",
+            headers={"x-api-key": "contract-key"},
+        )
     assert r.status_code == 404
     assert r.json()["status"] == "ERROR"
