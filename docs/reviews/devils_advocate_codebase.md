@@ -1,32 +1,32 @@
 # Devil's Advocate — Codebase Quality Review
 
-> **Status:** Re-scored **July 13, 2026**, branch `dev/organisation` (original pass: July 2026, `integration/seah-claude`).
+> **Status:** Re-scored **July 15, 2026**, branch `dev/tier2-quality` (supersedes the July 13 `dev/organisation` re-score; original pass: July 2026, `integration/seah-claude`).
 > **Method:** four independent adversarial reviews — Python backend (ticketing/, backend/, ops/; ~72k LOC), officer portal (channels/ticketing-ui/; 106 TS/TSX files, `tsc` + full `eslint` actually run), REST webchat (channels/REST_webchat/), and the chatbot conversation layer (orchestrator + actions). Every claim was verified in source with file:line evidence.
-> **Re-score basis:** the numbers below reflect what has actually **shipped into the tree** since the original pass — the full **Tier-1 Hardening sprint** (`docs/sprints/2026-07_hardening/`, all 7 HR tickets landed + CI) and the **org-chart remediation** (`docs/sprints/2026-07_org_chart_positions/`, R1–R13). Tier 2 and Tier 3 have **not** started; dimensions they own barely move.
+> **Re-score basis:** the numbers below reflect what has actually **shipped into the tree** — the **Tier-1 Hardening sprint** (`docs/sprints/2026-07_hardening/`, 7 HR tickets + CI), the **org-chart remediation** (`docs/sprints/2026-07_org_chart_positions/`, R1–R13), and now the full **Tier-2 Quality sprint** (`docs/sprints/2026-08_tier2_quality.md`, H2-01…08 + the authz-gaps and apifetch-refresh follow-ups, all landed on `dev/tier2-quality`, locally tested). Tier-2 code is **code-complete** but its browser/Keycloak manual sweeps and CI-on-integration are still pending — so the dimensions it owns move to "landed, locally verified", not "field-proven". Tier 3 has not started.
 > **Stance:** adversarial but honest — real defects, not style nits, and genuine strengths stated so the numbers are credible. Spec-side companion: [`devils_advocate_specs.md`](devils_advocate_specs.md).
 
 ---
 
-## 1. Overall score: **~64%** (was ~55%)
+## 1. Overall score: **~76%** (was ~55% → ~64% → **~76%**)
 
-Weighted by code volume and criticality (backend 45%, portal 25%, conversation layer 20%, webchat 10%). The `Was → Now` column shows the movement since the original pass; unchanged dimensions are the ones Tier 2/3 still own.
+Weighted by code volume and criticality (backend 45%, portal 25%, conversation layer 20%, webchat 10%). The `Was → Now` column shows the movement from the original pass to now (post-Tier-2); the middle July-13 value is noted where it helps. Dimensions that didn't move are the ones Tier 3 still owns.
 
 | Area | Was → Now | What moved it | Remaining weakest point |
 |---|---|---|---|
 | Backend — migrations & data safety | **72 → 84** | HR-03 partial unique index enforces one-ticket-per-grievance; CL-01 schema-baseline gate in CI | Cross-stream ownership still convention-enforced, not tooling-enforced |
-| Backend — performance | **63 → 65** | HR-04 removed the per-ticket N+1 in escalation candidate loading | Unbounded full-scan grievance sync every 2 min (Tier 2 H2-04, not done) |
-| Backend — maintainability | **62 → 67** | HR-01 makes the demo super_admin fallback dev-only, no longer welded into the prod auth path; single-source `ticket_access` gate | 2,414-line ticket router still carries most logic |
-| Backend — architecture | **58 → 59** | `ticket_access.py` extracted as a single visibility gate | 2,414-line God router; 430-line inline state machine (Tier 2 H2-02, not done) |
-| Backend — correctness | **55 → 74** | HR-04 savepoint-per-ticket + `FOR UPDATE SKIP LOCKED` + idempotence guard kills the partial-commit class; R3 keeps deactivated officers out of assignment; first tests | Actions/orchestrator state machine still lightly covered |
-| Backend — security | **55 → 78** | HR-01 fail-closed auth **and** HR-02 `require_ticket_access` on file/PII endpoints close both named holes; R1 SEAH-notification lockdown; R2/R4 authz containment | PII decryption still dual-pathed in ticketing (Tier 3) |
-| Backend — testing | **42 → 64** | Escalation-engine, authz-matrix (86), fail-closed, and uniqueness suites now exist; **CI is live** | Actions state machine untested; `@integration` tests quarantined in CI |
-| Portal — architecture | **50 → 53** | ~345 lines extracted from the settings page; typed `lib/api.ts` for notification rules | 4,372-line settings page; OIDC client still never uses its refresh token (Tier 2 H2-01) |
-| Portal — robustness/UX | **48 → 65** | HR-06 error card + retry + stale-response seq guard on all 5 list surfaces; hooks-order crash fixed; `error.tsx`/`global-error.tsx`; R5 friendly-error contract | Officer data-loss at token expiry remains (Tier 2 H2-01) |
-| Portal — types & testing | **47 → 62** | vitest wired into CI; the 2 rules-of-hooks crashes fixed; `tsc`+`eslint`+`build` now gate every push | Only 3 test files — coverage still thin; 134 lint **warnings** deferred |
-| Conversation layer | **52 → 53** | The ~90 orchestrator tests now run as a CI gate | 1,485-line `run_flow_turn`, CC≈120; broken Nepali strings (Tier 2 H2-08 / Tier 3, not done) |
+| Backend — performance | **63 → 74** (65 at Tier-1) | **H2-04** watermark-paged the O(all-time) grievance sync → O(delta) (72× on a 5k-row bench) + removed the GET-detail cache write-back; **H2-05** TTL-cached the per-request onboarding sync out of the auth dependency (~1.6 ms/req) | Query shapes only structurally reasoned, not profiled under load |
+| Backend — maintainability | **62 → 74** (67 at Tier-1) | **H2-02** split the 2,414-line ticket router into a 7-module `routers/tickets/` package + `engine/`; dead code and in-function imports removed along the way | 2,303-line `state_machine.py` still carries `run_flow_turn` (Tier 3) |
+| Backend — architecture | **58 → 68** (59 at Tier-1) | **H2-02** God router → package and `perform_action` → `engine/ticket_actions.py` (typed outcomes, no HTTP in the engine), route-surface pinned identical | 2,303-line inline conversation state machine (Tier 3) |
+| Backend — correctness | **55 → 74** | HR-04 savepoint-per-ticket + `FOR UPDATE SKIP LOCKED` + idempotence guard kills the partial-commit class; H2-04 sync is now crash-safe/idempotent; R3 keeps deactivated officers out of assignment | Actions/orchestrator state machine still lightly covered |
+| Backend — security | **55 → 80** (78 at Tier-1) | HR-01 fail-closed auth + HR-02 `require_ticket_access`; **authz-gaps-h2-03** closed 3 least-privilege holes (role-delete, project-metadata PATCH, 10 unauthenticated project-config reads) | PII decryption still dual-pathed in ticketing (Tier 3); project mutations tier-gated not project-scoped |
+| Backend — testing | **42 → 68** (64 at Tier-1) | **H2-03** (118 authz cells) + **H2-07** (escalation L1→L3/SEAH/interleave) + H2-04/05 behavior tests + SEAH parity/integrity | Conversation state machine still thin; `@integration` tests quarantined in CI |
+| Portal — architecture | **50 → 62** (53 at Tier-1) | **H2-01** the OIDC client now actually uses its refresh token; **H2-06** shared `useTicketThread` hook removed ~756 duplicated lines across the two thread pages | 4,372-line settings page (Tier 3) |
+| Portal — robustness/UX | **48 → 76** (65 at Tier-1) | **H2-01** ends officer data-loss at token expiry (proactive refresh + `401→refresh→retry-once`); **apifetch-refresh** extends the same to the blob/multipart upload sites | Coverage still thin; deep flows unexercised in CI |
+| Portal — types & testing | **47 → 66** (62 at Tier-1) | +32 vitest (H2-01 9, H2-06 23) + authedFetch tests; `tsc`/`eslint`/`build` still gate every push | Still no E2E; 141 lint **warnings** deferred (tracked) |
+| Conversation layer | **52 → 60** (53 at Tier-1) | **H2-08** deduped the victim/focal SEAH forms into a shared mixin and repaired the broken Nepali (tripled SEAH label, OCMC referral, garbled address, stray `ू`), with a parity + utterance-integrity net | 1,485-line `run_flow_turn`, CC≈120; broken Nepali outside the SEAH flow (Tier 3) |
 | REST webchat | **64 → 73** | HR-07 persists session ID at startup, adds an in-flight send lock, SRI hashes, `textContent` banner | Voice-chunk upload race (Tier 3, not done); browser regression sweep still pending-human |
 
-**Reading the number:** ~64% reflects a system whose **worst structural risks have been fixed and are now regression-guarded by CI** — fail-open auth, the ungated SEAH file/PII endpoints, the lock-free escalation engine, and "no tests / no CI" are all closed. It is not higher because the improvement was deliberately concentrated in security, correctness, and robustness (Tier 1). The dimensions that cap the score — the God-file architecture, the unbounded sync query, officer data-loss at token expiry, and the conversation layer's size and broken Nepali — are all Tier 2/3 work that has not begun. The doc's Tier-1 estimate of "~68%" assumed a little of that architecture/perf work would land with it; it did not, so the weighted rollup sits at ~64%.
+**Reading the number:** ~76% reflects a system whose worst structural risks are fixed and CI-guarded (Tier 1) **and** whose highest-drag quality/perf items have now landed (Tier 2): the God router is a testable package, the O(all-time) sync is incremental, officer data-loss at token expiry is closed, and the SEAH Nepali is repaired. It is not higher because the two largest remaining files — `state_machine.py` (`run_flow_turn`) and the 4,372-line settings page — plus PII-path unification and profiled performance are **Tier 3**, and because Tier-2's browser/Keycloak manual sweeps and CI-on-integration are still pending (code-complete, locally verified). Clearing Tier 3 + those confirmations is what would push the low-80s.
 
 ---
 
@@ -36,13 +36,13 @@ Weighted by code volume and criticality (backend 45%, portal 25%, conversation l
 2. ~~**SEAH wall has door-sized holes at the file/PII endpoints.**~~ **CLOSED (HR-02).** A single `require_ticket_access` / `require_file_access` dependency (`ticketing/api/ticket_access.py`) now gates `GET /attachments/{file_id}`, `GET /files/{file_id}`, `GET /tickets/{id}/pii`, and ~18 other per-ticket endpoints (exists + SEAH + scope + visibility). Persona×endpoint matrix: **86 tests**. Separately, R1 closed the SEAH **notification** leak (badge/notifications/@mention/convene/tier-cast).
 3. ~~**The escalation engine is lock-free, partially-committing, and untested.**~~ **CLOSED (HR-04).** `run_sla_check` wraps each ticket in `db.begin_nested()`; candidates are selected `.with_for_update(skip_locked=True)`; an idempotence re-check runs under the lock; HR-03 added the partial unique index on `tickets(grievance_id) WHERE is_deleted=false`. 6 engine tests including a mid-loop-failure case **verified red on the pre-fix code**.
 4. ~~**Zero frontend tests + no CI anywhere.**~~ **CLOSED (HR-05 + HR-06).** `.github/workflows/ci.yml` runs three parallel jobs (backend pytest on a Postgres service across all 3 Alembic streams; portal `tsc`+`eslint`+`vitest`+`build`; docs-link check) on every push/PR. First green run confirmed. *Caveat:* frontend coverage is still only 3 vitest files, and `@integration` backend tests are quarantined (`-m "not integration"`) pending a seed-reconciliation fix.
-5. **Officers lose work by design — STILL OPEN.** The portal still stores a refresh token it never uses (`lib/auth/token-storage.ts:47-49`); at access-token expiry a hard redirect discards any half-written note. This is Tier 2 **H2-01** (OIDC refresh-grant in `apiFetch`), which has not started. The list-page silent-empty half of this finding **was** fixed by HR-06 (error card + retry on all 5 surfaces).
+5. ~~**Officers lose work by design.**~~ **CLOSED (H2-01 + apifetch-refresh).** `apiFetch` now proactively refreshes a token expiring within 60 s and does `401 → refresh → retry-once` (single-flight `refreshTokens`) before any redirect; the shared `authedFetch` extends the same to the 4 blob/multipart upload sites (FormData rebuilt on retry). The refresh token is finally used; a half-written note survives expiry. The list-page silent-empty half was already fixed by HR-06.
 
 **New top findings (what now caps the score):**
-- **Officer data-loss at token expiry** (H2-01, unchanged) — the highest field-visible UX risk still live.
-- **God files** — `tickets.py` (2,414), `app/settings/page.tsx` (4,372), `run_flow_turn` inside a 2,303-line `state_machine.py`. The main merge-conflict and untestability surface (H2-02, Tier 3).
-- **Unbounded grievance sync** — still O(all-time) every 2 min against the shared chatbot DB (H2-04).
-- **Conversation layer** — broken Nepali strings and a lightly-tested 1,485-line turn handler (H2-08 / Tier 3).
+- **God files remaining** — `app/settings/page.tsx` (4,372) and `run_flow_turn` inside a 2,303-line `state_machine.py`. (The 2,414-line `tickets.py` was **split** by H2-02 into a 7-module package + engine.) Tier 3.
+- **PII decryption still dual-pathed** in ticketing — a Tier-3 unification item.
+- **Conversation layer size** — a lightly-tested 1,485-line `run_flow_turn`; broken Nepali *outside* the SEAH flow remains (the SEAH copy was repaired by H2-08). Tier 3.
+- **Confirmation debt** — Tier-2 is code-complete + locally tested but its browser/Keycloak manual sweeps and CI-on-integration are not yet run.
 
 ---
 
@@ -64,20 +64,22 @@ All seven tickets landed with tests and CI. This is the ~55% → ~64% movement a
 
 **Residual Tier-1 debt:** the HR-07 manual browser sweep and the HR-05 live deliberate-failure / branch-protection checks are still pending a human; `@integration` backend tests are quarantined in CI.
 
-### Tier 2 — NOT STARTED (`docs/sprints/2026-08_tier2_quality/`, all tickets `todo`)
+### Tier 2 — ✅ DONE (`docs/sprints/2026-08_tier2_quality.md`), code-complete + locally tested on `dev/tier2-quality`
 
-| Fix | Ticket | Effort | Estimated impact |
-|---|---|---|---|
-| OIDC refresh-grant in `apiFetch` (single-flight, retry-once) | H2-01 | M | Ends officer data loss at token expiry — highest field-visible UX win |
-| Split `tickets.py` into crud/actions/files/pii; `perform_action` → `engine/` | H2-02 | M | State machine becomes unit-testable; removes main merge-conflict hotspot |
-| Authz test matrix extension (all actions × personas; unauthenticated sweep) | H2-03 | M | Locks in the §2.2 class |
-| Watermark + page the grievance sync (`WHERE modified > :last_sync`) | H2-04 | S/M | Heaviest recurring query O(all-time)→O(delta) |
-| Cache the onboarding sync out of the auth dependency | H2-05 | S | ~10–30% off p50 API latency |
-| Shared `useTicketThread` hook for desktop + `/m` ticket pages | H2-06 | M | Deletes ~350 duplicated lines |
-| Escalation engine test extension (full L1→L3, SEAH isolation, interleaving) | H2-07 | M | Broadens the new engine coverage |
-| SEAH form mixin + fix garbled Nepali strings (translator sign-off) | H2-08 | M | ~150 duplicate lines gone; quality for the primary Nepali/SEAH audience |
+| Fix | Ticket | Status |
+|---|---|---|
+| OIDC refresh-grant in `apiFetch` (single-flight, retry-once) | H2-01 | ✅ shipped + 9 vitest; manual Keycloak sweep pending-human |
+| Split `tickets.py` into crud/actions/files/pii; `perform_action` → `engine/` | H2-02 | ✅ 7-module package + engine; 174-route snapshot pinned identical + 12 engine tests |
+| Authz test matrix extension (all actions × personas; unauthenticated sweep) | H2-03 | ✅ 118 tests; the 3 gaps it surfaced fixed in the authz-gaps follow-up |
+| Watermark + page the grievance sync | H2-04 | ✅ keyset-incremental + full-sweep backstop; 72× bench; 6 DB tests |
+| Cache the onboarding sync out of the auth dependency | H2-05 | ✅ in-process TTL cache + writer invalidation; 6 tests |
+| Shared `useTicketThread` hook for desktop + `/m` ticket pages | H2-06 | ✅ −756 duplicated lines; 23 vitest |
+| Escalation engine test extension (full L1→L3, SEAH isolation, interleaving) | H2-07 | ✅ 5 tests |
+| SEAH form mixin + fix garbled Nepali strings | H2-08 | ✅ mixin (−228 lines) + Nepali repair (AI-translated) + parity/integrity tests |
+| — follow-up: 3 authz gaps (role-delete, project PATCH, unauth config reads) | authz-gaps-h2-03 | ✅ gated + tests |
+| — follow-up: silent refresh on blob/multipart fetch sites | apifetch-refresh | ✅ `authedFetch` + tests |
 
-**Estimated effect of Tier 2: ~64% → ~76%** (moves performance, architecture, maintainability, portal architecture, and conversation layer — the dimensions Tier 1 left flat).
+**Effect of Tier 2: ~64% → ~76%** — moved performance, architecture, maintainability, portal architecture/robustness, security, and the conversation layer. **Residual Tier-2 debt:** browser/Keycloak manual sweeps (H2-01/02/06), the SEAH EN/NE webchat walk-through (H2-08), and CI-on-integration + merge are still pending-human; the SEAH translation fact-check (OCMC/address) is flagged in `docs/seah/translations_seah_review.csv`.
 
 ### Tier 3 — structural (L efforts, schedule deliberately)
 

@@ -145,7 +145,7 @@ The numbers above are the **single-threaded** order that keeps every step on ver
 | 2026-07-15 | H2-08 | **`validators.py:223` needed only a re-route, no new utterance.** | The target `validate_complainant_address_confirmed` utterance (EN+NE) already existed in the mapping; the code just hardcoded the English. Routed it through `contact_utterance`; only `phone.py:40`'s PH message needed a new (AI-translated) utterance entry. |
 
 ## Sprint close checklist
-- [ ] All tickets `done`, CI green on integration branch
-- [ ] Summary doc `docs/sprints/2026-08_tier2_quality.md` written
-- [ ] Folder moved to `docs/sprints/archive/`; sprints README updated
-- [ ] `devils_advocate_codebase.md` re-scored (architecture, performance, maintainability, portal dimensions)
+- [~] All tickets code-complete (`review`); **CI-on-integration + merge and the browser/Keycloak manual sweeps are pending-human** — see the summary's "Leftovers noted at close".
+- [x] Summary doc [`docs/sprints/2026-08_tier2_quality.md`](../../2026-08_tier2_quality.md) written (2026-07-15).
+- [x] Folder moved to `docs/sprints/archive/2026-08_tier2_quality/`; sprints [`README.md`](../../README.md) updated (Completed table + archive map); inbound `TODO.md` links repointed.
+- [x] [`devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md) re-scored — overall **~64% → ~76%**; performance 65→74, maintainability 67→74, architecture 59→68, portal robustness 65→76, portal architecture 53→62, conversation layer 53→60, security 78→80.
