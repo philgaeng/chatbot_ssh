@@ -2,12 +2,14 @@
 Grievance API router. Same URL surface and behaviour as Flask backend.
 """
 
+import hmac
+import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from backend.clients.messaging_api import send_email as send_email_via_api
@@ -17,6 +19,19 @@ from backend.services.database_services.grievance_manager import GrievanceDbMana
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# T3-06 step 2 — read audit for GET /api/grievance/{id}.
+#
+# Its own logger name so the trail can be filtered/shipped without dragging along
+# the rest of the router's chatter, and grepped as one stream. Deliberately NOT a
+# public.* table: a log line is reversible, a new table is a migration-stream
+# commitment (CLAUDE.md §Migration traceability). Revisit if the trail needs to be
+# queryable or retained — see PROGRESS.md T3-06.
+#
+# Emits at INFO because LOG_LEVEL=INFO is the deployed default (env.local:23);
+# a .debug record would be invisible in production, which is how
+# grievance_manager.py:172 already fails to be an audit trail.
+audit_logger = logging.getLogger("audit.grievance_read")
 
 grievance_manager = GrievanceDbManager()
 
@@ -174,6 +189,52 @@ def _identity_value_missing(value: Any) -> bool:
     if s.lower() in {"anonymous", "unknown", "n/a", "na", "not provided"}:
         return True
     return False
+
+
+def _principal_for_key(x_api_key: Optional[str]) -> str:
+    """
+    Name the caller behind an api key. Never returns or logs the key itself.
+
+    The audit trail needs a principal, not a secret. Keys are compared with
+    compare_digest so this cannot be used as a timing oracle.
+    """
+    if not x_api_key or not x_api_key.strip():
+        return "anonymous"
+    presented = x_api_key.strip()
+    for name, env_var in (("ticketing", "TICKETING_SECRET_KEY"), ("messaging", "MESSAGING_API_KEY")):
+        configured = os.environ.get(env_var, "").strip()
+        if configured and hmac.compare_digest(presented, configured):
+            return name
+    return "unrecognized-key"
+
+
+def _audit_grievance_read(
+    grievance_id: str,
+    principal: str,
+    client_host: Optional[str],
+    outcome: str,
+) -> None:
+    """
+    Record one read of a grievance record.
+
+    Emitted at INFO so it survives the deployed LOG_LEVEL. JSON payload so the
+    trail is parseable if it is ever shipped to a collector; the key itself is
+    never included, only the principal it resolves to.
+    """
+    audit_logger.info(
+        "grievance_read %s",
+        json.dumps(
+            {
+                "event": "grievance_read",
+                "grievance_id": grievance_id,
+                "principal": principal,
+                "client": client_host or "unknown",
+                "outcome": outcome,
+                "at": datetime.now(timezone.utc).isoformat(),
+            },
+            sort_keys=True,
+        ),
+    )
 
 
 def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
@@ -349,11 +410,18 @@ def update_grievance_status(grievance_id: str, body: UpdateStatusBody):
 
 
 @router.get("/api/grievance/{grievance_id}", response_model=GrievanceDetailResponse)
-def get_grievance(grievance_id: str):
+def get_grievance(
+    grievance_id: str,
+    request: Request,
+    x_api_key: Optional[str] = Header(default=None),
+):
     """Get detailed information about a specific grievance. Same response as Flask."""
+    principal = _principal_for_key(x_api_key)
+    client_host = request.client.host if request.client else None
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
+            _audit_grievance_read(grievance_id, principal, client_host, "not_found")
             return JSONResponse(
                 status_code=404,
                 content={"status": "ERROR", "message": f"Grievance {grievance_id} not found"},
@@ -369,12 +437,16 @@ def get_grievance(grievance_id: str):
             "status_history": status_history,
             "files": files,
         }
+        # Audited after retrieval succeeds so the record reflects what was actually
+        # disclosed, but before returning so no disclosure can go unrecorded.
+        _audit_grievance_read(grievance_id, principal, client_host, "success")
         return {
             "status": "SUCCESS",
             "message": "Grievance retrieved successfully",
             "data": response_data,
         }
     except Exception as e:
+        _audit_grievance_read(grievance_id, principal, client_host, "error")
         print(f"Error retrieving grievance: {str(e)}")
         return JSONResponse(
             status_code=500,
