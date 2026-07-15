@@ -15,6 +15,7 @@ from sqlalchemy import select
 
 from ticketing.constants.assignment import COUNTRY_L1_FALLBACK_ROLE
 from ticketing.constants.demo_officers import (
+    DEMO_OFFICER_SPECS,
     OFFICER_SITE_L1,
     OFFICER_SITE_L1_2,
     OFFICER_SITE_L1_3,
@@ -59,13 +60,55 @@ SEEDED_SITE_L1 = "l1-officer@grm.local"
 # user_id tie-break, and broke on any developer DB that had accumulated tickets (D-44).
 # The property under test is the *scope* the fallback widens to, so assert the pool.
 #
-# Sourced from ticketing.constants.demo_officers so growing the roster (as b8cab274 did,
-# 2→4, silently breaking these) updates the expectation instead of rotting it.
+
+
+def _is_in_province_1(location_code: str | None) -> bool:
+    """P1 itself, or any descendant of it. Not `startswith("P1")` — that would also
+    swallow a future P10/P12."""
+    loc = location_code or ""
+    return loc == "P1" or loc.startswith("P1_")
+
+
+# DERIVED from DEMO_OFFICER_SPECS, not enumerated — and that distinction is the point.
+# T3-08 published this as "sourced from ticketing.constants.demo_officers … so the next
+# roster change updates the expectation instead of rotting it". It wasn't: it was a
+# hand-typed frozenset of four names. Only the *constants* came from demo_officers; the
+# *membership* was manual. A fifth Province-1 L1 added to DEMO_OFFICER_SPECS would not
+# have appeared here, so the test would have rotted by the exact b8cab274 mechanism
+# (roster 2→4) that D-45 diagnosed and this fix exists to prevent. Computing it from the
+# seed's own roster is what makes the published claim true.
 PROVINCE_L1_POOL = frozenset(
-    {OFFICER_SITE_L1, OFFICER_SITE_L1_2, OFFICER_SITE_L1_3, OFFICER_SITE_L1_4}
+    spec.email
+    for spec in DEMO_OFFICER_SPECS
+    if spec.role_key == ROLE_L1 and _is_in_province_1(spec.user_role_location)
 )
 
 pytestmark = pytest.mark.integration
+
+
+def test_province_l1_pool_derivation_is_not_vacuous():
+    """
+    Guard the guard. The three assertions downstream are `assigned in PROVINCE_L1_POOL`,
+    so a derivation that silently produced an empty set would make them fail confusingly
+    — and one that over-matched would let them pass for the wrong reason.
+
+    Deliberately does NOT pin a count: the whole point is that the pool tracks the roster.
+    It pins the property — every seeded P1 L1 is in, and nothing that isn't an L1 is.
+    """
+    assert PROVINCE_L1_POOL, "derivation produced an empty pool — the filter is broken"
+
+    # The four the seed staffs today (Morang x2, Jhapa, Sunsari).
+    assert {
+        OFFICER_SITE_L1,
+        OFFICER_SITE_L1_2,
+        OFFICER_SITE_L1_3,
+        OFFICER_SITE_L1_4,
+    } <= PROVINCE_L1_POOL
+
+    # No L2 / admin / SEAH officer leaked in via a P1 location.
+    for spec in DEMO_OFFICER_SPECS:
+        if spec.email in PROVINCE_L1_POOL:
+            assert spec.role_key == ROLE_L1, f"{spec.email} is not an L1 but is in the L1 pool"
 
 
 def _first_step(db, workflow_key: str) -> WorkflowStep:
