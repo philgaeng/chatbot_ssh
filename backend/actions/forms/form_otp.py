@@ -349,7 +349,7 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         
         
         if otp_verification.otp_matches(slot_value, expected_otp):
-            message = self.get_utterance(1)
+            message = self.get_utterance(1, key="validate_otp_input")
             dispatcher.utter_message(text=message)
             result = {"otp_input": slot_value,
                       "otp_status" : "verified",

@@ -310,18 +310,12 @@ class ActionHelpersMixin(LanguageHelpersMixin, SensitiveContentHelpersMixin):
             self.file_name, self.name(), button_index, self.language_code
         )
 
-    def check_form_function_name(self, form_name: str, function_name: str) -> bool:
-        try:
-            UTTERANCE_MAPPING[form_name][function_name]
-            return True
-        except Exception as exc:
-            self.logger.error(
-                "check_form_function_name: %s | form=%s function=%s",
-                exc,
-                form_name,
-                function_name,
-            )
-            return False
+    # `check_form_function_name` lived here: a key-existence guard built for exactly the
+    # T3-01 bug class and never called by anything (D-05). Deleted rather than wired up —
+    # tests/actions/test_utterance_key_integrity.py now enforces the same invariant
+    # statically across every call site, and checks the utterance index and both
+    # languages too, which the guard did not. Two mechanisms for one invariant is how the
+    # weaker one rots.
 
     def validate_full_name_to_list(self, full_name: str) -> list:
         return full_name_lookup.validate_full_name_to_list(

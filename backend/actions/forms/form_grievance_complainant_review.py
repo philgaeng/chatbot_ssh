@@ -492,7 +492,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
             #if no category is selected or the slot_value is SKIP_VALUE, return slot_confirmed as this means the user is happy with the current selection and the SKIP_VALUE for the grievance_cat_modify slot
             try:
                 if not selected_category or slot_value == self.SKIP_VALUE:
-                    message = self.get_utterance(1)
+                    # Keyed on this form's name(), which is where the copy for this branch
+                    # was authored ("No category selected. skipping this step."). The old
+                    # introspection derived "validate_grievance_cat_modify" — the calling
+                    # function's name — which exists nowhere, so this raised ValueError
+                    # and the except below laundered it into a SKIP_VALUE (T3-01).
+                    message = self.get_utterance(
+                        1, key="validate_form_grievance_complainant_review"
+                    )
                     dispatcher.utter_message(text=message)
                     return {"grievance_categories_status": None,
                         "grievance_cat_modify": self.SKIP_VALUE,
@@ -523,7 +530,21 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     "grievance_categories_status": None,
                     "grievance_cat_modify": "Done",
                 }
-            except Exception as e:
+            # Narrowed from `except Exception` (T3-01). The bare catch turned *any*
+            # failure into a SKIP_VALUE, which is how a missing utterance key silently
+            # became "user skipped the category step": the confirmation message was never
+            # dispatched and the form returned the wrong slots, with no error anywhere.
+            # ValueError from the utterance layer is a bug in our mapping, not a user
+            # outcome — it must surface. ValueError/KeyError from list mutation below
+            # (`.remove()` on a category that isn't present) is the recoverable case this
+            # catch actually existed for, so it stays handled — but only there.
+            except (ValueError, KeyError) as e:
+                if isinstance(e, ValueError) and "Error getting utterance" in str(e):
+                    self.logger.error(
+                        f"validate_grievance_cat_modify: utterance lookup failed — "
+                        f"this is a mapping bug, not a user skip: {e}"
+                    )
+                    raise
                 self.logger.error(f"Error in validate_grievance_cat_modify: {e}")
                 return {"grievance_categories_status": self.LLM_GENERATED,
                         "grievance_cat_modify": self.SKIP_VALUE}

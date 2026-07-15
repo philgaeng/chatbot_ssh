@@ -1428,6 +1428,23 @@ UTTERANCE_MAPPING = {
             }
         }
     },
+    # T3-01: added so ValidateMenuForm.validate_language_code's key resolves, keeping the
+    # "every call-site key resolves" invariant total (no exclusion list in
+    # tests/actions/test_utterance_key_integrity.py). NOTE: the module that owns this key,
+    # forms/form_story_main_route_step.py, is DEAD CODE (no importer, absent from
+    # form_loop.py's _FORMS registry, no Rasa action server to auto-discover it) — so this
+    # copy is currently unreachable. Delete this entry together with the module; see
+    # docs/sprints/2026-08_tier3_structural/followups/dead-form-story-main-route-step.md
+    'form_story_main_route_step': {
+        'validate_language_code': {
+            'utterances': {
+                1: {
+                    'en': "Please choose a valid language: English or Nepali.",
+                    'ne': "कृपया मान्य भाषा छान्नुहोस्: अङ्ग्रेजी वा नेपाली।",
+                },
+            },
+        },
+    },
     'form_seah_1': {
         'action_ask_form_seah_1_sensitive_issues_follow_up': {
             'utterances': {
