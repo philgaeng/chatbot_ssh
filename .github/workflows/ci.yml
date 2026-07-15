@@ -3,7 +3,8 @@ name: CI
 # HR-05 (2026-07 hardening sprint) — docs/sprints/2026-07_hardening/03-ci-pipeline-spec.md
 #
 # Three independent gates, run in parallel:
-#   backend-tests — Postgres 15 service, all three Alembic streams, pytest (ticketing/orchestrator/actions)
+#   backend-tests — Postgres 15 service, all three Alembic streams, pytest
+#                   (ticketing/orchestrator/actions/backend, @integration included)
 #   ui-checks     — channels/ticketing-ui: tsc --noEmit, eslint, next build
 #   docs-links    — relative markdown link check under docs/ (excludes archive/)
 #
@@ -112,10 +113,15 @@ jobs:
         run: bash scripts/ci/check_public_schema_baseline.sh check
 
       - name: Seed KL Road locations + demo workflows
-        # tests/ticketing/conftest.py and several `pytest.mark.integration` tests
+        # tests/ticketing/conftest.py and the `pytest.mark.integration` tests
         # (test_officer_assignment.py, test_project_routing.py, test_entity_codes.py)
         # read the KL_ROAD project/workflow/location rows seeded here — same commands
         # as the dev/SSH startup runbook, docs/deployment/03_operations.md §2 step 4.
+        #
+        # `--reset` makes every run start from a pristine seed. That is what makes the
+        # @integration tests deterministic in CI: assignment ranks by active ticket load,
+        # so a DB carrying tickets from previous runs would pick different (still valid)
+        # officers. Keep the reset.
         run: |
           python -m ticketing.seed.import_locations_json \
             --country NP \
@@ -124,15 +130,30 @@ jobs:
             --max-level 3
           python -m ticketing.seed.mock_tickets --reset
 
-      - name: Run pytest (ticketing, orchestrator, actions)
-        # `-m "not integration"` quarantines the @integration ticketing tests, which
-        # currently fail on a pristine DB due to a pre-existing seed<->test mismatch
-        # (tests assume Jhapa has no local L1, but mock_tickets seeds l1-officer-2 there;
-        # plus projects.seah_workflow_id left NULL by seed ordering). Tracked for fix +
-        # re-enable in docs/sprints/2026-07_schema_and_legacy_cleanup/followups/
-        # integration-seed-reconciliation.md. Non-integration suite is green (195/0).
+      - name: Run pytest (ticketing, orchestrator, actions, backend)
+        # T3-08 (2026-07-15) — the `-m "not integration"` quarantine is GONE, and
+        # tests/backend is included. Both were measured, not assumed:
+        #
+        #   before: 364 passed /   3 skipped / 390 deselected  — 3m16s
+        #   after:  897 passed /   7 skipped /   0 deselected  — 3m32s
+        #
+        # ⇒ +533 tests gated for +16s. The quarantine's stated reasons were fixed by the
+        # seed/test reconciliation (4f0140dd) and never re-enabled: verified green on a
+        # clean migrate+seed matching this job's steps exactly, stable over three
+        # consecutive runs, with tests/ticketing alone at 563/5/0. Closes
+        # docs/sprints/2026-07_schema_and_legacy_cleanup/followups/
+        # integration-seed-reconciliation.md.
+        #
+        # This job seeds precisely so the @integration tests can run (see the seed step
+        # above, which names them). Deselecting them meant paying the seeding cost and
+        # gating nothing with it — which is how test_officer_assignment.py rotted
+        # unnoticed when b8cab274 grew the L1 roster (D-44).
+        #
+        # DO NOT re-add `-m "not integration"` to silence a red build. These tests
+        # require the seeded DB above; if one fails, the seed and the test have drifted
+        # apart, and that is the bug. `pytest.ini` documents the marker's contract.
         run: |
-          PYTHONPATH=. python -m pytest tests/ticketing tests/orchestrator tests/actions -q --maxfail=20 --strict-markers -m "not integration"
+          PYTHONPATH=. python -m pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers
 
   ui-checks:
     runs-on: ubuntu-latest
