@@ -101,7 +101,7 @@ New file `tests/actions/test_utterance_key_integrity.py`:
 - [ ] Webchat EN + NE: enter an invalid language code at the `form_story_main_route_step` prompt ⇒ the re-prompt message renders. **If you cannot produce an out-of-`["en","ne"]` value from the UI, the branch is unreachable — record that as §0's answer.**
 - [ ] Webchat EN + NE: reach the SEAH follow-up prompt (`form_seah_1`), send an unrecognized command ⇒ re-prompt renders.
 - [ ] Webchat EN + NE: in the category review, accept the current selection ⇒ confirmation message renders and the form advances.
-- [ ] *(May be marked pending-human if no browser is available in the build env — record as such. **Note H2-08's SEAH EN/NE webchat walk-through is also still pending-human** — see [`../2026-08_tier2_quality.md`](../2026-08_tier2_quality.md) §Leftovers. Same flows, same browser session — do them together.)*
+- [ ] *(May be marked pending-human if no browser is available in the build env — record as such. **Note H2-08's SEAH EN/NE webchat walk-through is also still pending-human** — see [`../2026-08_tier2_quality.md`](../../2026-08_tier2_quality.md) §Leftovers. Same flows, same browser session — do them together.)*
 
 ### Out of scope — log, don't fix
 - **`file_name` module-name derivation** (`base_mixins.py:63`) — ~200 sites, M+. **This is what the source review's "makes the chatbot refactorable" was actually aiming at**; this ticket fixes the other axis (`action_name`). → [`followups/utterance-file-name-derivation.md`](followups/utterance-file-name-derivation.md).

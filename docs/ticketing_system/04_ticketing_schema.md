@@ -29,7 +29,7 @@ Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
 > actually preserves the extraction option and keeps the three migration streams
 > independent, and it costs nothing.
 >
-> Full evidence and the decision: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
+> Full evidence and the decision: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
 > **If you amend a rule here, move its reason with it.**
 
 **Location codes:** Canonical rules for `location_code` → `LOCATION_CODES.md`.

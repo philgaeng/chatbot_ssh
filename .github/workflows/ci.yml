@@ -190,7 +190,7 @@ jobs:
         run: npm run build
 
   webchat-checks:
-    # T3-03 (2026-08 tier3-structural sprint) — docs/sprints/2026-08_tier3_structural/
+    # T3-03 (2026-08 tier3-structural sprint) — docs/sprints/archive/2026-08_tier3_structural/
     # 02-webchat-voice-spec.md. The webchat has no build step (static ES modules served
     # as-is); this job exists solely to run the module unit tests, which guard the
     # voice-chunk upload ordering. That class of bug is client-side only — a server test

@@ -57,7 +57,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA ticketing GRANT USAGE, SELECT ON SEQUENCES TO
 -- this block in the same commit** — a scoped role that lags the contract fails closed,
 -- in prod, as a permission error on a Celery beat job.
 --
--- Evidence: docs/sprints/2026-08_tier3_structural/00-reassessment.md §6.
+-- Evidence: docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md §6.
 GRANT USAGE ON SCHEMA public TO ticketing_app;
 
 -- services/grievance_content.py, tasks/grievance_sync.py — read-only.

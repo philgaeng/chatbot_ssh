@@ -12,7 +12,7 @@ DB_ENCRYPTION_KEY. That was a client-side workaround for a server-side omission 
 backend returned hex — and it is what made the "ticketing has a second PII path" reading
 look true. It never had one: it decrypted a ciphertext already handed to it by the API.
 T3-04 fixed the cause in `backend/services/database_services/grievance_manager.py` and
-deleted the workaround. See docs/sprints/2026-08_tier3_structural/03-pii-boundary-spec.md.
+deleted the workaround. See docs/sprints/archive/2026-08_tier3_structural/03-pii-boundary-spec.md.
 """
 from __future__ import annotations
 

@@ -1,6 +1,6 @@
 # Sprint — August 2026: Tier-3 Structural
 
-> **Status: ACTIVE** · Branch: `dev/tier3-structural` · Source: [`docs/reviews/devils_advocate_codebase.md`](../../reviews/devils_advocate_codebase.md) §3 Tier 3
+> **Status: ACTIVE** · Branch: `dev/tier3-structural` · Source: [`docs/reviews/devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md) §3 Tier 3
 > **Read [`00-reassessment.md`](00-reassessment.md) before any ticket.** The Tier-3 table in the source review was re-verified against the tree on 2026-07-15 and **four of its five items were materially wrong**. The tickets below reflect the corrected findings, not the review's text.
 > Goal: close the five Tier-3 findings as re-scoped. Target: overall ~76% → low-80s (conversation layer 60→72, backend security 80→85, backend architecture 68→76, portal architecture 62→70, webchat 73→82).
 > Estimated total effort: ~1.5 engineer-weeks including tests (the review's estimate of 3×M + 2×L was inflated — see §Effort correction).
@@ -84,10 +84,10 @@ The review sized this sprint at 3×M + 2×L. Measured against the tree:
 - Work on `dev/tier3-structural`. **Never touch `main`.** See CLAUDE.md git workflow.
 - **Build and run only with Docker.** Never `pip install`, `uvicorn`, or run migrations natively (CLAUDE.md §Docker). Host CLIs are read-only.
 - Every ticket ships **with its tests in the same commit**. The test requirements in each spec are acceptance criteria, not suggestions.
-- **No behavior changes outside the ticket's scope.** If you find an adjacent bug, log it in [`PROGRESS.md`](PROGRESS.md) → Deviations and open a `followups/<slug>.md` + a TODO.md row — **do not fix it**. See the standing rule in [`../README.md`](../README.md).
+- **No behavior changes outside the ticket's scope.** If you find an adjacent bug, log it in [`PROGRESS.md`](PROGRESS.md) → Deviations and open a `followups/<slug>.md` + a TODO.md row — **do not fix it**. See the standing rule in [`../README.md`](../../README.md).
 - **Line numbers in these specs are as of `dev/tier3-structural` @ 2026-07-15 — re-locate before editing.** They will drift, especially in `state_machine.py` and `page.tsx`.
 - Update [`PROGRESS.md`](PROGRESS.md) at every commit (status + checklist ticks + deviations).
-- When the sprint closes: write `docs/sprints/2026-08_tier3_structural.md` (summary, Tier-2 pattern), move this folder to `docs/sprints/archive/`, update [`../README.md`](../README.md), and re-score [`../../reviews/devils_advocate_codebase.md`](../../reviews/devils_advocate_codebase.md).
+- When the sprint closes: write `docs/sprints/2026-08_tier3_structural.md` (summary, Tier-2 pattern), move this folder to `docs/sprints/archive/`, update [`../README.md`](../../README.md), and re-score [`../../reviews/devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md).
 
 ## Definition of done (sprint level)
 
@@ -107,4 +107,4 @@ The review sized this sprint at 3×M + 2×L. Measured against the tree:
 | ~~Ticketing reads `public.grievances` / `public.file_attachments` directly — violates data rules #1/#5~~ → **not debt; the rule was retired.** Reads legitimized as-built per the §6 DECISION | Closed by **T3-07** ([`06-boundary-policy-spec.md`](06-boundary-policy-spec.md)); followup closed with the decision |
 | Real DB privilege separation (`scripts/ops/create_scoped_roles.sql` is opt-in, inactive, and as written grants ticketing **1 of the 5** `public.*` tables it touches — adopting it would break 4 paths) | Out of scope for T3-07 (docs+tests only); log as a followup if wanted on the board |
 
-Plus the inherited Tier-1/Tier-2 pending-human items (browser/Keycloak sweeps, CI-on-integration) — see [`../2026-08_tier2_quality.md`](../2026-08_tier2_quality.md) §Leftovers. **This sprint does not clear those.**
+Plus the inherited Tier-1/Tier-2 pending-human items (browser/Keycloak sweeps, CI-on-integration) — see [`../2026-08_tier2_quality.md`](../../2026-08_tier2_quality.md) §Leftovers. **This sprint does not clear those.**

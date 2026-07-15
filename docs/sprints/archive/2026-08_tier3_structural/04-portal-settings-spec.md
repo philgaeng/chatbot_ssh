@@ -71,7 +71,7 @@ Both are **ordinary imports, not refactors**. Everything else is cluster-interna
 **Honest constraint: `app/settings/page.tsx` has no direct test coverage.** Portal vitest is 61 tests / 8 files (H2-01 auth, H2-06 thread hook, HR-06 seed) — **none cover settings**. The safety net for this ticket is `tsc` + `eslint` + `build` + manual click-through.
 
 - [ ] `npx tsc --noEmit` clean at **every** commit.
-- [ ] `npx eslint .` — **0 errors** at every commit; warning count **does not increase** (baseline: 141 warnings, tracked in [`../2026-07_hardening/followups/portal-lint-cleanup.md`](../2026-07_hardening/followups/portal-lint-cleanup.md)). If your move surfaces new warnings, that is a signal you changed something.
+- [ ] `npx eslint .` — **0 errors** at every commit; warning count **does not increase** (baseline: 141 warnings, tracked in [`../2026-07_hardening/followups/portal-lint-cleanup.md`](../../2026-07_hardening/followups/portal-lint-cleanup.md)). If your move surfaces new warnings, that is a signal you changed something.
 - [ ] `npm run build` green at every commit.
 - [ ] `npm test` — existing 61 vitest still green.
 - [ ] **Add at least a smoke test per extracted tab** (render + assert the tab's heading/primary control). This ticket is the natural moment to start settings coverage from zero — the components become individually mountable *because* of the extraction. Small, but it makes the next settings change safe.
@@ -88,7 +88,7 @@ Every tab, at the roles that can see it (the shell's gating at `:4178-4196` is r
 - [ ] **Projects** → list, create, edit, packages, participants, staffing, go-live.
 - [ ] **Platform** (super_admin) → Locations, Quarterly reports, Project types, Advanced (JSON), Admin access.
 - [ ] Role-gating unchanged: a `project_admin` sees exactly the tabs they saw before; a non-admin still gets the lock screen (`:4255`).
-- [ ] *(May be marked pending-human if no browser/Keycloak is available — record as such. Note H2-02/H2-06's UI click-through parity sweeps are **also** still pending-human; see [`../2026-08_tier2_quality.md`](../2026-08_tier2_quality.md) §Leftovers. Consider one combined session.)*
+- [ ] *(May be marked pending-human if no browser/Keycloak is available — record as such. Note H2-02/H2-06's UI click-through parity sweeps are **also** still pending-human; see [`../2026-08_tier2_quality.md`](../../2026-08_tier2_quality.md) §Leftovers. Consider one combined session.)*
 
 ---
 

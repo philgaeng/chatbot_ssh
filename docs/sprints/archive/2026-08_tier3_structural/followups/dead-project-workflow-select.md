@@ -13,7 +13,7 @@ $ grep -rn "ProjectWorkflowSelect" --include=*.tsx --include=*.ts . | grep -v no
 app/settings/page.tsx:387:function ProjectWorkflowSelect({
 ```
 
-One hit — its own definition. It was **already dead before this sprint**: eslint flagged it in the 141-warning baseline (`'ProjectWorkflowSelect' is defined but never used`), tracked in [`../../2026-07_hardening/followups/portal-lint-cleanup.md`](../../2026-07_hardening/followups/portal-lint-cleanup.md).
+One hit — its own definition. It was **already dead before this sprint**: eslint flagged it in the 141-warning baseline (`'ProjectWorkflowSelect' is defined but never used`), tracked in [`../../2026-07_hardening/followups/portal-lint-cleanup.md`](../../../2026-07_hardening/followups/portal-lint-cleanup.md).
 
 It is superseded in practice by `ProjectWorkflowsEditor` (plural), which is what `ProjectEditor` actually renders.
 

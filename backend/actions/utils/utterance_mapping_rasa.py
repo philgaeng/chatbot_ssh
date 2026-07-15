@@ -1434,7 +1434,7 @@ UTTERANCE_MAPPING = {
     # forms/form_story_main_route_step.py, is DEAD CODE (no importer, absent from
     # form_loop.py's _FORMS registry, no Rasa action server to auto-discover it) — so this
     # copy is currently unreachable. Delete this entry together with the module; see
-    # docs/sprints/2026-08_tier3_structural/followups/dead-form-story-main-route-step.md
+    # docs/sprints/archive/2026-08_tier3_structural/followups/dead-form-story-main-route-step.md
     'form_story_main_route_step': {
         'validate_language_code': {
             'utterances': {

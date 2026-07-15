@@ -143,7 +143,7 @@ Called from ticket detail view to fetch **complainant PII** (name, phone) on-dem
 
 ## 3b. Ticketing → `public.*` direct access (NOT via the API)
 
-**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The full decision and evidence: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
+**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The full decision and evidence: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
 
 Measured surface — **11 statements, 5 tables, 3 writes**:
 

@@ -63,4 +63,4 @@ It also constrains T3-01: `form_story_main_route_step` is not a top-level key in
 
 Once both axes are explicit, the chatbot's copy is decoupled from its file layout and its function names, and `UTTERANCE_MAPPING` becomes a checkable contract rather than a set of coincidences. That is what "makes the chatbot refactorable" actually means — and it is the precondition for any future decomposition of `backend/actions/` (compare T3-02's decomposition of the orchestrator, which is unblocked because its state strings are already explicit).
 
-**Recommended trigger:** schedule alongside or immediately after the next `backend/actions/` refactor, or in the clean-up sprint the standing deferral rule is accumulating toward ([`../../README.md`](../../README.md)).
+**Recommended trigger:** schedule alongside or immediately after the next `backend/actions/` refactor, or in the clean-up sprint the standing deferral rule is accumulating toward ([`../../README.md`](../../../README.md)).

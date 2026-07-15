@@ -7,7 +7,7 @@ the boundary moved, and the question is whether that was deliberate. If it was, 
 ``CLAUDE.md`` §Data rules **and** this file in the same commit.
 
 The policy: ``CLAUDE.md`` §Data rules as amended 2026-07-15. Evidence and the decision:
-``docs/sprints/2026-08_tier3_structural/00-reassessment.md`` §6.
+``docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md`` §6.
 
   * **Rule 1** — ticketing may read *and write* ``public.*``, but only the ``CONTRACT`` set
     below. Until 2026-07-15 the rule read "no SQL joins into ``public.*``", which had been

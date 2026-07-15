@@ -30,7 +30,7 @@ This spec is implementation-facing and aligned with:
 > ownership split below is kept because **schema ownership is real architecture** — it is what
 > keeps the three migration streams from fighting over the same DDL — but it does not depend on
 > worktrees, and never really did. Rule 4 below was also **factually false** and is corrected.
-> Evidence: [`../sprints/2026-08_tier3_structural/00-reassessment.md`](../sprints/2026-08_tier3_structural/00-reassessment.md) §6.
+> Evidence: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
 
 | Ownership | Owner | Schema/tables | Responsibilities |
 |---|---|---|---|

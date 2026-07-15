@@ -13,7 +13,6 @@ A downgrade/suppression/scope-cut that is **not** logged this way is treated as 
 
 | Sprint | Status | Folder | Focus |
 |---|---|---|---|
-| **August 2026 — Tier-3 Structural** | Active | [`2026-08_tier3_structural/`](2026-08_tier3_structural/) | T3-01…05: explicit utterance keys, `run_flow_turn` decomposition, voice-chunk serialization, PII boundary unification, settings extraction. **Start with [`00-reassessment.md`](2026-08_tier3_structural/00-reassessment.md)** — the source review's Tier-3 table was re-verified and 4 of its 5 rows are wrong. Tracker: [`PROGRESS.md`](2026-08_tier3_structural/PROGRESS.md) |
 | **July 2026 — Tier-1 Hardening** | Residual | [`2026-07_hardening/`](2026-07_hardening/) | HR-01…07 all shipped; folder stays open for the pending-human items (HR-07 browser sweep, HR-05 live-failure/branch-protection checks). Tracker: [`PROGRESS.md`](2026-07_hardening/PROGRESS.md) |
 
 ## Completed sprints
@@ -29,6 +28,7 @@ One summary document per sprint, in chronological order. Full original sprint sp
 | May 2026 | [`2026-05_seah_canonical_privacy.md`](2026-05_seah_canonical_privacy.md) | Canonical SEAH data model, PII vault, geography reference |
 | June 2026 | [`2026-06_voice_and_ux.md`](2026-06_voice_and_ux.md) | Voice notes, chatbot/portal UX round, roles & permissions matrix |
 | August 2026 | [`2026-08_tier2_quality.md`](2026-08_tier2_quality.md) | Tier-2 quality/perf: OIDC refresh, `tickets.py` split + engine, sync watermark, auth cache, shared thread hook, SEAH mixin + Nepali repair (+ authz-gaps & apifetch follow-ups) |
+| August 2026 | [`2026-08_tier3_structural.md`](2026-08_tier3_structural.md) | Tier-3 structural: explicit utterance keys (**two live bugs — an HTTP 500 on SEAH intake**), `run_flow_turn` −21% + dead-air fix, voice-chunk serialization (**+ the webchat's first test suite**), PII boundary unified in `backend/`, settings `page.tsx` 4,372→301, grievance-API authn/audit/contract, boundary rules amended to as-built + pinned, and the `@integration` quarantine ended (**CI 364→897 tests**). **~76% → ~81%**; 2 of 5 dimension targets missed and stated as such |
 
 ## Archive map
 
@@ -41,5 +41,6 @@ One summary document per sprint, in chronological order. Full original sprint sp
 | `archive/June5/` | June5 sprint specs + agent prompts |
 | `archive/deployment refactor/` | Deployment refactor notes |
 | `archive/2026-08_tier2_quality/` | Tier-2 sprint specs, tracker (`PROGRESS.md`), agent prompts, `followups/` |
+| `archive/2026-08_tier3_structural/` | Tier-3 sprint: **[`00-reassessment.md`](archive/2026-08_tier3_structural/00-reassessment.md)** (why 4 of the review's 5 Tier-3 rows were wrong, and the §6 boundary DECISION), 6 specs, tracker (`PROGRESS.md`, **58 deviations**), `followups/` |
 
 Operational logs that used to live in `claude-tickets/` moved to the docs root: [`../PROGRESS.md`](../PROGRESS.md), [`../TODO.md`](../TODO.md); the Docker runbook is now [`../deployment/DOCKER.md`](../deployment/DOCKER.md) and the Keycloak auth guide [`../deployment/16_auth_keycloak.md`](../deployment/16_auth_keycloak.md).

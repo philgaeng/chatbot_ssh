@@ -2,7 +2,7 @@
 
 > **Read this before any Tier-3 ticket.** · Performed 2026-07-15 on `dev/tier3-structural` (fresh off `dev/tier2-quality` @ `87fbba86`).
 > **Method:** four independent adversarial assessments (one per area), each required to produce file:line evidence and to *try to refute* the review's claim rather than confirm it. Every decisive claim below was then **re-verified by hand** — the agent findings alone were not trusted.
-> **Source under assessment:** [`../../reviews/devils_advocate_codebase.md`](../../reviews/devils_advocate_codebase.md) §3 Tier 3 (the 5-row table).
+> **Source under assessment:** [`../../reviews/devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md) §3 Tier 3 (the 5-row table).
 
 ## Why this document exists
 
@@ -441,7 +441,7 @@ Recorded per this document's standing practice. Both would otherwise have shippe
 
 ## Consequences for the review document
 
-[`../../reviews/devils_advocate_codebase.md`](../../reviews/devils_advocate_codebase.md) §3 Tier-3 table is **known-wrong as written**. A correction pointer has been added to it referencing this document; the table itself is corrected at sprint close-out (per the sprint README's DoD), together with the re-score.
+[`../../reviews/devils_advocate_codebase.md`](../../../reviews/devils_advocate_codebase.md) §3 Tier-3 table is **known-wrong as written**. A correction pointer has been added to it referencing this document; the table itself is corrected at sprint close-out (per the sprint README's DoD), together with the re-score.
 
 Specific corrections owed at close-out:
 1. Tier-3 effort column: `M/M/L/M/L` → `S/M/M/M/S-M`.

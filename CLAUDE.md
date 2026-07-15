@@ -132,7 +132,7 @@ GET  /api/grievance/statuses          ← public
 > true** (`grievance_manager.py`), deleted the workaround, and removed the key from ticketing's
 > settings. The key is now owned solely by `backend`. **Ticketing decrypts nothing, and cannot:
 > there is no accessor** — pinned by `tests/ticketing/test_pii_boundary.py`. History:
-> [`00-reassessment.md`](docs/sprints/2026-08_tier3_structural/00-reassessment.md) §3.
+> [`00-reassessment.md`](docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md) §3.
 
 **Messaging API** — for complainant SMS fallback + quarterly reports:
 
@@ -164,7 +164,7 @@ grievance_db
 
 > **Amended 2026-07-15 (T3-07).** Rules 1 and 5 were rewritten to describe what is actually
 > built; rules 2 and 3 were kept and are now pinned by tests. **The evidence and the decision:
-> [`docs/sprints/2026-08_tier3_structural/00-reassessment.md`](docs/sprints/2026-08_tier3_structural/00-reassessment.md) §6 — read it before changing any rule below.**
+> [`docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md`](docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6 — read it before changing any rule below.**
 >
 > **Why the old rule 1 went.** Rules 1/2 were written 2026-03-11 to keep two options open: move
 > ticketing to its own database by changing a connection string, and keep the chatbot working if
