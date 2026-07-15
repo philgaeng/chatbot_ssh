@@ -37,7 +37,7 @@ def validate_complainant_phone(
         return {"complainant_phone": None, "complainant_phone_valid": False}
 
     if helpers.is_philippine_phone(slot_value):
-        dispatcher.utter_message(text="You entered a PH number for validation.")
+        dispatcher.utter_message(text=contact_utterance("validate_complainant_phone", language_code, 2))
         logger.info("%s - Philippine phone detected", action_name)
         return {
             "complainant_phone": helpers.is_philippine_phone(slot_value),

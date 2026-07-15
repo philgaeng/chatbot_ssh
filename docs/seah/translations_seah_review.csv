@@ -1,0 +1,69 @@
+key,en,ne_current,ne_proposed,status,note
+sensitive_issues_referral.utterances.1,We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.,गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।,"हामी तपाईंलाई मोरङको वान स्टप क्राइसिस म्यानेजमेन्ट सेन्टर (OCMC) मा सम्पर्क गर्न सिफारिस गर्छौं, जहाँ तपाईंलाई विशेष सहयोग प्रदान गरिनेछ।",fixed,NE did not match EN (OCMC referral). AI-translated; verify OCMC facts against service-provider registry.
+sensitive_issues_referral.utterances.2,"Address : Koshi Regional Hospital, Biratnagar
+                    Morang
+                    Phone : 021-530103","कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर / फोन : 021-530103","ठेगाना : कोशी रिजनल अस्पताल, विराटनगर
+                    मोरङ
+                    फोन : 021-530103",fixed,"Garbled address ('हस्तान्याउन' x2), Morang line dropped. AI-fixed; verify address/phone against service-provider registry."
+sensitive_issues_referral.utterances.3,You can get more information on : https://nwchelpline.gov.np,तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np,तपाईं अधिक जानकारी प्राप्त गर्न सक्नुहुन्छ : https://nwchelpline.gov.np,ok,
+sensitive_issues_referral.utterances.4,You can decide to file your grievance anonymously with one phone number or not.,ूतपाईले गुमनाम ... गर्न सक्नुहुन्छ।,तपाईंले गुमनाम वा बेनामी रूपमा फोन नम्बर प्रयोग गरेर वा फोन नम्बर प्रयोग नगरीकन पनि आफ्नो गुनासो दर्ता गर्न सक्नुहुन्छ।,fixed,Stray leading 'ू' removed; spacing tidied.
+sensitive_issues_referral.utterances.5,"If you desire, you can provide us with more details that we will forward to the OCMC.",यदि तपाईं चाहनुहुन्छ भने ... एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।,"यदि तपाईं चाहनुहुन्छ भने, तपाईंले हामीलाई थप विवरण दिन सक्नुहुन्छ जुन हामी OCMC लाई पठाउनेछौं।",fixed,NE drifted (said 'file with phone number' not 'forward to OCMC'). AI-retranslated.
+action_ask_commons.action_ask_story_main.buttons.1.ne[1],"Report sexual exploitation, sexual abuse, and sexual harassment","असुरक्षित व्यवहार, असुरक्षित व्यवहार, वा असुरक्षित व्यवहार रिपोर्ट गर्नुहोस्","यौन शोषण, यौन दुर्व्यवहार, र यौन उत्पीडन रिपोर्ट गर्नुहोस्",fixed,SEAH menu label repeated 'असुरक्षित व्यवहार' 3x instead of translating SEA/H. AI-fixed.
+form_seah_2.action_ask_form_seah_2_sensitive_issues_new_detail.utterances.1,Please provide a brief summary of the incident.,कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्।,कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्।,ok,
+form_seah_2.action_ask_form_seah_2_sensitive_issues_new_detail.utterances.2,"Thank you for your entry: ""{grievance_description}"".
+Do you want to add more details before submission?",ूगुनोसो प्रविष्टिको लागि धन्यवादस् ... ?ू,"तपाईंको प्रविष्टिको लागि धन्यवाद: ""{grievance_description}""।
+के तपाईं पेस गर्नु अघि थप विवरणहरू थप्न चाहनुहुन्छ?",fixed,"Merged victim+focal into one shared block; stray 'ू' removed, NE de-drifted."
+form_seah_2.action_ask_form_seah_2_sensitive_issues_new_detail.utterances.3,Please add more details.,कृपया थप विवरणहरू थप्नुहोस्।,कृपया थप विवरणहरू थप्नुहोस्।,ok,
+form_seah_2.action_ask_form_seah_2_seah_project_identification.utterances.1,Is the alleged perpetrator employed by an ADB project?,के गुनासेामा आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत छन्? ,के गुनासेामा आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत छन्?,ok,
+form_seah_2.action_ask_form_seah_2_seah_contact_consent_channel.utterances.1,Do you consent to be contacted for follow-up? Choose one channel.,के तपाई फलो–अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ? एउटा च्यानल छान्नुहोस्‌। ,के तपाई फलो–अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ? एउटा च्यानल छान्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_1_seah_focal_learned_when.utterances.1,When did you learn about this incident?,तपाईले यो घटनाको बारेमा कहिले थाहा पाउनुभयो? ,तपाईले यो घटनाको बारेमा कहिले थाहा पाउनुभयो?,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_1_seah_focal_reporter_consent_to_report.utterances.1,Did the complainant consent to you reporting this here?,के उजुरीकर्ताले तपाईलाई यहाँ घटनाको  रिपोर्ट गर्न सहमति दिनुभयो?,के उजुरीकर्ताले तपाईलाई यहाँ घटनाको  रिपोर्ट गर्न सहमति दिनुभयो?,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_1_sensitive_issues_follow_up.utterances.1,Did the complainant agree to be identified or anonymous?,के उजुरीकर्ता आफनो पहिचान सहित वा गुप्त/बेनाम रहन सहमत हुनुहुन्छ?,के उजुरीकर्ता आफनो पहिचान सहित वा गुप्त/बेनाम रहन सहमत हुनुहुन्छ?,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_project_identification.utterances.1,Is the alleged perpetrator employed by an ADB project?,के आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत हुनु हुन्छ? ,के आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत हुनु हुन्छ?,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_survivor_risks.utterances.1,"What additional risks to health, safety, or wellbeing are present? Choose an option below, or type your own response.",स्वास्थ्य‚ सुरक्षा‚ वा कल्याणको लागि कस्ता थप जोखिमहरू छन्? तलको एउटा विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌। ,स्वास्थ्य‚ सुरक्षा‚ वा कल्याणको लागि कस्ता थप जोखिमहरू छन्? तलको एउटा विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_mitigation_measures.utterances.1,"In what way have you mitigated these risks? Choose an option below, or type your own response.",तपाईंले यी जोखिमहरूलाई कसरी कम गर्नुभएको छ? तलको एउटा विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,तपाईंले यी जोखिमहरूलाई कसरी कम गर्नुभएको छ? तलको एउटा विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_other_at_risk_parties.utterances.1,"Aside from the survivor, who else is at risk? Choose an option below, or type your own response.",पीडित बाहेक‚ अरू को को जोखिममा छन्? तलको विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,पीडित बाहेक‚ अरू को को जोखिममा छन्? तलको विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_project_risk.utterances.1,"Is there a risk to the ADB project? Choose an option below, or type your own response.",के एडीबी आयोजनामा ​​कुनै जोखिम छ?  तलको विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,के एडीबी आयोजनामा ​​कुनै जोखिम छ?  तलको विकल्प छान्नुहोस्‚ वा आफ्नो प्रतिक्रियाको लागि टाइप गर्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_reputational_risk.utterances.1,Is there reputational risk for ADB?,के एडीबी को प्रतिष्ठामा कुनै जोखिम छ?,के एडीबी को प्रतिष्ठामा कुनै जोखिम छ?,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_sensitive_issues_new_detail.utterances.1,Please provide a brief summary of the incident.,कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्।,कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_sensitive_issues_new_detail.utterances.2,"Thank you for your entry: ""{grievance_description}"".
+Do you want to add more details before submission?",ूघटनाको विवरण प्रविष्टिको लागि धन्यवादस् ... ?ू,"तपाईंको प्रविष्टिको लागि धन्यवाद: ""{grievance_description}""।
+के तपाईं पेस गर्नु अघि थप विवरणहरू थप्न चाहनुहुन्छ?",fixed,Merged with victim form (shared block); stray 'ू' removed.
+form_seah_focal_point.action_ask_form_seah_focal_point_2_sensitive_issues_new_detail.utterances.3,Please add more details.,कृपया थप विवरणहरू थप्नुहोस्।,कृपया थप विवरणहरू थप्नुहोस्।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_contact_consent_channel.utterances.1,Do you consent to be contacted for follow-up? Choose one channel.,के तपाई फलो–अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ?  एक च्यानल छान्नुहोस्‌।,के तपाई फलो–अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ?  एक च्यानल छान्नुहोस्‌।,ok,
+form_seah_focal_point.action_ask_form_seah_focal_point_2_seah_focal_referred_to_support.utterances.1,Did you refer the complainant to proper support?,के तपाईले उजुरीकर्तालाई उचित सहयोगको लागि सिफारिस गर्नुभयो? ,के तपाईले उजुरीकर्तालाई उचित सहयोगको लागि सिफारिस गर्नुभयो?,ok,
+form_seah_focal_point.action_outro_sensitive_issues.utterances.1,Thank you for reporting this incident. This confidential SEAH report has been submitted.,यो घटना रिपोर्ट गर्नुभएकोमा धन्यवाद। तपाईको गोप्य SEAH रिपोर्ट पेश गरिएको छ। ,यो घटना रिपोर्ट गर्नुभएकोमा धन्यवाद। तपाईको गोप्य SEAH रिपोर्ट पेश गरिएको छ।,ok,
+form_seah_focal_point.action_outro_sensitive_issues.utterances.2,Thank you. This does not appear to be an ADB project. We will still handle your report confidentially and share referral/support contacts.,धन्यवाद। यो एडीबीको आयोजना अर्न्तगत पर्दैन । हामी तपाईको रिपोर्टलाई गोप्य रूपमा व्यवस्थापन गर्नेछौं र उचित  सिफारिस/सहयोग सम्पर्कहरू तपाईलाई उपलब्ध गराउनेछौं।,धन्यवाद। यो एडीबीको आयोजना अर्न्तगत पर्दैन । हामी तपाईको रिपोर्टलाई गोप्य रूपमा व्यवस्थापन गर्नेछौं र उचित  सिफारिस/सहयोग सम्पर्कहरू तपाईलाई उपलब्ध गराउनेछौं।,ok,
+form_contact.validate_complainant_phone.utterances.2,You entered a PH number for validation.,(none — was hardcoded English in phone.py),तपाईंले प्रमाणीकरणको लागि PH (फिलिपिन्स) नम्बर प्रविष्ट गर्नुभयो।,fixed,English-only 'You entered a PH number...' routed through utterances; NE AI-generated.
+BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL.ne[0],Phone only,फोन मात्र,फोन मात्र,ok,
+BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL.ne[1],Email only,इमेल मात्र,इमेल मात्र,ok,
+BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL.ne[2],Both phone and email,फोन र इमेल दुवै,फोन र इमेल दुवै,ok,
+BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL.ne[3],No follow-up contact,फलो-अप सम्पर्क नगर्नुहोस्,फलो-अप सम्पर्क नगर्नुहोस्,ok,
+BUTTONS_SEAH_FOCAL_LEARNED_WHEN.ne[0],Within last 24h,पछिल्लो २४ घण्टा,पछिल्लो २४ घण्टा,ok,
+BUTTONS_SEAH_FOCAL_LEARNED_WHEN.ne[1],24-72h ago,२४-७२ घण्टा अघि,२४-७२ घण्टा अघि,ok,
+BUTTONS_SEAH_FOCAL_LEARNED_WHEN.ne[2],3-7 days ago,३-७ दिन अघि,३-७ दिन अघि,ok,
+BUTTONS_SEAH_FOCAL_LEARNED_WHEN.ne[3],More than 7 days,७ दिनभन्दा बढी अघि,७ दिनभन्दा बढी अघि,ok,
+BUTTONS_SEAH_FOCAL_MITIGATION_MEASURES.ne[0],Referral to support services,सहायता सेवामा सन्दर्भ गरिएको,सहायता सेवामा सन्दर्भ गरिएको,ok,
+BUTTONS_SEAH_FOCAL_MITIGATION_MEASURES.ne[1],Provided information on police and/or legal services,प्रहरी वा कानुनी सेवाबारे जानकारी दिइयो,प्रहरी वा कानुनी सेवाबारे जानकारी दिइयो,ok,
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES.ne[0],Witnesses,प्रत्यक्षदर्शीहरू,प्रत्यक्षदर्शीहरू,ok,
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES.ne[1],Other family members,अन्य परिवारका सदस्यहरू,अन्य परिवारका सदस्यहरू,ok,
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES.ne[2],Other project workers,अन्य परियोजना कामदारहरू,अन्य परियोजना कामदारहरू,ok,
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES.ne[3],Other members of the community,समुदायका अन्य सदस्यहरू,समुदायका अन्य सदस्यहरू,ok,
+BUTTONS_SEAH_FOCAL_OTHER_AT_RISK_PARTIES.ne[4],Skip,छोड्नुहोस्,छोड्नुहोस्,ok,
+BUTTONS_SEAH_FOCAL_PROJECT_RISK.ne[0],Project delay,परियोजना ढिलाइ,परियोजना ढिलाइ,ok,
+BUTTONS_SEAH_FOCAL_PROJECT_RISK.ne[1],Skip,छोड्नुहोस्,छोड्नुहोस्,ok,
+BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS.ne[0],"Retaliation, intimidation, or threat to job security","प्रतिशोध, धम्की वा रोजगारी सुरक्षामा खतरा","प्रतिशोध, धम्की वा रोजगारी सुरक्षामा खतरा",ok,
+BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS.ne[1],Personal safety,व्यक्तिगत सुरक्षा,व्यक्तिगत सुरक्षा,ok,
+BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS.ne[2],Trauma,आघात,आघात,ok,
+BUTTONS_SEAH_FOCAL_SURVIVOR_RISKS.ne[3],Skip,छोड्नुहोस्,छोड्नुहोस्,ok,
+BUTTONS_SEAH_IDENTITY_MODE.ne[0],Anonymous grievance,गुमनाम उजुरी,गुमनाम उजुरी,ok,
+BUTTONS_SEAH_IDENTITY_MODE.ne[1],Grievance with contact details,सम्पर्क विवरण सहित उजुरी,सम्पर्क विवरण सहित उजुरी,ok,
+BUTTONS_SEAH_OUTRO.ne[0],Close Browser,ब्राउजर बन्द गर्नुहोस्,ब्राउजर बन्द गर्नुहोस्,ok,
+BUTTONS_SEAH_PROJECT_IDENTIFICATION.ne[0],Cannot specify,उल्लेख गर्न सक्दिन,उल्लेख गर्न सक्दिन,ok,
+BUTTONS_SEAH_PROJECT_IDENTIFICATION.ne[1],Not an ADB project,यो ADB आयोजना होइन,यो ADB आयोजना होइन,ok,
+BUTTONS_SEAH_PROJECT_IDENTIFICATION.ne[2],Skip,छोड्नुहोस्,छोड्नुहोस्,ok,
+BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE.ne[0],SEAH focal-point,SEAH फोकल-पोइन्ट,SEAH फोकल-पोइन्ट,ok,
+BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE.ne[1],Victim-Survivor,पीडित/उत्तरजीवी,पीडित/उत्तरजीवी,ok,
+BUTTONS_SEAH_VICTIM_SURVIVOR_ROLE.ne[2],Witness / Relative of the victim,साक्षी / पीडितको आफन्त,साक्षी / पीडितको आफन्त,ok,
+BUTTONS_SEAH_YES_NO.ne[0],Yes,हो,हो,ok,
+BUTTONS_SEAH_YES_NO.ne[1],No,होइन,होइन,ok,
