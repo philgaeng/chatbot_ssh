@@ -163,6 +163,8 @@ T3-06 spent four commits authenticating `:5001` — which the firewall already c
 
 ## Still pending-human (one browser session clears all of it)
 
+**→ Step-by-step guide: [`../deployment/17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md)** — exact expected strings, the role roster, and the seeded-data trap that would otherwise waste the session.
+
 D-24 (T3-01 EN/NE re-prompts) · D-17 (T3-03 Slow-3G) · D-33 (T3-06 rendered UI) · D-49 (T3-05 tabs × roles) · D-56 (T3-04 rendered card) — **plus** the inherited H2-01/02/06/08 and HR-07 sweeps. **Largely pre-empted:** T3-01's probe drove both live sites in EN *and* NE; T3-06 and T3-04 were both driven end-to-end through real clients against rebuilt containers. What remains is genuinely the rendered UI.
 
 ## Method notes for the next sprint

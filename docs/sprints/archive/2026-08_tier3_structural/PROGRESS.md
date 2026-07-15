@@ -379,6 +379,13 @@ Grepped repo-wide. **Every HTTP call funnels through two functions in one file**
 
 ## Inherited pending-human debt (NOT cleared by this sprint)
 
+> 🧭 **A step-by-step guide for the one browser session that clears all of this now exists:**
+> [`docs/deployment/17_manual_browser_sweep.md`](../../../deployment/17_manual_browser_sweep.md).
+> It has the exact EN/NE strings to compare against, the role roster, and — most importantly — the
+> **trap that would waste the session**: every seeded ticket's PII card shows "—" because the demo
+> data has no complainant names, which is **indistinguishable from the bug T3-04 fixed**. The guide
+> is ordered so Part A files a grievance *with* contact details and Part C checks *that* ticket.
+
 Carried from Tier 1 / Tier 2 — listed so they aren't forgotten, but they are **not** in this sprint's DoD:
 
 - HR-07 webchat manual browser sweep (**overlaps T3-03's manual sweep — do them together**)

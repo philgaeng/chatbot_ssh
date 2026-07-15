@@ -51,6 +51,7 @@ docs/
 | [`14_key_and_secret_lifecycle.md`](deployment/14_key_and_secret_lifecycle.md) | Secret inventory, rotation, `DB_ENCRYPTION_KEY` backup |
 | [`15_host_hardening.md`](deployment/15_host_hardening.md) | Host-OS hardening runbook (ufw, sshd, fail2ban, watchdog cron) |
 | [`16_auth_keycloak.md`](deployment/16_auth_keycloak.md) | Keycloak as-built: realm, clients, invites, SMTP, webhook, themes |
+| [`17_manual_browser_sweep.md`](deployment/17_manual_browser_sweep.md) | **Manual browser sweep** — the one session that clears the browser-only debt carried since Tier 1 (D-17/24/33/49/56 + HR-07, H2-02/06/08). Ordered so filing a grievance in Part A produces the ticket Part C checks; **read its warning first** — seeded tickets have no PII, so testing the card on one cannot tell "fixed" from "broken" |
 | [`DOCKER.md`](deployment/DOCKER.md) | Build, start, migrate, seed, test, debug the container stack |
 
 Legacy pre-Docker docs preserved in [`deployment/archive/`](deployment/archive/).
