@@ -20,7 +20,7 @@ from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
 from ticketing.models.workflow import WorkflowStep
 from ticketing.services.overdue_episodes import load_episodes_for_tickets, overdue_days_display
-from ticketing.services.pii_vault import grievance_pii_masked, reveal_field
+from ticketing.services.pii_vault import grievance_pii_masked
 from ticketing.services.report_rows import _fetch_auxiliary_maps, build_report_row, normalize_complaint_category
 
 _MODEL_STANDARD = "gpt-4o-mini"
@@ -147,7 +147,10 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
 
     original = ""
     if grievance:
-        original = reveal_field(grievance.get("grievance_description")) or ""
+        # T3-04: was reveal_field(...), which decrypted ticketing-side. It was always a
+        # no-op here — grievance_description is not one of the backend's ENCRYPTED_FIELDS
+        # (those are the four complainant contact columns) and is stored plaintext.
+        original = grievance.get("grievance_description") or ""
     if not original:
         original = ticket.grievance_summary or ""
 

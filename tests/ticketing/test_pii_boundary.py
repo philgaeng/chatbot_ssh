@@ -112,6 +112,38 @@ def test_scrub_pii_value_masks_ciphertext_and_passes_plaintext():
     assert scrub_pii_value(None) is None
 
 
+def test_scrub_pii_value_is_loud_about_ciphertext(caplog):
+    """
+    T3-04 step 3's decision, pinned. `scrub_pii_value` is a defense-in-depth ASSERTION,
+    not a masking behaviour: since the backend decrypts, ciphertext arriving here means
+    something upstream regressed. It must fail closed *and* say so.
+
+    Silence is what made the review's prescribed order dangerous — every contact field
+    would map to None and officers would see "—" with nothing in the logs. Added in step
+    3 (before it, the value was decrypted rather than scrubbed, so there was nothing to
+    shout about).
+    """
+    import logging as _logging
+
+    with caplog.at_level(_logging.ERROR, logger="ticketing.services.pii_vault"):
+        assert scrub_pii_value(CIPHERTEXT) is None
+
+    errors = [r for r in caplog.records if r.levelno >= _logging.ERROR]
+    assert errors, "ciphertext on the officer card must be logged at error, not masked silently"
+    assert CIPHERTEXT not in caplog.text, "the ciphertext value itself must not be logged"
+
+
+def test_scrub_pii_value_is_silent_for_plaintext(caplog):
+    """CONTROL — the normal path must not spam errors on every card render."""
+    import logging as _logging
+
+    with caplog.at_level(_logging.ERROR, logger="ticketing.services.pii_vault"):
+        scrub_pii_value(PLAIN["complainant_phone"])
+        scrub_pii_value(None)
+
+    assert not [r for r in caplog.records if r.levelno >= _logging.ERROR]
+
+
 def test_grievance_pii_masked_never_emits_ciphertext():
     """The default (non-card) shape must scrub all four contact fields."""
     data = grievance_pii_masked(_ciphertext_grievance())
