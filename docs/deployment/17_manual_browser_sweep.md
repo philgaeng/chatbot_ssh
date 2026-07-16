@@ -221,6 +221,45 @@ straight in — no login — via **"Continue to demo queue"**.
 The portal has a **role switcher** in the header (bypass builds only — it writes a
 `grm_bypass_user` cookie the API proxy turns into an identity).
 
+> ## 🚨 READ BEFORE YOU SWITCH — the switcher is a one-way door (**D-65**)
+>
+> **Switching to a non-admin officer locks you out of admin, and the UI will lie to you about it.**
+> This is a known open bug, not something you did wrong. It bites on the *first* non-admin row
+> in the table below.
+>
+> **What you'll see:** the dropdown shows `API 403 /api/v1/users/roster: {"detail":"Admin role
+> required"}`, the header still says **"DEMO GRM Admin"**, and **your ticket queues look empty**.
+>
+> **Why:** the switcher's roster is admin-gated, so switching away from admin breaks the control
+> that would switch you back. The failure path then displays a hardcoded `super_admin` identity
+> **while the officer cookie survives** — so the UI thinks you're admin and the API still treats
+> you as the officer. The empty queue is the *correct* answer to the *wrong* question. **Your
+> data is fine.**
+>
+> ### 🔑 The escape hatch — paste in DevTools → Console, on the portal tab
+>
+> ```js
+> document.cookie = "grm_bypass_user=; path=/; max-age=0";
+> document.cookie = "grm_mock_user=; path=/; max-age=0";
+> location.reload();
+> ```
+>
+> *(Or: DevTools → Application → Cookies → delete **`grm_bypass_user`**.)*
+>
+> On reload the backend answers as super_admin (no cookie ⇒ no `x-internal-*` headers) and the
+> portal re-picks a privileged officer. **You are back to admin.**
+>
+> ### ⇒ How to run C4 with the bug present
+>
+> **Do the escape hatch between *every* role.** The loop is:
+>
+> **switch → check the tabs → run the snippet → switch to the next role.**
+>
+> Do **`admin@grm.local` first** (it's the only one you can reach *from* a non-admin state
+> without the snippet), and treat the snippet as step 0 of each row. It costs ~5 seconds.
+>
+> Full write-up: [`../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md`](../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md)
+
 For each role below: switch, then click **My Queue → All Tickets → Escalated → GRC → Reports
 → Settings**.
 
@@ -238,6 +277,14 @@ For each role below: switch, then click **My Queue → All Tickets → Escalated
 | Every tab renders (no blank page, no crash) | A tab throws / white-screens |
 | **Gating is unchanged** — non-admins see no Settings | An L1 can reach Settings |
 | **A non-SEAH role never sees a 🔒 SEAH ticket** | SEAH leaks to a standard role |
+
+> **An empty or small queue for a non-admin role is a PASS, not a finding.** Scope + SEAH +
+> visibility filtering (HR-02) is *supposed* to hide tickets outside an officer's jurisdiction.
+> Two separate reasons it may be **completely** empty, both known and neither a bug in what
+> you're testing: **(a)** D-65 above — the API is still using the officer identity while the UI
+> claims admin; **(b)** `docs/TODO.md` tracks that the seed creates `UserRole` rows but **no
+> `OfficerScope` rows**, and an officer with zero scope rows matches nothing. **What you are
+> checking here is that tabs *render* and that gating *holds* — not that tickets appear.**
 
 > **Why this one is worth the clicks:** T3-05 moved **4,372 lines** out of `page.tsx` into 6
 > clusters. `tsc`/`eslint`/`build`/vitest were green at every commit and the bodies were moved
