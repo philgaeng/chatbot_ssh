@@ -320,6 +320,29 @@ def require_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -
     return current_user
 
 
+def require_admin_or_bypass(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> CurrentUser:
+    """Admin-gated under real auth; open to any authenticated identity in dev bypass.
+
+    The officer roster (names / emails / jurisdictions) stays admin-only under Keycloak.
+    In bypass mode (APP_ENV=dev + AUTH_MODE=bypass) it is a demo convenience: the officer
+    switcher must be able to render the roster while acting as a *non-admin* officer,
+    otherwise switching away from admin is a one-way door — the switcher can no longer load
+    the list that would switch you back (D-65, 2026-07-16). `bypass_enabled` is dev-only
+    (HR-01 pins it to APP_ENV=dev + AUTH_MODE=bypass), so this never widens access under
+    real auth.
+    """
+    if get_settings().bypass_enabled:
+        return current_user
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user
+
+
 def require_super_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:
     if not current_user.is_super_admin:
         raise HTTPException(

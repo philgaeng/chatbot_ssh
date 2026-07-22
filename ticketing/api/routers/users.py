@@ -19,6 +19,7 @@ from ticketing.api.dependencies import (
     get_current_user,
     get_db,
     require_admin,
+    require_admin_or_bypass,
     require_super_admin,
 )
 from ticketing.api.schemas.user import (
@@ -973,7 +974,9 @@ def list_officer_roster(
     limit: Optional[int] = Query(None, ge=1, le=200, description="Page size (omit = all)"),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
+    # D-65: admin-only under Keycloak; any authenticated identity in dev bypass, so the
+    # officer switcher can render for a non-admin officer and switching back is possible.
+    _: CurrentUser = Depends(require_admin_or_bypass),
 ) -> list[OfficerRosterEntry]:
     """
     Backward-compatible roster: with no query params it returns the full bare list
@@ -1000,7 +1003,8 @@ def search_officer_roster(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
+    # D-65: see list_officer_roster — same roster data, same bypass-mode relaxation.
+    _: CurrentUser = Depends(require_admin_or_bypass),
 ) -> OfficerRosterPage:
     """Structured pagination envelope so the UI can show "1–20 of N"."""
     entries = _build_officer_roster(db)

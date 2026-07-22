@@ -221,22 +221,21 @@ straight in — no login — via **"Continue to demo queue"**.
 The portal has a **role switcher** in the header (bypass builds only — it writes a
 `grm_bypass_user` cookie the API proxy turns into an identity).
 
-> ## 🚨 READ BEFORE YOU SWITCH — the switcher is a one-way door (**D-65**)
+> ## ✅ The switcher one-way door is FIXED (**D-65**, 2026-07-16) — switch freely
 >
-> **Switching to a non-admin officer locks you out of admin, and the UI will lie to you about it.**
-> This is a known open bug, not something you did wrong. It bites on the *first* non-admin row
-> in the table below.
+> Switching to a non-admin officer used to lock you out of admin (the roster the switcher
+> needs was admin-gated). **Fixed:** in bypass mode any officer can read the roster, so you can
+> switch to a role, check its tabs, and switch straight back via the dropdown. **Just switch
+> normally** — no workaround needed.
 >
-> **What you'll see:** the dropdown shows `API 403 /api/v1/users/roster: {"detail":"Admin role
-> required"}`, the header still says **"DEMO GRM Admin"**, and **your ticket queues look empty**.
+> **If you are testing against an image built _before_ 2026-07-16** (you didn't rebuild
+> `ticketing_api`), you may still hit the old behaviour: the dropdown shows `API 403
+> /api/v1/users/roster`, the header stays **"DEMO GRM Admin"**, and queues look empty. Two
+> options: rebuild (`docker compose … build ticketing_api && … up -d ticketing_api`), or use the
+> escape hatch below between roles. Either way **your data is fine** — the empty queue was the
+> correct answer to the wrong question.
 >
-> **Why:** the switcher's roster is admin-gated, so switching away from admin breaks the control
-> that would switch you back. The failure path then displays a hardcoded `super_admin` identity
-> **while the officer cookie survives** — so the UI thinks you're admin and the API still treats
-> you as the officer. The empty queue is the *correct* answer to the *wrong* question. **Your
-> data is fine.**
->
-> ### 🔑 The escape hatch — paste in DevTools → Console, on the portal tab
+> ### 🔑 Escape hatch (only needed on a pre-fix image) — DevTools → Console, portal tab
 >
 > ```js
 > document.cookie = "grm_bypass_user=; path=/; max-age=0";
@@ -244,19 +243,8 @@ The portal has a **role switcher** in the header (bypass builds only — it writ
 > location.reload();
 > ```
 >
-> *(Or: DevTools → Application → Cookies → delete **`grm_bypass_user`**.)*
->
-> On reload the backend answers as super_admin (no cookie ⇒ no `x-internal-*` headers) and the
-> portal re-picks a privileged officer. **You are back to admin.**
->
-> ### ⇒ How to run C4 with the bug present
->
-> **Do the escape hatch between *every* role.** The loop is:
->
-> **switch → check the tabs → run the snippet → switch to the next role.**
->
-> Do **`admin@grm.local` first** (it's the only one you can reach *from* a non-admin state
-> without the snippet), and treat the snippet as step 0 of each row. It costs ~5 seconds.
+> On reload the backend answers as super_admin (no cookie) and the portal re-picks a privileged
+> officer — you're back to admin.
 >
 > Full write-up: [`../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md`](../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md)
 
