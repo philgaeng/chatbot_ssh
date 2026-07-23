@@ -9,15 +9,18 @@
  */
 import React, { useState } from "react";
 import { updateStep, type WorkflowStep, type StepPayload } from "@/lib/api";
-import { roleLabel, CAST_TIER_LABELS } from "@/lib/labels";
+import { type WorkflowTrack } from "@/lib/trackFilter";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { RoleCreateModal } from "@/components/settings/roles/RoleCreateModal";
+import { StepCast } from "@/components/settings/workflows/StepCast";
 import { type WorkflowRoleOption } from "@/components/settings/workflows/workflowHelpers";
 
 export function StepForm({
   step,
   workflowId,
   roleOptions,
+  track,
+  nextStepAssignedRole,
   canCreateRole,
   onRoleCreated,
   onSaved,
@@ -26,6 +29,9 @@ export function StepForm({
   step: WorkflowStep;
   workflowId: string;
   roleOptions: WorkflowRoleOption[];
+  track: WorkflowTrack;
+  /** Next step's `assigned_role_key`, for StepCast's read-only escalation-target line. */
+  nextStepAssignedRole?: string | null;
   canCreateRole?: boolean;
   onRoleCreated?: () => void;
   onSaved: (s: WorkflowStep) => void;
@@ -41,18 +47,11 @@ export function StepForm({
   // Spec 12 tier fields
   const [supervisorRole, setSupervisorRole]   = useState<string>(step.supervisor_role ?? "");
   const [informedRoles, setInformedRoles]     = useState<string[]>(step.informed_roles ?? []);
-  const [newInformed, setNewInformed]         = useState("");
   const [observerRoles, setObserverRoles]     = useState<string[]>(step.observer_roles ?? []);
-  const [newObserver, setNewObserver]         = useState("");
   const [informedPii, setInformedPii]         = useState<boolean>(step.informed_pii_access ?? false);
   const [saving, setSaving]                   = useState(false);
   const [error, setError]                     = useState("");
   const [showCreateRole, setShowCreateRole]   = useState(false);
-  const systemRoles = roleOptions.filter((r) => r.origin !== "custom");
-  const customRoles = roleOptions.filter((r) => r.origin === "custom");
-  const assignedRoleMissing =
-    roleKey &&
-    !roleOptions.some((r) => r.key === roleKey);
 
   async function handleSave() {
     if (!displayName.trim() || !roleKey) { setError("Name and role are required."); return; }
@@ -108,30 +107,23 @@ export function StepForm({
           onClose={() => setShowCreateRole(false)}
         />
       )}
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Assigned role *</label>
-        <select value={roleKey} onChange={e => {
-          if (e.target.value === "__create__") { setShowCreateRole(true); return; }
-          setRoleKey(e.target.value);
-        }}
-          className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-          <option value="">— select role —</option>
-          {assignedRoleMissing && (
-            <option value={roleKey}>{roleKey} (current)</option>
-          )}
-          {systemRoles.length > 0 && (
-            <optgroup label="System (TOR)">
-              {systemRoles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </optgroup>
-          )}
-          {customRoles.length > 0 && (
-            <optgroup label="Custom">
-              {customRoles.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-            </optgroup>
-          )}
-          {canCreateRole && <option value="__create__">+ Create role…</option>}
-        </select>
-      </div>
+      <StepCast
+        track={track}
+        roleOptions={roleOptions}
+        assignedRole={roleKey}
+        onAssignedRole={setRoleKey}
+        supervisorRole={supervisorRole}
+        onSupervisorRole={setSupervisorRole}
+        informedRoles={informedRoles}
+        onInformedRoles={setInformedRoles}
+        observerRoles={observerRoles}
+        onObserverRoles={setObserverRoles}
+        informedPii={informedPii}
+        onInformedPii={setInformedPii}
+        nextStepAssignedRole={nextStepAssignedRole}
+        canCreateRole={canCreateRole}
+        onCreateRole={() => setShowCreateRole(true)}
+      />
 
       <div className="grid grid-cols-2 gap-3">
         <div>
@@ -165,87 +157,6 @@ export function StepForm({
           <button onClick={() => addTag(actions, setActions, newAction, setNewAction)}
             disabled={!newAction.trim()}
             className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
-        </div>
-      </div>
-
-      {/* ── Step cast (who's involved at this step) ──────────────────────────── */}
-      <div className="border-t border-blue-100 pt-3 mt-1 space-y-3">
-        <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">Who&apos;s involved at this step</div>
-
-        {/* Supervisor role → "Oversees" */}
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.supervisor_role}</label>
-          <select value={supervisorRole} onChange={e => setSupervisorRole(e.target.value)}
-            className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-            <option value="">— None (no supervisor at this step) —</option>
-            {roleOptions.map(r => <option key={r.key} value={r.key}>{r.label}</option>)}
-          </select>
-          <p className="text-[11px] text-gray-400 mt-0.5">Notified on escalation/SLA breach. Can override Actor, reassign ticket.</p>
-        </div>
-
-        {/* Informed roles */}
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.informed_roles} — auto-added when a ticket enters this step</label>
-          <div className="flex flex-wrap gap-1 mb-1">
-            {informedRoles.map(r => (
-              <span key={r} className="flex items-center gap-1 text-xs bg-violet-50 border border-violet-200 text-violet-700 px-2 py-0.5 rounded">
-                {roleLabel(r)}
-                <button onClick={() => setInformedRoles(informedRoles.filter(x => x !== r))} className="text-violet-300 hover:text-red-500 leading-none">×</button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <select value={newInformed} onChange={e => setNewInformed(e.target.value)}
-              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">+ Add informed role</option>
-              {roleOptions.filter(r => !informedRoles.includes(r.key)).map(r =>
-                <option key={r.key} value={r.key}>{r.label}</option>
-              )}
-            </select>
-            <button onClick={() => addTag(informedRoles, setInformedRoles, newInformed, setNewInformed)}
-              disabled={!newInformed}
-              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
-          </div>
-        </div>
-
-        {/* Observer roles */}
-        <div>
-          <label className="text-xs font-medium text-gray-500 block mb-1">{CAST_TIER_LABELS.observer_roles} — read-only access, no notifications</label>
-          <div className="flex flex-wrap gap-1 mb-1">
-            {observerRoles.map(r => (
-              <span key={r} className="flex items-center gap-1 text-xs bg-gray-100 border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
-                {roleLabel(r)}
-                <button onClick={() => setObserverRoles(observerRoles.filter(x => x !== r))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
-              </span>
-            ))}
-          </div>
-          <div className="flex gap-2">
-            <select value={newObserver} onChange={e => setNewObserver(e.target.value)}
-              className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400">
-              <option value="">+ Add observer role</option>
-              {roleOptions.filter(r => !observerRoles.includes(r.key)).map(r =>
-                <option key={r.key} value={r.key}>{r.label}</option>
-              )}
-            </select>
-            <button onClick={() => addTag(observerRoles, setObserverRoles, newObserver, setNewObserver)}
-              disabled={!newObserver}
-              className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition">Add</button>
-          </div>
-        </div>
-
-        {/* PII access toggle */}
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => setInformedPii(!informedPii)}
-            className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors ${informedPii ? "bg-violet-600" : "bg-gray-200"}`}
-          >
-            <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transform transition-transform ${informedPii ? "translate-x-4" : "translate-x-0"}`} />
-          </button>
-          <span className="text-xs text-gray-600">
-            Informed tier can see complainant PII
-            <span className="text-gray-400 ml-1">(default: off)</span>
-          </span>
         </div>
       </div>
 

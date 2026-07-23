@@ -261,6 +261,8 @@ export function WorkflowEditor({
                   step={step}
                   workflowId={wf.workflow_id}
                   roleOptions={roleOptions}
+                  track={workflowTrackOf(wf)}
+                  nextStepAssignedRole={steps[idx + 1]?.assigned_role_key ?? null}
                   canCreateRole={canCreateRole}
                   onRoleCreated={onRoleCatalogRefresh}
                   onSaved={handleStepSaved}
