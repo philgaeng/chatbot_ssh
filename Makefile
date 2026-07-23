@@ -118,6 +118,7 @@ define REMOTE_DEPLOY_CORE
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
+	git checkout -- docker-compose.aws.yml .dockerignore 2>/dev/null || true && \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
@@ -137,6 +138,7 @@ define REMOTE_DEPLOY_OPS
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
+	git checkout -- docker-compose.aws.yml .dockerignore 2>/dev/null || true && \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
@@ -177,6 +179,7 @@ define REMOTE_DEPLOY_LIGHT
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
+	git checkout -- docker-compose.aws.yml .dockerignore 2>/dev/null || true && \
 	git checkout $(DEPLOY_BRANCH) && \
 	git reset --hard origin/$(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
@@ -195,6 +198,7 @@ define REMOTE_DEPLOY_FULL
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
+	git checkout -- docker-compose.aws.yml .dockerignore 2>/dev/null || true && \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
