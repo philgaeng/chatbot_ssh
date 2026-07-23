@@ -118,11 +118,19 @@ def _apply_step_tier_roles(
         return
 
     # R1/B2 SEAH leak-proof: on a SEAH ticket, cast ONLY SEAH-eligible roles — a WHITELIST
-    # (SEAH operational + both-workflows oversight), not a donor-only blacklist. A donor, GRC
+    # (SEAH-track cast + both-workflows oversight), not a donor-only blacklist. A donor, GRC
     # member, or ADB observer in a SEAH step's cast must receive nothing that reveals the
     # case. Applies to ALL tiers (informed, observer, supervisor). On the standard track this
     # is a no-op, so the donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6) is intact.
-    _seah_eligible = SEAH_ROLES | BOTH_WORKFLOWS_ROLES
+    # Track-derived (DESIGN-cast-model §3.1): the whitelist is every role cast on a SEAH-track
+    # workflow (incl. synthetic per-step-tier keys) + both-workflows oversight. Only queried on
+    # a SEAH ticket. Superset of the legacy {seah_national_officer, seah_hq_officer}.
+    if ticket.is_seah:
+        from ticketing.services.seah_visibility import seah_track_role_keys
+
+        _seah_eligible = seah_track_role_keys(db) | SEAH_ROLES | BOTH_WORKFLOWS_ROLES
+    else:
+        _seah_eligible = SEAH_ROLES | BOTH_WORKFLOWS_ROLES
 
     def _seah_suppressed(role_key: str) -> bool:
         return bool(ticket.is_seah) and role_key not in _seah_eligible

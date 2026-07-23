@@ -93,6 +93,9 @@ class CurrentUser:
     location_code: str | None = None
     keycloak_sub: str | None = None
     admin_scopes: list[AdminScopeRow] = field(default_factory=list)
+    # Track-derived SEAH access (DESIGN-cast-model §3.1): True when the officer is cast on a
+    # SEAH-track workflow. Computed once per request in enrich_user; augments SEAH_ROLES.
+    seah_track_member: bool = False
 
     def matches_assignee(self, assignee_id: str | None) -> bool:
         """True when assignee_id is this officer (email, Keycloak sub, or legacy mock id)."""
@@ -260,6 +263,11 @@ def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
         if not officer_is_active(db, user.user_id):
             user.role_keys = []
             user.admin_scopes = []
+    # Track-derived SEAH membership (DESIGN-cast-model §3.1) — computed after role_keys are
+    # finalized (so a deactivated officer, now role-less, is not a track member).
+    from ticketing.services.seah_visibility import user_is_seah_track_member
+
+    user.seah_track_member = user_is_seah_track_member(db, user.role_keys)
     return user
 
 
