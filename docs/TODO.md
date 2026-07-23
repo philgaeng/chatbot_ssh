@@ -22,9 +22,19 @@
   (`followups/phase3-cast-ui-followup.md`)
 - **[Phase 3e] Seed refresh (§8) optional.** Demo seeds still use named role keys (coexist with
   synthetic keys, §6) — refreshing to the staffing model is fidelity, not correctness.
+- **[Phase 5 remainder] GRC per-step `is_grc` flag** — retire the `grc_committee` archetype;
+  gate `GRC_CONVENE` on the flag; derive GRC members from the step cast. Working today via the
+  role model; deferred (cross-file test + seed coupling). (`followups/phase5-remainder-followup.md`)
+- **[Phase 5 remainder] Remove archetype apparatus + user-facing `/roles` CRUD** — already dead at
+  runtime (Phase 1); coupled to invariant `test_authz_matrix_extended` + `test_roles_crud`, so
+  remove endpoints **with** those test rewrites. Keep `GET /roles`. Completes "stop writing
+  per-role permissions". (`followups/phase5-remainder-followup.md`)
 - **[Phase 1] Per-role permission writes retire in Phase 5.** Tier is the source of truth now;
   `create_role`/`update_role` still write `roles.permissions` until the archetype apparatus is
   removed (Phase 5). (`followups/tier-permissions-reconciliation.md`)
+- **[Perf §6/§3.6] Supervisor-tab hot path — verified, no work needed.** Supervisor membership is
+  already materialized at write-time into `ticket_viewers` (`escalation._apply_step_tier_roles`);
+  no MV/tier column. (`followups/phase5-remainder-followup.md`)
 
 ---
 
