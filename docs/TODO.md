@@ -15,11 +15,10 @@
 - **[Phase 2] `assign_officer_position` default-role fallback.** Assign requires an explicit
   `role_key` for null-default positions; legacy non-null defaults still pre-fill. Drop the
   `or pt.default_role_key` fallback once the seed drops position defaults (Phase 3/§8).
-- **[Phase 3e] The §3.6 Cast matrix screen is deferred (backend done + tested).** Staffing works
-  end-to-end via `POST/GET/DELETE /projects/{id}/cast` today; the dedicated Project→Cast authoring
-  screen (project-wide/per-package tabs, inheritance/override, officer picker, copy-from-package)
-  is the remaining net-new UI. Add `lib/api.ts` cast methods first.
-  (`followups/phase3-cast-ui-followup.md`)
+- **[Phase 3e] Cast matrix screen — BUILT** (`ProjectCastSection`, in Projects & packages).
+  Remaining §3.6 *niceties*: Copy-from-package, explicit per-cell Override/revert, inline
+  "Add officer" (invite + position) in the picker, contractor-org picker (today org = implementing
+  agency). (`followups/phase3-cast-ui-followup.md`)
 - **[Phase 3e] Seed refresh (§8) optional.** Demo seeds still use named role keys (coexist with
   synthetic keys, §6) — refreshing to the staffing model is fidelity, not correctness.
 - **[Phase 5 remainder] GRC per-step `is_grc` flag** — retire the `grc_committee` archetype;
