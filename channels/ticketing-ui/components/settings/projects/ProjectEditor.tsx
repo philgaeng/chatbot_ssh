@@ -43,7 +43,6 @@ import {
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
-import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
@@ -247,7 +246,6 @@ export function ProjectEditor({
   const [showCreatePkg, setShowCreatePkg] = useState(false);
   const [expandedPkg, setExpandedPkg]     = useState<string | null>(null);
   const [officerModalOrg, setOfficerModalOrg] = useState<{ id: string; name: string } | null>(null);
-  const [staffingTick, setStaffingTick] = useState(0);
 
   useEffect(() => {
     listPackages(p.project_id)
@@ -611,7 +609,7 @@ export function ProjectEditor({
           organizationName={officerModalOrg.name}
           roleChoices={grmRoleChoices}
           onClose={() => setOfficerModalOrg(null)}
-          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); setStaffingTick((n) => n + 1); }}
+          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); }}
         />
       )}
 
@@ -708,19 +706,8 @@ export function ProjectEditor({
         )}
       </div>
 
-      <div ref={(el) => { sectionRefs.current.cast = el; }}>
-        <ProjectCastSection project={p} packages={packages} />
-      </div>
-
       <div ref={(el) => { sectionRefs.current.staffing = el; }}>
-        <ProjectStaffingSection
-          key={staffingTick}
-          project={p}
-          projectActors={p.organizations}
-          orgs={orgs}
-          grmRoleChoices={grmRoleChoices}
-          packages={packages}
-        />
+        <ProjectCastSection project={p} packages={packages} />
       </div>
     </div>
   );
