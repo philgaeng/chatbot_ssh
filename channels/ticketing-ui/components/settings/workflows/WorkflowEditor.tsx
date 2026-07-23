@@ -121,9 +121,10 @@ export function WorkflowEditor({
   async function handleAddStep() {
     setAddingStep(true);
     try {
+      // Tier-toggle model: Actor is auto-minted; sending a toggle enables tier-toggle mode.
       const newStep = await addStep(wf.workflow_id, {
         display_name: `Step ${steps.length + 1}`,
-        assigned_role_key: "site_safeguards_focal_person",
+        supervisor_enabled: true,
       });
       setWf(prev => ({ ...prev, steps: [...prev.steps, newStep] }));
       setExpanded(newStep.step_id);
@@ -260,11 +261,7 @@ export function WorkflowEditor({
                 <StepForm
                   step={step}
                   workflowId={wf.workflow_id}
-                  roleOptions={roleOptions}
-                  track={workflowTrackOf(wf)}
-                  nextStepAssignedRole={steps[idx + 1]?.assigned_role_key ?? null}
-                  canCreateRole={canCreateRole}
-                  onRoleCreated={onRoleCatalogRefresh}
+                  hasNextStep={!!steps[idx + 1]}
                   onSaved={handleStepSaved}
                   onCancel={() => setExpanded(null)}
                 />

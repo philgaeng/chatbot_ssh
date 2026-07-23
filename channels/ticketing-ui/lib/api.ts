@@ -698,17 +698,22 @@ export function deleteWorkflow(id: string): Promise<void> {
 
 export interface StepPayload {
   display_name: string;
-  assigned_role_key: string;
+  // Optional now: the tier-toggle editor omits it (Actor auto-minted a synthetic per-step key).
+  assigned_role_key?: string;
   step_key?: string;
   response_time_hours?: number | null;
   resolution_time_days?: number | null;
   stakeholders?: string[] | null;
   expected_actions?: string[] | null;
-  // Spec 12 tier model fields
+  // Spec 12 tier model fields (legacy named-key path)
   supervisor_role?: string | null;
   informed_roles?: string[];
   observer_roles?: string[];
   informed_pii_access?: boolean;
+  // Tier-toggle editor (DESIGN-cast-model §3.5): on/off toggles → backend mints synthetic keys.
+  supervisor_enabled?: boolean;
+  participants_enabled?: boolean;
+  observers_enabled?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {
