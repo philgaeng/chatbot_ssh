@@ -28,6 +28,11 @@ KEY_NAME_RUNNING = /home/philg/.ssh/pg_rasa_train.pem
 SSH_RUNNING = ssh -i $(KEY_NAME_RUNNING) $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING)
 SCP_RUNNING = scp -i $(KEY_NAME_RUNNING)
 
+# Branch that remote deploys check out + fast-forward on the server.
+# Default `main` (production). AWS staging overrides this to `integration/stage`
+# via target-specific vars on the aws-deploy* targets (see the AWS section).
+DEPLOY_BRANCH ?= main
+
 # Production server (Nepal — VPN required, password SSH; no -i key)
 #
 # Configure in env.local (gitignored), not in this file:
@@ -113,9 +118,9 @@ define REMOTE_DEPLOY_CORE
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
-	git checkout main && \
+	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
-	git pull --ff-only origin main && \
+	git pull --ff-only origin $(DEPLOY_BRANCH) && \
 	echo "$(3): rebuilding $(2) (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
 	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(2),$(3)) && \
 	echo "$(3): starting $(2)" && \
@@ -132,9 +137,9 @@ define REMOTE_DEPLOY_OPS
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
-	git checkout main && \
+	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
-	git pull --ff-only origin main && \
+	git pull --ff-only origin $(DEPLOY_BRANCH) && \
 	echo "$(2): building ops" && \
 	$(REMOTE_COMPOSE) build --pull ops && \
 	echo "$(2): ops migration (ops.* schema + ops_app role)" && \
@@ -172,8 +177,8 @@ define REMOTE_DEPLOY_LIGHT
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
-	git checkout main && \
-	git reset --hard origin/main && \
+	git checkout $(DEPLOY_BRANCH) && \
+	git reset --hard origin/$(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
 	echo "$(3): rebuilding $(2) (sequential)" && \
 	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL,$(filter-out nginx,$(2)),$(3)) && \
@@ -190,9 +195,9 @@ define REMOTE_DEPLOY_FULL
 set -e; \
 	cd $(1) && \
 	git fetch origin && \
-	git checkout main && \
+	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
-	git pull --ff-only origin main && \
+	git pull --ff-only origin $(DEPLOY_BRANCH) && \
 	echo "full deploy: building all compose services sequentially" && \
 	for svc in $$($(REMOTE_COMPOSE) config --services); do \
 		echo "full deploy: build $$svc" && \
@@ -239,11 +244,11 @@ help:
 	@echo "  make wsl-ops          build & (re)start ONLY the ops monitor (run migrate_ops first on fresh DB)"
 	@echo "  make wsl-down         stop all containers (base + GRM + auth profile)"
 	@echo ""
-	@echo "AWS staging (EC2 key SSH — $(REMOTE_HOST_RUNNING)):"
+	@echo "AWS staging (EC2 key SSH — $(REMOTE_HOST_RUNNING)) — deploys branch integration/stage:"
 	@echo "  make aws-up           rebuild & up on this host (aws + GRM compose files)"
-	@echo "  make aws-deploy       pull main, migrate (incl. ops), rebuild AWS_DEPLOY_SERVICES (one image at a time)"
-	@echo "  make aws-deploy-light pull main, rebuild UI (+ nginx); no migrations (sequential builds)"
-	@echo "  make aws-deploy-full  pull main, migrate, rebuild entire stack (sequential builds)"
+	@echo "  make aws-deploy       pull integration/stage, migrate (incl. ops), rebuild AWS_DEPLOY_SERVICES (one image at a time)"
+	@echo "  make aws-deploy-light pull integration/stage, rebuild UI (+ nginx); no migrations (sequential builds)"
+	@echo "  make aws-deploy-full  pull integration/stage, migrate, rebuild entire stack (sequential builds)"
 	@echo "  make aws-deploy-ops   build + ops migration + restart ONLY the ops monitor"
 	@echo "  make ssh-running      open SSH session to staging"
 	@echo ""
@@ -303,11 +308,16 @@ wsl-down:
 	$(COMPOSE_WSL_AUTH) down $(COMPOSE_DOWN_FLAGS)
 
 # ── AWS ────────────────────────────────────────────────────────────────────────
+# AWS staging is our stage box: it tracks the integration branch, not main.
+# Prod deploys keep DEPLOY_BRANCH=main (the default) — this override is scoped to
+# the aws-deploy* targets only.
+aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops: DEPLOY_BRANCH := integration/stage
+
 # On the EC2 host (already in repo directory). Chatbot + GRM + Keycloak (auth profile).
 aws-up:
 	$(COMPOSE_AWS_AUTH) up -d --build
 
-# Remote deploy: pull main, migrations, rebuild selected services (default GRM UI/API + messaging backend).
+# Remote deploy: pull integration/stage, migrations, rebuild selected services (default GRM UI/API + messaging backend).
 aws-deploy:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
