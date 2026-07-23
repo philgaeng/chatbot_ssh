@@ -15,11 +15,13 @@ import { CastStaffing } from "@/components/settings/projects/CastStaffing";
 export function ProjectCastSection({
   project,
   orgs,
+  onChanged,
 }: {
   project: ProjectItem;
   /** Kept for API compatibility with the mount; per-package staffing lives in PackageRow. */
   packages?: PackageItem[];
   orgs: OrganizationItem[];
+  onChanged?: () => void;
 }) {
   const boundWorkflows = useMemo(() => {
     const slots = (project.workflow_slots ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
@@ -76,7 +78,13 @@ export function ProjectCastSection({
         )}
       </div>
       <div className="mt-4">
-        <CastStaffing project={project} orgs={orgs} package={null} workflowId={selectedWfId} />
+        <CastStaffing
+          project={project}
+          orgs={orgs}
+          package={null}
+          workflowId={selectedWfId}
+          onChanged={onChanged}
+        />
       </div>
     </div>
   );

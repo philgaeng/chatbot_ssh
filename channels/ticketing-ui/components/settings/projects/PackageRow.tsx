@@ -30,11 +30,13 @@ export function PackageRow({
   orgs,
   actorRoles,
   expanded,
+  needsActor,
   onToggle,
   onUpdate,
   onActorsChange,
   onAddLoc,
   onRemoveLoc,
+  onStaffingChanged,
 }: {
   project:      ProjectItem;
   projectId:    string;
@@ -42,11 +44,14 @@ export function PackageRow({
   orgs:         OrganizationItem[];
   actorRoles:   OrgRole[];
   expanded:     boolean;
+  /** True when no L1 Actor covers this lot (neither package-specific nor project-wide). */
+  needsActor?:  boolean;
   onToggle:     () => void;
   onUpdate:     (payload: Partial<PackageItem>) => Promise<void>;
   onActorsChange: (organizations: PackageItem["organizations"]) => void;
   onAddLoc:     (code: string) => Promise<void>;
   onRemoveLoc:  (code: string) => Promise<void>;
+  onStaffingChanged?: () => void;
 }) {
   const [codeVal, setCodeVal]       = useState(pkg.package_code);
   const [nameVal, setNameVal]       = useState(pkg.name);
@@ -139,6 +144,14 @@ export function PackageRow({
         <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={typeof actorSummary === "string" ? actorSummary : undefined}>
           {actorSummary}
         </span>
+        {needsActor && (
+          <span
+            className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+            title="No L1 Actor covers this lot yet — staff one (or set a project-wide L1) before go-live"
+          >
+            ⚠ L1 actor unstaffed
+          </span>
+        )}
         {pkg.location_codes.length > 0 && (
           <div className="flex gap-1 shrink-0">
             {pkg.location_codes.map((c) => (
@@ -279,7 +292,7 @@ export function PackageRow({
             <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2">
               Staffing — {pkg.name}
             </h4>
-            <CastStaffing project={project} orgs={orgs} package={pkg} />
+            <CastStaffing project={project} orgs={orgs} package={pkg} onChanged={onStaffingChanged} />
           </div>
 
           {dirty && (

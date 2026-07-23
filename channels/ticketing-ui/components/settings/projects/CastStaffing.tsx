@@ -56,6 +56,7 @@ export function CastStaffing({
   orgs,
   package: pkg = null,
   workflowId = null,
+  onChanged,
 }: {
   project: ProjectItem;
   orgs: OrganizationItem[];
@@ -63,6 +64,8 @@ export function CastStaffing({
   package?: PackageItem | null;
   /** Explicit workflow to staff; defaults to the project's standard/default workflow. */
   workflowId?: string | null;
+  /** Called after an assign/remove — lets the parent refresh coverage indicators. */
+  onChanged?: () => void;
 }) {
   const isPkg = !!pkg;
   const scopePkgId = pkg?.package_id ?? null;
@@ -192,6 +195,7 @@ export function CastStaffing({
       setAssigning(null);
       setPickerQ("");
       await loadCast();
+      onChanged?.();
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -205,6 +209,7 @@ export function CastStaffing({
     try {
       await unstaffCastSlot(project.project_id, scopeId);
       await loadCast();
+      onChanged?.();
     } catch (e) {
       setError(friendlyError(e));
     } finally {
