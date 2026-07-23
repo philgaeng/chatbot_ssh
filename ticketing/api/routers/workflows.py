@@ -483,14 +483,9 @@ def add_step(
     wf = _load_workflow(workflow_id, db, current_user)
     _require_workflow_write(current_user, wf.workflow_type)
 
-    # SH-2: role references must exist and match the workflow track.
-    validate_step_roles(
-        db,
-        workflow_type=wf.workflow_type,
-        assigned_role_key=payload.assigned_role_key,
-        supervisor_role=payload.supervisor_role,
-        informed_roles=payload.informed_roles,
-        observer_roles=payload.observer_roles,
+    tier_toggle_mode = any(
+        f in payload.model_fields_set
+        for f in ("supervisor_enabled", "participants_enabled", "observers_enabled")
     )
 
     # Append at the end
@@ -506,7 +501,7 @@ def add_step(
         step_order=max_order + 1,
         step_key=payload.step_key or _slug(payload.display_name),
         display_name=payload.display_name,
-        assigned_role_key=payload.assigned_role_key,
+        assigned_role_key=payload.assigned_role_key or "",
         response_time_hours=payload.response_time_hours,
         resolution_time_days=payload.resolution_time_days,
         supervisor_role=payload.supervisor_role,
@@ -516,6 +511,28 @@ def add_step(
         stakeholders=payload.stakeholders,
         expected_actions=payload.expected_actions,
     )
+    # Tier-toggle editor (DESIGN-cast-model §3.5): derive tier fields from on/off toggles,
+    # minting synthetic per-step-tier keys (+ their plumbing role rows) for enabled empty slots.
+    if tier_toggle_mode:
+        from ticketing.services.cast_staffing import set_step_tier_keys
+
+        set_step_tier_keys(
+            db, wf, step,
+            supervisor=bool(payload.supervisor_enabled),
+            participants=bool(payload.participants_enabled),
+            observers=bool(payload.observers_enabled),
+        )
+
+    # SH-2: role references must exist and match the workflow track (final state).
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=step.assigned_role_key or None,
+        supervisor_role=step.supervisor_role,
+        informed_roles=step.informed_roles,
+        observer_roles=step.observer_roles,
+    )
+
     db.add(step)
     db.commit()
     db.refresh(step)
@@ -572,6 +589,25 @@ def update_step(
         step.stakeholders = payload.stakeholders
     if "expected_actions" in fields_set:
         step.expected_actions = payload.expected_actions
+
+    # Tier-toggle editor (DESIGN-cast-model §3.5): re-derive tier fields from on/off toggles.
+    # An omitted toggle keeps the tier's current state (partial update never clobbers).
+    if any(f in fields_set for f in ("supervisor_enabled", "participants_enabled", "observers_enabled")):
+        from ticketing.services.cast_staffing import set_step_tier_keys
+
+        supervisor = (
+            bool(payload.supervisor_enabled) if "supervisor_enabled" in fields_set
+            else step.supervisor_role is not None
+        )
+        participants = (
+            bool(payload.participants_enabled) if "participants_enabled" in fields_set
+            else bool(step.informed_roles)
+        )
+        observers = (
+            bool(payload.observers_enabled) if "observers_enabled" in fields_set
+            else bool(step.observer_roles)
+        )
+        set_step_tier_keys(db, wf, step, supervisor=supervisor, participants=participants, observers=observers)
 
     db.commit()
     db.refresh(step)
