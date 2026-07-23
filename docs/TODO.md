@@ -6,6 +6,21 @@
 
 ---
 
+## Cast-model follow-ups (2026-07-23, `DESIGN-cast-model-and-package-staffing.md`)
+
+- **[Phase 2] Owning-level re-scope has no UI.** Position owner is server-stamped; the modal
+  dropped the picker. `PATCH /position-types/{id}` still accepts `owner_organization_id`, so
+  re-homing a title is API-only. Add an "advanced" edit affordance if needed.
+  (`followups/phase2-positions-followups.md`)
+- **[Phase 2] `assign_officer_position` default-role fallback.** Assign requires an explicit
+  `role_key` for null-default positions; legacy non-null defaults still pre-fill. Drop the
+  `or pt.default_role_key` fallback once the seed drops position defaults (Phase 3/§8).
+- **[Phase 1] Per-role permission writes retire in Phase 5.** Tier is the source of truth now;
+  `create_role`/`update_role` still write `roles.permissions` until the archetype apparatus is
+  removed (Phase 5). (`followups/tier-permissions-reconciliation.md`)
+
+---
+
 ## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
 
 All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):

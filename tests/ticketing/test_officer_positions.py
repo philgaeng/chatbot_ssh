@@ -156,6 +156,48 @@ def test_assign_prefill_and_override(officer_env):
         app.dependency_overrides.clear(); db.close()
 
 
+def test_assign_untiered_position_requires_explicit_role(officer_env):
+    """DESIGN-cast-model §3.2: a display-only title carries no default role — staffing must
+    pass the tier explicitly. Assign without role_key → 422; with role_key → 201."""
+    from ticketing.models.base import SessionLocal
+    from ticketing.models.position_type import PositionType
+
+    email = officer_env["email"]
+    s = SessionLocal()
+    pt = PositionType(position_key=f"untiered_{uuid.uuid4().hex[:6]}",
+                      display_name="Untiered", allowed_unit_types=["division_office"],
+                      default_role_key=None)
+    s.add(pt); s.commit()
+    pt_id = pt.position_type_id
+    s.close()
+
+    app, client, db = _client(_super())
+    try:
+        # no default, no override → the tier is required
+        r = client.post(f"/api/v1/users/{email}/positions", json={
+            "position_type_id": pt_id, "organization_id": "DOR", "location_code": "P1_JHA"})
+        assert r.status_code == 422, r.text
+        assert "role_key" in r.text
+        # explicit role_key → the scope is minted with that role
+        r2 = client.post(f"/api/v1/users/{email}/positions", json={
+            "position_type_id": pt_id, "organization_id": "DOR", "location_code": "P1_JHA",
+            "role_key": _ROLE_STD})
+        assert r2.status_code == 201, r2.text
+        assert (_ROLE_STD, "DOR", "P1_JHA") in _scopes(email)
+    finally:
+        app.dependency_overrides.clear(); db.close()
+        # Drop the officer_position rows referencing this PT before the PT (FK RESTRICT);
+        # officer_env's teardown clears this email's scopes/user_roles afterwards.
+        from ticketing.models.officer_position import OfficerPosition
+        s = SessionLocal()
+        s.execute(sa.delete(OfficerPosition).where(OfficerPosition.position_type_id == pt_id))
+        s.commit()
+        obj = s.get(PositionType, pt_id)
+        if obj:
+            s.delete(obj); s.commit()
+        s.close()
+
+
 def test_dual_hat_list_and_end(officer_env):
     email = officer_env["email"]
     app, client, db = _client(_super())

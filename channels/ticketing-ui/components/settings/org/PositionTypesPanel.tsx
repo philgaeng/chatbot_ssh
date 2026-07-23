@@ -22,10 +22,7 @@ import {
   type OrganizationItem,
 } from "@/lib/api";
 import { text as textTokens } from "@/lib/design-tokens";
-import { roleLabel } from "@/lib/labels";
 import { Bilingual } from "@/components/shared/Bilingual";
-import { RoleLabel } from "@/components/shared/RoleLabel";
-import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { ErrorCard } from "@/components/ui/ErrorCard";
 
@@ -33,19 +30,12 @@ import { PositionTypeEditor } from "./PositionTypeEditor";
 import { ReviewHoldersModal } from "./ReviewHoldersModal";
 import {
   UNIT_TYPES,
-  positionTrackLabel,
   owningLevelLabel,
   unitTypeLabel,
   orgNameMap,
 } from "./orgVocab";
 
 type EditorState = { mode: "create" } | { mode: "edit"; pt: PositionTypeItem };
-
-interface DriftState {
-  pt: PositionTypeItem;
-  oldRole: string;
-  newRole: string;
-}
 
 export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
   const [items, setItems] = useState<PositionTypeItem[] | null>(null);
@@ -58,7 +48,6 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
   const [reviewFor, setReviewFor] = useState<{ pt: PositionTypeItem; newDefault?: string } | null>(
     null,
   );
-  const [drift, setDrift] = useState<DriftState | null>(null);
 
   const [query, setQuery] = useState("");
   const [unitFilter, setUnitFilter] = useState<string[]>([]);
@@ -76,7 +65,7 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
       }
       if (q) {
         const hay =
-          `${pt.display_name} ${pt.display_name_ne ?? ""} ${roleLabel(pt.default_role_key)} ${pt.position_key}`.toLowerCase();
+          `${pt.display_name} ${pt.display_name_ne ?? ""} ${pt.position_key}`.toLowerCase();
         if (!hay.includes(q)) return false;
       }
       return true;
@@ -104,16 +93,10 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
     void load();
   }, [load]);
 
-  function handleSaved(updated: PositionTypeItem, before: EditorState | null) {
+  function handleSaved(_updated: PositionTypeItem, _before: EditorState | null) {
+    // Positions no longer carry a role (DESIGN-cast-model §3.2), so an edit can't change a
+    // default role — the old "role drift → review holders" prompt retired with the coupling.
     setEditor(null);
-    // Drift: an edit that changed the default role — surface the opt-in review.
-    if (before && before.mode === "edit" && before.pt.default_role_key !== updated.default_role_key) {
-      setDrift({
-        pt: updated,
-        oldRole: before.pt.default_role_key,
-        newRole: updated.default_role_key,
-      });
-    }
     void load();
   }
 
@@ -153,37 +136,6 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
       </div>
 
       <ErrorNotice error={actionError} />
-
-      {drift && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <div className="mb-1 flex items-center gap-2">
-            <SeverityBadge severity="warn" label="Heads up" />
-            <span className="text-sm font-medium text-amber-800">
-              {drift.pt.display_name}&rsquo;s default role changed
-            </span>
-          </div>
-          <p className="text-sm text-amber-800">
-            From <RoleLabel roleKey={drift.oldRole} /> to <RoleLabel roleKey={drift.newRole} />.
-            Officers who already hold this position were not changed.
-          </p>
-          <div className="mt-2 flex gap-2">
-            <button
-              type="button"
-              onClick={() => setReviewFor({ pt: drift.pt, newDefault: drift.newRole })}
-              className="rounded border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 transition hover:bg-amber-100"
-            >
-              Review holders
-            </button>
-            <button
-              type="button"
-              onClick={() => setDrift(null)}
-              className="rounded px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100"
-            >
-              Leave them as they are
-            </button>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="space-y-2" aria-busy>
@@ -276,7 +228,9 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
                       <Bilingual en={pt.display_name} ne={pt.display_name_ne} />
                     </div>
                     <div className={`mt-0.5 text-xs ${textTokens.secondary}`}>
-                      Acts as <RoleLabel roleKey={pt.default_role_key} /> · {positionTrackLabel(pt.workflow_track)}
+                      {pt.allowed_unit_types.length > 0
+                        ? pt.allowed_unit_types.map(unitTypeLabel).join(" · ")
+                        : "Job title"}
                     </div>
                   </div>
                   <span className="shrink-0 rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-medium text-gray-600">
@@ -321,7 +275,6 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
           mode={editor.mode}
           positionType={editor.mode === "edit" ? editor.pt : undefined}
           allPositionTypes={items ?? []}
-          orgs={orgs}
           onSaved={(updated) => handleSaved(updated, editor)}
           onCancel={() => setEditor(null)}
         />

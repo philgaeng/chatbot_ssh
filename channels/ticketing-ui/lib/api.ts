@@ -1014,7 +1014,7 @@ export function reactivateOfficer(userId: string): Promise<OfficerLifecycleResul
 
 // ── Position types + position→role matrix (OC-02, doc 16 §3.2/§9) ─────────────
 
-/** ticketing.position_types row — a position title + its default-role/reporting matrix. */
+/** ticketing.position_types row — a display-only job title (DESIGN-cast-model §3.2). */
 export interface PositionTypeItem {
   position_type_id: string;
   position_key: string;
@@ -1024,7 +1024,8 @@ export interface PositionTypeItem {
   reports_to_position_key: string | null;
   /** "same_unit" | "parent_unit" | null */
   reports_to_locus: string | null;
-  default_role_key: string;
+  /** Legacy role link — nullable; a title carries no role (tier chosen at staffing). */
+  default_role_key: string | null;
   /** "none" | "direct_reports" | "subtree" */
   visibility_mode: string;
   /** "standard" | "seah" | "both" */
@@ -1037,15 +1038,12 @@ export interface PositionTypeItem {
 
 export interface PositionTypeCreate {
   // position_key is server-minted from display_name — not part of the create payload.
+  // A title carries no role/track/visibility (DESIGN-cast-model §3.2); owner is server-set.
   display_name: string;
   display_name_ne?: string | null;
   allowed_unit_types?: string[];
   reports_to_position_key?: string | null;
   reports_to_locus?: string | null;
-  default_role_key: string;
-  visibility_mode?: string;
-  workflow_track?: string;
-  owner_organization_id?: string | null;
 }
 
 /** All fields optional; position_key is immutable and cannot be updated. */

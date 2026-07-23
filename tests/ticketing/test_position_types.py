@@ -137,17 +137,15 @@ def test_create_and_list(cleanup_pts):
             "display_name": title,
             "display_name_ne": "वरिष्ठ इन्जिनियर",
             "allowed_unit_types": ["division_office"],
-            "default_role_key": _ROLE_STD,
-            "visibility_mode": "none",
-            "workflow_track": "standard",
         })
         assert res.status_code == 201, res.text
         body = res.json()
         cleanup_pts.append(body["position_type_id"])
         # position_key is server-minted from the title (never user-supplied)
         assert body["position_key"] == _slugify_key(title)
-        assert body["default_role_key"] == _ROLE_STD
-        # visible in the standard-track filtered list
+        # a title carries no role at create (DESIGN-cast-model §3.2)
+        assert body["default_role_key"] is None
+        # visible in the standard-track filtered list (positions default to standard track)
         listed = client.get("/api/v1/position-types?workflow_track=standard").json()
         assert any(p["position_type_id"] == body["position_type_id"] for p in listed)
     finally:
@@ -159,31 +157,42 @@ def test_create_and_list(cleanup_pts):
 def test_create_validations(cleanup_pts):
     app, client, db = _client(_super())
     try:
-        # unknown default_role_key
+        # invalid unit_type (default_role_key is no longer a create field — a title has no role)
         assert client.post("/api/v1/position-types", json={
-            "display_name": "X", "default_role_key": "no_such_role",
-        }).status_code == 422
-        # invalid unit_type
-        assert client.post("/api/v1/position-types", json={
-            "display_name": "X", "default_role_key": _ROLE_STD,
+            "display_name": "X",
             "allowed_unit_types": ["spaceship"],
         }).status_code == 422
         # self-reference: the minted key equals slugify(title), so point reports_to at it
         selftitle = "Self " + uuid.uuid4().hex[:6]
         assert client.post("/api/v1/position-types", json={
-            "display_name": selftitle, "default_role_key": _ROLE_STD,
+            "display_name": selftitle,
             "reports_to_position_key": _slugify_key(selftitle),
         }).status_code == 422
         # unknown reports_to
         assert client.post("/api/v1/position-types", json={
-            "display_name": "X", "default_role_key": _ROLE_STD,
+            "display_name": "X",
             "reports_to_position_key": "ghost_position",
         }).status_code == 422
-        # unknown owner org
-        assert client.post("/api/v1/position-types", json={
-            "display_name": "X", "default_role_key": _ROLE_STD,
-            "owner_organization_id": "NO_SUCH_ORG",
-        }).status_code == 422
+        # owner_organization_id is server-stamped, not taken from the body — an unknown owner
+        # in the body is ignored (no longer a create field), so this now succeeds.
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+
+@pytest.mark.integration
+def test_create_without_default_role(cleanup_pts):
+    """DESIGN-cast-model §3.2: a position is a display-only title — creatable with no role.
+    The tier is chosen later at per-package staffing."""
+    app, client, db = _client(_super())
+    try:
+        title = "Untiered Title " + uuid.uuid4().hex[:6]
+        res = client.post("/api/v1/position-types", json={"display_name": title})
+        assert res.status_code == 201, res.text
+        body = res.json()
+        cleanup_pts.append(body["position_type_id"])
+        assert body["position_key"] == _slugify_key(title)
+        assert body["default_role_key"] is None
     finally:
         app.dependency_overrides.clear()
         db.close()
