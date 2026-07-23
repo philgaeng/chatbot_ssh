@@ -8,12 +8,13 @@
  *
  * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
  */
-import React, { useState } from "react";
-import { deleteRole } from "@/lib/api";
+import React, { useState, useEffect } from "react";
+import { deleteRole, listWorkflows } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { roleMatchesFilter, type TrackFilter } from "@/lib/trackFilter";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
+import { orgCategoryLabel } from "@/components/settings/org/orgVocab";
 import { type RoleEntry, owningLevelLabel } from "@/components/settings/roles/roleEntry";
 import { RoleEditModal } from "@/components/settings/roles/RoleEditModal";
 import { RoleCreateModal } from "@/components/settings/roles/RoleCreateModal";
@@ -27,13 +28,67 @@ export function RolesTab({ catalog, loading, onReload, canCreate }: {
   const [editing, setEditing]   = useState<RoleEntry | null>(null);
   const [creating, setCreating] = useState(false);
   const [trackFilter, setTrackFilter] = useState<TrackFilter>("all");
+  const [search, setSearch] = useState("");
+  const [actorFilter, setActorFilter] = useState("all");
+  const [workflowFilter, setWorkflowFilter] = useState("all");
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const { adminWorkflowTracks } = useAuth();
   const defaultTrack = adminWorkflowTracks.includes("seah") && !adminWorkflowTracks.includes("standard")
     ? "seah" as const : "standard" as const;
 
-  // Track filter is single-sourced in lib/trackFilter.ts (RB-2 structural rule 1).
-  const filtered = catalog.filter((r) => roleMatchesFilter(r.workflow, trackFilter));
+  // Load non-template workflows once; map each to the set of role_keys used across its step cast
+  // (assigned / supervisor / informed / observer) — powers the "used in workflow" filter.
+  const [workflows, setWorkflows] = useState<{ id: string; label: string; roleKeys: Set<string> }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    listWorkflows()
+      .then((res) => {
+        if (!alive) return;
+        setWorkflows(
+          res.items
+            .filter((w) => !w.is_template)
+            .map((w) => {
+              const roleKeys = new Set<string>();
+              for (const s of w.steps ?? []) {
+                if (s.is_deleted) continue;
+                if (s.assigned_role_key) roleKeys.add(s.assigned_role_key);
+                if (s.supervisor_role) roleKeys.add(s.supervisor_role);
+                (s.informed_roles ?? []).forEach((k) => roleKeys.add(k));
+                (s.observer_roles ?? []).forEach((k) => roleKeys.add(k));
+              }
+              return { id: w.workflow_id, label: w.display_name, roleKeys };
+            }),
+        );
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  // Actor types actually present in the catalog (for the dropdown).
+  const actorTypes = Array.from(
+    new Set(catalog.map((r) => r.actor_category).filter((c): c is string => !!c)),
+  );
+  const selectedWf = workflows.find((w) => w.id === workflowFilter);
+  const q = search.trim().toLowerCase();
+  const filtersActive =
+    !!q || trackFilter !== "all" || actorFilter !== "all" || workflowFilter !== "all";
+
+  // Track filter is single-sourced in lib/trackFilter.ts (RB-2 structural rule 1); the rest
+  // compose on top: actor affiliation, "used in workflow X", and free-text search.
+  const filtered = catalog.filter((r) => {
+    if (!roleMatchesFilter(r.workflow, trackFilter)) return false;
+    if (actorFilter !== "all" && (r.actor_category ?? "") !== actorFilter) return false;
+    if (workflowFilter !== "all" && !selectedWf?.roleKeys.has(r.key)) return false;
+    if (q && !`${r.label} ${r.key} ${r.description}`.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  function clearFilters() {
+    setSearch("");
+    setTrackFilter("all");
+    setActorFilter("all");
+    setWorkflowFilter("all");
+  }
 
   async function handleRemoveRole(r: RoleEntry) {
     if (!confirm(`Remove role "${r.label}" (${r.key}) from the catalog?`)) return;
@@ -71,17 +126,15 @@ export function RolesTab({ catalog, loading, onReload, canCreate }: {
         />
       )}
 
-      <div className="flex items-center justify-between mb-5 gap-3 flex-wrap">
+      <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <p className="text-sm text-gray-500">
-          {loading ? "Loading roles…" : `${filtered.length} operational roles`}
+          {loading
+            ? "Loading roles…"
+            : filtered.length === catalog.length
+            ? `${filtered.length} operational roles`
+            : `${filtered.length} of ${catalog.length} operational roles`}
         </p>
         <div className="flex items-center gap-2">
-          <select value={trackFilter} onChange={(e) => setTrackFilter(e.target.value as typeof trackFilter)}
-            className="text-xs border border-gray-300 rounded px-2 py-1">
-            <option value="all">All tracks</option>
-            <option value="standard">Standard</option>
-            <option value="seah">SEAH</option>
-          </select>
           {canCreate && (
             <button type="button" onClick={() => setCreating(true)}
               className="text-xs bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700">
@@ -92,6 +145,47 @@ export function RolesTab({ catalog, loading, onReload, canCreate }: {
             Refresh
           </button>
         </div>
+      </div>
+
+      {/* Filters: search + track + actor type + specific workflow */}
+      <div className="flex items-center gap-2 mb-5 flex-wrap">
+        <input
+          type="search"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search roles…"
+          className="text-xs border border-gray-300 rounded px-2 py-1 w-48 focus:outline-none focus:ring-1 focus:ring-blue-400"
+        />
+        <select value={trackFilter} onChange={(e) => setTrackFilter(e.target.value as typeof trackFilter)}
+          className="text-xs border border-gray-300 rounded px-2 py-1">
+          <option value="all">All tracks</option>
+          <option value="standard">Standard</option>
+          <option value="seah">SEAH</option>
+        </select>
+        {actorTypes.length > 0 && (
+          <select value={actorFilter} onChange={(e) => setActorFilter(e.target.value)}
+            className="text-xs border border-gray-300 rounded px-2 py-1">
+            <option value="all">All actor types</option>
+            {actorTypes.map((c) => (
+              <option key={c} value={c}>{orgCategoryLabel(c)}</option>
+            ))}
+          </select>
+        )}
+        {workflows.length > 0 && (
+          <select value={workflowFilter} onChange={(e) => setWorkflowFilter(e.target.value)}
+            className="text-xs border border-gray-300 rounded px-2 py-1 max-w-[16rem]">
+            <option value="all">All workflows</option>
+            {workflows.map((w) => (
+              <option key={w.id} value={w.id}>{w.label}</option>
+            ))}
+          </select>
+        )}
+        {filtersActive && (
+          <button type="button" onClick={clearFilters}
+            className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1 rounded hover:bg-gray-100">
+            Clear
+          </button>
+        )}
       </div>
 
       {!loading && catalog.length === 0 && (
