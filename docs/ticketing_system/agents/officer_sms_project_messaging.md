@@ -18,8 +18,8 @@ Country admins enable SMS under Settings → Projects & packages → project edi
 |------|-----|
 | [../06_messaging_rules_whatsapp_sms.md](../06_messaging_rules_whatsapp_sms.md) | Locked product rules (this feature) |
 | [../13_projects_and_packages.md](../13_projects_and_packages.md) | Project editor layout |
-| `docs/sprints/claude-tickets/PROGRESS.md` | Update when done |
-| `docs/sprints/claude-tickets/TODO.md` | Close related gap if listed |
+| `docs/sprints/archive/claude-tickets/PROGRESS.md` | Update when done |
+| `docs/sprints/archive/claude-tickets/TODO.md` | Close related gap if listed |
 | `ticketing/tasks/notifications.py` | Existing `notify_assignment` (in-app only) |
 | `ticketing/clients/messaging_api.py` | `send_sms()` |
 | `ticketing/services/keycloak_users.py` | `profiles_for_user_ids()` for phone lookup |
@@ -89,7 +89,7 @@ Execute **all** steps below in one session. Do not commit unless the user asks.
 6. **`ticketing/api/routers/locations.py`** (projects router) or new `project_messaging.py` router:
    - `GET /api/v1/projects/{project_id}/messaging`
    - `PATCH /api/v1/projects/{project_id}/messaging`
-   - Auth: `require_country_admin_or_super` (match project PATCH patterns in `ticketing/services/admin_access.py`)
+   - Auth: `require_org_admin_or_super` (match project PATCH patterns in `ticketing/services/admin_access.py`)
    - On PATCH: if `sms_enabled` and `sms_levels` empty, allow (means master on but no levels — no sends) OR normalize; document behaviour in code comment.
 
 7. Register router in `ticketing/api/main.py` if new file.
@@ -157,9 +157,9 @@ Execute **all** steps below in one session. Do not commit unless the user asks.
 
 18. Update [../13_projects_and_packages.md](../13_projects_and_packages.md) §5 table: insert Messaging row (#4), renumber following sections.
 
-19. Update `docs/sprints/claude-tickets/PROGRESS.md` — note officer SMS implemented.
+19. Update `docs/sprints/archive/claude-tickets/PROGRESS.md` — note officer SMS implemented.
 
-20. Update `docs/sprints/claude-tickets/TODO.md` — strike related open item if present.
+20. Update `docs/sprints/archive/claude-tickets/TODO.md` — strike related open item if present.
 
 ---
 
@@ -189,7 +189,7 @@ New case: {grievance_id} ({category_snippet}, {location_snippet}). Open: {url}
 
 ## Verification (manual)
 
-1. Docker stack up per `docs/sprints/claude-tickets/DOCKER.md`.
+1. Docker stack up per `docs/sprints/archive/claude-tickets/DOCKER.md`.
 2. As country admin: open project → Messaging → enable SMS for L1 only → save.
 3. Create ticket (webhook or API) assigned to L1 officer with phone in Keycloak.
 4. Confirm `OFFICER_SMS_SENT` event + SMS in messaging logs (or mocked client in dev).
@@ -217,7 +217,7 @@ New case: {grievance_id} ({category_snippet}, {location_snippet}). Open: {url}
 | Modify | `channels/ticketing-ui/lib/api.ts` |
 | Create | `tests/ticketing/test_officer_messaging.py` |
 | Modify | `docs/ticketing_system/13_projects_and_packages.md` |
-| Modify | `docs/sprints/claude-tickets/PROGRESS.md` |
+| Modify | `docs/sprints/archive/claude-tickets/PROGRESS.md` |
 
 ---
 

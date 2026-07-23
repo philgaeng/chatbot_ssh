@@ -1,18 +1,35 @@
 # CLAUDE.md — Nepal Chatbot / GRM Ticketing System
 
-# DEMO DEADLINE: May 10, 2026
-
 ---
 
 ## ⚡ READ THIS BEFORE ANY CODE DECISION
 
 | File                                    | Read for                                                                    |
 | --------------------------------------- | --------------------------------------------------------------------------- |
-| **→ `docs/claude-tickets/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
-| **→ `docs/claude-tickets/TODO.md`**     | Open gaps, next features, tech debt                                         |
-| **→ `docs/claude-tickets/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
+| **→ `docs/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
+| **→ `docs/TODO.md`**     | Open gaps, next features, tech debt                                         |
+| **→ `docs/deployment/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
+| **→ `docs/README.md`**   | Index of the full spec tree (services, ticketing, chatbot, SEAH, deployment) |
 
 `PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `DOCKER.md` tells you how to run it. This file has the locked architecture.
+
+## 🐳 BUILD & RUN ONLY WITH DOCKER (non-negotiable)
+
+**Always build and run this stack with Docker Compose — never on the host.** Every service (chatbot, orchestrator, backend, ticketing_api, celery, ops, db, redis, keycloak, grm_ui) is built and started through the Compose stacks — `make wsl-up` / `docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml build|up` (see `docs/deployment/DOCKER.md`). **Do not** `pip install`, `npm run build`, `uvicorn …`, `redis-server`, or run migrations/seeds natively to build or serve. Native runs cause port/version/schema drift (e.g. a stray host `redis-server` on :6379, a mismatched host Python, an unmigrated DB). Host CLIs are for **reading/inspection only**; anything that builds an image, starts a service, or mutates the DB goes through Docker.
+
+## ⚠️ SUPERSEDED BY AS-BUILT SPECS (July 2026)
+
+The May 10, 2026 demo shipped; parts of the locked plan below were superseded during the build. Where this file and the as-built specs disagree, **the specs win**:
+
+| This file says | As-built reality | Authoritative spec |
+| --- | --- | --- |
+| AWS **Cognito** OIDC + `COGNITO_GRM_*` env vars | **Keycloak** everywhere (PKCE OIDC, invites, SMTP, onboarding webhook) | `docs/deployment/16_auth_keycloak.md` |
+| 12-role list incl. `local_admin` | Admin ladder: `super_admin`/`country_admin`/`project_admin` + `workflow_track` + operational role catalog | `docs/ticketing_system/11_roles_and_permissions.md` |
+| Queue tabs "My Queue / Watching / Escalated / Resolved" | Actor / Supervisor / High Priority / All Tickets (+ Informed/Observer) | `docs/ticketing_system/15_ticket_queue_search_and_filters.md` |
+| GRC two-step Convene + **Decide** | `GRC_DECIDE` removed in v1 — only RESOLVE ends a case | `docs/ticketing_system/08_ticket_resolution_and_case_summary.md` |
+| Target `grm.facets-ai.com` (staging on facets) | Production is **`grm-chatbot.dor.gov.np`** (DOR infra); facets is staging | `docs/deployment/12_environment_urls.md` |
+| "Two workflows" (Standard + SEAH) | Multi-stream workflow slots per project (safeguards/hazards/ca/seah) | `docs/ticketing_system/12_workflows_configuration.md` |
+| SEAH intake per April plan | Canonical model: `grievance_parties` + PII vault, legacy SEAH tables dropped | `docs/seah/` |
 
 ---
 
@@ -58,10 +75,8 @@ backend/orchestrator/      → stable (chatbot state machine)
 backend/api/               → stable (grievance/file/messaging APIs)
 backend/services/          → stable (shared service layer)
 backend/task_queue/        → stable (chatbot Celery: llm/default/file queues)
-channels/accessible/       → stable
 channels/webchat/          → stable
 channels/REST_webchat/     → stable
-channels/monitoring-gsheet/→ stable
 rasa_chatbot/              → stable
 scripts/                   → stable (ops/db scripts — add new under scripts/ops or scripts/database)
 deployment/                → stable (nginx/certbot/keycloak config)
@@ -103,13 +118,21 @@ ops/                       → platform monitoring/health/backup/reporting (own 
 
 ### APIs to call (never reimplement):
 
-**Grievance API** — primary data source, handles PII decryption:
+**Grievance API** — primary data source for complainant PII, and it **decrypts server-side** (T3-04):
 
 ```
-GET  /api/grievance/{grievance_id}
-POST /api/grievance/{grievance_id}/status
-GET  /api/grievance/statuses
+GET  /api/grievance/{grievance_id}    ← auth: x-api-key (T3-06) · returns PLAINTEXT PII (T3-04)
+POST /api/grievance/{grievance_id}/status  ← auth: x-api-key (T3-06)
+GET  /api/grievance/statuses          ← public
 ```
+
+> This line claimed decryption for months before it was true. `get_grievance_by_id` returned
+> pgcrypto hex, and `ticketing/services/pii_vault.py` decrypted client-side as a workaround —
+> which is the *only* reason ticketing ever held `DB_ENCRYPTION_KEY`. **T3-04 made the claim
+> true** (`grievance_manager.py`), deleted the workaround, and removed the key from ticketing's
+> settings. The key is now owned solely by `backend`. **Ticketing decrypts nothing, and cannot:
+> there is no accessor** — pinned by `tests/ticketing/test_pii_boundary.py`. History:
+> [`00-reassessment.md`](docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md) §3.
 
 **Messaging API** — for complainant SMS fallback + quarterly reports:
 
@@ -133,17 +156,44 @@ POST /message  { user_id: session_id, text: str, channel: "ticketing" }
 
 ```
 grievance_db
-  ├── public.*     ← existing tables — READ ONLY, never query directly from ticketing
+  ├── public.*     ← chatbot-owned tables. Ticketing touches only the closed set in rule 1
   └── ticketing.*  ← all new tables, owned by ticketing system
 ```
 
 ### Data rules (LOCKED):
 
-1. No SQL joins from `ticketing.*` into `public.*`
-2. No foreign keys from `ticketing.*` into `public.*`
-3. PII (name, phone, email, address) NEVER stored in `ticketing.*`
+> **Amended 2026-07-15 (T3-07).** Rules 1 and 5 were rewritten to describe what is actually
+> built; rules 2 and 3 were kept and are now pinned by tests. **The evidence and the decision:
+> [`docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md`](docs/sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6 — read it before changing any rule below.**
+>
+> **Why the old rule 1 went.** Rules 1/2 were written 2026-03-11 to keep two options open: move
+> ticketing to its own database by changing a connection string, and keep the chatbot working if
+> ticketing were removed. **Both goals were abandoned in the code, by both sides, months before
+> anyone amended the rule** — ticketing issues 11 statements against `public.*` (3 of them
+> writes), and the chatbot's intake location validation reads `ticketing.locations` through its
+> own connection. The rule had no enforcement (one DB, one role), had been false for months, and
+> honoring it today would *degrade* security: the direct read is behind a Keycloak JWT and a
+> jurisdiction gate that `GET /api/grievance/{id}` still cannot offer (§6, and T3-06's scorecard).
+> A doc reorg (`21631051`, 2026-06-02) deleted that rationale and left the bare rule, which is
+> why it read as arbitrary fiat ever since. **If you amend a rule here, move its reason with it —
+> a rule without its reason decays into cargo cult.**
+
+1. **Ticketing may read and write `public.*` through its own session — but only the enumerated set below.** The set is **closed**: adding a table is a deliberate decision, not a default. **The table below is itself pinned** by `tests/ticketing/test_boundary_policy.py`, which parses it and fails when it and the code disagree — on the table set *or* on which tables are written. (Until 2026-07-15 this line claimed that and was false: the test pinned the code against a dict *inside the test*, and this table was a hand-maintained mirror. Editing it alone changed nothing. Now the chain is closed: this table ↔ the test's `CONTRACT` ↔ the code.)
+
+   | `public.*` table | Ticketing's access | Where |
+   | --- | --- | --- |
+   | `grievances` | read | `services/grievance_content.py`, `tasks/grievance_sync.py` |
+   | `file_attachments` | read + **write** (`UPDATE` archive tier) | `api/ticket_access.py`, `api/routers/tickets/files.py`, `engine/ticket_actions.py`, `services/archiving.py` |
+   | `grievance_classification_taxonomy` | read + **write** (`DELETE`+`INSERT` resync) | `services/grievance_categories_catalog.py`, `seed/kl_road_standard.py` |
+   | `complainants` | read — **join-only, non-PII columns** (`location_code`) | `tasks/grievance_sync.py` |
+   | `grievance_parties` | read — join-only | `tasks/grievance_sync.py` |
+
+   Grievance **state** changes still go over HTTP (`POST /api/grievance/{id}/status`), never SQL. That is a real invariant, not an accident — keep it.
+2. **No foreign keys from `ticketing.*` into `public.*`.** Kept, unchanged. This is the half of the March rule that still earns its keep: it preserves extraction optionality, keeps the three migration streams independent, and costs nothing — links are soft `String(64)` refs. **Pinned by a test.**
+3. **No complainant PII columns in `ticketing.*`** (`complainant_full_name` / `complainant_phone` / `complainant_email` / `complainant_address`), and **`public.complainants` is not a PII source for ticketing**. Kept, sharpened back to its original 2026-03 form. This is the one PII rule that stands on its own merits, independent of everything above. **Pinned by a test.**
 4. `ticketing.tickets` caches non-PII at creation: `grievance_summary`, `grievance_categories`, `grievance_location`, `priority`
-5. Officer detail view fetches PII fresh via `GET /api/grievance/{id}`
+   > **Honest caveat:** `grievance_summary` is free text and *can* contain self-disclosed PII. It is cached by design (`models/ticket.py`); `grievance_description` — the raw narrative — deliberately is **not** (`services/grievance_content.py` writes only summary/categories/location). **The asymmetry is intentional. Do not "fix" it** by caching the description.
+5. **Complainant PII** is fetched fresh via `GET /api/grievance/{id}` and never cached in `ticketing.*`. The endpoint returns **plaintext** — the backend decrypts server-side (T3-04) and ticketing holds no encryption key. **This does not extend to grievance content** — ticketing reads `grievance_description` and file metadata directly, per rule 1.
 6. Complainant name: shown by default. Phone: hidden, revealed via "Reveal contact" button (action logged, no OTP for proto)
 
 ### SQLAlchemy — ALL models must use:
@@ -255,7 +305,7 @@ adb_hq_exec               → read-only both (senior oversight)
 ### Stack:
 
 Fresh Next.js 16 app in `channels/ticketing-ui/` inside chatbot_ssh.
-TypeScript, Tailwind CSS v4, AWS Cognito OIDC.
+TypeScript, Tailwind CSS v4, Keycloak OIDC (originally planned as Cognito).
 
 ### Stratcon as reference (read only — never forked/merged):
 
@@ -510,13 +560,14 @@ ops/                    ← platform monitoring (own container, broker-independe
   migrations/           ← ops Alembic stream (ops.* schema + ops_app role)
 requirements.grm.txt
 docs/
-  claude-tickets/       ← Claude Code session files (this file lives here)
-    CLAUDE.md           ← also at repo root
-    open-questions-round-2.md
-    session-0-codebase-findings.md  ← generated by Session 0
-    context/
-      grm-specification.md
-      existing-services.md
+  README.md             ← index of the whole spec tree
+  PROGRESS.md, TODO.md  ← operational build logs
+  services/             ← shared backend service contracts
+  ticketing_system/     ← GRM ticketing specs (+ ui/ for the officer UI)
+  rest_chatbot/         ← chatbot architecture/flow/frontend specs
+  seah/                 ← SEAH intake + privacy/vault specs
+  deployment/           ← runbooks, auth, security, DOCKER.md
+  sprints/              ← one summary per sprint; originals in sprints/archive/
 ```
 
 ---
@@ -542,19 +593,20 @@ TICKETING_SECRET_KEY=           ← python -c "import secrets; print(secrets.tok
 MESSAGING_API_KEY=              ← from existing backend config
 BACKEND_GRIEVANCE_BASE_URL=http://localhost:5001
 ORCHESTRATOR_BASE_URL=http://localhost:8000
-COGNITO_GRM_USER_POOL_ID=       ← new pool (separate from Stratcon)
-COGNITO_GRM_CLIENT_ID=
-COGNITO_GRM_REGION=             ← same as existing AWS_REGION
+# Keycloak vars (Cognito was superseded — see docs/deployment/16_auth_keycloak.md)
+KEYCLOAK_ISSUER=                ← e.g. https://<host>/keycloak/realms/grm
+KEYCLOAK_CLIENT_ID=
 ```
 
 ---
 
-## COGNITO — GRM pool (separate from Stratcon)
+## AUTH — Keycloak (superseded Cognito)
 
-Initial users:
-philgaeng@pm.me, philgaeng@gmail.com, philgaeng@stratcon.ph,
-philippe@gaeng.fr, philgaeng@soriano.ph,
-susen@adb.org, rmascarinas@adb.org, jlang@adb.org, skhadka@adb.org
+Officer auth runs on a self-hosted **Keycloak** realm (`grm`): PKCE OIDC login in
+`channels/ticketing-ui`, JWT verification in `ticketing/auth/keycloak_jwt.py`,
+invite flow (password-only setup email via realm SMTP), and an event webhook that
+activates `officer_onboarding`. Full as-built guide: `docs/deployment/16_auth_keycloak.md`.
 
-Account flow: admin creates in ticketing UI → ticketing calls Cognito invite API
-→ Cognito sends email → officer sets password. No console access needed.
+Account flow: admin creates officer in ticketing UI → ticketing calls the Keycloak
+Admin API → Keycloak emails a set-password link → officer sets password. No console
+access needed.

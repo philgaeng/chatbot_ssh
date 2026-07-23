@@ -1,0 +1,10 @@
+# The webchat itself ships as plain static ES modules — these are test-harness only.
+
+# dependencies
+/node_modules
+
+# testing
+/coverage
+
+# debug
+npm-debug.log*

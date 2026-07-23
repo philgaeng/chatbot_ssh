@@ -1,9 +1,14 @@
-# Ticketing System – API Reference (as-built, June 2026)
+# Ticketing System – API Reference (as-built, July 2026)
 
-All integration with the ticketing system is API-only. This document covers:
+Integration with the ticketing system is API-first. This document covers:
 1. **Inbound** — chatbot/backend calls ticketing
 2. **Outbound** — ticketing calls chatbot, messaging, grievance API
-3. **Full endpoint reference** — all implemented ticketing API routes
+3. **Direct `public.*` access** — the enumerated exception to "API-only" (§3b)
+4. **Full endpoint reference** — all implemented ticketing API routes
+
+> **"API-only" was never true and is no longer claimed** (amended 2026-07-15). Ticketing reads
+> and writes a closed set of `public.*` tables directly — see **§3b** for the contract, and
+> CLAUDE.md §Data rules rule 1. Complainant PII *is* API-only; grievance content is not.
 
 ---
 
@@ -91,7 +96,7 @@ Response: {
   "token": "a1b2c3d4",
   "package_id": "...",
   "package_label": "KL Road — Km 45 Sign",
-  "location_code": "NP_P1_MOR",
+  "location_code": "P1_MOR",
   "project_code": "KL_ROAD",
   "chatbot_url": "https://grm.facets-ai.com/chat"
 }
@@ -124,10 +129,37 @@ Body: { "phone": "...", "message": "..." }
 ## 3. Ticketing → Grievance API (Outbound)
 
 ```
-GET {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}
+GET  {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}          → x-api-key
+POST {BACKEND_GRIEVANCE_BASE_URL}/api/grievance/{grievance_id}/status   → x-api-key
 ```
 
-Called from ticket detail view to fetch PII (name, phone) on-demand. Never cached in `ticketing.*`.
+Called from ticket detail view to fetch **complainant PII** (name, phone) on-demand. Never cached in `ticketing.*`. Both endpoints require `x-api-key: $TICKETING_SECRET_KEY` as of T3-06; every call funnels through `ticketing/clients/grievance_api.py`.
+
+**Grievance *state* changes go over this API, never over SQL.** That is a real invariant — keep it.
+
+> ⚠️ The GET does **not** decrypt PII today; it returns pgcrypto hex ciphertext, which `ticketing/services/pii_vault.py` decrypts client-side. T3-04 fixes this at the backend. See CLAUDE.md §APIs to call.
+
+---
+
+## 3b. Ticketing → `public.*` direct access (NOT via the API)
+
+**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The full decision and evidence: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+
+Measured surface — **11 statements, 5 tables, 3 writes**:
+
+| `public.*` table | Access | Callers |
+| --- | --- | --- |
+| `grievances` | read | `services/grievance_content.py` (9 cols incl. `grievance_description`), `tasks/grievance_sync.py` (10 cols) |
+| `file_attachments` | read + **`UPDATE`** (archive tier) | `api/ticket_access.py`, `api/routers/tickets/files.py`, `engine/ticket_actions.py`, `services/archiving.py` |
+| `grievance_classification_taxonomy` | read + **`DELETE`+`INSERT`** (catalog resync) | `services/grievance_categories_catalog.py`, `seed/kl_road_standard.py` |
+| `complainants` | read — join-only, **non-PII** (`location_code`) | `tasks/grievance_sync.py` |
+| `grievance_parties` | read — join-only | `tasks/grievance_sync.py` |
+
+**The contract is enforced, not aspirational.** `tests/ticketing/test_boundary_policy.py` fails when the code and this list disagree, in both directions, and when a column ticketing names disappears from the `public.*` schema baseline.
+
+**Why not route these through the grievance API?** Because it would be a **security downgrade**. The direct read is behind a Keycloak JWT and `assert_ticket_visibility`'s SEAH + jurisdiction gate; `GET /api/grievance/{id}` has **no authz** even after T3-06 hardened it (D-38) — an `x-api-key` says *"this is ticketing"*, not *"this is officer X in district Y"*. Routing would also turn a PII-free query into a PII-bearing one, and `grievance_sync.py` pages 500 rows every 2 minutes against an API with no bulk endpoint. **Do not cite T3-06 as having made this viable** — it made the API a credible *authn + audit* boundary, not an *authorization* one.
+
+**Two rules still hold and are pinned by the same test:** no cross-schema FK, and no complainant PII columns in `ticketing.*`.
 
 ---
 
@@ -145,120 +177,153 @@ All routes prefixed with `/api/v1` unless noted.
 | `PATCH` | `/tickets/{id}` | Update ticket metadata |
 | `PATCH` | `/tickets/{id}/complainant` | Update complainant data |
 | `POST` | `/tickets/{id}/actions` | Perform workflow action (see below) |
+| `PATCH` | `/tickets/{id}/classification` | Officer validates/edits summary + categories → `officer_confirmed` (see [17_classification_status.md](17_classification_status.md)) |
+| `GET` | `/reference/grievance-categories` | Category options from classification taxonomy (TP-14) |
 | `POST` | `/tickets/{id}/reply` | Reply to complainant via orchestrator |
-| `POST` | `/tickets/{id}/inbound-message` | Record inbound complainant message |
+| `POST` | `/tickets/{id}/inbound` | Record inbound complainant message |
 | `GET` | `/tickets/{id}/sla` | SLA countdown data |
 | `GET` | `/tickets/{id}/teammates` | Assignable teammates for this ticket |
 | `POST` | `/tickets/{id}/seen` | Mark events as seen (badge clear) |
 | `POST` | `/tickets/{id}/informed` | Add user to Informed tier |
 | `PUT` | `/tickets/{id}/complainant-reply-owner` | Set complainant reply owner |
 | `GET` | `/tickets/{id}/files` | List complainant-uploaded files |
-| `GET` | `/tickets/{id}/files/{file_id}` | Download complainant file |
+| `GET` | `/files/{file_id}` | Download complainant file |
 | `POST` | `/tickets/{id}/attachments` | Upload officer attachment |
 | `GET` | `/tickets/{id}/attachments` | List officer attachments |
-| `GET` | `/tickets/{id}/attachments/{file_id}` | Download officer attachment |
+| `GET` | `/attachments/{file_id}` | Download officer attachment |
 | `GET` | `/tickets/{id}/pii` | Fetch PII from grievance API (logged) |
 | `GET` | `/tickets/{id}/resolved-summary` | Get resolved case summary |
 | `POST` | `/tickets/{id}/resolved-summary` | Generate resolved summary (LLM) |
 | `POST` | `/tickets/{id}/findings` | Generate AI findings digest (LLM) |
-| `POST` | `/tickets/{id}/reveal-contact/begin` | Begin PII reveal (logged) |
-| `POST` | `/tickets/{id}/reveal-contact/close` | Close PII reveal session |
+| `POST` | `/tickets/{id}/reveal` | Begin PII reveal session (logged) |
+| `POST` | `/tickets/{id}/reveal/close` | Close PII reveal session |
 
 ### Ticket actions (`POST /tickets/{id}/actions`)
 
-`action_type` values:
+`action_type` values (`VALID_ACTIONS` in `ticketing/api/routers/tickets.py`):
 
 | Action | Who | Effect |
 |---|---|---|
-| `ACKNOWLEDGE` | Actor at current step | Moves status to IN_PROGRESS |
-| `ESCALATE` | Actor or Supervisor | Advances to next step, auto-assigns, notifies |
-| `RESOLVE` | Actor (with resolution record) | Closes workflow, notifies complainant |
-| `CLOSE` | Super admin | Hard close |
-| `NOTE_ADDED` | Any officer with access | Adds internal note to timeline |
-| `FIELD_REPORT` | Actor | Adds field report bubble to timeline |
-| `GRC_CONVENE` | GRC chair | Schedules hearing, notifies GRC members |
-| `GRC_DECIDE` | GRC chair | Records GRC resolution |
-| `ASSIGN` | Actor or Supervisor | Reassign to another officer |
+| `ACKNOWLEDGE` | Assigned officer (or admin) | Moves status to IN_PROGRESS, starts SLA clock. **Blocked (422)** until classification is validated — see [17_classification_status.md](17_classification_status.md) |
+| `ESCALATE` | Assigned officer / Supervisor / admin | Advances to next step, auto-assigns, notifies |
+| `RESOLVE` | Assigned officer, admin, or `supervisor_role` match (with resolution record) | **Only terminal action** — resolves the case, notifies complainant. See `08_ticket_resolution_and_case_summary.md` §2 |
+| `NOTE` | Any officer with access | Adds internal note to timeline (LLM EN translation async) |
+| `FIELD_REPORT` | Assigned officer | Adds field report bubble to timeline |
+| `GRC_CONVENE` | GRC chair | Sets `GRC_HEARING_SCHEDULED`, notifies all GRC members |
+| `REASSIGNMENT_REQUESTED` | Assigned officer / admin | Requests (or performs) reassignment to another officer |
+
+> **Removed in v1:** `CLOSE` and `GRC_DECIDE`. The only way to end a case is `RESOLVE` with a resolution record; GRC chairs use `GRC_CONVENE` then `RESOLVE` (or `ESCALATE` to legal) like any assigned officer. Direct reassignment by an admin also happens via `PATCH /tickets/{id}` (`assigned_to` → `ASSIGNED` event); there is no `ASSIGN` action.
+
+### Auth (`ticketing/api/routers/auth.py`)
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/auth/login` | Sign in with email + password (Keycloak direct grant) |
+| `POST` | `/auth/forgot-password` | Request password reset |
+| `POST` | `/auth/request-invite-link` | Re-request invite/setup link |
+| `POST` | `/auth/reset-password` | Complete password reset |
 
 ### Workflows
 
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/workflows` | List all workflow definitions |
-| `GET` | `/workflows/{id}` | Workflow detail + steps |
-| `POST` | `/workflows` | Create workflow |
-| `PATCH` | `/workflows/{id}` | Update workflow |
-| `POST` | `/workflows/{id}/steps` | Add step |
-| `PATCH` | `/workflows/{id}/steps/{step_id}` | Update step |
-| `DELETE` | `/workflows/{id}/steps/{step_id}` | Delete step |
-
-### Users / Officers
+Full contract in [12_workflows_configuration.md](12_workflows_configuration.md) §11. Highlights:
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/users/roster` | List all officers (for bypass switcher + Settings) |
+| `GET` | `/workflows`, `/workflows/{id}` | List / detail + steps |
+| `GET` | `/workflows/templates`, `/workflows/routing-options` | Templates; classifications + intake routes for the project workflow editor |
+| `POST/PATCH/DELETE` | `/workflows`, `/workflows/{id}` | Create (optional clone) / metadata / delete (draft only) |
+| `POST` | `/workflows/{id}/publish`, `/{id}/archive`, `/{id}/save-as-template` | Lifecycle |
+| `POST/PATCH/DELETE` | `/workflows/{id}/steps…`, `POST …/steps/reorder` | Step editor |
+| `GET/POST/DELETE` | `/workflows/{id}/assignments…` | **Legacy** workflow_assignments rows (fallback routing only) |
+| `GET/PUT` | `/projects/{id}/workflows` | Project workflow bindings (slots) |
+
+### Users / Roles / Admin scopes
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/users/roster`, `/users/officers` | Officer lists (bypass switcher, Settings, staffing) |
+| `GET` | `/users/invite/preflight` | Validate invite before creating |
 | `POST` | `/users/invite` | Invite officer (`user_roles` + `officer_scopes`; field roles: org resolved from project — §1.3) |
-| `GET` | `/users/{id}` | Officer detail |
-| `PATCH` | `/users/{id}` | Update officer (org, roles, Keycloak sync); `apply_officer_organization()` updates all `user_roles` + `officer_scopes` |
-| `GET/POST/DELETE` | `/users/{id}/scopes` | Officer jurisdiction rows |
-| `GET` | `/roles` | List roles catalog |
-| `PATCH` | `/roles/{id}` | Update role definition |
+| `POST` | `/users/{id}/resend-invite` | Re-send Keycloak setup link |
+| `PATCH/DELETE` | `/users/{id}` | Update officer (org, roles, Keycloak sync) / deactivate |
+| `GET/POST/DELETE` | `/users/{id}/roles…` | Role assignments |
+| `GET/POST/DELETE` | `/users/{id}/scopes…` | Officer jurisdiction rows |
+| `GET/PATCH` | `/users/me/preferences`, `/users/me/profile` | Own preferences / profile |
+| `GET` | `/users/me/session`, `/users/me/admin-context`, `/users/me/badge`, `/users/me/notifications`, `/users/me/tasks` | Session, admin ladder context, badge count, notifications, own tasks |
+| `GET/POST/PATCH/DELETE` | `/roles…` | Roles catalog CRUD; `GET /roles/archetypes` for the role wizard |
+| `GET/POST/DELETE` | `/admin-scopes…` | Admin ladder (`org_admin` / `project_admin`); `POST /admin-scopes/{id}/send-invite` |
 
 ### Settings
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/settings` | Get all settings (key/value) |
-| `PATCH` | `/settings/{key}` | Update a setting |
+| `GET` | `/settings`, `/settings/{key}` | List / get settings (key/value JSON) |
+| `PUT` | `/settings/{key}` | Update a setting (super-admin gate on sensitive keys — see `14_platform_settings.md` §7) |
+| `DELETE` | `/settings/{key}` | Delete a setting |
 
-### Organizations / Locations / Projects
+### Organizations / Locations / Projects / Packages
 
 | Method | Path | Description |
 |---|---|---|
-| `GET/POST` | `/organizations` | List / create orgs |
-| `GET/PATCH` | `/organizations/{id}` | Get / update org |
-| `GET/POST` | `/locations` | List / create locations |
-| `GET/PATCH` | `/locations/{id}` | Get / update location |
-| `GET/POST` | `/projects` | List / create projects |
-| `GET/PATCH` | `/projects/{id}` | Get / update project |
-| `GET/POST` | `/projects/{id}/packages` | List / create packages |
-| `GET/PATCH/DELETE` | `/projects/{id}/packages/{pkg_id}` | Package CRUD |
+| `GET/POST/PATCH/DELETE` | `/organizations…` | Org CRUD |
+| `GET` | `/countries` | Country list |
+| `GET` | `/locations`, `/locations/{code}` | Location tree query / node |
+| `POST` | `/locations/import` (+ `GET /locations/import/template.{csv,json}`) | Bulk location import |
+| `GET/POST/PATCH/DELETE` | `/projects…` | Project CRUD |
+| `GET` | `/projects/{id}/go-live` | Go-live readiness check |
+| `GET/PATCH` | `/projects/{id}/messaging` | Project officer SMS/WhatsApp config |
+| `GET/PUT` | `/projects/{id}/workflows` | Workflow slot bindings |
+| `GET/POST/PATCH/DELETE` | `/projects/{id}/organizations…`, `…/actor-roles` | Project actors + org role links |
+| `GET/POST/DELETE` | `/projects/{id}/locations…` | Project location links |
+| `GET/POST/PATCH` | `/projects/{id}/packages…` | Package CRUD |
+| `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/{code}`, `…/organizations/{org}` | Package location + org links |
+
+### Project types
+
+| Method | Path | Description |
+|---|---|---|
+| `GET/POST/PATCH` | `/project-types…` | Project archetype CRUD (`14_platform_settings.md` §4) |
 
 ### QR Tokens
 
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/scan/{token}` | Public scan — no auth; returns package context |
-| `GET` | `/qr-tokens` | Admin: list tokens (with scan_url) |
-| `POST` | `/qr-tokens` | Admin: create token for a package |
-| `DELETE` | `/qr-tokens/{token}` | Admin: revoke token |
+| `GET` | `/my-packages/qr` | Packages + QR tokens in the caller's scope |
+| `GET/POST` | `/packages/{package_id}/qr-tokens` | List / create tokens for a package |
+| `DELETE` | `/qr-tokens/{token}` | Revoke token |
 
 ### Reports
 
+Full behaviour: `09_reports_and_report_builder.md`.
+
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/reports/overview` | Filtered overview (Resolved/High/Overdue/Others) |
-| `GET` | `/reports/pivot` | Pivot crosstab query |
-| `POST` | `/reports/export` | XLSX export (rate-limited) |
-| `GET` | `/reports/quarterly-plan` | Current quarter assignments |
-| `PUT` | `/reports/quarterly-plan/{role}` | Update role's report assignment |
-| `POST` | `/reports/quarterly-library` | Save named report to library |
-| `GET` | `/reports/quarterly-library` | List library |
-| `DELETE` | `/reports/quarterly-library/{id}` | Remove from library |
-| `PATCH` | `/reports/limits` | Update per-role caps (super_admin) |
-| `GET` | `/reports/limits` | Get current caps |
+| `GET` | `/reports/query` | Operational report — four sections (Resolved/High/Overdue/Others) with filters |
+| `GET` | `/reports/summary`, `/reports/summary/export` | Summary tab (quarterly matrix) + XLSX export |
+| `POST` | `/reports/build` | Pivot/report builder query |
+| `GET` | `/reports/export`, `/reports/export-all` | XLSX export (rate-limited) |
+| `POST` | `/reports/share` | Create public share link (`GET /reports/share/{token}`) |
+| `GET` | `/reports/fields` | Available report fields |
+| `GET/PUT/POST/PATCH/DELETE` | `/reports/quarterly-plan`, `…/quarterly-schedule`, `…/quarterly-assignments…`, `…/quarterly-library…` | Quarterly email plan, schedule, role assignments, report library |
 
 ### Viewers / Tasks
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/tickets/{id}/viewers` | List viewers (Informed + Observer) |
-| `POST` | `/tickets/{id}/viewers` | Add viewer |
+| `GET/POST` | `/tickets/{id}/viewers` | List / add viewers (Informed + Observer) |
 | `DELETE` | `/tickets/{id}/viewers/{user_id}` | Remove viewer |
-| `GET` | `/tickets/{id}/tasks` | List tasks |
-| `POST` | `/tickets/{id}/tasks` | Create task |
-| `PATCH` | `/tickets/{id}/tasks/{task_id}` | Update task |
-| `DELETE` | `/tickets/{id}/tasks/{task_id}` | Delete task |
+| `GET/POST` | `/tickets/{id}/tasks` | List / create tasks |
+| `POST` | `/tickets/{id}/tasks/{task_id}/complete` | Complete task |
+| `GET` | `/users/me/tasks` | Own open tasks across tickets |
+
+### Public (no officer auth)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/public/closure/{token}` (+ `/pdf`) | Complainant-facing closure document + PDF |
+| `GET` | `/public/report/{token}`, `/reports/share/{token}` | Shared report views |
+| `GET` | `/scan/{token}` | QR scan (above) |
 
 ### Webhooks
 

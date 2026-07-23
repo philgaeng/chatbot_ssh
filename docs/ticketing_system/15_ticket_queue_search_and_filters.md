@@ -101,3 +101,39 @@ Pagination unchanged (`page`, `page_size` max 100).
 4. Select project **KL_ROAD** → package dropdown populates → filter by package  
 5. **Clear filters** restores full tab list  
 6. API: `GET /api/v1/tickets?q=dust&priority=HIGH&sla_breached=true` returns expected count
+
+---
+
+## Appendix A — Queue summary tile logic (as-built)
+
+> Resolves the bug report frozen in `docs/sprints/archive/claude-tickets/queue-tile-logic.md`
+> ("BROKEN — needs a decision", Options A/B/C). **Option A landed**, extended with
+> task due dates. The old tile filters (`status_code === "OPEN"`, stale `sla_breached`
+> flag, no 24-hour window) are gone.
+
+### Backend
+
+`GET /api/v1/tickets` list items (`TicketListItem`, `ticketing/api/schemas/ticket.py`) include two computed fields:
+
+| Field | Computation |
+|-------|-------------|
+| `sla_deadline_at` | `step_started_at` (fallback `created_at`) + `step.resolution_time_days`; null if the step has no SLA (`ticketing/api/routers/tickets.py`, `list_tickets`) |
+| `my_earliest_task_due_at` | Earliest `due_date` among the requesting user's PENDING tasks on the ticket; null if none |
+
+### Frontend (`channels/ticketing-ui/app/queue/page.tsx`)
+
+```
+effectiveDeadline(t) = min(sla_deadline_at, my_earliest_task_due_at)   // whichever is set / earlier
+```
+
+Tiles are computed client-side over the **Actor** tab (fetched `page_size=100` on mount):
+
+| Tile | Rule |
+|------|------|
+| **Action Needed** | `status_code ∉ {RESOLVED, CLOSED}` — all active actor tickets |
+| **Due Today** | subset with `now ≤ effectiveDeadline ≤ now + 24 h` |
+| **Overdue** | subset with `effectiveDeadline < now` |
+
+- Invariant `Action Needed ≥ Due Today + Overdue` holds by construction (Due Today and Overdue are disjoint subsets of Action Needed).
+- **Overdue no longer reads the stale `sla_breached` DB flag** (which the Celery watchdog only refreshes every 15 min) — tiles now agree with the live per-row `SlaCountdown`.
+- Tiles double as click-to-filter toggles on the list (clicking a tile filters, clicking again clears; switching to a non-Actor tab resets the tile filter). Row sorting uses the same `effectiveDeadline` categories: overdue → due today → high priority → other, closest deadline first.

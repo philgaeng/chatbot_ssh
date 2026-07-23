@@ -2,7 +2,7 @@
 Workflow management endpoints — full CRUD for the no-code workflow editor.
 
 Read endpoints: any authenticated officer
-Mutating endpoints: matrix-aware admin (country_admin by track, super_admin)
+Mutating endpoints: matrix-aware admin (org_admin by track, super_admin)
 SEAH workflows: additionally gated by can_see_seah
 """
 import re
@@ -16,10 +16,13 @@ from sqlalchemy.orm import Session, selectinload
 from ticketing.api.dependencies import get_db, get_authenticated_user, CurrentUser
 from ticketing.services.admin_access import (
     SettingsAction,
+    apply_catalog_scope,
     can_mutate_workflow,
+    catalog_owner_for,
     require_settings_write,
     workflow_track_from_type,
 )
+from ticketing.services.role_scope import validate_step_roles
 from ticketing.api.schemas.workflow import (
     SaveAsTemplateBody,
     StepReorderRequest,
@@ -127,6 +130,8 @@ def list_workflows(
         q = q.where(WorkflowDefinition.status == status)
     if is_template is not None:
         q = q.where(WorkflowDefinition.is_template == is_template)
+    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+    q = apply_catalog_scope(q, db, current_user, WorkflowDefinition.owner_organization_id)
 
     workflows = db.execute(q.order_by(WorkflowDefinition.display_name)).scalars().all()
     return WorkflowListResponse(
@@ -241,6 +246,11 @@ def create_workflow(
         version=1,
         is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
+        # SH-7 §S5: templates stay global (NULL); a scoped org_admin owns its custom workflows.
+        owner_organization_id=(
+            None if payload.is_template
+            else catalog_owner_for(current_user, workflow_track_from_type(normalized_type))
+        ),
     )
     db.add(wf)
 
@@ -339,6 +349,17 @@ def publish_workflow(
         raise HTTPException(
             status_code=422,
             detail=f"Cannot publish: steps missing assigned role: {', '.join(missing)}",
+        )
+    # SH-2: every step's role references must exist and match the workflow track —
+    # publish is the full-workflow gate that also catches legacy/wrong-track bindings.
+    for s in active_steps:
+        validate_step_roles(
+            db,
+            workflow_type=wf.workflow_type,
+            assigned_role_key=s.assigned_role_key,
+            supervisor_role=s.supervisor_role,
+            informed_roles=s.informed_roles,
+            observer_roles=s.observer_roles,
         )
     wf.status = "published"
     wf.version = (wf.version or 0) + 1
@@ -462,6 +483,16 @@ def add_step(
     wf = _load_workflow(workflow_id, db, current_user)
     _require_workflow_write(current_user, wf.workflow_type)
 
+    # SH-2: role references must exist and match the workflow track.
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=payload.assigned_role_key,
+        supervisor_role=payload.supervisor_role,
+        informed_roles=payload.informed_roles,
+        observer_roles=payload.observer_roles,
+    )
+
     # Append at the end
     max_order = db.execute(
         select(WorkflowStep.step_order)
@@ -507,6 +538,18 @@ def update_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     fields_set = payload.model_fields_set
+
+    # SH-2: validate any role field being SET here (existing refs untouched by this
+    # PATCH aren't re-checked — publish gates the whole workflow).
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=payload.assigned_role_key if "assigned_role_key" in fields_set else None,
+        supervisor_role=payload.supervisor_role if "supervisor_role" in fields_set else None,
+        informed_roles=payload.informed_roles if "informed_roles" in fields_set else None,
+        observer_roles=payload.observer_roles if "observer_roles" in fields_set else None,
+    )
+
     if "display_name" in fields_set:
         step.display_name = payload.display_name
     if "step_key" in fields_set:

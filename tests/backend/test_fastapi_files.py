@@ -349,6 +349,40 @@ def test_upload_voice_chunk_duplicate_is_idempotent(client: TestClient, tmp_path
         assert r2.json().get("duplicate") is True
 
 
+def test_upload_voice_chunk_without_upload_id_after_first_is_rejected(
+    client: TestClient, tmp_path
+):
+    """A chunk past index 0 must carry the upload_id minted by chunk 0.
+
+    Pins the contract the webchat client relies on (T3-03): only chunk 0 may omit
+    upload_id. The client serializes its chunk queue precisely so this 400 cannot be
+    reached — before that fix, a link with RTT > 1s built chunk 1 before chunk 0's
+    response had returned the id, and the whole recording was aborted here.
+    """
+    grievance_id = "GR-20241201-KO-JH-VOICE3-B"
+    with patch.object(
+        __import__("backend.api.routers.files", fromlist=["file_server_core"]).file_server_core,
+        "upload_folder",
+        str(tmp_path),
+    ), patch(
+        "backend.api.routers.files.db_manager.is_grievance_archived",
+        return_value=False,
+    ), patch(
+        "backend.api.routers.files.db_manager.check_entry_exists_for_entity_key",
+        return_value=True,
+    ):
+        r = client.post(
+            "/upload-voice-chunk",
+            data={
+                "chunk_index": 1,
+                "grievance_id": grievance_id,
+            },
+            files=[("chunk", ("chunk1.bin", io.BytesIO(b"audio-data"), "application/octet-stream"))],
+        )
+        assert r.status_code == 400
+        assert "upload_id required" in r.json().get("error", "")
+
+
 # --- test-upload ---
 
 

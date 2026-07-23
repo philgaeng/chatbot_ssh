@@ -8,11 +8,10 @@ import { useAuth } from "@/app/providers/AuthProvider";
 import { AuthApiError, requestInviteSetupLinkApi, requestPasswordResetApi } from "@/lib/auth/auth-api";
 import { SESSION_EXPIRED_QUERY } from "@/lib/auth/session-expired";
 import { readRememberedLoginEmail, rememberLoginEmail } from "@/lib/auth/token-storage";
+import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 import { defaultQueuePath } from "@/lib/mobile-routes";
 
 type Step = "email" | "password" | "forgot" | "forgot-sent" | "invite-resend" | "invite-sent";
-
-const BYPASS = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
 
 function normalizeEmail(raw: string): string {
   return raw.trim().toLowerCase();
@@ -119,7 +118,7 @@ function LoginContent() {
     }
   }
 
-  if (BYPASS) {
+  if (AUTH_BYPASS) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-10 w-full max-w-sm text-center">

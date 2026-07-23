@@ -33,7 +33,9 @@ def upsert_grm_roles(db: Session) -> None:
         jmode = entry.get("jurisdiction_mode")
         dname = entry["display_name"]
         rkind = entry.get("role_kind") or (
-            "admin" if rk in ("super_admin", "country_admin", "project_admin") else "operational"
+            "admin"
+            if rk in ("super_admin", "org_admin", "project_admin", "officer_admin")
+            else "operational"
         )
         rorigin = entry.get("role_origin", "system")
         if existing:

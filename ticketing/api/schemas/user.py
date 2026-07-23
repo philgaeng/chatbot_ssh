@@ -18,6 +18,9 @@ class RoleResponse(BaseModel):
     permissions: Any
     role_kind: str | None = None
     role_origin: str | None = None
+    # SH-7 org-scoped catalog: the owning org node (NULL = global/system). Drives the
+    # "available at DoR & below" owning-level chip in the role picker (RB frame 08).
+    owner_organization_id: str | None = None
     steps_count: int = 0
     officers_count: int = 0
     created_at: datetime
@@ -67,7 +70,7 @@ class AdminScopeResponse(BaseModel):
 
 class AdminScopeCreate(BaseModel):
     user_id: str = Field(..., max_length=128)
-    role_key: str = Field(..., pattern="^(country_admin|project_admin)$")
+    role_key: str = Field(..., pattern="^(org_admin|project_admin|officer_admin)$")
     country_code: str | None = Field(None, max_length=8)
     project_id: str | None = Field(None, max_length=64)
     organization_id: str | None = Field(None, max_length=64)
@@ -100,7 +103,7 @@ class AdminScopeCreate(BaseModel):
 
 class AdminContextResponse(BaseModel):
     is_super_admin: bool
-    is_country_admin: bool
+    is_org_admin: bool
     is_project_admin: bool
     admin_workflow_tracks: list[str]
     admin_project_ids: list[str]

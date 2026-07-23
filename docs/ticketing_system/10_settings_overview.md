@@ -41,15 +41,15 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 | Role | Tier | Track | Settings access |
 |------|------|-------|-----------------|
 | **`super_admin`** | Platform | Both | All tabs + **Settings → Settings** (platform) |
-| **`country_admin`** | Country | **`workflow_track` on scope** (`standard` \| `seah`) | Country admin; standard track owns structure, SEAH track owns SEAH ops |
+| **`org_admin`** | Country | **`workflow_track` on scope** (`standard` \| `seah`) | Country admin; standard track owns structure, SEAH track owns SEAH ops |
 | **`project_admin`** | Project | **`workflow_track` on scope** (`standard` \| `seah`) | Project delegate; track set at appointment |
 | **Operational officers** | — | — | No Settings |
 
-`local_admin` / `seah_admin` are **deprecated** → scoped `country_admin` or `project_admin` + `workflow_track`.
+`local_admin` / `seah_admin` are **deprecated** → scoped `org_admin` or `project_admin` + `workflow_track`.
 
 ### Settings UI matrix (target)
 
-| Main tab | `super_admin` | `country_admin` | `project_admin` |
+| Main tab | `super_admin` | `org_admin` | `project_admin` |
 |----------|---------------|-----------------|-----------------|
 | Organizations & officers | ✅ | ✅ country | ✅ scoped |
 | Workflows, roles & permissions | ✅ | ✅ | ✅ (roles catalog read) |
@@ -68,7 +68,7 @@ Additional gates:
 
 | Concept | Where configured | Stored in | Example keys |
 |---------|------------------|-----------|--------------|
-| **Admin roles** | Settings → Settings → **Admin access** (`super_admin`) | `ticketing.roles` + scoped assignments | `super_admin`, `country_admin`, `project_admin` (+ `workflow_track` on scope) |
+| **Admin roles** | Settings → Settings → **Admin access** (`super_admin`) | `ticketing.roles` + scoped assignments | `super_admin`, `org_admin`, `project_admin` (+ `workflow_track` on scope) |
 | **Operational GRM roles** | Workflows → **Roles & permissions** | `ticketing.roles`, `workflow_steps`, `user_roles`, `officer_scopes` | `site_safeguards_focal_person`, `grc_chair` |
 | **Project party roles** | Projects & packages → Actor roles / project actors | `project_actor_roles`, `project_organizations.org_role` | `donor`, `main_contractor`, `implementing_agency` |
 
@@ -95,7 +95,7 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 
 | Key | UI surface | Who can write | Spec |
 |-----|------------|---------------|------|
-| `notification_rules` | Workflow editor panel | `country_admin`+ | [12_workflows_configuration.md](12_workflows_configuration.md) |
+| `notification_rules` | Workflow editor panel | `org_admin`+ | [12_workflows_configuration.md](12_workflows_configuration.md) |
 | `complainant_notifications` | Seeded; no dedicated UI yet | Admin | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
 | `org_roles` | Advanced (JSON) | `super_admin` only | [14_platform_settings.md](14_platform_settings.md) |
 | `report_limits` | Advanced (JSON) | `super_admin` only | [09_reports_and_report_builder.md](09_reports_and_report_builder.md) |
@@ -115,9 +115,10 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 | [14_platform_settings.md](14_platform_settings.md) | Locations, quarterly report settings, project types, system JSON |
 | [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) | Officer invite, scopes, auto-assign |
 | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) | Staff WhatsApp/SMS policy |
+| [16_org_chart_and_positions.md](16_org_chart_and_positions.md) | Org unit tree, position types, position→role matrix |
 | [Escalation_rules.md](Escalation_rules.md) | SLA breach behaviour (runtime; configured via workflows) |
 
-**Historical:** `docs/sprints/claude-tickets/workflow-settings-spec.md` was the working draft for tabs 2–3; content is split into docs 10–14 above.
+**Historical:** `docs/sprints/archive/claude-tickets/workflow-settings-spec.md` was the working draft for tabs 2–3; content is split into docs 10–14 above.
 
 ---
 

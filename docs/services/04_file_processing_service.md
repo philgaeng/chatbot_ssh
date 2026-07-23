@@ -174,7 +174,7 @@ Prod attachments: **private encrypted object storage (~50 GB)**, not root disk.
 - DB `file_attachments`: store final `s3_key` (or path during local-dev), `file_size`, optional JSON `processing_metadata`:
   - `original_bytes`, `compressed_bytes`, `width`, `height`, `compression_status` (`compressed` | `skipped` | `failed`)
 
-### 6.7 Code layout (to implement)
+### 6.7 Code layout (implemented — `backend/services/image_compression.py`)
 
 | Piece | Location |
 |-------|----------|

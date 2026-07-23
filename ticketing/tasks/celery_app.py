@@ -62,10 +62,19 @@ celery_app.conf.update(
             "schedule": 60,
         },
         # Grievance sync: polls public.grievances for new submissions every 2 minutes
-        # Creates ticketing.tickets automatically — no chatbot code change needed
+        # Creates ticketing.tickets automatically — no chatbot code change needed.
+        # Incremental (watermark-paged) since H2-04 — only rows modified since last run.
         "grm-grievance-sync": {
             "task": "ticketing.tasks.grievance_sync.sync_grievances",
             "schedule": 120,  # 2 minutes
+        },
+        # Daily full grievance sweep (H2-04 hybrid backstop): catches join-sourced changes the
+        # watermark can't see — e.g. a complainant location_code edit that never bumps the
+        # grievance's grievance_modification_date. 02:30 Asia/Kathmandu (20:45 UTC), off-peak.
+        "grm-grievance-sync-full": {
+            "task": "ticketing.tasks.grievance_sync.sync_grievances",
+            "schedule": crontab(hour=20, minute=45),
+            "kwargs": {"full": True},
         },
         # SLA watchdog: runs every 15 minutes
         "grm-sla-watchdog": {

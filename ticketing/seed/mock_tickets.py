@@ -205,14 +205,14 @@ def seed_mock_officers(db: Session) -> None:
 
 
 def seed_admin_scopes(db: Session) -> None:
-    """Scoped admin assignments for demo matrix (country_admin / project_admin)."""
+    """Scoped admin assignments for demo matrix (org_admin / project_admin)."""
     from sqlalchemy import select
 
     from ticketing.models.admin_scope import AdminScope
 
     specs = [
-        (OFFICER_COUNTRY_ADMIN_STD, "country_admin", "NP", None, "standard", OFFICER_ADMIN),
-        (OFFICER_COUNTRY_ADMIN_SEAH, "country_admin", "NP", None, "seah", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_STD, "org_admin", "NP", None, "standard", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_SEAH, "org_admin", "NP", None, "seah", OFFICER_ADMIN),
         (OFFICER_PROJECT_ADMIN, "project_admin", None, "KL_ROAD", "standard", OFFICER_COUNTRY_ADMIN_STD),
     ]
     for user_id, role_key, country, project_id, track, created_by in specs:
@@ -663,27 +663,33 @@ def seed_all(reset: bool = False) -> None:
     db = SessionLocal()
     try:
         if reset:
-            logger.info("Reset mode: deleting all ticketing.* rows...")
-            db.execute(TicketEvent.__table__.delete())
-            db.execute(Ticket.__table__.delete())
-            from ticketing.models.admin_scope import AdminScope
-            db.execute(AdminScope.__table__.delete())
-            db.execute(OfficerScope.__table__.delete())
-            db.execute(UserRole.__table__.delete())
-            from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
-            from ticketing.models.organization import Organization
-            from ticketing.models.user import Role
-            from ticketing.models.settings import Settings
-            db.execute(WorkflowAssignment.__table__.delete())
-            db.execute(WorkflowStep.__table__.delete())
-            db.execute(WorkflowDefinition.__table__.delete())
-            # Locations live in ticketing.locations (imported geodata) — not reset here.
-            # Only reset org/role/settings that are seeded by mock_tickets.
-            db.execute(Organization.__table__.delete())
-            db.execute(Role.__table__.delete())
-            db.execute(Settings.__table__.delete())
+            logger.info("Reset mode: truncating transactional data (structural data preserved)...")
+            # Wipe only the *transactional / assignment* data that accumulates and is
+            # re-seeded (tickets + their children via CASCADE, officer/admin scopes, roster
+            # roles, officer positions). PRESERVE all STRUCTURAL data — workflows, projects,
+            # packages, project_workflows, organizations, roles, position_types — plus the
+            # imported geodata: the seeders upsert those idempotently, and several are
+            # *migration-seeded* (packages, project_workflows) with no seeder to re-create
+            # them, so a blanket TRUNCATE would leave them permanently empty. CASCADE covers
+            # ticket child tables; RESTART IDENTITY resets sequences.
+            from sqlalchemy import text as _sql_text
+
+            transactional = [
+                "tickets",           # → ticket_events / tasks / viewers / files / episodes (CASCADE)
+                "officer_scopes",
+                "admin_scopes",
+                "user_roles",
+                "officer_positions",
+            ]
+            db.execute(
+                _sql_text(
+                    "TRUNCATE TABLE "
+                    + ", ".join(f"ticketing.{t}" for t in transactional)
+                    + " RESTART IDENTITY CASCADE"
+                )
+            )
             db.commit()
-            logger.info("Reset complete.")
+            logger.info("Reset complete (transactional data wiped; structure preserved).")
 
         # Seed workflows (each is idempotent)
         seed_standard(db)

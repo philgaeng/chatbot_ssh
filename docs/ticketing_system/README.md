@@ -1,6 +1,6 @@
 # GRM Ticketing System – Documentation Index
 
-> Last updated: June 2026 (routing org, grievance sync Option A, dispatch on all intake paths). Reflects as-built state.
+> Last updated: July 2026 (workflow slots as-built, actions v1, geography + classification specs promoted). Reflects as-built state.
 
 ---
 
@@ -29,7 +29,10 @@
 | [`07_officer_management_and_assignment.md`](07_officer_management_and_assignment.md) | Officer accounts, scopes, assignment logic | Current |
 | [`08_ticket_resolution_and_case_summary.md`](08_ticket_resolution_and_case_summary.md) | Resolution flow, resolved summary, 4-tier model spec | Current |
 | [`09_reports_and_report_builder.md`](09_reports_and_report_builder.md) | Reports: Overview / Pivot / Quarterly email (built); Summary tab §12 (planned) | Current |
-| [`15_ticket_queue_search_and_filters.md`](15_ticket_queue_search_and_filters.md) | Queue / All Tickets search bar + filters (priority, SLA, date filed, project, package) | Current |
+| [`15_ticket_queue_search_and_filters.md`](15_ticket_queue_search_and_filters.md) | Queue / All Tickets search bar + filters (priority, SLA, date filed, project, package) + tile logic (Appendix A) | Current |
+| [`16_org_chart_and_positions.md`](16_org_chart_and_positions.md) | Org chart, position types, position→role matrix | Agreed design — not yet implemented |
+| [`17_classification_status.md`](17_classification_status.md) | Grievance classification status (Option B): enum, transitions, officer validation gate, hybrid sync | ✅ Current |
+| [`18_geography_and_locations.md`](18_geography_and_locations.md) | Geography reference model (countries, level defs, location tree, translations) + submit-time mapping rule | ✅ Current |
 
 ## Settings (admin UI)
 
@@ -42,6 +45,13 @@ Start at [`10_settings_overview.md`](10_settings_overview.md) — maps all four 
 | [`12_workflows_configuration.md`](12_workflows_configuration.md) | Workflow definitions, steps, SLAs, templates, notification rules | Current |
 | [`13_projects_and_packages.md`](13_projects_and_packages.md) | `ticketing.projects`, actors, packages, go-live, QR | Current |
 | [`14_platform_settings.md`](14_platform_settings.md) | Locations, quarterly report settings, project types, system JSON | Current |
+
+## Related spec folders
+
+| Folder | Contents |
+|---|---|
+| [`../seah/README.md`](../seah/README.md) | SEAH intake, privacy, and workflow specs (dedicated folder) |
+| [`ui/README.md`](ui/README.md) | Officer UI spec + design system |
 
 ## Features (chatbot-shared data)
 

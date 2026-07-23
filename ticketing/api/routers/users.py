@@ -8,7 +8,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -45,11 +45,16 @@ from ticketing.services.admin_access import (
     ADMIN_ROLE_KEYS,
     SettingsAction,
     admin_context_payload,
+    apply_catalog_scope,
+    can_admin_org,
     can_create_operational_role,
-    is_country_admin,
+    catalog_owner_for,
+    is_org_admin,
+    is_project_admin,
     is_super_admin,
     require_settings_write,
 )
+from ticketing.services.role_scope import role_scope_matches_track
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -75,17 +80,40 @@ def _email_hint(user_id: str) -> str | None:
     return user_id if "@" in user_id else None
 
 
+def _org_admin_covers_project(db: Session, user: CurrentUser, project_ref: str, track: str) -> bool:
+    """R4: True if ``user``'s org_admin subtree covers the project's **implementing agency**
+    (the accountable org) on ``track``. Contains project_admin appointment to the accountable
+    agency's admin — a *donor*'s org_admin (a participant, not the IA) may not appoint the
+    funded project's admin. No IA resolvable → not covered (super_admin already returned)."""
+    from ticketing.services.donor_guardrail import implementing_agency_org_id
+    from ticketing.services.project_routing import load_project_ref
+
+    proj = load_project_ref(db, project_ref)
+    if proj is None:
+        return False
+    ia = implementing_agency_org_id(db, proj)
+    return bool(ia) and can_admin_org(db, user, ia, track)
+
+
 # ── Roles ─────────────────────────────────────────────────────────────────────
 
 def _role_usage_counts(db: Session, role_key: str) -> tuple[int, int]:
-    steps = db.scalar(
-        select(func.count())
-        .select_from(WorkflowStep)
-        .where(
-            WorkflowStep.assigned_role_key == role_key,
-            WorkflowStep.is_deleted.is_(False),
-        )
-    ) or 0
+    # SH-5 (OC-06 F15): a role is "used" by a step if it appears in ANY tier — assigned,
+    # supervisor, informed, or observer. The guard previously counted only
+    # assigned_role_key, so a role held only as supervisor/informed/observer could be
+    # deleted, orphaning those references. Steps are a small set — evaluate the tiers in
+    # Python to avoid dialect-specific JSON containment on informed/observer lists.
+    active_steps = db.execute(
+        select(WorkflowStep).where(WorkflowStep.is_deleted.is_(False))
+    ).scalars().all()
+    steps = sum(
+        1
+        for s in active_steps
+        if s.assigned_role_key == role_key
+        or s.supervisor_role == role_key
+        or role_key in (s.informed_roles or [])
+        or role_key in (s.observer_roles or [])
+    )
     role_row = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
     officers = 0
     if role_row:
@@ -112,6 +140,7 @@ def _role_to_response(db: Session, role: Role) -> RoleResponse:
         permissions=role.permissions,
         role_kind=role.role_kind,
         role_origin=role.role_origin,
+        owner_organization_id=role.owner_organization_id,
         steps_count=steps,
         officers_count=officers,
         created_at=role.created_at,
@@ -131,20 +160,19 @@ def list_roles(
     kind: str = "operational",
     workflow_track: Optional[str] = None,
     db: Session = Depends(get_db),
-    _: CurrentUser = Depends(get_authenticated_user),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> list[RoleResponse]:
     stmt = select(Role).order_by(Role.role_key)
     if kind == "admin":
         stmt = stmt.where(Role.role_kind == "admin")
     elif kind == "operational":
         stmt = stmt.where(Role.role_kind == "operational")
+    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+    stmt = apply_catalog_scope(stmt, db, current_user, Role.owner_organization_id)
     roles = db.execute(stmt).scalars().all()
     if workflow_track:
-        wt = workflow_track.lower()
-        if wt == "standard":
-            roles = [r for r in roles if r.workflow_scope in ("Standard", "Both", None)]
-        elif wt == "seah":
-            roles = [r for r in roles if r.workflow_scope in ("SEAH", "Both", None)]
+        # SH-2: single-sourced role↔track predicate (was inlined here and in 3 other places).
+        roles = [r for r in roles if role_scope_matches_track(r.workflow_scope, workflow_track)]
     return [_role_to_response(db, r) for r in roles]
 
 
@@ -187,6 +215,8 @@ def create_role(
         permissions=perms,
         role_kind="operational",
         role_origin="custom",
+        # SH-7 §S5: stamp the author's scope node (NULL = global for super / country-wide).
+        owner_organization_id=catalog_owner_for(current_user, track),
     )
     db.add(role)
     db.commit()
@@ -268,8 +298,15 @@ def delete_role(
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")
 
-    if role.role_origin == "system" and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="System roles deletable by super_admin only")
+    if role.role_origin == "system":
+        if not current_user.is_super_admin:
+            raise HTTPException(status_code=403, detail="System roles deletable by super_admin only")
+    else:
+        # authz-gaps-h2-03 #2: a custom/operational role had NO admin gate — any authenticated
+        # officer could delete one. Require the same catalog-authoring permission as creating
+        # it (org_admin on the role's track, or super_admin; doc 11 §3.3).
+        track = "seah" if role.workflow_scope == "SEAH" else "standard"
+        require_settings_write(current_user, SettingsAction.CREATE_OPERATIONAL_ROLE, track=track)
 
     steps, officers = _role_usage_counts(db, role.role_key)
     if steps or officers:
@@ -366,7 +403,7 @@ def list_admin_scopes(
     "/admin-scopes",
     response_model=AdminScopeResponse,
     status_code=status.HTTP_201_CREATED,
-    summary="Appoint country_admin or project_admin",
+    summary="Appoint org_admin or project_admin",
 )
 def create_admin_scope(
     body: AdminScopeCreate,
@@ -378,24 +415,85 @@ def create_admin_scope(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    if body.role_key == "country_admin":
+    # SH-7 §S4 — attenuated delegation: an appointer may only grant a scope within its own
+    # subtree + track, and never a tier above its own (doc 11 §2.2/§2.3/§2.3b).
+    if body.role_key == "org_admin":
+        if not (body.organization_id or body.country_code):
+            raise HTTPException(
+                status_code=422,
+                detail="organization_id (subtree node) or country_code required for org_admin",
+            )
         if not current_user.is_super_admin:
-            raise HTTPException(status_code=403, detail="Only super_admin may appoint country_admin")
-        if not body.country_code:
-            raise HTTPException(status_code=422, detail="country_code required for country_admin")
+            # A higher org_admin may appoint a lower one, but only inside its own subtree
+            # + track. Country-wide (org-less) org_admins remain super_admin-only.
+            if not body.organization_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="Only super_admin may appoint a country-wide org_admin; set an organization_id within your subtree",
+                )
+            for track in tracks:
+                if not can_admin_org(db, current_user, body.organization_id, track):
+                    raise HTTPException(
+                        status_code=403,
+                        detail="You may only appoint org_admin within your own subtree and track",
+                    )
     elif body.role_key == "project_admin":
         if len(tracks) != 1:
             raise HTTPException(
                 status_code=422,
                 detail="project_admin requires exactly one workflow_track",
             )
-        if not (current_user.is_super_admin or is_country_admin(current_user, tracks[0])):  # type: ignore[arg-type]
-            raise HTTPException(
-                status_code=403,
-                detail="country_admin (matching track) or super_admin required",
-            )
         if not body.project_id:
             raise HTTPException(status_code=422, detail="project_id required for project_admin")
+        if not (current_user.is_super_admin or is_org_admin(current_user, tracks[0])):  # type: ignore[arg-type]
+            raise HTTPException(
+                status_code=403,
+                detail="org_admin (matching track) or super_admin required",
+            )
+        # R4 (BUILD-REVIEW MO2): attenuated delegation — an org_admin may only appoint a
+        # project_admin on a project WITHIN its own subtree (the org_admin/officer_admin
+        # branches already contain; this one previously did not → any org_admin could
+        # appoint project_admin on any project).
+        if not current_user.is_super_admin and not _org_admin_covers_project(
+            db, current_user, body.project_id, tracks[0]
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="You may only appoint project_admin on a project within your subtree",
+            )
+    elif body.role_key == "officer_admin":
+        if len(tracks) != 1:
+            raise HTTPException(
+                status_code=422,
+                detail="officer_admin requires exactly one workflow_track",
+            )
+        track = tracks[0]
+        if not body.organization_id and not body.project_id:
+            raise HTTPException(
+                status_code=422,
+                detail="organization_id (subtree) or project_id required for officer_admin",
+            )
+        appointer_ok = (
+            current_user.is_super_admin
+            or is_org_admin(current_user, track)  # type: ignore[arg-type]
+            or is_project_admin(current_user, body.project_id, track)  # type: ignore[arg-type]
+        )
+        if not appointer_ok:
+            raise HTTPException(
+                status_code=403,
+                detail="org_admin, project_admin (own project), or super_admin required to appoint officer_admin",
+            )
+        # An org_admin appointer must keep the officer_admin's org scope inside its subtree.
+        if (
+            not current_user.is_super_admin
+            and body.organization_id
+            and is_org_admin(current_user, track)  # type: ignore[arg-type]
+            and not can_admin_org(db, current_user, body.organization_id, track)
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="officer_admin org scope must be within your subtree",
+            )
     else:
         raise HTTPException(status_code=422, detail="Invalid role_key")
 
@@ -417,7 +515,7 @@ def create_admin_scope(
             AdminScope.role_key == body.role_key,
             AdminScope.workflow_track == track,
         )
-        if body.role_key == "country_admin":
+        if body.role_key == "org_admin":
             dup_stmt = dup_stmt.where(AdminScope.country_code == body.country_code)
         else:
             dup_stmt = dup_stmt.where(AdminScope.project_id == project_ref)
@@ -496,10 +594,10 @@ def send_admin_scope_invite(
     scope = db.get(AdminScope, admin_scope_id)
     if not scope:
         raise HTTPException(status_code=404, detail="Admin scope not found")
-    if scope.role_key == "country_admin" and not current_user.is_super_admin:
-        raise HTTPException(status_code=403, detail="Only super_admin may manage country_admin")
+    if scope.role_key == "org_admin" and not current_user.is_super_admin:
+        raise HTTPException(status_code=403, detail="Only super_admin may manage org_admin")
     if scope.role_key == "project_admin" and not (
-        current_user.is_super_admin or is_country_admin(current_user, scope.workflow_track)  # type: ignore[arg-type]
+        current_user.is_super_admin or is_org_admin(current_user, scope.workflow_track)  # type: ignore[arg-type]
     ):
         raise HTTPException(status_code=403, detail="Insufficient permissions for this admin scope")
 
@@ -674,21 +772,38 @@ class OfficerRosterEntry(BaseModel):
     project_codes: list[str] = []
     package_ids: list[str] = []
     scopes: list[OfficerRosterScopeBrief] = []
+    # OC-04 §5.1 — active position titles ("Senior Divisional Engineer · DOR_JHA") for the
+    # roster/directory, in place of raw role keys. Descriptive; no access decision.
+    positions: list[str] = []
     onboarding_status: str = "active"  # invited | active
+    # Frame-11 (officer lifecycle): False = soft-deactivated (history kept, access revoked).
+    is_active: bool = True
 
 
-@router.get(
-    "/users/roster",
-    response_model=list[OfficerRosterEntry],
-    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
-)
-def list_officer_roster(
-    db: Session = Depends(get_db),
-    _: CurrentUser = Depends(require_admin),
-) -> list[OfficerRosterEntry]:
+class OfficerRosterPage(BaseModel):
+    """Paginated roster envelope for the Settings directory ("1–N of total")."""
+
+    items: list[OfficerRosterEntry]
+    total: int
+    limit: int
+    offset: int
+
+
+def _roster_matches_query(entry: OfficerRosterEntry, q: str) -> bool:
+    needle = q.strip().lower()
+    if not needle:
+        return True
+    haystack = " ".join(
+        v for v in (entry.user_id, entry.email or "", entry.display_name) if v
+    ).lower()
+    return needle in haystack
+
+
+def _build_officer_roster(db: Session) -> list[OfficerRosterEntry]:
     """
     Admin roster: merge Keycloak officer accounts with ticketing.user_roles /
     officer_scopes. user_id is always the Keycloak email when auth is enabled.
+    Returns the full, sorted list; callers apply search / pagination.
     """
     from ticketing.services.keycloak_users import list_grm_officer_profiles
 
@@ -780,6 +895,31 @@ def list_officer_roster(
             if scope_loc:
                 locs_by[uid].add(scope_loc)
 
+    # OC-04 §5.1 — active position titles per officer (position display name + org unit).
+    positions_by: dict[str, list[str]] = defaultdict(list)
+    if order:
+        from ticketing.models.officer_position import OfficerPosition
+        from ticketing.models.position_type import PositionType
+
+        pos_rows = db.execute(
+            select(OfficerPosition.user_id, PositionType.display_name, OfficerPosition.organization_id)
+            .join(PositionType, PositionType.position_type_id == OfficerPosition.position_type_id)
+            .where(OfficerPosition.user_id.in_(order), OfficerPosition.is_active.is_(True))
+            .order_by(PositionType.display_name)
+        ).all()
+        for uid, disp, org_id in pos_rows:
+            positions_by[uid].append(f"{disp} · {org_id}")
+
+    # Frame-11 — soft-deactivation flag per officer (absent row = active by default).
+    active_map: dict[str, bool] = {}
+    if order:
+        active_rows = db.execute(
+            select(OfficerOnboarding.user_id, OfficerOnboarding.is_active).where(
+                OfficerOnboarding.user_id.in_(order)
+            )
+        ).all()
+        active_map = {uid: bool(active) for uid, active in active_rows}
+
     def _entry(uid: str) -> OfficerRosterEntry:
         kc = kc_profiles.get(uid.lower()) if "@" in uid else None
         effective_keys: list[str] = []
@@ -803,7 +943,9 @@ def list_officer_roster(
             project_codes=sorted(proj_by.get(uid, set())),
             package_ids=sorted(pkg_by.get(uid, set())),
             scopes=scope_detail_by.get(uid, []),
+            positions=positions_by.get(uid, []),
             onboarding_status=officer_roster_onboarding_status(db, uid),
+            is_active=active_map.get(uid, True),
         )
 
     # Keycloak order first (alphabetic by display name), then legacy non-email ids.
@@ -818,6 +960,59 @@ def list_officer_roster(
     other_ids.sort()
 
     return [_entry(uid) for uid in email_ids + other_ids]
+
+
+@router.get(
+    "/users/roster",
+    response_model=list[OfficerRosterEntry],
+    summary="List officers for Settings UI — Keycloak identity + DB jurisdiction",
+)
+def list_officer_roster(
+    response: Response,
+    q: Optional[str] = Query(None, description="Case-insensitive match on user_id / email / name"),
+    limit: Optional[int] = Query(None, ge=1, le=200, description="Page size (omit = all)"),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> list[OfficerRosterEntry]:
+    """
+    Backward-compatible roster: with no query params it returns the full bare list
+    exactly as before. Optional `q` / `limit` / `offset` filter + paginate; the total
+    (pre-pagination) match count is always returned in the `X-Total-Count` header so
+    existing callers that parse the JSON list keep working unchanged.
+    """
+    entries = _build_officer_roster(db)
+    if q:
+        entries = [e for e in entries if _roster_matches_query(e, q)]
+    response.headers["X-Total-Count"] = str(len(entries))
+    if limit is None:
+        return entries[offset:] if offset else entries
+    return entries[offset : offset + limit]
+
+
+@router.get(
+    "/users/roster/search",
+    response_model=OfficerRosterPage,
+    summary="Paginated officer roster ({items, total, limit, offset}) for the directory",
+)
+def search_officer_roster(
+    q: Optional[str] = Query(None, description="Case-insensitive match on user_id / email / name"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+    _: CurrentUser = Depends(require_admin),
+) -> OfficerRosterPage:
+    """Structured pagination envelope so the UI can show "1–20 of N"."""
+    entries = _build_officer_roster(db)
+    if q:
+        entries = [e for e in entries if _roster_matches_query(e, q)]
+    total = len(entries)
+    return OfficerRosterPage(
+        items=entries[offset : offset + limit],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get(
@@ -1195,6 +1390,9 @@ class OfficerInviteRequest(BaseModel):
     package_id: Optional[str] = None
     includes_children: bool = False
     temp_password: Optional[str] = None
+    # R7 (BUILD-REVIEW M5): invite-by-position — record the officer_positions row so a
+    # freshly-invited officer shows their position (parity with assign_officer_position).
+    position_type_id: Optional[str] = None
 
 
 class OfficerInviteResponse(BaseModel):
@@ -1288,6 +1486,22 @@ def invite_officer(
     loc = (body.location_code or "").strip() or None
     upsert_user_role_row(db, email, role, body.organization_id, loc)
     create_scope_row(db, email, juris, resolved_pc)
+
+    # R7 (M5): if invited by position, record the descriptive officer_positions row so the
+    # directory shows the position (the enforcement rows above already exist).
+    if body.position_type_id:
+        from ticketing.models.officer_position import OfficerPosition
+        from ticketing.models.position_type import PositionType
+
+        pt = db.get(PositionType, body.position_type_id)
+        if pt is None:
+            raise HTTPException(status_code=404, detail="Position type not found")
+        db.add(OfficerPosition(
+            user_id=email,
+            position_type_id=pt.position_type_id,
+            organization_id=body.organization_id,
+            is_active=True,
+        ))
 
     ob = db.get(OfficerOnboarding, email)
     if ob:
@@ -1414,7 +1628,22 @@ def delete_officer(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
 ) -> None:
-    from ticketing.services.officer_admin import keycloak_delete_user, log_admin_audit
+    from ticketing.services.officer_admin import (
+        keycloak_delete_user,
+        log_admin_audit,
+        open_cases_for_officer,
+    )
+
+    # Open-case guard (Frame-11): never orphan tickets on hard delete — block until reassigned.
+    open_cases = open_cases_for_officer(db, user_id)
+    if open_cases:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Officer still owns open cases — reassign them first",
+                "open_count": len(open_cases),
+            },
+        )
 
     roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
     scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
@@ -1440,6 +1669,132 @@ def delete_officer(
     db.commit()
 
 
+# ── Officer lifecycle: open-case guard + soft deactivate/reactivate ───────────
+
+class OpenCaseBrief(BaseModel):
+    ticket_id: str
+    grievance_id: str
+    status: str
+
+
+class OpenCasesResponse(BaseModel):
+    user_id: str
+    open_count: int
+    tickets: list[OpenCaseBrief]
+
+
+class OfficerActiveResponse(BaseModel):
+    ok: bool
+    user_id: str
+    is_active: bool
+    onboarding_status: str
+
+
+@router.get(
+    "/users/{user_id}/open-cases",
+    response_model=OpenCasesResponse,
+    summary="Open/assigned tickets still owned by an officer (reassign-before-remove guard)",
+)
+def get_officer_open_cases(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> OpenCasesResponse:
+    # Officers can see their own open cases; admins can see any.
+    if user_id != current_user.user_id and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Access denied")
+    from ticketing.services.officer_admin import open_cases_for_officer
+
+    rows = open_cases_for_officer(db, user_id)
+    return OpenCasesResponse(
+        user_id=user_id,
+        open_count=len(rows),
+        tickets=[
+            OpenCaseBrief(ticket_id=tid, grievance_id=gid, status=sc)
+            for tid, gid, sc in rows
+        ],
+    )
+
+
+@router.post(
+    "/users/{user_id}/deactivate",
+    response_model=OfficerActiveResponse,
+    summary="Soft-deactivate an officer's GRM access (blocks if open cases remain)",
+)
+def deactivate_officer(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerActiveResponse:
+    from ticketing.services.officer_admin import (
+        log_admin_audit,
+        officer_exists_in_db,
+        open_cases_for_officer,
+        set_officer_active,
+    )
+
+    if not officer_exists_in_db(db, user_id):
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    open_cases = open_cases_for_officer(db, user_id)
+    if open_cases:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Officer still owns open cases — reassign them first",
+                "open_count": len(open_cases),
+            },
+        )
+
+    ob = set_officer_active(db, user_id, False)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.deactivate",
+        target_user_id=user_id,
+        payload={},
+    )
+    db.commit()
+    db.refresh(ob)
+    return OfficerActiveResponse(
+        ok=True, user_id=user_id, is_active=ob.is_active, onboarding_status=ob.status
+    )
+
+
+@router.post(
+    "/users/{user_id}/reactivate",
+    response_model=OfficerActiveResponse,
+    summary="Restore a soft-deactivated officer's GRM access",
+)
+def reactivate_officer(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+) -> OfficerActiveResponse:
+    from ticketing.services.officer_admin import (
+        log_admin_audit,
+        officer_exists_in_db,
+        set_officer_active,
+    )
+
+    if not officer_exists_in_db(db, user_id):
+        raise HTTPException(status_code=404, detail="Officer not found")
+
+    ob = set_officer_active(db, user_id, True)
+    log_admin_audit(
+        db,
+        actor_user_id=current_user.user_id,
+        action="officer.reactivate",
+        target_user_id=user_id,
+        payload={},
+    )
+    db.commit()
+    db.refresh(ob)
+    return OfficerActiveResponse(
+        ok=True, user_id=user_id, is_active=ob.is_active, onboarding_status=ob.status
+    )
+
+
 # ── Notification badge ────────────────────────────────────────────────────────
 
 @router.get(
@@ -1452,12 +1807,19 @@ def get_badge(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> NotificationBadgeResponse:
     from sqlalchemy import func
-    count = db.execute(
-        select(func.count(TicketEvent.event_id)).where(
+    stmt = (
+        select(func.count(TicketEvent.event_id))
+        .select_from(TicketEvent)
+        .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
+        .where(
             TicketEvent.assigned_to_user_id == current_user.user_id,
             TicketEvent.seen.is_(False),
         )
-    ).scalar_one()
+    )
+    # R1 SEAH leak: a non-SEAH officer must never see a SEAH case's existence, even as a count.
+    if not current_user.can_see_seah:
+        stmt = stmt.where(Ticket.is_seah.is_(False))
+    count = db.execute(stmt).scalar_one()
     return NotificationBadgeResponse(unseen_count=count)
 
 
@@ -1478,7 +1840,11 @@ def get_notifications(
     """
     from sqlalchemy import func
 
-    rows = db.execute(
+    # R1 SEAH leak: exclude SEAH-ticket events (grievance_id + summary would leak the case)
+    # unless the officer may see SEAH.
+    seah_ok = current_user.can_see_seah
+
+    rows_stmt = (
         select(TicketEvent, Ticket.grievance_id, Ticket.grievance_summary)
         .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
         .where(
@@ -1487,14 +1853,22 @@ def get_notifications(
         )
         .order_by(TicketEvent.created_at.asc())
         .limit(limit)
-    ).all()
-
-    total_count = db.execute(
-        select(func.count(TicketEvent.event_id)).where(
+    )
+    count_stmt = (
+        select(func.count(TicketEvent.event_id))
+        .select_from(TicketEvent)
+        .join(Ticket, Ticket.ticket_id == TicketEvent.ticket_id)
+        .where(
             TicketEvent.assigned_to_user_id == current_user.user_id,
             TicketEvent.seen.is_(False),
         )
-    ).scalar_one()
+    )
+    if not seah_ok:
+        rows_stmt = rows_stmt.where(Ticket.is_seah.is_(False))
+        count_stmt = count_stmt.where(Ticket.is_seah.is_(False))
+
+    rows = db.execute(rows_stmt).all()
+    total_count = db.execute(count_stmt).scalar_one()
 
     items = [
         NotificationItem(

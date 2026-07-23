@@ -42,12 +42,21 @@ def test_effective_role_keys_merges_user_roles_and_scopes(db):
     )
     db.commit()
 
-    keys = load_effective_role_keys(db, email)
-    assert "csc_officer" in keys
-    assert "site_safeguards_focal_person" in keys
+    try:
+        keys = load_effective_role_keys(db, email)
+        assert "csc_officer" in keys
+        assert "site_safeguards_focal_person" in keys
+    finally:
+        # Clean up committed rows — a leaked officer_scope pollutes the shared assignment pool.
+        import sqlalchemy as _sa
+        db.execute(_sa.delete(OfficerScope).where(OfficerScope.user_id == email))
+        db.execute(_sa.delete(UserRole).where(UserRole.user_id == email))
+        db.commit()
 
 
 def test_enrich_user_prefers_db_over_stale_jwt(db):
+    from ticketing.models.package import ProjectPackage
+
     email = f"jwt-{uuid.uuid4().hex[:8]}@grm.local"
     role_scope = db.execute(
         select(Role).where(Role.role_key == "site_safeguards_focal_person")
@@ -55,21 +64,32 @@ def test_enrich_user_prefers_db_over_stale_jwt(db):
     if not role_scope:
         pytest.skip("site_safeguards_focal_person not seeded")
 
+    # package_id is FK-constrained to ticketing.project_packages; use a real
+    # seeded package rather than a random UUID (which violates the FK).
+    package = db.execute(select(ProjectPackage).limit(1)).scalar_one_or_none()
+    if package is None:
+        pytest.skip("no project_packages seeded")
+
     db.add(
         OfficerScope(
             user_id=email,
             role_key="site_safeguards_focal_person",
             organization_id="NP_CTJ",
-            package_id=str(uuid.uuid4()),
+            package_id=package.package_id,
         )
     )
     db.commit()
 
-    user = CurrentUser(
-        user_id=email,
-        role_keys=["csc_officer"],
-        organization_id="NP_CTJ",
-    )
-    enrich_user(db, user)
-    assert "site_safeguards_focal_person" in user.role_keys
-    assert user.role_keys == load_effective_role_keys(db, email)
+    try:
+        user = CurrentUser(
+            user_id=email,
+            role_keys=["csc_officer"],
+            organization_id="NP_CTJ",
+        )
+        enrich_user(db, user)
+        assert "site_safeguards_focal_person" in user.role_keys
+        assert user.role_keys == load_effective_role_keys(db, email)
+    finally:
+        import sqlalchemy as _sa
+        db.execute(_sa.delete(OfficerScope).where(OfficerScope.user_id == email))
+        db.commit()

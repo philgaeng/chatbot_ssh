@@ -65,6 +65,15 @@ class Project(Base):
         ForeignKey("ticketing.project_types.type_key", ondelete="SET NULL"),
         nullable=True,
     )
+    # Implementing agency (doc 13 / DECISION 2026-07-10 §2): the single accountable org —
+    # the signing ministry; routing + reporting anchor. Defaulted to the owning ministry;
+    # must be a government/local_government org (validated in the service layer). Replaces
+    # the org_role='implementing_agency' link + project_types.routing_org_role.
+    implementing_agency_org_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     officer_messaging: Mapped[dict] = mapped_column(
         JSON,
         nullable=False,
@@ -89,6 +98,42 @@ class Project(Base):
         cascade="all, delete-orphan",
         order_by="ProjectWorkflow.sort_order",
     )
+    donors: Mapped[list["ProjectDonor"]] = relationship(
+        "ProjectDonor", back_populates="project", cascade="all, delete-orphan"
+    )
+
+
+class ProjectDonor(Base):
+    """
+    Optional funder orgs (category ``donor``) for a project — 0..n (co-financing possible).
+
+    doc 13 / DECISION 2026-07-10 §3. Exists solely to hang the last-step-informed donor
+    guardrail (OC-04 §5.6): a project with a donor must keep ≥1 of the donor's ``donor_*``
+    roles in the final standard-track step's "Kept informed" cast, so donor staff are
+    notified on final escalation. **SEAH-suppressed** — donor tiers are never cast on a
+    SEAH ticket (``ticketing.engine.escalation._apply_step_tier_roles``).
+    """
+    __tablename__ = "project_donors"
+    __table_args__ = (
+        PrimaryKeyConstraint("project_id", "organization_id"),
+        {"schema": "ticketing"},
+    )
+
+    project_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.projects.project_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    organization_id: Mapped[str] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_now
+    )
+
+    project: Mapped["Project"] = relationship("Project", back_populates="donors")
 
 
 class ProjectActorRole(Base):

@@ -184,7 +184,7 @@ class RedisConfig:
         if not self.host:
             raise ValueError("Redis host cannot be empty")
             
-        if self.host in ('localhost', '127.0.0.1') and os.getenv('ENVIRONMENT') == 'production':
+        if self.host in ('localhost', '127.0.0.1') and os.getenv('APP_ENV') == 'production':
             logger.warning("Using localhost Redis in production environment")
 
 @dataclass

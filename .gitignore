@@ -11,9 +11,14 @@ __pycache__/
 .bash_history
 
 # Environment and dependency folders
+# Convention (CL-03): `.env.example` (root) is the single TRACKED template; per-host
+# secrets live in `env.local` / `.env.local` (never committed). Do not re-add the old
+# per-area templates (env.grm.example; channels/ticketing-ui/.env.local is covered by
+# that package's own .gitignore).
 create_env.sh
 env.local
 env.local.example
+.env.local
 aws_local.local
 *.aws.local
 .env

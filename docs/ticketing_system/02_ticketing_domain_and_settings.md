@@ -1,4 +1,4 @@
-# Ticketing System – Domain Model (as-built, June 2026)
+# Ticketing System – Domain Model (as-built, July 2026)
 
 Full schema DDL → `04_ticketing_schema.md`. API contracts → `03_ticketing_api_integration.md`.
 
@@ -26,11 +26,14 @@ The central entity. One ticket per grievance submission.
 | `project_id` | String(36) | FK → `ticketing.projects` |
 | `project_code` | String(64) | Deprecated; kept for backwards compat |
 | `package_id` | String(36) | Set via QR scan; NULL for walk-in |
-| `status_code` | String(32) | `OPEN`, `IN_PROGRESS`, `PENDING_ESCALATION`, `ESCALATED`, `RESOLVED`, `CLOSED` |
+| `status_code` | String(32) | `OPEN`, `IN_PROGRESS`, `ESCALATED`, `GRC_HEARING_SCHEDULED`, `RESOLVED` (`CLOSED` is legacy — read-compat only, never written; `PENDING_ESCALATION` removed) |
 | `current_workflow_id` | UUID FK | Active workflow |
 | `current_step_id` | UUID FK | Current step within workflow |
 | `priority` | String(32) | `NORMAL`, `HIGH`, `SENSITIVE` |
 | `is_seah` | Boolean | DB-level filter; SEAH tickets invisible to non-SEAH roles |
+| `intake_route` | String(64) | Chatbot `story_main` at intake (e.g. `new_grievance`, `seah_intake`, `road_hazard_grievance`); used for workflow (re-)resolution |
+| `intake_fast_path` | String(64) | Deprecated intake signal (kept for compat; `intake_route` is authoritative) |
+| `is_archived`, `archived_at` | Boolean / Timestamp | Resolved-case archiving — see `docs/ARCHIVING_AND_RETENTION.md` |
 | `assigned_to_user_id` | String(128) | Current Actor |
 | `assigned_role_id` | String(36) | Role at current step |
 | `complainant_reply_owner_id` | String(128) | Who can reply to complainant (default: L1 Actor) |
@@ -43,7 +46,7 @@ The central entity. One ticket per grievance submission.
 
 Append-only audit log for every state change and communication.
 
-Key `event_type` values: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `CLOSED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `GRC_DECIDED`, `TIER_CHANGED`, `TASK_ADDED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`.
+Key `event_type` values: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `ASSIGNED`, `REASSIGNMENT_REQUESTED`, `CLASSIFICATION_VALIDATED`, `TIER_CHANGED`, `TASK_ASSIGNED`/`TASK_COMPLETED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`. (`CLOSED` and `GRC_DECIDED` remain only as historical event types on old rows — the `CLOSE` and `GRC_DECIDE` actions were removed in v1; see `08_ticket_resolution_and_case_summary.md`.)
 
 Each event carries: `ticket_id`, `event_type`, `actor_user_id`, `note` (text), `payload` (JSONB), `created_at`.
 
@@ -91,11 +94,11 @@ Fields: `organization_id` (server-generated from name initials + country prefix)
 
 ### Location (`ticketing.locations`)
 
-Location tree: country → province → district → municipality.
+Adjacency-list admin tree per country (province → district → municipality for Nepal).
 
-Fields: `location_code` (canonical mnemonic, see `LOCATION_CODES.md`), `name`, `name_ne`, `parent_code`, `level` (`province`/`district`/`municipality`), `country_code`.
+Fields: `location_code` (PK, canonical mnemonic — see `LOCATION_CODES.md`, e.g. `P1`, `P1_MOR`), `country_code`, `level_number` (matches `location_level_defs`), `parent_location_code` (self-FK), `source_id` (import re-sync), `latitude`/`longitude`, `is_active`. Names are **not** stored on the node — display names live in `ticketing.location_translations` (`location_code` + `lang_code` composite PK). Level semantics per country in `ticketing.location_level_defs`.
 
-Also: `ticketing.location_translations` (EN/NE display names for codes).
+Full geography model + submit-time mapping: [18_geography_and_locations.md](18_geography_and_locations.md).
 
 ### Project (`ticketing.projects`)
 
@@ -126,19 +129,29 @@ Lookup table for multi-country support.
 
 ### WorkflowDefinition (`ticketing.workflow_definitions`)
 
-Named workflow (e.g. `KL_ROAD_4_LEVEL`, `KL_ROAD_SEAH`). Fields: `name`, `description`, `workflow_scope` (`standard`/`seah`).
+Named, versioned workflow (e.g. Default GRM 4-level, Default SEAH). Fields: `workflow_key` (unique slug), `display_name`, `description`, `workflow_type` (`standard`/`seah` — visibility / SEAH gate), `status` (`draft`/`published`/`archived`), `version` (incremented on publish), `is_template`, `template_source_id`.
+
+Full lifecycle (draft → publish → archive), templates, and admin UI: [12_workflows_configuration.md](12_workflows_configuration.md).
 
 ### WorkflowStep (`ticketing.workflow_steps`)
 
-One row per level. Fields: `step_order`, `name`, `role_required`, `response_time_hours`, `resolution_time_days`, `tier_config` (JSONB), `notification_rules` (JSONB).
+One row per level. Fields: `step_order`, `step_key`, `display_name`, `assigned_role_key` (GRM role for the Actor at this step), `response_time_hours`, `resolution_time_days` (NULL = no auto-escalation), plus tier-model fields `supervisor_role`, `informed_roles` (JSON), `observer_roles` (JSON), `informed_pii_access`, and display metadata `stakeholders` / `expected_actions` (JSON). `is_deleted` soft delete.
 
-### WorkflowAssignment (`ticketing.workflow_assignments`)
+> **Deprecated shape:** the original columns `role_required`, `tier_config` (JSONB) and per-step `notification_rules` (JSONB) no longer exist — replaced by `assigned_role_key` + the tier fields above; notification rules moved to the `settings.notification_rules` key.
 
-Maps (organization, project, location, priority) to a `workflow_definition`. Engine uses this to pick the right workflow at ticket creation.
+### ProjectWorkflow (`ticketing.project_workflows`)
+
+Active project ↔ workflow binding ("slots"): a project can attach N workflow streams. Fields: `project_id`, `workflow_id` (FK → published definition), `display_label`, `classifications` (JSON — taxonomy groups for re-route after category edit), `intake_route` (chatbot `story_main`: `new_grievance`, `seah_intake`, `road_hazard_grievance`; scalar since migration `e7f9a1b3`), `is_default` (catch-all), `sort_order`.
+
+`resolve_workflow()` picks the ticket's workflow from these bindings (classification/intake-route match → default), falling back to legacy `projects.standard_workflow_id`/`seah_workflow_id`, then legacy `workflow_assignments`.
+
+### WorkflowAssignment (`ticketing.workflow_assignments`) — legacy
+
+Maps (organization, location, project_code, priority) to a workflow. **Legacy fallback only** — used by `resolve_workflow()` when the ticket has no resolvable project. Not configured in the UI; do not use for new projects.
 
 ### Role (`ticketing.roles`)
 
-Named GRM role. Fields: `role_code`, `name`, `description`, `workflow_scope` (`standard`/`seah`/`both`), `jurisdiction_mode`.
+Named GRM role. Fields: `role_key` (unique), `display_name`, `description`, `workflow_scope` (`standard`/`seah`/`both`), `jurisdiction_mode` (`field`/`country`/`global`), `permissions` (JSON), `role_kind` (`operational`/`admin`), `role_origin` (`system`/`custom`).
 
 9 seeded GRM roles (from `grm_role_catalog.py`): `site_safeguards_focal_person`, `pd_piu_safeguards_focal`, `grc_chair`, `grc_member`, `seah_national_officer`, `seah_hq_officer`, `adb_national_project_director`, `adb_hq_safeguards`, `super_admin`.
 

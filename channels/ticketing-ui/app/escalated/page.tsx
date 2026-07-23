@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { listTickets, type TicketListItem } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, IntakeRouteBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
   return (
@@ -48,15 +49,31 @@ export default function EscalatedPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const seqRef = useRef(0);
 
-  useEffect(() => {
+  function load() {
     if (!isAuthenticated) return;
+    const seq = ++seqRef.current;
     setLoading(true);
+    setError(null);
     listTickets({ status_code: "ESCALATED", page_size: 100 })
-      .then((r) => { setTickets(r.items); setTotal(r.total); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [isAuthenticated]);
+      .then((r) => {
+        if (seq !== seqRef.current) return; // stale response — a newer load has started
+        setTickets(r.items);
+        setTotal(r.total);
+      })
+      .catch((e) => {
+        if (seq !== seqRef.current) return;
+        console.error(e);
+        setError(e instanceof Error ? e.message : "Couldn't load escalated tickets.");
+      })
+      .finally(() => {
+        if (seq === seqRef.current) setLoading(false);
+      });
+  }
+
+  useEffect(load, [isAuthenticated]);
 
   return (
     <div className="p-6">
@@ -81,6 +98,8 @@ export default function EscalatedPage() {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+        ) : error ? (
+          <ErrorCard message="Couldn't load escalated tickets." onRetry={load} />
         ) : tickets.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">
             <CheckCircle2 size={18} strokeWidth={2} className="inline mr-1.5 text-green-500" />

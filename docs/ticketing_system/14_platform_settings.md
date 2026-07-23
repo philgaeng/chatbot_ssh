@@ -2,15 +2,15 @@
 
 **Status:** Product reference (June 2026). **Access:** `super_admin` only for this entire main tab — see [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.  
 **UI:** Settings → **Settings** (platform tab)  
-**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
+**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [18_geography_and_locations.md](18_geography_and_locations.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
 
-The fourth main Settings tab holds **platform-wide** configuration: national reference data, project archetypes, system JSON, and **admin role assignment**. `country_admin` and `project_admin` **cannot** open this tab. Per-project routing stays in [13_projects_and_packages.md](13_projects_and_packages.md).
+The fourth main Settings tab holds **platform-wide** configuration: national reference data, project archetypes, system JSON, and **admin role assignment**. `org_admin` and `project_admin` **cannot** open this tab. Per-project routing stays in [13_projects_and_packages.md](13_projects_and_packages.md).
 
 ---
 
 ## 1. Sub-tabs and access
 
-| Sub-tab | `super_admin` | `country_admin` | `project_admin` |
+| Sub-tab | `super_admin` | `org_admin` | `project_admin` |
 |---------|---------------|-----------------|-----------------|
 | **Locations** | ✅ import + tree | ❌ (tab hidden) | ❌ |
 | **Quarterly reports** | ✅ | ❌ | ❌ |
@@ -18,7 +18,7 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 | **Advanced (JSON)** | ✅ | ❌ | ❌ |
 | **Admin access** *(planned)* | ✅ | ❌ | ❌ |
 
-**Note:** `country_admin` manages workflows, orgs, projects, and packages via the **other three** main Settings tabs (country scope). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
+**Note:** `org_admin` manages workflows, orgs, projects, and packages via the **other three** main Settings tabs (country scope). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
 
 ---
 
@@ -28,11 +28,12 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ### Data
 
-- `ticketing.locations` — `location_code`, `name`, `name_ne`, `parent_code`, `level`, `country_code`
-- `ticketing.location_translations` — EN/NE display names
+- `ticketing.locations` — `location_code`, `country_code`, `level_number`, `parent_location_code`, `source_id`, `latitude`/`longitude`, `is_active` (names live in translations)
+- `ticketing.location_translations` — per-language display names (`location_code`, `lang_code`, `name`)
+- `ticketing.location_level_defs` — level semantics per country (Province / District / Municipality)
 - `ticketing.countries` — country lookup
 
-Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `NP-KO`, district `NP-KO-JH`).
+Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `P1` = Koshi, district `P1_MOR` = Morang, `P1_JHA` = Jhapa). Full model: [18_geography_and_locations.md](18_geography_and_locations.md).
 
 ### UI (`LocationsSection`)
 
@@ -85,7 +86,7 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 | Required actor role keys | `project_actor_roles` rows |
 | `routing_org_role` | Go-live implementing-agency check |
 
-`country_admin` and `project_admin` **cannot** edit type definitions or actor role keys on instantiated projects.
+`org_admin` and `project_admin` **cannot** edit type definitions or actor role keys on instantiated projects.
 
 See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
@@ -93,16 +94,16 @@ See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
 ## 5. Admin access *(planned sub-tab)*
 
-**Purpose:** Assign the **admin ladder** — who holds `country_admin` and scoped `project_admin` roles. Operational officer assignment stays under **Organizations & officers** / **Project staffing**.
+**Purpose:** Assign the **admin ladder** — who holds `org_admin` and scoped `project_admin` roles. Operational officer assignment stays under **Organizations & officers** / **Project staffing**.
 
 | Action | Who performs |
 |--------|----------------|
-| Create `country_admin` | `super_admin` |
-| Create `country_admin` (`country_code` + `workflow_track`) | `super_admin` |
-| Create `project_admin` (project + optional org + `workflow_track`) | `country_admin` with **matching** track, or `super_admin` |
+| Create `org_admin` | `super_admin` |
+| Create `org_admin` (`country_code` + `workflow_track`) | `super_admin` |
+| Create `project_admin` (project + optional org + `workflow_track`) | `org_admin` with **matching** track, or `super_admin` |
 | Revoke admin access | Same as creator tier or `super_admin` |
 
-**Not in this tab:** Operational GRM roles (`site_safeguards_focal_person`, …) — those are defined in **Roles & permissions** and assigned by `project_admin` / `country_admin` via Officers.
+**Not in this tab:** Operational GRM roles (`site_safeguards_focal_person`, …) — those are defined in **Roles & permissions** and assigned by `project_admin` / `org_admin` via Officers.
 
 Full role semantics: [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.
 
@@ -165,7 +166,7 @@ Controls resolved-case archiving schedule and attachment tiering. Documented in 
 | `PUT` | `/settings/{key}` | Admin; `org_roles`, `report_limits`, `archiving_policy` require `super_admin` |
 | `DELETE` | `/settings/{key}` | Admin (same super-admin gate) |
 
-**Other keys** (e.g. `notification_rules`) are writable by `country_admin`+ and edited from the workflow UI — see [12_workflows_configuration.md](12_workflows_configuration.md).
+**Other keys** (e.g. `notification_rules`) are writable by `org_admin`+ and edited from the workflow UI — see [12_workflows_configuration.md](12_workflows_configuration.md).
 
 ---
 
@@ -195,8 +196,8 @@ Orgs are linked to projects via project actors, not as a standalone platform set
 ## 10. Acceptance criteria
 
 1. Only `super_admin` can open the **Settings → Settings** (platform) main tab.
-2. Super admin can import location tree, CRUD project types, edit Advanced JSON, and assign `country_admin`.
-3. `country_admin` and `project_admin` are blocked from platform tab (API + UI).
+2. Super admin can import location tree, CRUD project types, edit Advanced JSON, and assign `org_admin`.
+3. `org_admin` and `project_admin` are blocked from platform tab (API + UI).
 4. `org_roles` JSON validates (array of `{key, label}`) before save.
 5. `report_limits` and `archiving_policy` reject invalid shapes with 422.
 6. Admin access sub-tab lists admin role holders; does not list operational officers.

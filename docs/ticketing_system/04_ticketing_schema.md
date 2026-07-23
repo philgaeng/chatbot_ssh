@@ -1,9 +1,36 @@
-# Ticketing System – Database Schema (as-built, June 2026)
+# Ticketing System – Database Schema (as-built, July 2026)
 
 All tables live in the `ticketing` schema inside `grievance_db`.
 No cross-schema FK from `ticketing.*` into `public.*`.
 All SQLAlchemy models use `__table_args__ = {"schema": "ticketing"}`.
 Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
+
+> **Why isolation — the March 2026 rationale, restored 2026-07-15.** This section carried the
+> bare rule for a year after a doc reorg (`21631051`, 2026-06-02) deleted its reason, which is
+> why it came to read as arbitrary fiat. The original (`7b696559`, 2026-03-11) said:
+>
+> > - **Isolation**: keep ticketing data in its **own schema / table group** (no cross-FKs into
+> >   existing grievance tables).
+> >
+> > This makes it easy later to:
+> > - Move ticketing to a **separate database** by copying only the ticketing schema and
+> >   changing the connection string, and
+> > - Keep the chatbot working if ticketing is offline or removed.
+>
+> **Which half retired, and why.** Both goals above are **dead in the code, in both
+> directions** — ticketing issues 11 statements against `public.*` (3 writes), and the
+> chatbot's intake location validation reads `ticketing.locations` through its own
+> connection. So the *"no joins into `public.*`"* half was **dropped on 2026-07-15**: it had
+> been false for months, had no enforcement (one DB, one role), and honoring it today would
+> *degrade* security. It is replaced by an enumerated read/write contract — CLAUDE.md §Data
+> rules rule 1, gated by `tests/ticketing/test_boundary_policy.py`.
+>
+> **The no-cross-FK half above is KEPT and is now pinned by a test.** It is the part that
+> actually preserves the extraction option and keeps the three migration streams
+> independent, and it costs nothing.
+>
+> Full evidence and the decision: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+> **If you amend a rule here, move its reason with it.**
 
 **Location codes:** Canonical rules for `location_code` → `LOCATION_CODES.md`.
 
@@ -11,9 +38,10 @@ Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
 
 ## 1. Design rules
 
-1. No FK from `ticketing.*` into `public.*`.
-2. PII (`name`, `phone`, `email`, `address`) never stored in `ticketing.*`.
+1. No FK from `ticketing.*` into `public.*`. — **pinned by `tests/ticketing/test_boundary_policy.py`**
+2. PII (`name`, `phone`, `email`, `address`) never stored in `ticketing.*`. — **pinned by the same file.** Precisely: no complainant PII *columns*, and `public.complainants` is not a PII source for ticketing. (`ticketing.tickets.grievance_summary` is free text and *can* carry self-disclosed PII — cached by design; `grievance_description` deliberately is not. That asymmetry is intentional — CLAUDE.md §Data rules rule 4.)
 3. Grievance/complainant referenced by `grievance_id` (String), `complainant_id` (String) only.
+   - Ticketing **does** read (and in 3 places write) an enumerated set of `public.*` tables through its own session — see CLAUDE.md §Data rules rule 1 for the closed list. That is deliberate as of 2026-07-15, not a violation.
 4. Every model: `__table_args__ = {"schema": "ticketing"}`.
 5. Alembic `include_object` scoped to `ticketing` schema only; `version_table_schema="ticketing"`.
 
@@ -43,6 +71,8 @@ current_workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions
 current_step_id             VARCHAR(36)   FK → ticketing.workflow_steps (SET NULL)
 priority                    VARCHAR(32)   DEFAULT 'NORMAL'
 is_seah                     BOOLEAN       DEFAULT FALSE
+intake_route                VARCHAR(64)                   -- chatbot story_main at intake (workflow re-resolution)
+intake_fast_path            VARCHAR(64)                   -- deprecated intake signal (compat)
 assigned_to_user_id         VARCHAR(128)
 assigned_role_id            VARCHAR(36)
 complainant_reply_owner_id  VARCHAR(128)                  -- default: L1 Actor
@@ -51,6 +81,8 @@ sla_breached                BOOLEAN       DEFAULT FALSE
 current_overdue_episode_id  VARCHAR(36)   FK → ticketing.ticket_overdue_episodes (SET NULL)
 ai_summary_en               TEXT                          -- LLM findings digest
 ai_summary_updated_at       TIMESTAMPTZ
+is_archived                 BOOLEAN       DEFAULT FALSE   -- resolved-case archiving
+archived_at                 TIMESTAMPTZ
 is_deleted                  BOOLEAN       DEFAULT FALSE
 created_at                  TIMESTAMPTZ   NOT NULL
 created_by_user_id          VARCHAR(128)
@@ -58,9 +90,9 @@ updated_at                  TIMESTAMPTZ   NOT NULL
 updated_by_user_id          VARCHAR(128)
 ```
 
-Indexes: `grievance_id`, `(organization_id, location_code, status_code)`, `assigned_to_user_id`, `(current_workflow_id, current_step_id)`, `is_seah`.
+Indexes: `grievance_id`, `(organization_id, location_code, status_code)`, `assigned_to_user_id`, `(current_workflow_id, current_step_id)`, `is_seah`, `(is_archived, status_code)`.
 
-Status codes: `OPEN`, `IN_PROGRESS`, `PENDING_ESCALATION`, `ESCALATED`, `RESOLVED`, `CLOSED`.
+Status codes written by current code: `OPEN`, `IN_PROGRESS`, `ESCALATED`, `GRC_HEARING_SCHEDULED`, `RESOLVED`. (`CLOSED` is accepted read-side for legacy rows but never written since the `CLOSE` action was removed; `PENDING_ESCALATION` no longer exists.)
 Priority codes: `NORMAL`, `HIGH`, `SENSITIVE`.
 
 ### `ticketing.ticket_events`
@@ -68,19 +100,28 @@ Priority codes: `NORMAL`, `HIGH`, `SENSITIVE`.
 Append-only audit log.
 
 ```sql
-event_id            VARCHAR(36)   PK
-ticket_id           VARCHAR(36)   FK → ticketing.tickets
-event_type          VARCHAR(64)   NOT NULL
-actor_user_id       VARCHAR(128)
-actor_role          VARCHAR(64)
-note                TEXT
-note_en             TEXT                -- LLM translation of note
-payload             JSONB
-step_id             VARCHAR(36)        -- step context at event time
-created_at          TIMESTAMPTZ   NOT NULL
+event_id                VARCHAR(36)   PK
+ticket_id               VARCHAR(36)   FK → ticketing.tickets (CASCADE)
+event_type              VARCHAR(64)   NOT NULL
+old_status_code         VARCHAR(32)
+new_status_code         VARCHAR(32)
+old_assigned_to         VARCHAR(128)
+new_assigned_to         VARCHAR(128)
+workflow_step_id        VARCHAR(36)        -- step context at event time
+note                    TEXT
+payload                 JSON               -- LLM note translation lives in payload["translation_en"]
+seen                    BOOLEAN       DEFAULT FALSE  -- unseen → officer badge count
+assigned_to_user_id     VARCHAR(128)       -- notification target for badge
+created_at              TIMESTAMPTZ   NOT NULL
+created_by_user_id      VARCHAR(128)
+actor_role              VARCHAR(64)        -- role key snapshotted at write time
+case_sensitivity        VARCHAR(16)   DEFAULT 'standard'  -- 'standard' | 'seah'
+summary_regen_required  BOOLEAN       DEFAULT FALSE  -- LLM summary must regenerate
 ```
 
-Event types: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `CLOSED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `GRC_DECIDED`, `TIER_CHANGED`, `TASK_ADDED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`, `ASSIGN`, `REVEAL_CONTACT`.
+(There is no `note_en` column — per-note EN translation is stored in `payload["translation_en"]` by the `translate_note` Celery task.)
+
+Event types: `CREATED`, `ACKNOWLEDGED`, `ESCALATED`, `RESOLVED`, `NOTE_ADDED`, `FIELD_REPORT`, `COMPLAINANT_MESSAGE`, `REPLY_SENT`, `GRC_CONVENED`, `ASSIGNED`, `REASSIGNMENT_REQUESTED`, `CLASSIFICATION_VALIDATED`, `TIER_CHANGED`, `REPLY_OWNER_CHANGED`, `TASK_ASSIGNED`, `TASK_COMPLETED`, `FILE_UPLOADED`, `FINDINGS_GENERATED`, `REVEAL_ORIGINAL`, `REVEAL_ORIGINAL_CLOSED`, `VIEWER_ADDED`, `VIEWER_REMOVED`, `COMPLAINANT_UPDATED`. `CLOSED` and `GRC_DECIDED` appear only on historical rows (actions removed in v1).
 
 ### `ticketing.ticket_overdue_episodes`
 
@@ -145,6 +186,22 @@ added_at            TIMESTAMPTZ
 added_by_user_id    VARCHAR(128)
 ```
 
+### `ticketing.ticket_files`
+
+Officer-uploaded attachments (complainant files stay in the chatbot upload store).
+
+```sql
+file_id             VARCHAR(36)   PK
+ticket_id           VARCHAR(36)   NOT NULL (indexed; soft ref)
+file_name           VARCHAR(255)  NOT NULL
+file_path           VARCHAR(512)  NOT NULL
+file_type           VARCHAR(50)
+file_size           INTEGER       DEFAULT 0
+caption             VARCHAR(500)
+uploaded_by_user_id VARCHAR(64)
+uploaded_at         TIMESTAMPTZ
+```
+
 ### `ticketing.ticket_context_cache`
 
 LLM context window (per ticket). Prevents full event history re-fetch on each AI call.
@@ -165,39 +222,73 @@ updated_at      TIMESTAMPTZ
 
 ```sql
 workflow_id         VARCHAR(36)   PK
-name                VARCHAR(128)  NOT NULL
+workflow_key        VARCHAR(64)   UNIQUE NOT NULL   -- slug (auto from name)
+display_name        TEXT          NOT NULL
 description         TEXT
-workflow_scope      VARCHAR(32)   DEFAULT 'standard'  -- 'standard', 'seah'
-is_active           BOOLEAN       DEFAULT TRUE
+workflow_type       VARCHAR(32)   DEFAULT 'standard'   -- 'standard' | 'seah' (lowercase since g0h2i4j6)
+status              VARCHAR(32)   DEFAULT 'published'  -- 'draft' | 'published' | 'archived'
+version             INTEGER       DEFAULT 1            -- incremented on publish
+is_template         BOOLEAN       DEFAULT FALSE
+template_source_id  VARCHAR(36)                        -- provenance when cloned
+updated_by_user_id  VARCHAR(64)
 created_at          TIMESTAMPTZ
+updated_at          TIMESTAMPTZ
 ```
 
 ### `ticketing.workflow_steps`
 
 ```sql
 step_id                 VARCHAR(36)   PK
-workflow_id             VARCHAR(36)   FK → ticketing.workflow_definitions
+workflow_id             VARCHAR(36)   FK → ticketing.workflow_definitions (CASCADE)
 step_order              INTEGER       NOT NULL
-name                    VARCHAR(128)  NOT NULL
-role_required           VARCHAR(64)
-response_time_hours     INTEGER
-resolution_time_days    INTEGER
-tier_config             JSONB         -- per-tier actor/supervisor/informed assignment rules
-notification_rules      JSONB         -- event × tier × channel matrix
+step_key                VARCHAR(64)   NOT NULL
+display_name            TEXT          NOT NULL
+assigned_role_key       VARCHAR(64)   NOT NULL  -- GRM role for the Actor at this step
+response_time_hours     INTEGER                 -- NULL = no first-response SLA
+resolution_time_days    INTEGER                 -- NULL = no auto-escalation (e.g. L4 legal)
+supervisor_role         VARCHAR(64)             -- tier model (spec 12)
+informed_roles          JSON          DEFAULT []
+observer_roles          JSON          DEFAULT []
+informed_pii_access     BOOLEAN       DEFAULT FALSE
+stakeholders            JSON                    -- legacy display field (names, not role keys)
+expected_actions        JSON
+is_deleted              BOOLEAN       DEFAULT FALSE
+created_at              TIMESTAMPTZ
+updated_at              TIMESTAMPTZ
 ```
 
-### `ticketing.workflow_assignments`
+> **Deprecated:** the original `role_required`, `tier_config` (JSONB) and per-step `notification_rules` (JSONB) columns no longer exist. Roles bind via `assigned_role_key` + tier columns; notification rules are the `settings.notification_rules` key.
 
-Maps (org, project, location, priority) → workflow.
+### `ticketing.project_workflows`
+
+Active project ↔ workflow bindings (N streams per project) — see [12_workflows_configuration.md](12_workflows_configuration.md).
+
+```sql
+project_workflow_id VARCHAR(36)   PK
+project_id          VARCHAR(64)   FK → ticketing.projects (CASCADE)
+workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions (RESTRICT)
+display_label       TEXT          NOT NULL
+classifications     JSON          DEFAULT []   -- taxonomy groups for re-route after category edit
+intake_route        VARCHAR(64)                -- chatbot story_main (scalar since e7f9a1b3)
+is_default          BOOLEAN       DEFAULT FALSE -- catch-all when no rule matches
+sort_order          INTEGER       DEFAULT 0
+created_at          TIMESTAMPTZ
+updated_at          TIMESTAMPTZ
+```
+
+### `ticketing.workflow_assignments` — legacy
+
+Maps (org, location, project_code, priority) → workflow. **Fallback only**: `resolve_workflow()` consults it when the ticket has no resolvable project. Not managed in the UI.
 
 ```sql
 assignment_id       VARCHAR(36)   PK
-workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions
-organization_id     VARCHAR(64)
-project_id          VARCHAR(64)
+organization_id     VARCHAR(64)   NOT NULL
 location_code       VARCHAR(64)
+project_code        VARCHAR(64)
 priority            VARCHAR(32)
-is_default          BOOLEAN       DEFAULT FALSE
+workflow_id         VARCHAR(36)   FK → ticketing.workflow_definitions (CASCADE)
+created_at          TIMESTAMPTZ
+updated_at          TIMESTAMPTZ
 ```
 
 ---
@@ -216,29 +307,47 @@ created_at          TIMESTAMPTZ
 
 ### `ticketing.locations`
 
+Adjacency-list tree; names live in `location_translations`, level semantics in `location_level_defs`. Full model: [18_geography_and_locations.md](18_geography_and_locations.md).
+
 ```sql
-location_code   VARCHAR(64)   PK   -- canonical mnemonic (see LOCATION_CODES.md)
-name            VARCHAR(255)  NOT NULL
-name_ne         VARCHAR(255)       -- Nepali name
-parent_code     VARCHAR(64)        -- FK to self
-level           VARCHAR(32)        -- 'province', 'district', 'municipality'
-country_code    VARCHAR(8)
+location_code           VARCHAR(64)   PK   -- canonical mnemonic, e.g. P1, P1_MOR (see LOCATION_CODES.md)
+country_code            VARCHAR(8)    FK → ticketing.countries (RESTRICT), NOT NULL
+level_number            INTEGER       NOT NULL  -- matches location_level_defs
+parent_location_code    VARCHAR(64)   FK → ticketing.locations (SET NULL)
+source_id               INTEGER            -- original ID from import dataset (re-sync)
+latitude                NUMERIC(9,6)
+longitude               NUMERIC(9,6)
+is_active               BOOLEAN       DEFAULT TRUE
+created_at              TIMESTAMPTZ
+updated_at              TIMESTAMPTZ
+```
+
+### `ticketing.location_level_defs`
+
+```sql
+country_code    VARCHAR(8)    FK → ticketing.countries (CASCADE)
+level_number    INTEGER
+level_name_en   TEXT          NOT NULL   -- "Province"
+level_name_local TEXT                    -- "प्रदेश"
+PRIMARY KEY (country_code, level_number)
 ```
 
 ### `ticketing.location_translations`
 
 ```sql
-id              INTEGER       PK (autoincrement)
-location_code   VARCHAR(64)   FK → ticketing.locations
-lang            VARCHAR(8)    -- 'en', 'ne'
-name            VARCHAR(255)
+location_code   VARCHAR(64)   FK → ticketing.locations (CASCADE)
+lang_code       VARCHAR(8)    -- 'en', 'ne', …
+name            TEXT          NOT NULL
+PRIMARY KEY (location_code, lang_code)
 ```
 
 ### `ticketing.countries`
 
 ```sql
 country_code    VARCHAR(8)    PK
-name            VARCHAR(128)
+name            TEXT          NOT NULL
+created_at      TIMESTAMPTZ
+updated_at      TIMESTAMPTZ
 ```
 
 ### `ticketing.projects`
@@ -302,11 +411,16 @@ PRIMARY KEY (package_id, organization_id)
 
 ```sql
 role_id             VARCHAR(36)   PK
-role_code           VARCHAR(64)   UNIQUE NOT NULL
-name                VARCHAR(128)
+role_key            VARCHAR(64)   UNIQUE NOT NULL
+display_name        TEXT          NOT NULL
 description         TEXT
 workflow_scope      VARCHAR(32)   -- 'standard', 'seah', 'both'
-jurisdiction_mode   VARCHAR(32)   -- e.g. 'local', 'national', 'global'
+jurisdiction_mode   VARCHAR(16)   -- 'field', 'country', 'global'
+permissions         JSON          DEFAULT []
+role_kind           VARCHAR(16)   DEFAULT 'operational'  -- 'operational' | 'admin'
+role_origin         VARCHAR(16)   DEFAULT 'system'       -- 'system' | 'custom'
+created_at          TIMESTAMPTZ
+updated_at          TIMESTAMPTZ
 ```
 
 ### `ticketing.user_roles`
@@ -400,29 +514,45 @@ created_at      TIMESTAMPTZ   NOT NULL
 
 ## 9. Migration history
 
-Managed by Alembic (`ticketing/migrations/`). Key migrations in order:
+Managed by Alembic (`ticketing/migrations/`). Full chain (38 revisions, head `g0h2i4j6`), in `down_revision` order:
 
-| Migration ID | Description |
-|---|---|
-| `a1b2c3...` | Initial schema: tickets, ticket_events, workflow_*, organizations, locations, roles, user_roles, settings |
-| `b2c3d4...` | officer_scopes |
-| `c1d5f8a2e047` | LLM findings: `ai_summary_en`, `ai_summary_updated_at` on tickets; `note_en` on ticket_events |
-| `e8d4b6a0f291` | Projects, packages, package_locations, officer scopes redesign |
-| `f1a3e9c72b05` | Countries, location redesign, location_translations |
-| `f2b4d6e8a0c3` | ticket_tasks |
-| `g4d6f8b0c2e5` | ticket_viewers |
-| `h5e7g9i1k3m5` | `chatbot_url` on projects |
-| `i6j8l0n2p4` | ticket_context_cache |
-| `j8l0n2p4r6` | workflow_step tier model (`tier_config`, `notification_rules`) |
-| `k0l2n4p6r8` | `tier` on ticket_viewers; `complainant_reply_owner_id` on tickets |
-| `l2m4o6q8s0` | qr_tokens; `package_id` on tickets |
-| `n4p6r8t0` | `description`, `workflow_scope` on roles |
-| `o5p7q9r1` | officer_onboarding; backfill existing users as active |
-| `p6q8s0t2` | admin_audit_log |
-| `q9r7s1u3` | Canonical Nepal location codes seeded |
-| `r0s2t4v6` | project_workflow_links |
-| `s1t3u5v7` | package_organizations; `actor_roles` on projects |
-| `u3v5w7x9` | project_types |
-| `v5x7y9z1` | `jurisdiction_mode` on roles |
-| `w8x0y2z4` | ticket_resolved_summaries |
-| `x9y1z3a5` | ticket_overdue_episodes; `current_overdue_episode_id` on tickets |
+| # | Migration ID | Description |
+|---|---|---|
+| 1 | `e3ca0a118dbf` | Initial schema: tickets, ticket_events, workflow_definitions/steps/assignments, organizations, locations, roles, user_roles, settings |
+| 2 | `b2f1a9c34d87` | `ticket_files` (officer attachments) |
+| 3 | `c4e7d2b91f35` | Workflow editor columns: `status`, `version`, `is_template`, `is_deleted` |
+| 4 | `d5f3e1a09c28` | `officer_scopes` |
+| 5 | `f1a3e9c72b05` | Geography redesign: `countries`, `location_level_defs`, locations tree, `location_translations`, org country FK |
+| 6 | `e8d4b6a0f291` | `projects`, `project_organizations`, `project_locations`, scope `includes_children`, `tickets.project_id` |
+| 7 | `a9c3e5f1d720` | `org_role` on project_organizations + seed default org roles in settings |
+| 8 | `b8c2d4e6f1a3` | `project_packages`, `package_locations`, `officer_scopes.package_id` + seed KL Road lots |
+| 9 | `c1d5f8a2e047` | LLM findings: `ai_summary_en`, `ai_summary_updated_at` on tickets |
+| 10 | `d2e8f4a1b093` | `default_language` on organizations + `preferred_language` on user_roles |
+| 11 | `e5a7b2c089d1` | Event audit fields: `actor_role`, `case_sensitivity`, `summary_regen_required` on ticket_events (SEAH privacy handoff) |
+| 12 | `f2b4d6e8a0c3` | `ticket_tasks` |
+| 13 | `g4d6f8b0c2e5` | `ticket_viewers` |
+| 14 | `h5e7g9i1k3m5` | `chatbot_base_url` on projects |
+| 15 | `i6j8l0n2p4` | `ticket_context_cache` |
+| 16 | `j8l0n2p4r6` | Workflow step tier model: `supervisor_role`, `informed_roles`, `observer_roles`, `informed_pii_access` |
+| 17 | `k0l2n4p6r8` | `tier` on ticket_viewers; `complainant_reply_owner_id` on tickets |
+| 18 | `l2m4o6q8s0` | `qr_tokens`; `package_id` on tickets |
+| 19 | `n4p6r8t0` | `description`, `workflow_scope` on roles |
+| 20 | `o5p7q9r1` | `officer_onboarding` (invited vs active, Keycloak webhook) |
+| 21 | `p6q8s0t2` | `admin_audit_log` |
+| 22 | `q9r7s1u3` | Rewrite Nepal location PKs from legacy `NP_*` to canonical `P1` / `P1_*` (LOCATION_CODES.md) |
+| 23 | `r0s2t4v6` | Legacy `standard_workflow_id` / `seah_workflow_id` links on projects |
+| 24 | `s1t3u5v7` | `package_organizations`, `project_actor_roles`; drop `contractor_org_id` |
+| 25 | `u3v5w7x9` | `project_types` archetypes; `projects.project_type_key`; seed `construction_road` |
+| 26 | `v5x7y9z1` | `roles.jurisdiction_mode` (field \| country \| global) |
+| 27 | `w8x0y2z4` | `ticket_resolved_summaries` |
+| 28 | `x9y1z3a5` | `ticket_overdue_episodes`; `current_overdue_episode_id` on tickets |
+| 29 | `y0z2a4b6` | `latitude`/`longitude` on locations + seed NP district centroids |
+| 30 | `z1a3b5c7` | `is_archived`, `archived_at` on tickets |
+| 31 | `a2b4c6d8` | `admin_scopes` table; `role_kind`, `role_origin` on roles |
+| 32 | `b3c5d7e9` | `project_workflows` — N workflow slots per project |
+| 33 | `c4d6e8f0` | `officer_messaging` JSON on projects |
+| 34 | `c5e7f9a1` | Dynamic project workflows: `classifications`, intake routes, `is_default` flag |
+| 35 | `d6f8a0b2` | Normalize `project_workflows.intake_routes` to active catalog keys |
+| 36 | `e7f9a1b3` | Replace `intake_routes[]` with scalar `intake_route` (story_main) |
+| 37 | `f8a0b2c4` | Shorten `package_code` values; migrate KL Road lot ids to 01–05 |
+| 38 | `g0h2i4j6` | Normalize `workflow_definitions.workflow_type` to lowercase |

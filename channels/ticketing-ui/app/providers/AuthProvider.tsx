@@ -2,7 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { OIDCAuthClient, refreshTokens, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { AUTH_BYPASS, OIDC_ISSUER, OIDC_CLIENT_ID } from "@/lib/auth/runtime-config";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
@@ -42,8 +43,9 @@ function tokenFromRosterRow(o: OfficerRosterEntry): TokenPayload {
 
 const PRIVILEGED_ROLE_KEYS = new Set([
   "super_admin",
-  "country_admin",
+  "org_admin",          // SH-7: country_admin retired → org_admin
   "project_admin",
+  "officer_admin",
 ]);
 
 function pickDefaultOfficer(roster: OfficerRosterEntry[]): OfficerRosterEntry | null {
@@ -145,29 +147,32 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "country_admin", "project_admin"]);
-const ADMIN_ROLES = new Set(["super_admin", "country_admin", "project_admin"]);
+// SH-7: country_admin retired → org_admin (org-subtree admin, any depth). The derived
+// `isCountryAdmin` flag is kept (many consumers read it) but now sources from org_admin;
+// RB-3 renames it to isOrgAdmin across the tree.
+const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "org_admin", "project_admin"]);
+const ADMIN_ROLES = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
   const fromRoles = {
     canSeeSeah: roleKeys.some((r) => SEAH_CAN_SEE_ROLES.has(r)),
     isAdmin: roleKeys.some((r) => ADMIN_ROLES.has(r)),
     isSuperAdmin: roleKeys.includes("super_admin"),
-    isCountryAdmin: roleKeys.includes("country_admin"),
+    isCountryAdmin: roleKeys.includes("org_admin"),
     isProjectAdmin: roleKeys.includes("project_admin"),
   };
   if (!adminCtx) return fromRoles;
   return {
     canSeeSeah: fromRoles.canSeeSeah || adminCtx.admin_workflow_tracks.includes("seah"),
-    isAdmin: fromRoles.isAdmin || adminCtx.is_country_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
+    isAdmin: fromRoles.isAdmin || adminCtx.is_org_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
     isSuperAdmin: fromRoles.isSuperAdmin || adminCtx.is_super_admin,
-    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_country_admin,
+    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_org_admin,
     isProjectAdmin: fromRoles.isProjectAdmin || adminCtx.is_project_admin,
   };
 }
 
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const bypass = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+  const bypass = AUTH_BYPASS;
   const searchParams = useSearchParams();
 
   const [isAuthenticated, setIsAuthenticated] = useState(bypass);
@@ -202,8 +207,8 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 
   const client = !bypass
     ? new OIDCAuthClient(
-        process.env.NEXT_PUBLIC_OIDC_ISSUER ?? "",
-        process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "",
+        OIDC_ISSUER,
+        OIDC_CLIENT_ID,
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
           : (process.env.NEXT_PUBLIC_REDIRECT_SIGN_IN ?? ""),
@@ -307,21 +312,35 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       const existing = client.getCurrentUser();
       if (existing && token) {
         if (isAccessTokenExpired(token)) {
-          clearAuthTokens();
-          setUser(null);
-          setAccessToken(null);
-          setIsAuthenticated(false);
-          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-            window.location.replace("/login?reason=session_expired");
-            return;
-          }
-        } else {
-          clearCookie(BYPASS_COOKIE);
-          clearCookie(LEGACY_MOCK_COOKIE);
-          setUser(existing);
-          setAccessToken(token);
-          setIsAuthenticated(true);
+          // Returning to the tab with an expired token: try a silent refresh
+          // before bouncing to /login (H2-01) — redirect only if refresh fails.
+          void (async () => {
+            const refreshed = await refreshTokens();
+            if (refreshed) {
+              clearCookie(BYPASS_COOKIE);
+              clearCookie(LEGACY_MOCK_COOKIE);
+              setUser(client.getCurrentUser());
+              setAccessToken(refreshed);
+              setIsAuthenticated(true);
+            } else {
+              clearAuthTokens();
+              setUser(null);
+              setAccessToken(null);
+              setIsAuthenticated(false);
+              if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+                window.location.replace("/login?reason=session_expired");
+                return;
+              }
+            }
+            setIsLoading(false);
+          })();
+          return;
         }
+        clearCookie(BYPASS_COOKIE);
+        clearCookie(LEGACY_MOCK_COOKIE);
+        setUser(existing);
+        setAccessToken(token);
+        setIsAuthenticated(true);
       }
     }
     setIsLoading(false);

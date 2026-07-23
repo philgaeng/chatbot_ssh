@@ -7,6 +7,8 @@
 
 This document covers **`ticketing.projects`** and related package/QR configuration. For the chatbot **`public.projects`** catalog (SEAH picker, CSV import), see [features/settings/settings_tab_projects_and_seah_contact_centers.md](features/settings/settings_tab_projects_and_seah_contact_centers.md).
 
+> **⚠ Revised 2026-07-10 — project participants simplified. See [`DECISION-project-participants-and-supervision.md`](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md).** The per-project **actor-role catalog** (`project_actor_roles`, `project_organizations.org_role`, `project_types.actor_roles`, `routing_org_role`, the "+ Add role" action, `GET/PUT /projects/{id}/actor-roles`) is **removed**. A project now carries one defaulted **`implementing_agency_org_id`** (the signing ministry — routing/reporting anchor; `government`/`local_government` only) + optional **`project_donors`** (0..n). **Go-live gates on staffing** — every workflow level has an officer — plus the **donor last-step-informed guardrail** (SEAH-suppressed). Sections below that still describe the actor-role model are **superseded** by the DECISION; the build reconciles them (OC-03 / doc-13 work).
+
 ---
 
 ## 1. Purpose
@@ -20,7 +22,7 @@ A **project** is the routing hub for a financed infrastructure intervention (e.g
 
 ### Who edits what (admin matrix)
 
-| Action | `country_admin` `track=standard` | `country_admin` `track=seah` | `project_admin` |
+| Action | `org_admin` `track=standard` | `org_admin` `track=seah` | `project_admin` |
 |--------|-------------------------------|------------------------------|-----------------|
 | Create **project** | ✅ country | ✅ country | ❌ |
 | Create **package** | ✅ country | ❌ | ❌ |
@@ -200,12 +202,12 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 | A2 | `seah` slot → published SEAH workflow | Warn |
 | A3h | `hazards` slot → published workflow | Warn |
 | A3c | `ca` slot → published workflow | Warn |
-| A3 | Project actor `implementing_agency` has an org | **Block** for activation |
-| B1 | Required actor slots filled | Warn |
+| A3 | `implementing_agency_org_id` set (defaults to owning ministry; `government`/`local_government` only) | **Block** for activation |
+| A4 | **Every workflow level has ≥1 officer scoped to the project** ([DECISION §7](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) | **Block** for activation |
+| A5 | **Donor present ⇒ ≥1 donor role in the last step's "Kept informed" cast** (standard track; SEAH-suppressed) | **Block** for activation |
 | B2 | Each active package has ≥1 location | Warn |
 | B3 | Package required roles filled | Warn |
-| C1 | L1 GRM officer scoped to implementing agency + project | Warn on project; **Block ticket create** if fail |
-| C2 | Officer org matches implementing agency | Warn |
+| C1 | **L1 is staffed** — ≥1 L1 officer scoped to the project | Warn on project; **Block ticket create** if fail |
 | C4 | SEAH L1 officer scoped to project | Warn |
 | D1 | ≥1 project location linked | Warn |
 | D2 | Package QR token present | Info |
@@ -225,8 +227,8 @@ Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is fal
 | `GET/PUT` | `/projects/{id}/workflows` | Workflow stream assignments |
 | `GET/PATCH` | `/projects/{id}/messaging` | Officer assignment SMS config — [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
 | `GET` | `/projects/{id}/go-live` | Checklist report |
-| `GET/PUT` | `/projects/{id}/actor-roles` | Commercial role vocabulary |
-| `GET/POST/PATCH/DELETE` | `/projects/{id}/organizations/...` | Project actors |
+| `GET/PUT` | `/projects/{id}/implementing-agency` | Set the one accountable org (`government`/`local_government`) — [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md) |
+| `GET/POST/DELETE` | `/projects/{id}/donors` | Optional donor participants (0..n); drives the last-step-informed guardrail |
 | `GET/POST` | `/projects/{id}/locations/{code}` | Location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages` | Package CRUD |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/organizations/...` | Package actors |

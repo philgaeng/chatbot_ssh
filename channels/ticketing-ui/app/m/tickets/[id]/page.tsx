@@ -15,14 +15,12 @@
  * Nothing is shown in a side-by-side column — thread always takes full width.
  */
 
-import React, { use, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
-  getTicket, getSla, performAction, markSeen, listTicketTasks, completeTask, createTask, patchTicket,
   listTicketFiles, listOfficerAttachments, uploadOfficerAttachment,
-  complainantFilePath, officerAttachmentPath,
-  listOfficerRoster, getGrievancePii,
-  type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
+  complainantFilePath, officerAttachmentPath, getGrievancePii,
+  type TicketDetail, type TicketEvent, type TicketTask,
   type TicketFile, type OfficerAttachment, type GrievancePii, type RevealSession,
 } from "@/lib/api";
 import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
@@ -31,18 +29,12 @@ import { ComplainantQuickContactButton } from "@/components/tickets/ComplainantQ
 import { useComplainantPhoneHref } from "@/lib/use-complainant-phone-href";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
+import { useTicketThread } from "@/lib/useTicketThread";
+import { assigneeIsCurrentUser } from "@/lib/auth/token-storage";
 import {
   SYSTEM_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, isThreadTaskEvent,
-  COMPLAINANT_EVENT_TYPES, AUTHORITY_ROLES, type HashCommand,
 } from "@/lib/mobile-constants";
-import { hasImageAttachment } from "@/lib/attachments";
-import {
-  canAssignTicket,
-  canSupervisorAssign,
-  getReassignMode,
-  type ReassignMode,
-} from "@/lib/officer-permissions";
+import { type ReassignMode } from "@/lib/officer-permissions";
 import { IntakeRouteBadge } from "@/lib/icons";
 import {
   AlertTriangle, ArrowUpCircle, Flag, ClipboardList, CheckCircle2,
@@ -52,7 +44,6 @@ import {
 
 import { NoteBubble }                        from "@/components/thread/NoteBubble";
 import { ResolutionSheet }                   from "@/components/ResolutionSheet";
-import type { ResolutionCategoryCode }       from "@/lib/resolution";
 import { SystemPill }                         from "@/components/thread/SystemPill";
 import { TaskCard, AssignTaskSheet }          from "@/components/thread/TaskCard";
 import { FilterChips, type FilterChip }       from "@/components/thread/FilterChips";
@@ -64,20 +55,13 @@ import { EscalationFormCard }                 from "@/components/thread/Escalati
 import { CallReportComposeCard }              from "@/components/thread/CallReportComposeCard";
 import { ReassignmentRequestCard, type ReassignmentReasonCode } from "@/components/thread/ReassignmentRequestCard";
 import { AttachmentListSection }              from "@/components/AttachmentListSection";
-import {
-  formatCallReportNote, isSiteVisitTask, parseInspectAssignCommand, type FieldVisitFormData, type CallReportFormData,
-} from "@/lib/field-visit";
-import { submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { ErrorCard }                          from "@/components/ui/ErrorCard";
 import { ActionNotice } from "@/components/ActionNotice";
 import {
   formatUserFacingError,
-  MSG_IMAGE_BEFORE_ESCALATE,
-  MSG_IMAGE_BEFORE_RESOLVE,
-  MSG_SUPERVISOR_ONLY_ASSIGN,
   MSG_NO_COMPLAINANT_PHONE,
   type ActionNoticeState,
 } from "@/lib/user-messages";
-import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { SlaSubHeader, WorkflowMiniStepper }  from "@/components/thread/SlaSubHeader";
 
@@ -690,388 +674,56 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   const router           = useRouter();
   const searchParams     = useSearchParams();
   const { user, roleKeys, isAdmin } = useAuth();
-  const currentUserId    = canonicalUserId(user);
-  const fieldVisitSubmitLock = useRef(false);
 
-  const [ticket, setTicket]               = useState<TicketDetail | null>(null);
-  const [sla, setSla]                     = useState<SlaStatus | null>(null);
-  const [tasks, setTasks]                 = useState<TicketTask[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [activeFilter, setActiveFilter]   = useState<FilterChip>("all");
-  const [noteText, setNoteText]           = useState("");
-  const [submitting, setSubmitting]       = useState(false);
-  const [fieldReportOpen, setFieldReportOpen] = useState(false);
-  const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
-  const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
-  const [attachUploading, setAttachUploading] = useState(false);
-  const [escalationOpen, setEscalationOpen] = useState(false);
-  const [callReportOpen, setCallReportOpen] = useState(false);
-  const [reassignOpen, setReassignOpen] = useState(false);
-  const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
-  const [officerFiles, setOfficerFiles] = useState<OfficerAttachment[]>([]);
-  const [rosterIds, setRosterIds] = useState<string[]>([]);
-  const [actionNotice, setActionNotice] = useState<ActionNoticeState | null>(null);
-  const [revealModalOpen, setRevealModalOpen] = useState(false);
-  const [revealSession, setRevealSession] = useState<RevealSession | null>(null);
+  // ── Shared thread orchestration (H2-06) ──────────────────────────────────
+  const {
+    ticket, sla, tasks, loading, error, errorIsNotFound,
+    activeFilter, setActiveFilter, noteText, setNoteText, submitting,
+    actionNotice, setActionNotice, threadEndRef,
+    escalationOpen, setEscalationOpen, resolutionOpen, setResolutionOpen,
+    reassignOpen, setReassignOpen, callReportOpen, setCallReportOpen,
+    fieldReportOpen, fieldReportLinkedTask, fieldReportSubmitting, attachUploading,
+    currentUserId, viewerIds, viewerTiers, filteredEvents,
+    mentionParticipants, pendingTaskCount, canManageViewers,
+    userCanSupervisorAssign, reassignMode, rosterIds,
+    reload, performSimpleAction,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve,
+    submitReassignment, submitCallReport, submitNote, handleHashCommand,
+    handleCompleteTask, openFieldReport, closeFieldReport, submitFieldReportForm,
+    handleAttachFile,
+  } = useTicketThread({ ticketId, user, roleKeys, isAdmin });
 
-  // Sheet visibility
-  const [showInfoMenu, setShowInfoMenu]   = useState(false);
-  const [infoPanel, setInfoPanel]         = useState<InfoPanel | null>(null);
-  const [showMore, setShowMore]           = useState(false);
+  // Aliases so the JSX below keeps its original names.
+  const loadTicket = reload;
+  const handleAction = performSimpleAction;
+  const handleNoteOrReport = submitNote;
+
+  // ── Mobile-only UI state (bottom sheets) ──────────────────────────────────
+  const [showInfoMenu, setShowInfoMenu]     = useState(false);
+  const [infoPanel, setInfoPanel]           = useState<InfoPanel | null>(null);
+  const [showMore, setShowMore]             = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
-  const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [revealModalOpen, setRevealModalOpen] = useState(false);
+  const [revealSession, setRevealSession]     = useState<RevealSession | null>(null);
 
-  const threadEndRef = useRef<HTMLDivElement>(null);
+  // ── Mobile-only derived ───────────────────────────────────────────────────
+  const myPendingTasks = useMemo(
+    () => tasks.filter((t) => t.status === "PENDING" && assigneeIsCurrentUser(t.assigned_to_user_id, user)),
+    [tasks, user],
+  );
 
-  // ── Data loading ──────────────────────────────────────────────────────────
-
-  const loadTicket = useCallback(async () => {
-    try {
-      const [t, s, tk] = await Promise.all([
-        getTicket(ticketId),
-        getSla(ticketId).catch(() => null),
-        listTicketTasks(ticketId).catch(() => [] as TicketTask[]),
-      ]);
-      setTicket(t);
-      setSla(s);
-      setTasks(tk);
-    } catch (e) {
-      console.error("Failed to load ticket", e);
-    } finally {
-      setLoading(false);
-    }
-  }, [ticketId]);
-
-  useEffect(() => { loadTicket(); }, [loadTicket]);
-  useEffect(() => {
-    if (!ticketId) return;
-    Promise.all([
-      listTicketFiles(ticketId).catch(() => [] as TicketFile[]),
-      listOfficerAttachments(ticketId).catch(() => [] as OfficerAttachment[]),
-    ]).then(([cf, of]) => { setComplainantFiles(cf); setOfficerFiles(of); });
-    listOfficerRoster().then((r) => setRosterIds(r.map((o) => o.user_id))).catch(() => {});
-  }, [ticketId, ticket?.updated_at]);
-  useEffect(() => { markSeen(ticketId).catch(() => {}); }, [ticketId]);
+  // Deep-link: /m/tickets/[id]?openFieldVisit=<taskId> opens the field-report sheet.
   useEffect(() => {
     const openId = searchParams.get("openFieldVisit");
     if (!openId || tasks.length === 0) return;
     const pending = tasks.find((t) => t.task_id === openId && t.status === "PENDING");
-    if (pending) {
-      setFieldReportLinkedTask(pending);
-      setFieldReportOpen(true);
-    }
-  }, [searchParams, tasks]);
+    if (pending) openFieldReport(pending);
+  }, [searchParams, tasks, openFieldReport]);
+
+  // Auto-scroll to the newest message once the thread has loaded.
   useEffect(() => {
     if (ticket && !loading) threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [ticket, loading]);
-
-  // ── Derived state ─────────────────────────────────────────────────────────
-
-  const viewerIds = useMemo(
-    () => new Set((ticket?.viewers ?? []).map((v) => v.user_id)),
-    [ticket],
-  );
-  const viewerTiers = useMemo(() => {
-    const m = new Map<string, "informed" | "observer">();
-    (ticket?.viewers ?? []).forEach((v) => m.set(v.user_id, v.tier as "informed" | "observer"));
-    return m;
-  }, [ticket]);
-
-  const filteredEvents = useMemo(() => {
-    if (!ticket) return [];
-    switch (activeFilter) {
-      case "all":        return ticket.events;
-      case "mine":       return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
-      case "owner":      return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
-      case "supervisor": return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
-      case "observers":  return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
-      case "tasks":      return ticket.events.filter((e) => isThreadTaskEvent(e.event_type));
-      case "complainant":return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
-      default:           return ticket.events;
-    }
-  }, [ticket, activeFilter, currentUserId, viewerIds]);
-
-  const pendingTaskCount = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
-  const myPendingTasks   = useMemo(
-    () => tasks.filter((t) => t.status === "PENDING" && assigneeIsCurrentUser(t.assigned_to_user_id, user)),
-    [tasks, user],
-  );
-  const canManageViewers = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
-  const isAssignedActor = useMemo(
-    () =>
-      !!ticket &&
-      (!ticket.assigned_to_user_id ||
-        assigneeIsCurrentUser(ticket.assigned_to_user_id, user)),
-    [ticket, user],
-  );
-  const userCanSupervisorAssign = useMemo(
-    () => !!ticket && canSupervisorAssign(roleKeys, ticket, isAdmin),
-    [ticket, roleKeys, isAdmin],
-  );
-  const userCanAssign = useMemo(
-    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin, currentUserId),
-    [ticket, roleKeys, isAdmin, currentUserId],
-  );
-  const reassignMode = useMemo(
-    () => (ticket ? getReassignMode(roleKeys, ticket, currentUserId, isAdmin) : null),
-    [ticket, roleKeys, currentUserId, isAdmin],
-  );
-  const hasImages = useMemo(
-    () => hasImageAttachment(complainantFiles, officerFiles),
-    [complainantFiles, officerFiles],
-  );
-
-  const refreshFiles = useCallback(async () => {
-    const [cf, of] = await Promise.all([
-      listTicketFiles(ticketId).catch(() => [] as TicketFile[]),
-      listOfficerAttachments(ticketId).catch(() => [] as OfficerAttachment[]),
-    ]);
-    setComplainantFiles(cf);
-    setOfficerFiles(of);
-  }, [ticketId]);
-
-  const ensureAcknowledged = useCallback(async () => {
-    await ensureTicketAcknowledged(ticket, isAssignedActor, ticketId, loadTicket);
-  }, [ticket, isAssignedActor, ticketId, loadTicket]);
-  const mentionParticipants = useMemo(() => {
-    if (!ticket) return [];
-    const ids = new Set<string>();
-    if (ticket.assigned_to_user_id) ids.add(ticket.assigned_to_user_id);
-    (ticket.viewers ?? []).forEach((v) => ids.add(v.user_id));
-    ids.delete(currentUserId);
-    const list = Array.from(ids).map((id) => ({ user_id: id, label: `@${id}` }));
-    list.unshift({ user_id: "all", label: "@all" });
-    return list;
-  }, [ticket, currentUserId]);
-
-  // ── Actions ───────────────────────────────────────────────────────────────
-
-  const handleAction = useCallback(async (actionType: string) => {
-    if (!ticket) return;
-    setSubmitting(true);
-    try {
-      await performAction(ticketId, { action_type: actionType });
-      await loadTicket();
-      await refreshFiles();
-    } catch (e) {
-      console.error("Action failed", e);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ticket, ticketId, loadTicket, refreshFiles]);
-
-  const openEscalationFlow = useCallback(() => {
-    if (!hasImages) {
-      setActionNotice({ message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" });
-      return;
-    }
-    setEscalationOpen(true);
-  }, [hasImages]);
-
-  const openResolveFlow = useCallback(() => {
-    if (!hasImages) {
-      setActionNotice({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
-      return;
-    }
-    setResolutionOpen(true);
-  }, [hasImages]);
-
-  const submitEscalation = useCallback(async (data: {
-    escalationDate: string;
-    personsInvolved: string[];
-    notes: string;
-  }) => {
-    setSubmitting(true);
-    try {
-      await ensureAcknowledged();
-      await performAction(ticketId, {
-        action_type: "ESCALATE",
-        escalation_date: data.escalationDate,
-        persons_involved: data.personsInvolved,
-        escalation_notes: data.notes,
-      });
-      setEscalationOpen(false);
-      await loadTicket();
-    } catch (e) {
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ticketId, loadTicket, ensureAcknowledged]);
-
-  const submitReassignment = useCallback(async (reasonCode: ReassignmentReasonCode, notes: string) => {
-    setSubmitting(true);
-    try {
-      await performAction(ticketId, {
-        action_type: "REASSIGNMENT_REQUESTED",
-        reassignment_reason_code: reasonCode,
-        reassignment_notes: notes,
-      });
-      setReassignOpen(false);
-      await loadTicket();
-    } catch (e) {
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ticketId, loadTicket]);
-
-  const submitCallReport = useCallback(async (data: CallReportFormData) => {
-    setSubmitting(true);
-    try {
-      await ensureAcknowledged();
-      await performAction(ticketId, {
-        action_type: "NOTE",
-        note: formatCallReportNote(data),
-        is_call_report: true,
-      });
-      setCallReportOpen(false);
-      await loadTicket();
-    } catch (e) {
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ticketId, loadTicket, ensureAcknowledged]);
-
-  const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
-    if (!ticket) return;
-    setSubmitting(true);
-    try {
-      await ensureAcknowledged();
-      await performAction(ticketId, {
-        action_type: "RESOLVE",
-        resolution_category: category,
-        note,
-      });
-      setResolutionOpen(false);
-      await loadTicket();
-    } catch (e) {
-      console.error("Resolve failed", e);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [ticket, ticketId, loadTicket, ensureAcknowledged]);
-
-  const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
-    setFieldReportLinkedTask(linkedTask ?? null);
-    setFieldReportOpen(true);
-    requestAnimationFrame(() => {
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
-  }, []);
-
-  const closeFieldReport = useCallback(() => {
-    setFieldReportOpen(false);
-    setFieldReportLinkedTask(null);
-  }, []);
-
-  const handleHashCommand = useCallback(async (cmd: HashCommand) => {
-    if (cmd.kind === "call_report") { setCallReportOpen(true); return; }
-    if (cmd.kind === "reassign_request" && reassignMode === "supervisor") {
-      setReassignOpen(true);
-      return;
-    }
-    if (cmd.kind === "action" && cmd.action === "ESCALATE") { openEscalationFlow(); return; }
-    if (cmd.kind === "action" && cmd.action) { await handleAction(cmd.action); return; }
-    if (cmd.kind === "assign" && !userCanAssign) {
-      setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
-    }
-  }, [handleAction, openEscalationFlow, userCanAssign, reassignMode]);
-
-  const handleNoteOrReport = useCallback(async () => {
-    if (!noteText.trim() || submitting) return;
-    setSubmitting(true);
-    const text = noteText.trim();
-    setNoteText("");
-    try {
-      const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
-      const inspectAssignee = parseInspectAssignCommand(text);
-      if (inspectAssignee !== undefined) {
-        const assignee = inspectAssignee ?? currentUserId;
-        await createTask(ticketId, {
-          task_type: "SITE_VISIT",
-          assigned_to_user_id: assignee,
-        });
-      } else if (assignMatch) {
-        if (!userCanAssign) {
-          setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
-          setNoteText(text);
-          return;
-        }
-        await patchTicket(ticketId, { assign_to_user_id: assignMatch[1] });
-      } else {
-        await ensureAcknowledged();
-        await performAction(ticketId, { action_type: "NOTE", note: text });
-      }
-      await loadTicket();
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      console.error("Submit failed", e);
-      setNoteText(text);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [noteText, submitting, ticketId, loadTicket, ensureAcknowledged, currentUserId, userCanAssign]);
-
-  const handleCompleteTask = useCallback(async (task: TicketTask) => {
-    if (!ticket) return;
-    if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
-      openFieldReport(task);
-      return;
-    }
-    try {
-      await completeTask(ticketId, task.task_id);
-      await loadTicket();
-    } catch (e) {
-      console.error("Complete task failed", e);
-      setActionNotice(formatUserFacingError(e, "task"));
-    }
-  }, [ticket, ticketId, loadTicket, openFieldReport]);
-
-  const submitFieldReportForm = useCallback(async (data: FieldVisitFormData) => {
-    if (fieldVisitSubmitLock.current) return;
-    fieldVisitSubmitLock.current = true;
-    setFieldReportSubmitting(true);
-    try {
-      await submitStructuredFieldReport({
-        ticketId,
-        data,
-        linkedTask: fieldReportLinkedTask,
-        ensureAcknowledged,
-      });
-      closeFieldReport();
-      await loadTicket();
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      console.error("Field report failed", e);
-      setActionNotice(formatUserFacingError(e, "field_report"));
-      throw e;
-    } finally {
-      fieldVisitSubmitLock.current = false;
-      setFieldReportSubmitting(false);
-    }
-  }, [ticketId, fieldReportLinkedTask, loadTicket, ensureAcknowledged, closeFieldReport]);
-
-  const handleAttachFile = useCallback(async (file: File) => {
-    setAttachUploading(true);
-    try {
-      await uploadOfficerAttachment(ticketId, file, "");
-      await refreshFiles();
-      await loadTicket();
-    } catch (e) {
-      console.error("Attach failed", e);
-      setActionNotice(formatUserFacingError(e, "upload"));
-    } finally {
-      setAttachUploading(false);
-    }
-  }, [ticketId, loadTicket, refreshFiles]);
+  }, [ticket, loading, threadEndRef]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -1084,10 +736,20 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
   }
 
   if (!ticket) {
+    // Only treat a genuine 404 as "not found" — any other failure (network,
+    // 5xx, timeout) gets the recoverable error card instead of a look-alike
+    // blank page (HR-06). `errorIsNotFound` is computed in the hook from the raw
+    // HTTP status.
     return (
-      <div className="flex flex-col items-center justify-center h-full gap-3">
-        <AlertTriangle size={32} strokeWidth={1.5} className="text-amber-400" />
-        <div className="text-sm text-gray-500">Ticket not found</div>
+      <div className="flex flex-col items-center justify-center h-full gap-3 p-6">
+        {error && !errorIsNotFound ? (
+          <ErrorCard message="Couldn't load this ticket." onRetry={() => void loadTicket()} />
+        ) : (
+          <>
+            <AlertTriangle size={32} strokeWidth={1.5} className="text-amber-400" />
+            <div className="text-sm text-gray-500">Ticket not found</div>
+          </>
+        )}
         <button onClick={() => router.back()} className="text-blue-600 text-sm">← Go back</button>
       </div>
     );

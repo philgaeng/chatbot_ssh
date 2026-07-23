@@ -3,11 +3,15 @@
 export type JurisdictionMode = "field" | "country" | "global";
 
 const COUNTRY_DEFAULT_ROLES = new Set([
-  "country_admin",
+  "org_admin",                     // SH-7: country_admin retired → org_admin
+  "country_l1_fallback",
   "adb_national_project_director",
   "adb_hq_safeguards",
   "adb_hq_project",
   "adb_hq_exec",
+  "donor_consultant",              // doc 13: donor observer tier is country-jurisdiction
+  "donor_national",
+  "donor_hq",
 ]);
 
 export function defaultJurisdictionMode(roleKey: string): JurisdictionMode {

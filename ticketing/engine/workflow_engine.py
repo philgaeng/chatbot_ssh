@@ -180,7 +180,15 @@ def resolve_workflow(
             )
             if wf:
                 return wf
-            for wf_id in (project.standard_workflow_id, project.seah_workflow_id):
+            # Legacy fallback must respect the track: a SEAH grievance resolves to the SEAH
+            # workflow first, a standard one to the standard workflow first. (Was is_seah-blind
+            # — always returned standard first — latent while project_workflows had bindings.)
+            legacy_order = (
+                (project.seah_workflow_id, project.standard_workflow_id)
+                if is_seah
+                else (project.standard_workflow_id, project.seah_workflow_id)
+            )
+            for wf_id in legacy_order:
                 if wf_id:
                     legacy = db.get(WorkflowDefinition, wf_id)
                     if legacy:
@@ -373,6 +381,7 @@ def _scope_country_fallback_candidates(
     Never used for field roles — see assignment_tier='field'.
     """
     from ticketing.models.officer_scope import OfficerScope
+    from ticketing.services.officer_admin import officer_is_active
     from ticketing.services.project_routing import (
         load_project_ref,
         officer_scope_project_code_match,
@@ -385,6 +394,8 @@ def _scope_country_fallback_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                if not officer_is_active(db, uid):  # R3: deactivated officers out of the pool
+                    continue
                 result.append(uid)
 
     base = (
@@ -456,6 +467,7 @@ def _scope_candidates(
     from ticketing.models.officer_scope import OfficerScope
     from ticketing.models.package import PackageLocation, ProjectPackage
     from ticketing.models.project import Project
+    from ticketing.services.officer_admin import officer_is_active
 
     seen: set[str] = set()
     result: list[str] = []
@@ -464,6 +476,11 @@ def _scope_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                # R3 (BUILD-REVIEW M2): a soft-deactivated officer is out of the assignment
+                # pool — the system assignment path never passes through enrich_user, so it
+                # must exclude them here or tickets auto-route to someone who can't log in.
+                if not officer_is_active(db, uid):
+                    continue
                 result.append(uid)
 
     base = (OfficerScope.role_key == role_key,)
@@ -659,7 +676,19 @@ def auto_assign_officer(
         ).all()
     )
 
-    return min(candidates, key=lambda uid: active_counts.get(uid, 0))
+    # OC-04 §5.4 prefer-own-office: among the *already-filtered* candidates, rank first the
+    # officers whose office territory covers the ticket location, then least-loaded. A
+    # preference, never a filter — the candidate set (and province fallback) is unchanged.
+    from ticketing.services.chart_behaviors import territory_covering_user_ids
+
+    covering = territory_covering_user_ids(db, candidates, location_code)
+
+    # (not-covering flag, load, user_id) — ties broken deterministically by user_id so the
+    # choice never depends on undefined Postgres row order (would be flaky otherwise).
+    return min(
+        candidates,
+        key=lambda uid: (0 if uid in covering else 1, active_counts.get(uid, 0), uid),
+    )
 
 
 def auto_assign_for_workflow_step(
@@ -739,3 +768,41 @@ def get_teammates(
         ticket_package_id=ticket_package_id,
     )
     return [uid for uid in candidates if uid != exclude_user_id]
+
+
+# ── Step supervisor / assignee helpers (H2-02: moved out of the tickets router) ──
+
+def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
+    """First in-scope holder of the current step's supervisor role, if any."""
+    step = get_current_step(ticket, db)
+    if not step or not step.supervisor_role:
+        return None
+    candidates = _scope_candidates(
+        role_key=step.supervisor_role,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        db=db,
+    )
+    return candidates[0] if candidates else None
+
+
+def is_step_assignee_eligible(db: Session, ticket: Ticket, assign_to_user_id: str) -> bool:
+    """True when the user is in the current step's role + jurisdiction pool.
+
+    Pure predicate (no HTTP) — the router maps False to a 422. When the ticket has
+    no current step there is nothing to validate against, so it returns True.
+    """
+    step = get_current_step(ticket, db)
+    if not step:
+        return True
+    eligible = get_teammates(
+        role_key=step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        exclude_user_id=None,
+        db=db,
+        ticket_package_id=ticket.package_id,
+    )
+    return assign_to_user_id in eligible

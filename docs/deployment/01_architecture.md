@@ -1,785 +1,110 @@
-# Nepal Chatbot - System Architecture
+# Architecture — Nepal Chatbot + GRM Ticketing
 
-Comprehensive overview of the Nepal Chatbot system architecture, components, and data flow.
+**Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/01_architecture.md`](archive/01_architecture.md).
 
-## Current Architecture (Post-Refactor)
+The whole stack is **Docker Compose only** — no systemd services, no standalone Rasa server, no Flask. One repo, one image for all Python services, plus a Next.js image for the officer UI and stock images for Postgres/Redis/nginx/Keycloak.
 
-We **do not run the full Rasa server**. Conversation is driven by:
+## 1. Service map
 
-- **Orchestrator** (FastAPI): Receives `POST /message`, runs the state machine, invokes **Rasa SDK** actions (same Python code in `rasa_chatbot/actions/`), returns `messages`, `next_state`, `expected_input_type`. Optional Socket.IO bridge on `/socket.io` for legacy webchat.
-- **Flask backend** (port 5001): File uploads (`/upload-files`), grievance API (`/api/grievance/*`), status updates, WebSocket, gsheet. Uses `backend/services/messaging.py` in-process for SMS/email (no HTTP messaging API yet).
-- **REST webchat** (`channels/REST_webchat`): Calls Orchestrator `POST /message` and Flask for file uploads. No Rasa or Socket.IO dependency for conversation.
+### Base stack — `docker-compose.yml` (chatbot)
 
-Details: [Refactor specs (March 5)](Refactor%20specs/March%205/01_orchestrator.md), [BACKEND.md](BACKEND.md). The sections below include the **legacy** Rasa Server / Action Server picture for reference; in current deployment these are replaced by the Orchestrator + Rasa SDK.
+| Service | Image / command | Port (container) | Role |
+|---|---|---|---|
+| `orchestrator` | `uvicorn backend.orchestrator.main:app` | 8000 | Conversation state machine; runs intake actions from `backend/actions/` in-process. `POST /message`, `GET /health` |
+| `backend` | `uvicorn backend.api.fastapi_app:app` | 5001 | Grievance/file/messaging/voice/gsheet APIs (FastAPI). See [`04_backend.md`](04_backend.md) |
+| `celery_llm` | Celery `-Q llm_queue` (concurrency 6) | — | LLM classification/summarization tasks |
+| `celery_default` | Celery `-Q default` (concurrency 2) | — | General background tasks |
+| `celery_file` | Celery `-Q file_queue` (concurrency 1) | — | File processing (image compression, voice) |
+| `redis` | `redis:7` | 6379 | Broker (db1) + result backend (db2) + Socket.IO bus (db0); `requirepass` when `REDIS_PASSWORD` set |
+| `db` | `postgres:15` | 5432 (host `5433` via GRM overlay) | `app_db` — schemas `public`, `ticketing`, `ops`, `keycloak` |
+| `nginx` | `nginx:stable` | 80 (host `8080` on WSL; `80/443` via AWS/prod overlays) | Edge: serves `channels/REST_webchat/` static + proxies APIs |
+| `db_init` | one-shot, `--profile init` | — | Creates baseline chatbot tables in an empty volume |
 
-## Table of Contents
+All Celery workers share one app: `backend.task_queue.celery_app`.
 
-- [Current Architecture (Post-Refactor)](#current-architecture-post-refactor)
-- [High-Level Architecture](#high-level-architecture)
-- [Core Components](#core-components)
-- [Data Flow](#data-flow)
-- [Database Schema](#database-schema)
-- [Message Queue Architecture](#message-queue-architecture)
-- [Security Architecture](#security-architecture)
-- [Scalability Considerations](#scalability-considerations)
+### GRM overlay — `docker-compose.grm.yml`
 
-## High-Level Architecture
+| Service | Port (host) | Role |
+|---|---|---|
+| `ticketing_api` | 5002 | Ticketing FastAPI (`ticketing.api.main:app`) — the **single** consolidated API; auth behaviour set by `AUTH_MODE` (`keycloak` default / `bypass` only when `APP_ENV=dev`) |
+| `grm_ui` | 3001 | Officer UI (Next.js) — the **single** consolidated UI; auth mode baked from `AUTH_MODE`/`KEYCLOAK_ISSUER` at build time; proxies to `ticketing_api:5002` |
+| `grm_celery` | — | GRM Celery worker, queues `grm_ticketing,grm_geocode` (SLA watchdog, escalation, grievance sync, notifications, archiving) |
+| `grm_celery_beat` | — | GRM periodic scheduler (SLA watchdog, sync, heartbeat, archiving) |
+| `ops` | — | Platform monitor (`python -m ops.scheduler`, APScheduler, broker-independent). Spec: [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) |
+| `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | Keycloak 26 OIDC provider (the only profile-gated service); state in `keycloak` schema of `app_db`. See [`16_auth_keycloak.md`](16_auth_keycloak.md) |
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        User Interfaces                           │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
-│  │ Webchat  │  │ WhatsApp │  │ Facebook │  │ Accessible   │   │
-│  │          │  │          │  │          │  │ Interface    │   │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘  └──────┬───────┘   │
-└───────┼─────────────┼─────────────┼────────────────┼───────────┘
-        │             │             │                │
-        └─────────────┴─────────────┴────────────────┘
-                              │
-                    ┌─────────▼─────────┐
-                    │    Nginx          │
-                    │  Reverse Proxy    │
-                    └─────────┬─────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-┌───────▼────────┐   ┌───────▼────────┐   ┌───────▼────────┐
-│  Rasa Server   │   │  Flask Server  │   │ Django Helpdesk│
-│  (Port 5005)   │   │  (Port 5001)   │   │  (Port 8000)   │
-│                │   │                │   │   Option       │
-│  - NLU         │   │  - File Upload │   │  - Ticketing   │
-│  - Dialogue    │   │  - WebSocket   │   │  - User Mgmt   │
-│  - Policies    │   │  - REST API    │   │  - Reporting   │
-└───────┬────────┘   └───────┬────────┘   └───────┬────────┘
-        │                    │                     │
-        │            ┌───────▼────────┐            │
-        │            │  Celery Workers│            │
-        │            │                │            │
-        │            │  - LLM Queue   │            │
-        │            │  - File Queue  │            │
-        │            │  - Email Queue │            │
-        │            └───────┬────────┘            │
-        │                    │                     │
-┌───────▼────────┐   ┌───────▼────────┐           │
-│ Action Server  │   │     Redis      │           │
-│  (Port 5055)   │   │                │           │
-│                │   │  - Broker      │           │
-│  - Forms       │   │  - Cache       │           │
-│  - Validation  │   │  - Sessions    │           │
-│  - Business    │   └────────────────┘           │
-│    Logic       │                                │
-└───────┬────────┘                                │
-        │                                         │
-        └─────────────────┬───────────────────────┘
-                          │
-                  ┌───────▼────────┐
-                  │  PostgreSQL    │
-                  │   Database     │
-                  │                │
-                  │  - Grievances  │
-                  │  - Users       │
-                  │  - Tickets     │
-                  │  - Files       │
-                  └────────────────┘
-```
+The old demo-vs-auth split (`ticketing_api_auth`:5003 / `grm_ui_auth`:3002) is **gone** (CL-03): one `ticketing_api` (:5002) and one `grm_ui` (:3001), their auth behaviour driven by `AUTH_MODE` + `KEYCLOAK_ISSUER`.
 
-## Core Components
+GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the chatbot Celery app, same Redis broker.
 
-### 1. Rasa Server (Port 5005)
+### Environment overlays
 
-**Purpose**: Natural language understanding and dialogue management
+| File | Adds |
+|---|---|
+| `docker-compose.aws.yml` | nginx on host `80/443`, TLS conf `deployment/nginx/webchat_rest_compose_aws.conf` (`nepal-gms-chatbot.facets-ai.com` + `grm-auth.` subdomain), certbot mounts |
+| `docker-compose.prod.yml` | Nepal DOR prod (`grm-chatbot.dor.gov.np`): TLS conf `webchat_rest_compose_prod.tls.conf`, single-host Keycloak at `/keycloak` path, IPv4-preferred SMTP for Keycloak |
 
-**Responsibilities:**
+There is no `docker-compose.override.yml` any more (CL-03): dev-ness comes from `env.local` (`APP_ENV=dev AUTH_MODE=bypass`), not an override file. The compose set is `docker-compose.yml` (base) + `docker-compose.grm.yml` (single GRM stack) + `docker-compose.aws.yml` / `docker-compose.prod.yml` (deploy overlays). Deploys bring Keycloak up with `--profile auth`.
 
-- Process user messages and extract intents/entities
-- Manage conversation state and context
-- Determine next actions based on policies
-- Handle multi-turn dialogues
-- Support English and Nepali languages
+## 2. Request / data flows
 
-**Key Technologies:**
-
-- Rasa 3.6.21
-- spaCy for NLP
-- TensorFlow for ML models
-
-**Configuration Files:**
-
-- `rasa_chatbot/config.yml` - NLU pipeline and policies
-- `rasa_chatbot/domain.yml` - Intents, entities, slots, responses
-- `rasa_chatbot/endpoints.yml` - External service connections
-
-**API Endpoints:**
-
-- `POST /webhooks/rest/webhook` - Send messages
-- `GET /conversations/{conversation_id}/tracker` - Get conversation state
-- `POST /conversations/{conversation_id}/execute` - Execute actions
-- `GET /version` - Get Rasa version
-- `GET /status` - Health check
-
-### 2. Action Server (Port 5055)
-
-**Purpose**: Execute custom actions and business logic
-
-**Responsibilities:**
-
-- Form handling and validation
-- Database operations (CRUD)
-- External API integrations
-- Business rule implementation
-- Response generation
-
-**Key Actions:**
-
-- **Form Actions**: Grievance details, contact info, OTP verification
-- **Generic Actions**: Menu, language selection, goodbye
-- **Status Actions**: Check status by ID or phone
-- **Submission Actions**: Submit grievance, store files
-
-**Location:** `rasa_chatbot/actions/`
-
-**Structure:**
+### Complainant webchat (active channel: `channels/REST_webchat/`)
 
 ```
-actions/
-├── forms/                    # Form validation logic
-│   ├── form_grievance.py     # Grievance submission forms
-│   ├── form_contact.py       # Contact information forms
-│   ├── form_status_check.py  # Status check forms
-│   └── form_validation_*.py  # Form validation helpers
-├── generic_actions.py        # Generic actions (menu, intro)
-├── status_actions.py         # Status checking actions
-└── base_classes.py           # Base action classes
+Browser ── /rest-webchat/ (static) ──► nginx
+   │                                    │ /message
+   └── chat turn ───────────────────────┼──► orchestrator:8000  (state machine + backend/actions/)
+   └── file upload /upload-files ───────┴──► backend:5001       (files router → celery file_queue)
 ```
 
-### 3. Flask Server (Port 5001)
+`channels/webchat/` (Socket.IO webchat) is **legacy and unmounted** — do not build against it.
 
-**Purpose**: File handling, WebSocket connections, and API endpoints
+### Chatbot → ticketing
 
-**Responsibilities:**
+- On grievance submit, `backend/actions/utils/ticketing_dispatch.py` POSTs to the ticketing API (`POST /api/v1/tickets`) to create the ticket.
+- Safety net: `ticketing.tasks.grievance_sync.sync_grievances` (GRM Celery Beat) periodically reconciles `public.grievances` → `ticketing.tickets` for anything the webhook missed.
+- Ticketing reads grievance detail/PII fresh via `GET /api/grievance/{id}` on the backend — never by joining `public.*`.
 
-- Handle file uploads (images, documents, voice recordings)
-- WebSocket connections for real-time updates
-- REST API endpoints for frontend
-- Task status tracking
-- File validation and processing
-
-**Key Endpoints:**
-
-- `POST /upload` - File upload
-- `GET /health` - Health check
-- `POST /task-status` - Task status updates
-- `GET /grievance/{id}` - Get grievance details
-- `WebSocket /socket.io` - Real-time connections
-
-**Location:** `backend/app.py`
-
-### 4. Django Helpdesk (Port 8000) - option
-
-**Purpose**: Ticket management and workflow system
-
-**Responsibilities:**
-
-- Ticket lifecycle management
-- User hierarchy (PD, PM, Contractor)
-- SLA monitoring and escalation
-- Email notifications
-- Reporting and analytics
-- Admin interface
-
-**Key Features:**
-
-- Multi-level escalation (4 levels)
-- Priority-based routing
-- Automated notifications
-- Custom workflows
-- Audit trail
-
-**Location:** `backend/django_helpdesk/`
-
-### 5. Celery Workers
-
-**Purpose**: Asynchronous task processing
-
-**Queues:**
-
-1. **LLM Queue** (6 workers)
-
-   - AI classification and summarization
-   - Language translation
-   - Transcript processing
-   - Follow-up question generation
-
-2. **Default Queue** (4 workers)
-   - File processing
-   - Email notifications
-   - SMS sending
-   - Background jobs
-
-**Configuration:**
-
-- Broker: Redis
-- Result Backend: Redis
-- Task retry: 3 attempts
-- Task timeout: 300 seconds (LLM tasks)
-
-**Location:** `task_queue/`
-
-### 6. PostgreSQL Database
-
-**Purpose**: Primary data store
-
-**Databases:**
-
-- `grievance_db` - Main application database
-- `helpdesk_db` - Django helpdesk database (future)
-
-**Key Tables:**
-
-- `grievances` - Grievance records
-- `complainants` - User information (encrypted)
-- `office_management` - Office assignments
-- `office_user` - User accounts
-- `file_attachments` - File metadata
-- `status_history` - Status change log
-- `task_tracking` - Celery task tracking
-
-**Security Features:**
-
-- Field-level encryption (pgcrypto)
-- Row-level security (planned)
-- Audit logging
-- Connection pooling
-
-### 7. Redis
-
-**Purpose**: Message broker, cache, and session store
-
-**Uses:**
-
-- Celery message broker
-- Task result backend
-- Session storage
-- Rate limiting
-- Caching frequently accessed data
-
-**Configuration:**
-
-- Password protected
-- Persistence enabled
-- Max memory: 2GB
-- Eviction policy: allkeys-lru
-
-## Data Flow
-
-### Grievance Submission Flow
+### Officer UI → ticketing API → Keycloak
 
 ```
-┌──────────┐
-│   User   │
-└────┬─────┘
-     │ 1. Start conversation
-     ▼
-┌──────────────┐
-│   Webchat    │
-└────┬─────────┘
-     │ 2. Send message
-     ▼
-┌──────────────┐
-│  Rasa Server │
-└────┬─────────┘
-     │ 3. Extract intent/entities
-     ▼
-┌──────────────────┐
-│  Action Server   │
-└────┬─────────────┘
-     │ 4. Activate form
-     │    (grievance_details_form)
-     ▼
-┌──────────────────┐
-│  User provides   │
-│  grievance text  │
-└────┬─────────────┘
-     │ 5. Submit details
-     ▼
-┌──────────────────┐
-│  Action Server   │
-│  - Validate      │
-│  - Store temp    │
-└────┬─────────────┘
-     │ 6. Trigger async classification
-     ▼
-┌──────────────────┐
-│  Celery (LLM)    │
-│  - OpenAI API    │
-│  - Classify      │
-│  - Summarize     │
-└────┬─────────────┘
-     │ 7. Classification complete
-     ▼
-┌──────────────────┐
-│  Webchat         │
-│  - Show results  │
-│  - Send to Rasa  │
-└────┬─────────────┘
-     │ 8. User confirms
-     ▼
-┌──────────────────┐
-│  Contact Form    │
-│  - Name          │
-│  - Phone         │
-│  - Location      │
-└────┬─────────────┘
-     │ 9. OTP verification
-     ▼
-┌──────────────────┐
-│  Submit to DB    │
-│  - Encrypt data  │
-│  - Store files   │
-│  - Generate ID   │
-└────┬─────────────┘
-     | 10. Confirmation
-     ▼
-┌──────────────┐
-│   User gets  │
-│ Grievance ID │
-└──────────────┘
+Browser ──► grm_ui :3001 (Next.js; server-side proxy via rewrites)
+                 │                     ▲ OIDC login (browser → Keycloak issuer URL, when AUTH_MODE=keycloak)
+                 └──► ticketing_api :5002 ──► JWT validated against Keycloak JWKS
+                            │
+                            ├──► GET /api/grievance/{id}   (backend:5001 — PII on demand)
+                            ├──► POST /message             (orchestrator:8000 — officer reply to complainant)
+                            └──► POST /api/messaging/send-sms|send-email (backend:5001 — SMS fallback, reports)
 ```
 
-### Status Check Flow
+### Notifications
 
-```
-┌──────────┐
-│   User   │
-│ requests │
-│  status  │
-└────┬─────┘
-     │ 1. Send grievance ID or phone
-     ▼
-┌──────────────┐
-│ Rasa Server  │
-│ (intent:     │
-│  check_status)
-└────┬─────────┘
-     │ 2. Trigger action
-     ▼
-┌──────────────────┐
-│  Action Server   │
-│ - Query DB       │
-└────┬─────────────┘
-     │ 3. Retrieve data
-     ▼
-┌──────────────────┐
-│  PostgreSQL      │
-│ - Find grievance │
-│ - Get status     │
-│ - Get history    │
-└────┬─────────────┘
-     │ 4. Format response
-     ▼
-┌──────────────────┐
-│  Action Server   │
-│ - Build message  │
-│ - Include files  │
-└────┬─────────────┘
-     │ 5. Send to user
-     ▼
-┌──────────────┐
-│   Webchat    │
-│ Display info │
-└──────────────┘
-```
+Complainant: chatbot-first (`POST /message` with stored `session_id`), SMS fallback via Messaging API (DOIT gateway in Nepal prod, AWS SNS dev/international — see [`../services/05_messaging_service.md`](../services/05_messaging_service.md)). Officers: in-app badge.
 
-### File Upload Flow
+## 3. Database — one Postgres, four schemas, three Alembic streams
 
-```
-┌──────────┐
-│   User   │
-│  selects │
-│   file   │
-└────┬─────┘
-     │ 1. Upload file
-     ▼
-┌──────────────┐
-│ Flask Server │
-│ - Validate   │
-│ - Save temp  │
-└────┬─────────┘
-     │ 2. Queue processing
-     ▼
-┌──────────────────┐
-│  Celery Worker   │
-│ - Check format   │
-│ - Resize (img)   │
-│ - Scan malware   │
-└────┬─────────────┘
-     │ 3. Move to permanent storage
-     ▼
-┌──────────────────┐
-│  File System     │
-│  uploads/        │
-│  └─ grievance_id/│
-│     ├─ images/   │
-│     ├─ docs/     │
-│     └─ voice/    │
-└────┬─────────────┘
-     │ 4. Update database
-     ▼
-┌──────────────────┐
-│  PostgreSQL      │
-│  file_attachments│
-│  - file_id       │
-│  - file_path     │
-│  - file_type     │
-└──────────────────┘
-```
+`app_db` in the `db` container:
 
-## Database Schema
+| Schema | Owner / migration stream | Contents |
+|---|---|---|
+| `public` | `migrations/public/alembic.ini` (version table `alembic_version_public`) | Chatbot canonical data: grievances, complainants (pgcrypto-encrypted PII), files, SEAH intake, vault/reveal audit |
+| `ticketing` | `ticketing/migrations/alembic.ini` (version table in `ticketing` schema) | Tickets, workflows, roles, settings, events — **no PII**, string refs to `grievance_id` only, no cross-schema FKs/joins |
+| `ops` | `ops/migrations/alembic.ini` (version table `alembic_version_ops`) | `system_health_checks`, `dependency_findings`; scoped `ops_app` role |
+| `keycloak` | Keycloak manages its own DDL | Keycloak 26 internal state |
 
-### Core Tables
+Rules (locked): the three Alembic streams never share a table; run all of them with `make migrate_all`. Full policy: [`07_migrations_policy.md`](07_migrations_policy.md).
 
-#### grievances
+## 4. Deeper specs
 
-```sql
-CREATE TABLE grievances (
-    grievance_id VARCHAR(50) PRIMARY KEY,
-    complainant_id INTEGER REFERENCES complainants(complainant_id),
-    grievance_description TEXT NOT NULL,
-    grievance_summary TEXT,
-    grievance_categories TEXT[],
-    grievance_location TEXT,
-    classification_status VARCHAR(50),
-    priority_level VARCHAR(20),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    session_id VARCHAR(255),
-    language VARCHAR(10),
-    sensitive_issue BOOLEAN DEFAULT FALSE,
-    high_priority BOOLEAN DEFAULT FALSE
-);
+| Topic | Where |
+|---|---|
+| Per-service specs (grievance, files, messaging, LLM, task queue, DB, health, security monitoring) | [`../services/00_services_index.md`](../services/00_services_index.md) |
+| Ticketing product/schema/API/workflow specs | `../ticketing_system/` (start: `04_ticketing_schema.md`) |
+| Chatbot conversation flow, forms, frontend | `../rest_chatbot/` (flows: `02_flow_spec.md`) |
+| SEAH sensitive intake | `../seah/` (written in parallel; see `../seah/README.md`) |
+| Auth (Keycloak) as-built | [`16_auth_keycloak.md`](16_auth_keycloak.md) |
+| Build/run/debug containers | [`DOCKER.md`](DOCKER.md) |
+| Setup runbook | [`02_setup.md`](02_setup.md) · Operations: [`03_operations.md`](03_operations.md) |
+| Privacy/security | [`09_privacy.md`](09_privacy.md) · [`13_security.md`](13_security.md) |
 
-CREATE INDEX idx_grievances_complainant ON grievances(complainant_id);
-CREATE INDEX idx_grievances_status ON grievances(classification_status);
-CREATE INDEX idx_grievances_created ON grievances(created_at);
-```
-
-#### complainants (with encryption)
-
-```sql
-CREATE TABLE complainants (
-    complainant_id SERIAL PRIMARY KEY,
-    complainant_full_name BYTEA,  -- Encrypted
-    complainant_phone BYTEA,      -- Encrypted
-    complainant_email BYTEA,      -- Encrypted
-    complainant_address BYTEA,    -- Encrypted
-    complainant_province VARCHAR(50),
-    complainant_district VARCHAR(50),
-    complainant_municipality VARCHAR(100),
-    complainant_ward INTEGER,
-    complainant_village VARCHAR(100),
-    phone_verified BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_complainants_phone ON complainants(complainant_phone);
-CREATE INDEX idx_complainants_municipality ON complainants(complainant_municipality);
-```
-
-#### file_attachments
-
-```sql
-CREATE TABLE file_attachments (
-    file_id VARCHAR(50) PRIMARY KEY,
-    grievance_id VARCHAR(50) REFERENCES grievances(grievance_id),
-    file_type VARCHAR(50) NOT NULL,
-    file_name VARCHAR(255),
-    file_path TEXT NOT NULL,
-    file_size INTEGER,
-    mime_type VARCHAR(100),
-    uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_files_grievance ON file_attachments(grievance_id);
-```
-
-#### status_history
-
-```sql
-CREATE TABLE status_history (
-    history_id SERIAL PRIMARY KEY,
-    grievance_id VARCHAR(50) REFERENCES grievances(grievance_id),
-    old_status VARCHAR(50),
-    new_status VARCHAR(50) NOT NULL,
-    changed_by VARCHAR(100),
-    notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX idx_status_history_grievance ON status_history(grievance_id);
-```
-
-#### office_management
-
-```sql
-CREATE TABLE office_management (
-    office_id VARCHAR(50) PRIMARY KEY,
-    office_name TEXT NOT NULL,
-    office_address TEXT,
-    office_email VARCHAR(255),
-    office_pic_name TEXT,
-    office_phone VARCHAR(20),
-    district VARCHAR(100) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-#### office_municipality_ward (junction table)
-
-```sql
-CREATE TABLE office_municipality_ward (
-    id SERIAL PRIMARY KEY,
-    office_id VARCHAR(50) REFERENCES office_management(office_id),
-    municipality VARCHAR(100) NOT NULL,
-    ward INTEGER NOT NULL,
-    village VARCHAR(100),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(office_id, municipality, ward, village)
-);
-
-CREATE INDEX idx_office_muni_ward ON office_municipality_ward(office_id, municipality, ward);
-```
-
-### Relationships
-
-```
-complainants (1) ──────────────── (many) grievances
-                                     │
-                                     │ (many)
-                                     ▼
-                            file_attachments
-                                     │
-                                     │ (many)
-                                     ▼
-                             status_history
-
-office_management (1) ─────── (many) office_municipality_ward
-        │
-        │ (1)
-        ▼
-   office_user
-```
-
-## Message Queue Architecture
-
-### Queue Types
-
-1. **LLM Queue** (`llm_queue`)
-
-   - Priority: High
-   - Concurrency: 6 workers
-   - Timeout: 300 seconds
-   - Tasks: AI classification, summarization, translation
-
-2. **Default Queue** (`default`)
-
-   - Priority: Medium
-   - Concurrency: 4 workers
-   - Timeout: 60 seconds
-   - Tasks: File processing, emails, SMS
-
-3. **Notification Queue** (`notifications`)
-   - Priority: Low
-   - Concurrency: 2 workers
-   - Timeout: 30 seconds
-   - Tasks: Email, SMS notifications
-
-### Task Flow
-
-```
-┌───────────────┐
-│ Web Request   │
-└───────┬───────┘
-        │
-        ▼
-┌───────────────┐
-│ Create Task   │
-│ (Celery)      │
-└───────┬───────┘
-        │
-        ▼
-┌───────────────┐
-│ Redis Queue   │
-└───────┬───────┘
-        │
-        ▼
-┌───────────────────────────────┐
-│ Celery Worker                 │
-│ 1. Fetch task from queue      │
-│ 2. Execute task               │
-│ 3. Store result in Redis      │
-│ 4. Send status update         │
-└───────┬───────────────────────┘
-        │
-        ├─────────────┬─────────────┐
-        │             │             │
-        ▼             ▼             ▼
-┌────────────┐ ┌──────────┐ ┌──────────────┐
-│ PostgreSQL │ │  Redis   │ │  WebSocket   │
-│  (result)  │ │ (status) │ │  (notify)    │
-└────────────┘ └──────────┘ └──────────────┘
-```
-
-### Retry Strategy
-
-- **Max Retries**: 3
-- **Retry Delay**: Exponential backoff (2^retry \* 60 seconds)
-- **Dead Letter Queue**: Failed tasks after max retries
-
-## Security Architecture
-
-### Authentication & Authorization
-
-1. **User Authentication**
-
-   - Session-based (Rasa conversations)
-   - Phone OTP verification
-   - Admin: Django authentication
-
-2. **API Authentication**
-   - Bearer token (Google Sheets integration)
-   - API keys (external services)
-
-### Data Protection
-
-1. **At Rest**
-
-   - Database field-level encryption (pgcrypto)
-   - Encrypted sensitive fields:
-     - `complainant_full_name`
-     - `complainant_phone`
-     - `complainant_email`
-     - `complainant_address`
-
-2. **In Transit**
-
-   - HTTPS/TLS for all connections
-   - WebSocket secure (wss://)
-   - Database SSL connections
-
-3. **File Security**
-   - File type validation
-   - Size limits (10MB per file)
-   - Virus scanning (planned)
-   - Secure file paths (no direct access)
-
-### Network Security
-
-```
-Internet
-   │
-   ▼
-┌────────────────┐
-│  Firewall      │
-│  - Port 80/443 │
-│  - Rate limit  │
-└────────┬───────┘
-         │
-         ▼
-┌────────────────┐
-│  Nginx         │
-│  - SSL term    │
-│  - CORS        │
-│  - Headers     │
-└────────┬───────┘
-         │
-         ├───────────────────────┐
-         │                       │
-         ▼                       ▼
-┌────────────────┐      ┌────────────────┐
-│  Application   │      │  Application   │
-│  Servers       │      │  Servers       │
-│  (Internal)    │      │  (Internal)    │
-└────────┬───────┘      └────────┬───────┘
-         │                       │
-         └───────────┬───────────┘
-                     │
-                     ▼
-            ┌────────────────┐
-            │  PostgreSQL    │
-            │  (localhost)   │
-            └────────────────┘
-```
-
-## Scalability Considerations
-
-### Current Capacity
-
-- **Concurrent Users**: ~100
-- **Daily Grievances**: ~50
-- **File Uploads**: ~300 per day
-- **Database Size**: ~10 GB
-
-### Scaling Strategy
-
-#### Horizontal Scaling
-
-1. **Rasa Server**
-
-   - Load balancer (Nginx)
-   - Multiple Rasa instances
-   - Shared Redis for state
-
-2. **Celery Workers**
-
-   - Additional worker nodes
-   - Queue-based distribution
-   - Auto-scaling based on queue length
-
-3. **Database**
-   - Read replicas for reports
-   - Connection pooling
-   - Query optimization
-
-#### Vertical Scaling
-
-1. **Increase Server Resources**
-
-   - RAM: 8GB → 16GB
-   - CPU: 4 cores → 8 cores
-   - Storage: SSD recommended
-
-2. **Database Optimization**
-   - Indexing frequently queried fields
-   - Partitioning large tables
-   - Vacuuming and maintenance
-
-#### Caching Strategy
-
-1. **Redis Caching**
-
-   - User sessions
-   - Frequently accessed grievances
-   - Location data
-   - Category mappings
-
-2. **Application Caching**
-   - Response templates
-   - Static resources
-   - API responses (short TTL)
-
-### Performance Targets
-
-- **Response Time**: < 2 seconds (95th percentile)
-- **Availability**: 99.5% uptime
-- **Throughput**: 1000 requests/minute
-- **Database Queries**: < 100ms average
-
----
-
-For implementation details, see:
-
-- [Backend Guide](BACKEND.md)
-- [Rasa Guide](RASA.md)
-- [Operations Guide](OPERATIONS.md)
+> Numbering note: `05_rasa.md` was retired to [`archive/05_rasa.md`](archive/05_rasa.md) — the Rasa runtime no longer exists; the number is intentionally unused.

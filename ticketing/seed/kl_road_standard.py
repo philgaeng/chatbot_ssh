@@ -25,9 +25,10 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.country import Location
 from ticketing.models.organization import Organization
-from ticketing.models.project import Project
+from ticketing.models.project import Project, ProjectDonor, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.seed.position_types import seed_position_types
 from ticketing.seed.grm_roles import upsert_grm_roles
 
 logger = logging.getLogger(__name__)
@@ -75,12 +76,16 @@ def seed_organizations(db: Session) -> None:
             name="Department of Roads (DOR)",
             country_code="NP",
             is_active=True,
+            org_category="government",  # OC-01 doc 16 §3.1
+            unit_type="department",
         ),
         Organization(
             organization_id=ORG_ADB_ID,
             name="Asian Development Bank (ADB)",
             country_code="NP",
             is_active=True,
+            org_category="donor",  # OC-01: ADB is a development partner, not government
+            unit_type="development_partner",
         ),
     ]
     for org in orgs:
@@ -89,7 +94,15 @@ def seed_organizations(db: Session) -> None:
             db.add(org)
             logger.info("  + organization: %s", org.organization_id)
         else:
-            logger.info("  = organization already exists: %s", org.organization_id)
+            # org_category / unit_type are authoritative actor-type fields (doc 16 §3.1) —
+            # correct them on re-seed. An earlier backfill mislabeled ADB as 'government';
+            # the donor guardrail + implementing-agency validation depend on ADB='donor'.
+            if existing.org_category != org.org_category:
+                existing.org_category = org.org_category
+                logger.info("  ~ organization %s: org_category -> %s", org.organization_id, org.org_category)
+            if existing.unit_type != org.unit_type:
+                existing.unit_type = org.unit_type
+                logger.info("  ~ organization %s: unit_type -> %s", org.organization_id, org.unit_type)
     db.flush()
 
 
@@ -214,7 +227,10 @@ def seed_standard_workflow(db: Session) -> None:
             display_name="Level 4 – Legal Institutions",
             assigned_role_key="adb_hq_safeguards",
             supervisor_role=None,            # no supervisor at L4
-            informed_roles=[],
+            # Donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6): ADB is a donor
+            # on KL Road, so the final standard step keeps a donor tier in the informed
+            # cast → donor staff are notified on final escalation. SEAH-suppressed.
+            informed_roles=["donor_national"],
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -484,6 +500,113 @@ def seed_project(db: Session) -> None:
     db.flush()
 
 
+def seed_project_organizations(db: Session) -> None:
+    """
+    Ensure KL_ROAD's project_organizations rows carry the org_role that
+    resolve_ticket_organization() (ticketing/services/project_routing.py) looks
+    up for ticket-intake routing.
+
+    Migration e8d4b6a0f291 links KL_ROAD to DOR + ADB but leaves org_role NULL
+    (the column was added afterwards by a9c3e5f1d720, unbackfilled). Without an
+    "implementing_agency" org_role on the DOR row, resolve_ticket_organization()
+    returns None for every KL_ROAD ticket and intake fails with 422 ("No routing
+    organization for project=KL_ROAD"). Backfills existing NULL rows and creates
+    any missing link — safe to re-run.
+    """
+    from sqlalchemy import select
+
+    project = db.execute(
+        select(Project).where(Project.short_code == "KL_ROAD")
+    ).scalar_one_or_none()
+    if not project:
+        logger.warning("  ! project KL_ROAD not found — skipping project_organizations seed")
+        return
+
+    # DOR runs day-to-day implementation (routing target); ADB is the donor —
+    # matches ProjectOrganization's own docstring example and the
+    # construction_road project-type actor-role vocabulary (u3v5w7x9 migration).
+    desired_roles = {
+        ORG_DOR_ID: "implementing_agency",
+        ORG_ADB_ID: "donor",
+    }
+    for org_id, role in desired_roles.items():
+        existing = db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(ProjectOrganization(
+                project_id=project.project_id,
+                organization_id=org_id,
+                org_role=role,
+            ))
+            logger.info("  + project_organization: KL_ROAD + %s -> %s", org_id, role)
+        elif not existing.org_role:
+            existing.org_role = role
+            logger.info("  ~ project_organization: KL_ROAD + %s backfilled org_role=%s", org_id, role)
+        else:
+            logger.info("  = project_organization already set: KL_ROAD + %s -> %s", org_id, existing.org_role)
+
+    # doc 13 / DECISION 2026-07-10: the participant model is now thin typed fields, not an
+    # org_role layer. DOR (government) is the implementing agency; ADB is a donor. These
+    # coexist with the legacy org_role links above during the expand phase.
+    if project.implementing_agency_org_id != ORG_DOR_ID:
+        project.implementing_agency_org_id = ORG_DOR_ID
+        logger.info("  ~ project KL_ROAD: implementing_agency_org_id -> %s", ORG_DOR_ID)
+    donor_exists = db.execute(
+        select(ProjectDonor).where(
+            ProjectDonor.project_id == project.project_id,
+            ProjectDonor.organization_id == ORG_ADB_ID,
+        )
+    ).scalar_one_or_none()
+    if donor_exists is None:
+        db.add(ProjectDonor(project_id=project.project_id, organization_id=ORG_ADB_ID))
+        logger.info("  + project_donor: KL_ROAD + %s", ORG_ADB_ID)
+    db.flush()
+
+
+def seed_packages(db: Session) -> None:
+    """Seed the 5 KL Road lots + their district coverage (canonical location codes).
+
+    Formerly seeded inside migration b8c2d4e6f1a3 — moved into the seed so a data reset
+    (mock_tickets --reset TRUNCATEs everything) re-creates them; alembic never re-runs an
+    applied migration. Idempotent (ON CONFLICT DO NOTHING); caller commits.
+    """
+    from sqlalchemy import text
+
+    db.execute(text("""
+        INSERT INTO ticketing.project_packages
+            (package_id, project_id, package_code, name, description, is_active, created_at, updated_at)
+        SELECT gen_random_uuid()::text, p.project_id, v.package_code, v.name, v.description, true, NOW(), NOW()
+        FROM ticketing.projects p
+        CROSS JOIN (VALUES
+            ('01', 'Lot 1 — Kakarbhitta to Sitapur',                 'Civil works: Km 0+000 to Km 45+000'),
+            ('02', 'Lot 2 — Km 45 to Km 85',                          'Civil works: Km 45+000 to Km 85+000'),
+            ('03', 'Lot 3 — Km 85 to Km 95.76',                       'Civil works: Km 85+000 to Km 95+760'),
+            ('04', 'Lot 4 — Major Bridges (Ninda, Biring, Kankai)',   'Bridge construction'),
+            ('05', 'Lot 5 — Major Bridges (Ratuwa, Bakra, Lohendra)', 'Bridge construction')
+        ) AS v(package_code, name, description)
+        WHERE p.short_code = 'KL_ROAD'
+        ON CONFLICT (project_id, package_code) DO NOTHING
+    """))
+    db.execute(text("""
+        INSERT INTO ticketing.package_locations (package_id, location_code)
+        SELECT pp.package_id, v.location_code
+        FROM ticketing.project_packages pp
+        JOIN ticketing.projects p ON p.project_id = pp.project_id
+        CROSS JOIN (VALUES
+            ('01', 'P1_JHA'), ('02', 'P1_MOR'), ('03', 'P1_SUN'),
+            ('04', 'P1_JHA'), ('05', 'P1_JHA'), ('05', 'P1_MOR')
+        ) AS v(package_code, location_code)
+        WHERE p.short_code = 'KL_ROAD' AND pp.package_code = v.package_code
+          AND EXISTS (SELECT 1 FROM ticketing.locations WHERE location_code = v.location_code)
+        ON CONFLICT DO NOTHING
+    """))
+    db.flush()
+
+
 def seed_standard(db: Session | None = None) -> None:
     """Run all standard seed steps inside a single transaction."""
     own_session = db is None
@@ -495,9 +618,12 @@ def seed_standard(db: Session | None = None) -> None:
         seed_organizations(db)
         seed_locations(db)
         seed_roles(db)
+        seed_position_types(db)  # OC-02: after roles (matrix refs) + orgs (owner)
         seed_standard_workflow(db)
         seed_workflow_assignment(db)
         seed_project(db)
+        seed_project_organizations(db)
+        seed_packages(db)  # KL Road lots (was migration-seeded; re-created here after reset)
         seed_settings(db)
         db.commit()
         logger.info("Standard seed complete.")

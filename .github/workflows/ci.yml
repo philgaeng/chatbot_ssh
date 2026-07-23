@@ -1,0 +1,309 @@
+name: CI
+
+# HR-05 (2026-07 hardening sprint) — docs/sprints/2026-07_hardening/03-ci-pipeline-spec.md
+#
+# Three independent gates, run in parallel:
+#   backend-tests — Postgres 15 service, all three Alembic streams, pytest
+#                   (ticketing/orchestrator/actions/backend, @integration included)
+#   ui-checks     — channels/ticketing-ui: tsc --noEmit, eslint, next build
+#   docs-links    — relative markdown link check under docs/ (excludes archive/)
+#
+# `dev/**` is included in the push triggers because the 2026-07 hardening sprint
+# works off a single shared `dev/hardening` branch (see CLAUDE.md git workflow).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "integration/**"
+      - "dev/**"
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grievance_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Read by backend/config/constants.py (DB_CONFIG), ticketing/config/settings.py
+      # (TicketingSettings) and ops/config.py (OpsSettings) — all three streams and the
+      # app code share these POSTGRES_* names, so one set of values wires everything.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: grievance_db_test
+      # Dev bypass (no live Keycloak in CI) — matches tests/ticketing/_host_env.py default.
+      # APP_ENV=dev + AUTH_MODE=bypass is the single-flag scheme the fail-closed guards
+      # key on (CL-03); KEYCLOAK_ISSUER empty is fine because bypass ignores it.
+      KEYCLOAK_ISSUER: ""
+      TICKETING_SECRET_KEY: ci-test-secret
+      APP_ENV: dev
+      AUTH_MODE: bypass
+      # pgcrypto passphrase for the four ENCRYPTED_FIELDS on public.complainants. Any value
+      # works — it is a symmetric passphrase, and nothing in CI reads production data.
+      #
+      # Required, not optional: without it `_encrypt_field` returns its input unchanged
+      # (`if not self.encryption_key: return encrypted_value`), so T3-04's decryption tests
+      # would encrypt nothing, decrypt nothing, and **pass vacuously** — plaintext in,
+      # plaintext out, assertion satisfied. That is D-09's exact failure mode, which T3-04
+      # exists to close. `test_the_fixture_really_is_encrypted` is the guard that caught it
+      # here (it failed on the first real CI run, doing precisely its job); the fix is to
+      # give CI the key, not to relax the guard.
+      DB_ENCRYPTION_KEY: ci-test-pgcrypto-passphrase
+      # Redis (backend app / celery import requires REDIS_HOST — task_queue/config.py).
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      # Dummy SMTP so EmailClient.__init__ (messaging.py) resolves a profile instead of
+      # raising "SMTP is not configured"; orchestrator flow tests mock the actual send.
+      SMTP_SERVER: localhost
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ci
+      SMTP_PASSWORD: ci
+      SMTP_FROM: ci@example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10" # matches Dockerfile (python:3.10-slim)
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements.grm.txt
+            requirements-dev.txt
+
+      # requirements.txt installs pyvips, but pyvips is a binding — without the system
+      # libvips it imports far enough to raise OSError("cannot load library
+      # libvips.so.42"), which is NOT an ImportError, so test_image_compression.py's
+      # `pytest.importorskip("pyvips")` guard does not catch it and the file fails to
+      # COLLECT. That took the whole job down.
+      #
+      # Found the first time this branch was ever pushed. T3-08 added tests/backend to CI
+      # and verified it "on a clean migrate+seed matching CI's steps" — but locally, where
+      # pyvips is not installed at all, so the same 4 tests skipped cleanly and the gap was
+      # invisible. Local simulation of CI is not CI: same lesson as D-25/D-35 (repo-level
+      # reasoning vs infrastructure reality), arriving from a third direction.
+      #
+      # Installing the library rather than broadening the skip guard is deliberate. The
+      # Dockerfile treats libvips as REQUIRED (it fails the build if HEIF support is
+      # missing), so image compression is a real production path — and these 4 tests have
+      # never run in CI. Skipping them would be the quarantine pattern T3-08 removed.
+      # Package names copied from the Dockerfile rather than guessed. The runtime library
+      # is `libvips42` on older Debian but `libvips42t64` since the time64 transition
+      # (verified in the backend image: `dpkg -S` says libvips42t64 owns libvips.so.42), so
+      # naming the runtime package directly would break on some runners and not others.
+      # `libvips-dev` keeps a stable name across both and pulls the runtime in.
+      # The Dockerfile keeps ownership of the HEIF assertion — it is the image that has to
+      # serve HEIF uploads.
+      - name: Install system libraries (libvips — mirrors the Dockerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libvips-dev \
+            libvips-tools \
+            libheif1 \
+            libde265-0
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements.grm.txt -r requirements-dev.txt
+
+      - name: Run migrations (public -> ticketing -> ops)
+        run: |
+          python -m alembic -c migrations/public/alembic.ini upgrade head
+          python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+          python -m alembic -c ops/migrations/alembic.ini upgrade head
+
+      # CL-01 self-consistency gate: the freshly-migrated public schema must
+      # equal the committed canonical baseline (migrations/public/expected_public_schema.sql).
+      # Guards against public.* drifting from its own baseline again. pg_dump is
+      # pinned to 15 (matches the postgres:15 service) via `docker run` so the
+      # dump text is stable regardless of the runner's client version.
+      # NOTE: real-CI verification pending (no gh access in the authoring
+      # environment); validated locally against scratch DBs.
+      - name: Public schema self-consistency gate
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: grievance_db_test
+        run: bash scripts/ci/check_public_schema_baseline.sh check
+
+      - name: Seed KL Road locations + demo workflows
+        # tests/ticketing/conftest.py and the `pytest.mark.integration` tests
+        # (test_officer_assignment.py, test_project_routing.py, test_entity_codes.py)
+        # read the KL_ROAD project/workflow/location rows seeded here — same commands
+        # as the dev/SSH startup runbook, docs/deployment/03_operations.md §2 step 4.
+        #
+        # `--reset` makes every run start from a pristine seed. That is what makes the
+        # @integration tests deterministic in CI: assignment ranks by active ticket load,
+        # so a DB carrying tickets from previous runs would pick different (still valid)
+        # officers. Keep the reset.
+        run: |
+          python -m ticketing.seed.import_locations_json \
+            --country NP \
+            --en backend/dev-resources/location_dataset/en_cleaned.json \
+            --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+            --max-level 3
+          python -m ticketing.seed.mock_tickets --reset
+
+      - name: Run pytest (ticketing, orchestrator, actions, backend)
+        # T3-08 (2026-07-15) — the `-m "not integration"` quarantine is GONE, and
+        # tests/backend is included. Both were measured, not assumed:
+        #
+        #   before: 364 passed /   3 skipped / 390 deselected  — 3m16s
+        #   after:  897 passed /   7 skipped /   0 deselected  — 3m32s
+        #
+        # ⇒ +533 tests gated for +16s. The quarantine's stated reasons were fixed by the
+        # seed/test reconciliation (4f0140dd) and never re-enabled: verified green on a
+        # clean migrate+seed matching this job's steps exactly, stable over three
+        # consecutive runs, with tests/ticketing alone at 563/5/0. Closes
+        # docs/sprints/2026-07_schema_and_legacy_cleanup/followups/
+        # integration-seed-reconciliation.md.
+        #
+        # This job seeds precisely so the @integration tests can run (see the seed step
+        # above, which names them). Deselecting them meant paying the seeding cost and
+        # gating nothing with it — which is how test_officer_assignment.py rotted
+        # unnoticed when b8cab274 grew the L1 roster (D-44).
+        #
+        # DO NOT re-add `-m "not integration"` to silence a red build. These tests
+        # require the seeded DB above; if one fails, the seed and the test have drifted
+        # apart, and that is the bug. `pytest.ini` documents the marker's contract.
+        run: |
+          PYTHONPATH=. python -m pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers
+
+  ui-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: channels/ticketing-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20" # matches channels/ticketing-ui/Dockerfile (node:20-alpine)
+          cache: "npm"
+          cache-dependency-path: channels/ticketing-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint . --max-warnings=-1
+
+      # HR-06: vitest seed (lib/user-messages.test.ts, lib/queueTiles.test.ts) — pure
+      # logic only, no DOM/env needed. Runs in well under a second locally.
+      - name: Unit tests
+        run: npm test
+
+      # Verified locally (no backend env vars, no .env.local): completes in ~20s,
+      # well under the ~5 min budget in spec §1 — safe to keep in CI.
+      - name: Build
+        run: npm run build
+
+  webchat-checks:
+    # T3-03 (2026-08 tier3-structural sprint) — docs/sprints/archive/2026-08_tier3_structural/
+    # 02-webchat-voice-spec.md. The webchat has no build step (static ES modules served
+    # as-is); this job exists solely to run the module unit tests, which guard the
+    # voice-chunk upload ordering. That class of bug is client-side only — a server test
+    # structurally cannot catch a regression in it. Runs in well under a second.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: channels/REST_webchat
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: channels/REST_webchat/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+  docs-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check relative markdown links under docs/ (excludes archive/)
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from urllib.parse import unquote
+
+          DOCS_ROOT = "docs"
+          LINK_RE = re.compile(r"\]\(([^)#\s]+)\)")
+          broken = []
+          checked = 0
+
+          for dirpath, dirnames, filenames in os.walk(DOCS_ROOT):
+              dirnames[:] = [d for d in dirnames if "archive" not in d]
+              if "archive" in dirpath:
+                  continue
+              for fname in filenames:
+                  if not fname.endswith(".md"):
+                      continue
+                  fpath = os.path.join(dirpath, fname)
+                  if "archive" in fpath:
+                      continue
+                  with open(fpath, encoding="utf-8") as f:
+                      text = f.read()
+                  for match in LINK_RE.finditer(text):
+                      target = match.group(1)
+                      if target.startswith(("http://", "https://", "mailto:", "#")):
+                          continue
+                      target = unquote(target)
+                      checked += 1
+                      resolved = os.path.normpath(os.path.join(dirpath, target))
+                      if not os.path.exists(resolved):
+                          broken.append((fpath, target))
+
+          print(f"checked {checked} relative link(s) under {DOCS_ROOT}/ (excluding archive)")
+          if broken:
+              print(f"Found {len(broken)} broken relative link(s):")
+              for fpath, target in broken:
+                  print(f"  {fpath} -> {target}")
+              sys.exit(1)
+          print("All relative markdown links resolve OK.")
+          PY

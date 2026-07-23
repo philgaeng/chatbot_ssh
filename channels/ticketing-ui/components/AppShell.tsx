@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/providers/AuthProvider";
+import { useT } from "@/app/providers/LanguageProvider";
+import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 import type { OfficerRosterEntry } from "@/lib/api";
 import { getBadge } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -23,21 +25,21 @@ import {
 // ── Desktop sidebar nav ───────────────────────────────────────────────────────
 
 const NAV = [
-  { href: "/queue",     label: "Tickets",     Icon: IconAllTickets, badge: "action"    },
+  { href: "/queue",     labelKey: "nav.tickets",  Icon: IconAllTickets, badge: "action"    },
   null, // divider
-  { href: "/reports",   label: "Reports",     Icon: IconReports,    badge: null        },
-  { href: "/qr-codes",  label: "QR Codes",    Icon: IconQrCodes,    badge: null        },
+  { href: "/reports",   labelKey: "nav.reports",  Icon: IconReports,    badge: null        },
+  { href: "/qr-codes",  labelKey: "nav.qrCodes",  Icon: IconQrCodes,    badge: null        },
   null,
-  { href: "/settings",  label: "Settings",    Icon: IconSettings,   badge: null, adminOnly: true },
-  { href: "/help",      label: "Help",        Icon: IconHelp,       badge: null        },
+  { href: "/settings",  labelKey: "nav.settings", Icon: IconSettings,   badge: null, adminOnly: true },
+  { href: "/help",      labelKey: "nav.help",     Icon: IconHelp,       badge: null        },
 ] as const;
 
 // ── Mobile bottom tab nav ─────────────────────────────────────────────────────
 
 const MOBILE_TABS = [
-  { href: "/m/queue",   label: "Queue", Icon: IconMobileQueue  },
-  { href: "/m/tickets", label: "All",   Icon: IconMobileSearch },
-  { href: "/m/tasks",   label: "Tasks", Icon: IconMobileTasks  },
+  { href: "/m/queue",   labelKey: "nav.queue", Icon: IconMobileQueue  },
+  { href: "/m/tickets", labelKey: "nav.all",   Icon: IconMobileSearch },
+  { href: "/m/tasks",   labelKey: "nav.tasks", Icon: IconMobileTasks  },
 ] as const;
 
 // ── Demo role switcher (bypass-auth only) — options from DB roster ────────────
@@ -121,6 +123,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, isLoading, signOut, canSeeSeah, isAdmin, isSuperAdmin, isCountryAdmin } = useAuth();
+  const t = useT();
   const [unseenCount, setUnseenCount] = useState(0);
 
   useEffect(() => {
@@ -138,7 +141,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="text-sm text-gray-400">Loading…</div>
+        <div className="text-sm text-gray-400">{t("common.loading")}</div>
       </div>
     );
   }
@@ -149,8 +152,8 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
     <div className="flex h-screen bg-gray-50 font-sans">
       <aside className="hidden md:flex flex-col w-56 bg-slate-800 text-slate-100 shrink-0">
         <div className="px-5 pt-6 pb-4 border-b border-slate-700">
-          <div className="text-lg font-bold tracking-tight">GRM Ticketing</div>
-          {process.env.NEXT_PUBLIC_BYPASS_AUTH !== "true" && (
+          <div className="text-lg font-bold tracking-tight">{t("app.name")}</div>
+          {!AUTH_BYPASS && (
             <div className="text-xs text-slate-300 mt-0.5 truncate">{user?.email ?? "Officer"}</div>
           )}
         </div>
@@ -171,7 +174,9 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon size={16} strokeWidth={1.75} className="shrink-0" />
                 <span className="flex-1">
-                  {item.href === "/settings" && isAdmin && !isSuperAdmin && !isCountryAdmin ? "Project setup" : item.label}
+                  {item.href === "/settings" && isAdmin && !isSuperAdmin && !isCountryAdmin
+                    ? t("nav.projectSetup")
+                    : t(item.labelKey)}
                 </span>
                 {badgeCount > 0 && (
                   <span className="bg-red-500 text-white text-xs font-bold px-1.5 py-0.5 rounded-full min-w-[1.25rem] text-center">
@@ -188,7 +193,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
             className="w-full flex items-center gap-2 text-sm text-slate-300 hover:text-red-400 transition-colors px-3 py-2 rounded"
           >
             <IconSignOut size={14} strokeWidth={1.75} />
-            Sign out
+            {t("nav.signOut")}
           </button>
         </div>
       </aside>
@@ -210,7 +215,7 @@ function DesktopShell({ children }: { children: React.ReactNode }) {
                 getBadge().then((b) => setUnseenCount(b.unseen_count)).catch(() => {});
               }}
             />
-            {process.env.NEXT_PUBLIC_BYPASS_AUTH === "true" ? (
+            {AUTH_BYPASS ? (
               <BypassRoleSwitcher />
             ) : (
               <UserMenu />
@@ -229,6 +234,7 @@ function MobileShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated, isLoading } = useAuth();
+  const t = useT();
   const [unseenCount, setUnseenCount] = useState(0);
 
   useEffect(() => {
@@ -246,7 +252,7 @@ function MobileShell({ children }: { children: React.ReactNode }) {
   if (isLoading) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-white">
-        <div className="text-sm text-gray-400">Loading…</div>
+        <div className="text-sm text-gray-400">{t("common.loading")}</div>
       </div>
     );
   }
@@ -281,7 +287,7 @@ function MobileShell({ children }: { children: React.ReactNode }) {
                   }`}
                 >
                   <Icon size={22} strokeWidth={1.75} className="mb-0.5" />
-                  <span className="font-medium">{tab.label}</span>
+                  <span className="font-medium">{t(tab.labelKey)}</span>
                   {isQueue && unseenCount > 0 && (
                     <span className="absolute top-1.5 right-[calc(50%-12px)] bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
                       {unseenCount > 99 ? "99+" : unseenCount}

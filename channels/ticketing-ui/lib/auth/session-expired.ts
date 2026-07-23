@@ -18,39 +18,36 @@ export class SessionExpiredError extends Error {
   }
 }
 
-/** True when a JWT access token is past its `exp` claim (with 30s skew). */
-export function isAccessTokenExpired(token: string): boolean {
+/**
+ * True when a JWT access token expires within `withinSeconds` from now. This is
+ * the proactive-refresh trigger (H2-01): `apiFetch` refreshes a token that is
+ * about to expire *before* firing the request, rather than eating a 401.
+ */
+export function isAccessTokenExpiringSoon(token: string, withinSeconds: number): boolean {
   try {
     const payload = JSON.parse(
       atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")),
     ) as { exp?: number };
     if (!payload.exp) return false;
-    return payload.exp * 1000 < Date.now() - 30_000;
+    return payload.exp * 1000 < Date.now() + withinSeconds * 1000;
   } catch {
     return false;
   }
 }
 
-/** Detect ticketing API 401 responses that mean re-login is required. */
-export function isSessionExpiredResponse(status: number, body: string): boolean {
-  if (status !== 401) return false;
-  let detail = body;
-  try {
-    const parsed = JSON.parse(body) as { detail?: string | string[] };
-    if (typeof parsed.detail === "string") detail = parsed.detail;
-    else if (Array.isArray(parsed.detail)) detail = parsed.detail.join(" ");
-  } catch {
-    /* use raw body */
-  }
-  const lower = detail.toLowerCase();
-  return (
-    lower.includes("expired") ||
-    lower.includes("invalid token") ||
-    lower.includes("not authenticated") ||
-    lower.includes("could not validate") ||
-    lower.includes("credentials")
-  );
+/**
+ * True when a JWT access token is at/near its `exp` claim. Treats the token as
+ * expired 30s *before* the real deadline (H2-01: the old check was inverted —
+ * `Date.now() - 30_000` kept a token "valid" 30s past expiry, guaranteeing a 401
+ * window; it now refreshes early instead).
+ */
+export function isAccessTokenExpired(token: string): boolean {
+  return isAccessTokenExpiringSoon(token, 30);
 }
+
+// isSessionExpiredResponse was retired (2026-07-15): every 401 path now routes through the
+// status-code-based refresh+retry in apiFetch (JSON) or authedFetch (blob/multipart), so the
+// substring body-sniffing heuristic is no longer needed.
 
 export function clearAuthTokens(): void {
   if (typeof window === "undefined") return;

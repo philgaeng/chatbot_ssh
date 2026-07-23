@@ -34,13 +34,16 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "permissions": ["*"],
     },
     {
-        "role_key": "country_admin",
-        "display_name": "Country Administrator",
+        "role_key": "org_admin",
+        "display_name": "Organization Administrator",
         "workflow_scope": "Both",
         "jurisdiction_mode": "country",
         "role_kind": "admin",
         "role_origin": "system",
-        "description": "Country-tier admin — workflow track is set on admin_scopes assignment.",
+        "description": (
+            "Org-subtree admin (any depth) — authors the catalog; workflow track is set "
+            "on the admin_scopes assignment (doc 11 §2.2)."
+        ),
         "permissions": [
             "tickets:read",
             "projects:manage",
@@ -62,6 +65,22 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
             "officers:assign",
             "notifications:configure",
             "settings:project",
+            "users:invite",
+        ],
+    },
+    {
+        "role_key": "officer_admin",
+        "display_name": "Officer Administrator",
+        "workflow_scope": "Both",
+        "jurisdiction_mode": "field",
+        "role_kind": "admin",
+        "role_origin": "system",
+        "description": (
+            "Narrowest admin — invite / modify / revoke officers only, within scope "
+            "(doc 11 §2.3b); track is set on the admin_scopes assignment."
+        ),
+        "permissions": [
+            "tickets:read",
             "users:invite",
         ],
     },
@@ -166,6 +185,42 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "workflow_scope": "Standard",
         "jurisdiction_mode": "country",
         "description": "Observer — project oversight.",
+        "permissions": ["tickets:read", "reports:read"],
+    },
+    # Donor observer/informed tier (doc 13 / DECISION 2026-07-10 §3). Generalizes the
+    # legacy adb_* observers. Kept informed on the STANDARD track's final step only —
+    # never cast on a SEAH case (ticketing.models.user.DONOR_ROLES).
+    {
+        "role_key": "donor_consultant",
+        "display_name": "Donor — Consultant",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor-side consultant — read-only oversight; kept informed on final "
+            "escalation of standard cases for the funded project."
+        ),
+        "permissions": ["tickets:read", "reports:read"],
+    },
+    {
+        "role_key": "donor_national",
+        "display_name": "Donor — National Officer",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor national officer — read-only oversight; kept informed on final "
+            "escalation of standard cases for the funded project."
+        ),
+        "permissions": ["tickets:read", "reports:read"],
+    },
+    {
+        "role_key": "donor_hq",
+        "display_name": "Donor — HQ",
+        "workflow_scope": "Standard",
+        "jurisdiction_mode": "country",
+        "description": (
+            "Donor HQ officer — read-only oversight; kept informed on final escalation "
+            "of standard cases for the funded project."
+        ),
         "permissions": ["tickets:read", "reports:read"],
     },
     {

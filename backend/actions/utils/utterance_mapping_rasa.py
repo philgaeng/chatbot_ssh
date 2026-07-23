@@ -22,16 +22,17 @@ from .mapping_buttons import *
 SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
             'utterances': {
                 1: {
-                    'en': """We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you. 
+                    'en': """We recommend that you contact the One Stop Crisis Management Centre of Morang where special support will be provided to you.
                     """,
-                    'ne': """गेंडर गुनासो बारेमा बताइएको छ। कृपया थप विवरण प्रविष्ट गर्नुहोस्।
+                    'ne': """हामी तपाईंलाई मोरङको वान स्टप क्राइसिस म्यानेजमेन्ट सेन्टर (OCMC) मा सम्पर्क गर्न सिफारिस गर्छौं, जहाँ तपाईंलाई विशेष सहयोग प्रदान गरिनेछ।
                     """
                 },
                 2: {
                     'en': """Address : Koshi Regional Hospital, Biratnagar
                     Morang
                     Phone : 021-530103""",
-                    'ne': """कोशी रिजियनल हस्तान्याउन हस्तान्याउन, बिरतनगर
+                    'ne': """ठेगाना : कोशी रिजनल अस्पताल, विराटनगर
+                    मोरङ
                     फोन : 021-530103""",
                 },
                 3: {
@@ -41,11 +42,11 @@ SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
                 4: {
                     'en': """You can decide to file your grievance anonymously with one phone number or not.
                     """,
-                    'ne': "ूतपाईले गुमनाम वा बेनामी रूपमा फोन नम्बर प्रयोग गरेर  वा फोन नम्बर प्रयोग नगरीकन पनि आफ्नो गुनासो दर्ता गर्न सक्नुहुन्छ।"
+                    'ne': "तपाईंले गुमनाम वा बेनामी रूपमा फोन नम्बर प्रयोग गरेर वा फोन नम्बर प्रयोग नगरीकन पनि आफ्नो गुनासो दर्ता गर्न सक्नुहुन्छ।"
                 },
                 5: {
                     'en': "If you desire, you can provide us with more details that we will forward to the OCMC.",
-                    'ne': "यदि तपाईं चाहनुहुन्छ भने, तपाईंको अतिरिक्त विवरण हामीलाई फोरवर्ड गर्न सक्नुहुन्छ जुन हामी एक फोन नम्बर सहित गुनासो दर्ता गर्न चाहनुहुन्छ।",
+                    'ne': "यदि तपाईं चाहनुहुन्छ भने, तपाईंले हामीलाई थप विवरण दिन सक्नुहुन्छ जुन हामी OCMC लाई पठाउनेछौं।",
                 }
             },
             'buttons': {
@@ -63,6 +64,32 @@ SENSITIVE_ISSUES_UTTERANCES_AND_BUTTONS = {
                 }
             }
         }
+
+# Shared SEAH "sensitive_issues_new_detail" ask copy (H2-08): one source of truth for the
+# victim (form_seah_2) and focal-point (form_seah_focal_point) forms, whose EN was identical
+# but whose NE had drifted (with stray "ू" artifacts). Both UTTERANCE_MAPPING entries below
+# reference this, so the two file/action lookup keys still resolve to the same corrected copy.
+_SEAH_SENSITIVE_ISSUES_NEW_DETAIL = {
+    'utterances': {
+        1: {
+            'en': "Please provide a brief summary of the incident.",
+            'ne': "कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्।",
+        },
+        2: {
+            'en': '''Thank you for your entry: "{grievance_description}".
+Do you want to add more details before submission?''',
+            'ne': "तपाईंको प्रविष्टिको लागि धन्यवाद: \"{grievance_description}\"।\nके तपाईं पेस गर्नु अघि थप विवरणहरू थप्न चाहनुहुन्छ?",
+        },
+        3: {
+            'en': "Please add more details.",
+            'ne': "कृपया थप विवरणहरू थप्नुहोस्।",
+        },
+    },
+    'buttons': {
+        1: BUTTONS_SKIP,
+        2: BUTTONS_GRIEVANCE_SUBMISSION,
+    },
+}
 
 UTTERANCE_MAPPING = {
     'action_ask_commons': {
@@ -87,7 +114,7 @@ UTTERANCE_MAPPING = {
                     ],
                     'ne': [
                         {"title": "गुनासो दर्ता गर्नुहोस्", "payload": "/new_grievance"},
-                        {"title": "असुरक्षित व्यवहार, असुरक्षित व्यवहार, वा असुरक्षित व्यवहार रिपोर्ट गर्नुहोस्", "payload": "/seah_intake"},
+                        {"title": "यौन शोषण, यौन दुर्व्यवहार, र यौन उत्पीडन रिपोर्ट गर्नुहोस्", "payload": "/seah_intake"},
                         {"title": "स्थिति जाँच गर्नुहोस्", "payload": "/check_status"},
                         {"title": "बाहिर निस्कनुहोस्", "payload": "/goodbye"}
                     ]
@@ -582,6 +609,10 @@ UTTERANCE_MAPPING = {
                 1: {
                     'en': "The number you provided is not valid. Please provide a valid number - it should start by 9 and be 10 digits long",
                     'ne': "कृपया तपाईंको आधिकारिक फोन नम्बर प्रदान गर्नुहोस् – फोन नम्बर ९ अंक बाट सुरु हुनुपर्छ र १० अंकको हुनुपर्छ"
+                },
+                2: {
+                    'en': "You entered a PH number for validation.",
+                    'ne': "तपाईंले प्रमाणीकरणको लागि PH (फिलिपिन्स) नम्बर प्रविष्ट गर्नुभयो।"
                 }
             }
         },
@@ -1397,6 +1428,23 @@ UTTERANCE_MAPPING = {
             }
         }
     },
+    # T3-01: added so ValidateMenuForm.validate_language_code's key resolves, keeping the
+    # "every call-site key resolves" invariant total (no exclusion list in
+    # tests/actions/test_utterance_key_integrity.py). NOTE: the module that owns this key,
+    # forms/form_story_main_route_step.py, is DEAD CODE (no importer, absent from
+    # form_loop.py's _FORMS registry, no Rasa action server to auto-discover it) — so this
+    # copy is currently unreachable. Delete this entry together with the module; see
+    # docs/sprints/archive/2026-08_tier3_structural/followups/dead-form-story-main-route-step.md
+    'form_story_main_route_step': {
+        'validate_language_code': {
+            'utterances': {
+                1: {
+                    'en': "Please choose a valid language: English or Nepali.",
+                    'ne': "कृपया मान्य भाषा छान्नुहोस्: अङ्ग्रेजी वा नेपाली।",
+                },
+            },
+        },
+    },
     'form_seah_1': {
         'action_ask_form_seah_1_sensitive_issues_follow_up': {
             'utterances': {
@@ -1437,27 +1485,7 @@ UTTERANCE_MAPPING = {
         },
     },
     'form_seah_2': {
-        'action_ask_form_seah_2_sensitive_issues_new_detail': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a brief summary of the incident.",
-                    'ne': "कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्‌। ",
-                },
-                2: {
-                    'en': """Thank you for your entry: "{grievance_description}".
-Do you want to add more details before submission?""",
-                    'ne': "ूगुनोसो प्रविष्टिको लागि धन्यवादस् \"\"{grievance_description}\"\"।                                    के तपाई यसलाई पेस गर्नु अघि केहि थप विवरणहरु थप्न चाहनुहुन्छ?ू"
-                },
-                3: {
-                    'en': "Please add more details.",
-                    'ne': "कृपया थप विवरणहरू थप्नुहोस्‌।",
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP,
-                2: BUTTONS_GRIEVANCE_SUBMISSION
-            }
-        },
+        'action_ask_form_seah_2_sensitive_issues_new_detail': _SEAH_SENSITIVE_ISSUES_NEW_DETAIL,
         'action_ask_form_seah_2_seah_project_identification': {
             'utterances': {1: {'en': "Is the alleged perpetrator employed by an ADB project?", 'ne': "के गुनासेामा आरोपित व्यक्ति एडीबी आयोजनामा ​​कार्यरत छन्? "}},
             'buttons': {1: BUTTONS_SEAH_YES_NO}
@@ -1504,27 +1532,7 @@ Do you want to add more details before submission?""",
             'utterances': {1: {'en': "Is there reputational risk for ADB?", 'ne': "के एडीबी को प्रतिष्ठामा कुनै जोखिम छ?"}},
             'buttons': {1: BUTTONS_SEAH_YES_NO},
         },
-        'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': {
-            'utterances': {
-                1: {
-                    'en': "Please provide a brief summary of the incident.",
-                    'ne': "कृपया घटनाको संक्षिप्त विवरण प्रविष्ट गर्नुहोस्‌। ",
-                },
-                2: {
-                    'en': """Thank you for your entry: "{grievance_description}".
-Do you want to add more details before submission?""",
-                    'ne': "ूघटनाको विवरण प्रविष्टिको लागि धन्यवादस् \"\"{grievance_description}\"\"।                                     के तपाई यसलाई पेश गर्नु अघि अन्य  विवरणहरू थप्न चाहनुहुन्छ?ू"
-                },
-                3: {
-                    'en': "Please add more details.",
-                    'ne': "कृपया थप विवरणहरू थप्नुहोस्‌।",
-                }
-            },
-            'buttons': {
-                1: BUTTONS_SKIP,
-                2: BUTTONS_GRIEVANCE_SUBMISSION
-            }
-        },
+        'action_ask_form_seah_focal_point_2_sensitive_issues_new_detail': _SEAH_SENSITIVE_ISSUES_NEW_DETAIL,
         'action_ask_form_seah_focal_point_2_seah_contact_consent_channel': {
             'utterances': {1: {'en': "Do you consent to be contacted for follow-up? Choose one channel.", 'ne': "के तपाई फलो–अपको लागि सम्पर्क गर्न सहमत हुनुहुन्छ?  एक च्यानल छान्नुहोस्‌।"}},
             'buttons': {1: BUTTONS_SEAH_CONTACT_CONSENT_CHANNEL}

@@ -75,6 +75,7 @@ export {
   AlertTriangle  as IconWarning,
   X              as IconClose,
   Info           as IconInfo,
+  RefreshCw      as IconRetry,           // list-load error card / boundary "Try again"
 
   // ── Settings / admin ────────────────────────────────────────────────────────
   Cpu            as IconSystemConfig,

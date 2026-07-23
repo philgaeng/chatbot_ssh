@@ -86,6 +86,12 @@ def open_overdue_episode(
         triggered_by=triggered_by,
     )
     db.add(episode)
+    # HR-04: tickets.current_overdue_episode_id ↔ ticket_overdue_episodes.ticket_id are a
+    # mutual FK pair. Persist the new episode row *before* pointing the ticket at it, so the
+    # unit-of-work cannot order the ticket UPDATE ahead of the episode INSERT (which would
+    # violate fk_tickets_current_overdue_episode — e.g. a first-ever SLA breach at a final
+    # workflow step, where the episode is not closed within the same flush).
+    db.flush()
     ticket.current_overdue_episode_id = episode.episode_id
     sync_sla_breached_flag(ticket)
     logger.info(

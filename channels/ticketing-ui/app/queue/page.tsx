@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   EMPTY_TICKET_LIST_FILTERS,
@@ -14,7 +14,9 @@ import { TicketListFiltersBar } from "@/components/tickets/TicketListFiltersBar"
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, IntakeRouteBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 import { IconChevronRight } from "@/lib/icons";
+import { effectiveDeadline, ticketCategory, sortTickets, computeTileCounts } from "@/lib/queueTiles";
 
 // ── Tab definition ────────────────────────────────────────────────────────────
 
@@ -39,52 +41,6 @@ const TABS: TabDef[] = [
   { id: "high_priority", label: "High Priority",  redBadge: true,  showBadge: true,  alwaysVisible: true,  description: "HIGH / CRITICAL priority or SLA-breached tickets" },
   { id: "all",           label: "All Tickets",    redBadge: false, showBadge: false, alwaysVisible: true,  description: "All tickets visible to my role" },
 ];
-
-// ── Deadline helpers ──────────────────────────────────────────────────────────
-
-/**
- * Returns the effective deadline for a ticket:
- * - Action owner (assigned to me): ticket SLA deadline
- * - Task holder only: earliest pending task due date
- * - Both apply: earlier of the two
- */
-function effectiveDeadline(t: TicketListItem): Date | null {
-  const sla  = t.sla_deadline_at        ? new Date(t.sla_deadline_at)        : null;
-  const task = t.my_earliest_task_due_at ? new Date(t.my_earliest_task_due_at) : null;
-  if (sla && task) return sla < task ? sla : task;
-  return sla ?? task;
-}
-
-type TicketCategory = "overdue" | "due_today" | "high_priority" | "other";
-
-function ticketCategory(t: TicketListItem, now: number, in24h: number): TicketCategory {
-  const d = effectiveDeadline(t);
-  if (d && d.getTime() < now)   return "overdue";
-  if (d && d.getTime() <= in24h) return "due_today";
-  if (t.priority === "HIGH" || t.priority === "CRITICAL") return "high_priority";
-  return "other";
-}
-
-const CATEGORY_ORDER: Record<TicketCategory, number> = {
-  overdue:       0,
-  due_today:     1,
-  high_priority: 2,
-  other:         3,
-};
-
-function sortTickets(tickets: TicketListItem[]): TicketListItem[] {
-  const now   = Date.now();
-  const in24h = now + 24 * 60 * 60 * 1000;
-  return [...tickets].sort((a, b) => {
-    const ca = CATEGORY_ORDER[ticketCategory(a, now, in24h)];
-    const cb = CATEGORY_ORDER[ticketCategory(b, now, in24h)];
-    if (ca !== cb) return ca - cb;
-    // Within same category: closest deadline first
-    const da = effectiveDeadline(a)?.getTime() ?? Infinity;
-    const db = effectiveDeadline(b)?.getTime() ?? Infinity;
-    return da - db;
-  });
-}
 
 // ── Summary tile ──────────────────────────────────────────────────────────────
 
@@ -200,6 +156,8 @@ export default function QueuePage() {
   const [tickets, setTickets]         = useState<TicketListItem[]>([]);
   const [total, setTotal]             = useState(0);
   const [loading, setLoading]         = useState(true);
+  const [error, setError]             = useState<string | null>(null);
+  const listSeqRef                    = useRef(0);
   const [tabCounts, setTabCounts]     = useState<Partial<Record<Tab, number>>>({});
   const [filters, setFilters]         = useState<TicketListFilterValues>(EMPTY_TICKET_LIST_FILTERS);
   const [debouncedQ, setDebouncedQ]   = useState("");
@@ -231,23 +189,10 @@ export default function QueuePage() {
   }, [isAuthenticated]);
 
   // ── Tile counts — computed from actor tickets using effectiveDeadline ─────
-  const { actionNeeded, dueToday, overdue } = useMemo(() => {
-    const now   = Date.now();
-    const in24h = now + 24 * 60 * 60 * 1000;
-    let actionNeeded = 0, dueToday = 0, overdue = 0;
-    for (const t of actorTickets) {
-      // Action Needed = all active actor tickets (not resolved / closed)
-      if (!["RESOLVED", "CLOSED"].includes(t.status_code)) {
-        actionNeeded++;
-        const d = effectiveDeadline(t);
-        if (d) {
-          if (d.getTime() < now)              overdue++;
-          else if (d.getTime() <= in24h)      dueToday++;
-        }
-      }
-    }
-    return { actionNeeded, dueToday, overdue };
-  }, [actorTickets]);
+  const { actionNeeded, dueToday, overdue } = useMemo(
+    () => computeTileCounts(actorTickets),
+    [actorTickets],
+  );
 
   // ── Tab totals (role tabs: hide when zero; badges when showBadge) ─────────
   useEffect(() => {
@@ -271,11 +216,14 @@ export default function QueuePage() {
   }, [visibleTabs, activeTab]);
 
   // ── Active tab ticket list ────────────────────────────────────────────────
-  useEffect(() => {
+  function loadActiveTab() {
     if (!isAuthenticated) return;
+    const seq = ++listSeqRef.current;
     setLoading(true);
+    setError(null);
     listTickets({ tab: activeTab, page_size: 100, ...apiFilters })
       .then((r) => {
+        if (seq !== listSeqRef.current) return; // stale response — a newer load has started
         setTickets(r.items);
         setTotal(r.total);
         const tabDef = TABS.find((t) => t.id === activeTab);
@@ -286,9 +234,17 @@ export default function QueuePage() {
           setActorTickets(r.items);
         }
       })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [activeTab, isAuthenticated, apiFilters, filters]);
+      .catch((e) => {
+        if (seq !== listSeqRef.current) return;
+        console.error(e);
+        setError(e instanceof Error ? e.message : "Couldn't load tickets.");
+      })
+      .finally(() => {
+        if (seq === listSeqRef.current) setLoading(false);
+      });
+  }
+
+  useEffect(loadActiveTab, [activeTab, isAuthenticated, apiFilters, filters]);
 
   // ── Sorted + filtered list ────────────────────────────────────────────────
   const displayedTickets = useMemo(() => {
@@ -407,6 +363,8 @@ export default function QueuePage() {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-600 text-sm">Loading…</div>
+        ) : error ? (
+          <ErrorCard message="Couldn't load tickets." onRetry={loadActiveTab} />
         ) : displayedTickets.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
             {tileFilter !== "all" ? "No tickets match this filter." : "No tickets in this view."}

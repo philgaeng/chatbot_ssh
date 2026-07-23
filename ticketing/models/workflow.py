@@ -35,6 +35,12 @@ class WorkflowDefinition(Base):
     is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     template_source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Org-scoped catalog (doc 11 §3.3, SH-7). NULL = global. Mirrors position_types.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

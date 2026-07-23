@@ -56,6 +56,12 @@ let invalidSendTooltipTimer = null;
 let uploadInProgress = false;
 /** Incremented to cancel in-flight pollFileStatus loops. */
 let pollGeneration = 0;
+/** In-flight text-send lock: blocks a double-submit (double Enter / double click)
+ *  until the orchestrator response resolves, or a failsafe timeout releases it so a
+ *  lost response can't brick the composer. */
+let isSending = false;
+let sendLockTimer = null;
+const SEND_LOCK_TIMEOUT_MS = 15000;
 
 // Session and State Variables
 let messageRetryCount = 0;
@@ -200,7 +206,16 @@ function generateSessionId() {
 window.getSessionId = function () {
   const storage = localStorage;
   const storageKey = SESSION_CONFIG.STORAGE_KEY;
-  return storage.getItem(storageKey) || tempSessionId;
+  let sessionId = storage.getItem(storageKey);
+  if (!sessionId) {
+    // First visit: persist the temp id so a mid-conversation refresh reuses the
+    // same session id (no orphaned server session / mismatched socket room /
+    // lost upload association). /clear_session still rotates the id via
+    // handleClearSessionCommand.
+    sessionId = tempSessionId;
+    storage.setItem(storageKey, sessionId);
+  }
+  return sessionId;
 };
 
 // Make grievance ID status available globally for debugging
@@ -298,7 +313,12 @@ function filterCloseQuickReplies(buttons) {
 function showFiledBanner(grievanceId) {
   if (!grievanceFiledBanner || !grievanceId) return;
   const label = get("filed_banner.label");
-  grievanceFiledBannerText.innerHTML = `${label} <strong>${grievanceId}</strong>`;
+  // Compose as text + <strong> DOM nodes (no HTML string parsing) so a server-supplied
+  // grievanceId can never inject markup. Renders identically to label + bold id.
+  grievanceFiledBannerText.textContent = `${label} `;
+  const idEl = document.createElement("strong");
+  idEl.textContent = grievanceId;
+  grievanceFiledBannerText.appendChild(idEl);
   grievanceFiledBanner.classList.remove("hidden");
 }
 
@@ -884,11 +904,36 @@ window.handleCloseWindowCommand = function () {
   }, 100);
 };
 
+// Lock the composer while a text message is awaiting the orchestrator response.
+function beginSendLock() {
+  isSending = true;
+  if (sendButton) sendButton.disabled = true;
+  if (sendLockTimer) clearTimeout(sendLockTimer);
+  sendLockTimer = setTimeout(endSendLock, SEND_LOCK_TIMEOUT_MS);
+}
+
+function endSendLock() {
+  isSending = false;
+  if (sendLockTimer) {
+    clearTimeout(sendLockTimer);
+    sendLockTimer = null;
+  }
+  // Re-enable the send button per the current composer mode (no-op while a file
+  // upload holds the composer locked — refreshComposerSubmitState bails then).
+  uiActions.refreshComposerSubmitState();
+}
+
 // Handle message submission
 async function handleMessageSubmit(e) {
   e.preventDefault();
   const message = messageInput.value.trim();
   const hasFiles = selectedFiles.length > 0;
+
+  // Drop a duplicate text submit (double Enter / double click) while the previous
+  // text send is still in flight. File-only submits keep their own upload guard.
+  if (message && isSending) {
+    return;
+  }
 
   if (
     !hasFiles &&
@@ -911,7 +956,10 @@ async function handleMessageSubmit(e) {
     quickReplyBlocks.forEach((el) => el.remove());
 
     uiActions.appendMessage(message, "sent");
-    window.safeSendMessage(message);
+    beginSendLock();
+    // safeSendMessage (restSendMessage) always resolves (errors are caught inside);
+    // finally() releases the lock on both success and error paths.
+    Promise.resolve(window.safeSendMessage(message)).finally(endSendLock);
     messageInput.value = "";
     messageInput.style.height = "44px";
   }

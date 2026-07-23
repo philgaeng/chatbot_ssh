@@ -36,10 +36,12 @@ getenv() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed
 echo "== Security preflight ($(date -u +%FT%TZ)) =="
 [[ -f "$ENV_FILE" ]] || fail "env file not found: $ENV_FILE"
 
-# 1. Bypass-auth must be off; demo profile not active.
-BYPASS="$(getenv NEXT_PUBLIC_BYPASS_AUTH)"
-[[ "$BYPASS" == "true" ]] && fail "NEXT_PUBLIC_BYPASS_AUTH=true (demo bypass)" || pass "bypass-auth not enabled"
-case " ${COMPOSE_PROFILES:-} " in *" demo "*) fail "COMPOSE_PROFILES includes 'demo'";; *) pass "demo profile not active";; esac
+# 1. Auth must be keycloak and env non-dev (dev bypass is honoured only when
+#    APP_ENV=dev AND AUTH_MODE=bypass — production can never bypass).
+APP_ENV_V="$(getenv APP_ENV)"
+AUTH_MODE_V="$(getenv AUTH_MODE)"
+[[ "$AUTH_MODE_V" == "bypass" ]] && fail "AUTH_MODE=bypass (demo bypass)" || pass "AUTH_MODE not bypass"
+[[ "$APP_ENV_V" == "dev" ]] && fail "APP_ENV=dev (not a deployed environment)" || pass "APP_ENV not dev"
 
 # 2. Keycloak issuer set.
 [[ -n "$(getenv KEYCLOAK_ISSUER)" ]] && pass "KEYCLOAK_ISSUER set" || fail "KEYCLOAK_ISSUER empty"

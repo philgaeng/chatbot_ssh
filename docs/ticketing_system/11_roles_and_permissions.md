@@ -1,6 +1,6 @@
 # Roles and permissions
 
-**Status:** Locked product spec (June 2026). **Implementation:** partial — admin ladder not fully wired in API/UI; see §8.  
+**Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation: as-built** — the 4-tier ladder + org-subtree scope + org-scoped catalog shipped in SH-7 (migration `q7s9u1w3`); `country_admin` removed from backend **and** frontend. See §8.  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [14_platform_settings.md](14_platform_settings.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [13_projects_and_packages.md](13_projects_and_packages.md)
 
 This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project actor roles** (`donor`, `contractor`, …) in `ticketing.project_actor_roles`; those are configured per project in [13_projects_and_packages.md](13_projects_and_packages.md).
@@ -11,12 +11,14 @@ This document covers **`ticketing.roles`** — both the **admin ladder** (who co
 
 | Kind | `role_kind` (conceptual) | Question it answers | UI surface |
 |------|--------------------------|---------------------|------------|
-| **Admin roles** | `admin` | Who can configure the platform and delegate to others? | Settings → **Settings** (platform) → **Admin access** — `super_admin` only |
-| **Operational roles** | `operational` | Who acts on grievance tickets in the workflow? | Settings → **Workflows, roles & permissions** → **Roles & permissions** — catalog managed by scoped `country_admin`; used by `project_admin` when inviting |
+| **Admin roles** | `admin` | Who can configure the system and delegate to others? | Settings → **Admin access** — `super_admin` + `org_admin` |
+| **Operational roles** | `operational` | Who acts on grievance tickets in the workflow? | Settings → **Workflows, roles & permissions** → **Roles & permissions** — catalog authored by `super_admin` + `org_admin`; **used** (not authored) by `project_admin` / `officer_admin` when inviting |
 
 **Party types** (`implementing_agency`, `main_contractor`, …) are **not** in `ticketing.roles`. They live in `project_actor_roles` on each project.
 
-**Delegation model (locked):** Three admin **`role_key`s** only (`super_admin`, `country_admin`, `project_admin`). **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** at country and project tiers — not a separate role name.
+**Delegation model (as-built, 2026-07):** **Four** admin **`role_key`s** — `super_admin`, **`org_admin`** (org-subtree-scoped, **any depth**), `project_admin`, `officer_admin`. **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** — not a separate role name.
+
+> **As-built 2026-07 (Handover A):** admin authority attaches to an **org node** and cascades over its **subtree at any depth** — a Department-of-Roads admin, and beneath it a district admin — which is what handles ministry scale (DoR ≈ 5,000 staff) and Nepal's federal structure (province assemblies with no national parent). A narrow **`officer_admin`** tier delegates officer onboarding; and org **actor types** (`government` / `local_government` / `donor` / `third_party`) gate who may create each kind of root. Full model: [design §2.5](../sprints/2026-07_org_chart_positions/DESIGN-settings-redesign.md); backend = Handover B **SH-7**.
 
 ---
 
@@ -26,58 +28,65 @@ Admins are defined on **two dimensions**:
 
 | Dimension | Values |
 |-----------|--------|
-| **Tier** | Platform → Country → Project |
+| **Tier** (a **strict subset ladder** — each tier does everything below it, plus more) | Platform → Org (any depth) → Project → Officer |
 | **Workflow track** | **Standard** GRM \| **SEAH** |
 
 Same tier + same *kind* of responsibility; **SEAH roles mirror Standard roles** with SEAH-scoped data and `canSeeSeah`. Not a separate permission mini-language.
 
 ```
-                    │  Standard track              │  SEAH track
-────────────────────┼──────────────────────────────┼────────────────────────────
-Platform (global)   │  super_admin (both tracks)   │  super_admin
-Country             │  country_admin + track=standard│  country_admin + track=seah
+                    │  Standard track                │  SEAH track
+────────────────────┼────────────────────────────────┼──────────────────────────────
+Platform (global)   │  super_admin (both tracks)     │  super_admin
+Org (any depth)     │  org_admin + track=standard    │  org_admin + track=seah
 Project             │  project_admin + track=standard│  project_admin + track=seah
+Officer mgmt        │  officer_admin + track=standard│  officer_admin + track=seah
 ```
 
-**Three admin keys, scope carries the track.** No `seah_admin`, `seah_project_admin`, or `local_admin`. Reusable for future tracks by extending `workflow_track`, not the role catalog.
+**The ladder (bottom-up):** `officer_admin` invites/modifies/revokes officers → `project_admin` also adds participant orgs (contractors) + staffing/go-live data → `org_admin` also **authors the catalog** (workflows / roles / position types) + builds org structure + appoints lower admins, over **its org node and entire subtree, at any depth** → `super_admin` sets up the whole system and creates institutional roots. **Only `super_admin` + `org_admin` author the catalog** (`project_admin` / `officer_admin` consume it — this is what keeps a single consistent catalog, §3.3).
+
+**Four admin keys, scope carries the track.** No `seah_admin`, `seah_project_admin`, or `local_admin`. Reusable for future tracks by extending `workflow_track`, not the role catalog.
+
+**Actor types (`org_category`) gate root creation.** Every org carries a category, set at its root and inherited by children: **`government`** (ministry → department → offices) · **`local_government`** (province assembly / municipality — its own root, no national parent) · **`donor`** (ADB, World Bank) · **`third_party`** (contractors, CSCs, private firms). Creating a **new institutional root** (`government` / `local_government` / `donor`) is **`super_admin` only**; **`third_party`** roots are delegable — `org_admin` within its scope, and `project_admin` for its own project's contractors. Building **sub-units inside an existing tree** follows the tier ladder (an `org_admin` extends its own subtree).
 
 ### Admin scope shape (implementation)
 
-| Field | Country tier | Project tier |
-|-------|--------------|--------------|
-| `country_code` | Required | From project |
-| `project_id` | — | Required |
-| `organization_id` | — | Optional |
-| **`workflow_track`** | `standard` \| `seah` | `standard` \| `seah` |
+| Field | Org tier | Project tier | Officer tier |
+|-------|----------|--------------|--------------|
+| `organization_id` (scope node — **covers its whole subtree**) | Required | Optional | Required |
+| `project_id` | — | Required | Optional |
+| **`workflow_track`** | `standard` \| `seah` | `standard` \| `seah` | `standard` \| `seah` |
 
-One person may hold **two** assignments (e.g. `country_admin` NP + `standard` and `country_admin` NP + `seah`) — two scope rows, not two role keys.
+Scope is **hierarchical**: an `org_admin` on node N administers N and every descendant (`descendant_org_ids`, cycle-guarded), plus `third_party` orgs it created and subtrees explicitly shared with it. Any depth of `org_admin` is allowed (DoR, then a Jhapa-district admin below it).
+
+One person may hold **two** assignments (e.g. `org_admin` DoR + `standard` and `org_admin` DoR + `seah`) — two scope rows, not two role keys.
 
 ### 2.1 `super_admin`
 
 - Full access including **Settings → Settings** (platform): locations import, project types, system JSON (`org_roles`, `report_limits`, `archiving_policy`).
-- Creates and manages scoped `country_admin` and `project_admin` accounts (sets `workflow_track` on each assignment).
+- Creates **institutional roots** (`government` / `local_government` / `donor`) and appoints top-level `org_admin` accounts (sets `organization_id` + `workflow_track`); lower tiers cascade from org_admins.
 - Break-glass, migrations, env-level config.
 - Does **not** need to perform day-to-day officer assignment unless supporting ops.
 
-### 2.2 `country_admin` — country tier (scoped by `workflow_track`) — LOCKED
+### 2.2 `org_admin` — org subtree, any depth (scoped by `workflow_track`) — as-built 2026-07
 
-One **`role_key`** for all country-tier admins. **`workflow_track` on the assignment scope** selects Standard vs SEAH behaviour (same pattern as `project_admin`).
+One **`role_key`** for all org-tier admins; **`workflow_track` on the assignment scope** selects Standard vs SEAH. Scoped to an **org node** (`organization_id`) and administers **that node and its entire subtree** — *any depth* (a Department-of-Roads admin, and a Jhapa-district admin beneath it) — plus `third_party` orgs it created and subtrees shared with it. An `org_admin` scoped at a government/ministry root is the top of that structure's admin tree.
 
 | Capability | `workflow_track: standard` | `workflow_track: seah` |
 |------------|---------------------------|------------------------|
-| Settings (no platform tab) | ✅ country | ✅ country |
-| Create / edit **projects** | ✅ country | ✅ country |
-| Create / edit **packages**, **orgs**, **locations** | ✅ | ❌ — detail structure owned by **standard** track |
-| Create / edit **workflows** | ✅ standard templates | ✅ SEAH templates only |
-| Create **custom operational roles** (§3) | ✅ standard track | ✅ SEAH track only |
-| Appoint **`project_admin`** (same track on child scope) | ✅ `track=standard` | ✅ `track=seah` |
-| Invite **country-wide** operational officers | ✅ standard roles | ✅ SEAH roles only |
-| Read tickets in country | ✅ standard | ✅ SEAH only (`is_seah`) |
+| Settings (no platform tab) | ✅ own subtree | ✅ own subtree |
+| Create / edit **projects** | ✅ | ✅ |
+| Create / edit **packages**, **sub-orgs**, **third-party orgs (contractors)**, **locations** | ✅ | ❌ — detail structure owned by **standard** track |
+| Create a **new institutional root** (`government`/`local_government`/`donor`) | ❌ — `super_admin` only | ❌ |
+| Create / edit **workflows** (catalog) | ✅ standard templates | ✅ SEAH templates only |
+| Author **custom operational roles / position types** (§3) | ✅ standard track | ✅ SEAH track only |
+| Appoint **lower admins** (`org_admin` below · `project_admin` · `officer_admin`) in its subtree | ✅ ≤ own capabilities | ✅ `track=seah` |
+| Invite/manage operational officers | ✅ standard roles, in subtree | ✅ SEAH roles only |
+| Read tickets in subtree | ✅ standard | ✅ SEAH only (`is_seah`) |
 | Manage other track | ❌ | ❌ |
 
-**Appointment:** `super_admin` only (sets `country_code` + `workflow_track`).
+**Appointment:** `super_admin` (top-level org_admins) **or a higher `org_admin`** in the same subtree + track — **attenuated**: never granting a capability the appointer doesn't hold. Sets `organization_id` + `workflow_track`.
 
-**Isolation:** API filters every mutation by scope `workflow_track`. Standard and SEAH country admins are different **assignments**, not different role keys.
+**Isolation:** API filters every mutation by scope subtree (`descendant_org_ids`, cycle-guarded) + `workflow_track`. Standard and SEAH org admins are different **assignments**, not different role keys.
 
 ### 2.3 `project_admin` — project tier (scoped by `workflow_track`) — LOCKED
 
@@ -85,34 +94,46 @@ One **`role_key`** for all project-tier delegates. **Track** (Standard vs SEAH) 
 
 | Scope field | Values | Set by |
 |-------------|--------|--------|
-| `project_id` (+ optional `organization_id`, `package_id`) | Assigned project(s) | `country_admin` **with matching `workflow_track`** |
-| **`workflow_track`** | `standard` \| `seah` | Must match appointing country admin’s track |
+| `project_id` (+ optional `organization_id`, `package_id`) | Assigned project(s) | `org_admin` **with matching `workflow_track`** |
+| **`workflow_track`** | `standard` \| `seah` | Must match appointing `org_admin`'s track |
 
 | `workflow_track` on scope | Appointed by | Can do (within project scope) |
 |---------------------------|--------------|-------------------------------|
-| **`standard`** | `country_admin` (`track=standard`) | Standard officers, party orgs, staffing, go-live data entry |
-| **`seah`** | `country_admin` (`track=seah`) | SEAH officers, SEAH staffing fields; **no** standard L1/L2/GRC officer management |
+| **`standard`** | `org_admin` (`track=standard`) | Standard officers, party orgs (contractors), staffing, go-live data entry |
+| **`seah`** | `org_admin` (`track=seah`) | SEAH officers, SEAH staffing fields; **no** standard L1/L2/GRC officer management |
 
 Shared rules (both tracks):
 
-- **Cannot** create projects, country location tree, or workflow templates.
-- **Cannot** appoint other `project_admin` or `country_admin` users.
+- **Cannot** create projects, the org/location tree, or workflow templates.
+- **Cannot** author operational roles or position types (**catalog = `super_admin` + `org_admin` only**).
+- **Cannot** appoint `project_admin` or `org_admin` (may appoint `officer_admin` within its project).
 - **Cannot** access platform **Settings → Settings** tab.
-- **Cannot** create operational roles in catalog (country-tier admin only).
 
-**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` links orgs to party roles without waiting for `country_admin`.
+**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` links **third-party** orgs to party roles without waiting for an `org_admin`.
 
-**Implementation:** extend admin scope model (reuse `officer_scopes` pattern or `admin_scopes` table) with `workflow_track` column; API enforces track on every Settings mutation.
+**Implementation:** extend admin scope model (reuse `officer_scopes` pattern or `admin_scopes` table) with `organization_id` (subtree) + `workflow_track`; API enforces subtree + track on every Settings mutation.
+
+### 2.3b `officer_admin` — officer management only (scoped by `workflow_track`) — new 2026-07
+
+The **narrowest** admin: **invite, modify, and revoke officers** within an org subtree *or* a single project — and nothing else. For delegating officer onboarding/HR to a clerk who must not touch structure, contractors, projects, or the catalog.
+
+| Scope field | Values | Set by |
+|-------------|--------|--------|
+| `organization_id` (subtree) **or** `project_id` | Assigned scope | `org_admin` (or `project_admin` for its own project) |
+| **`workflow_track`** | `standard` \| `seah` | Must match the appointer's track |
+
+- **Can:** invite/re-invite officers, edit officer position / email / scope, deactivate/revoke — within scope + track (reassigns open cases first, per design §7.F1).
+- **Cannot:** create/edit orgs, contractors, projects, packages, workflows, roles, position types, or appoint any admin.
 
 ### 2.4 Deprecated admin keys
 
 | `role_key` | Migration |
 |------------|-----------|
-| **`local_admin`** | → `country_admin` or `project_admin` + appropriate `workflow_track` |
-| **`seah_admin`** *(if seeded)* | → `country_admin` + `workflow_track: seah` |
+| **`local_admin`** | → `org_admin` or `project_admin` + appropriate `workflow_track` |
+| **`seah_admin`** *(if seeded)* | → `org_admin` + `workflow_track: seah` |
 | **`seah_project_admin`** | Never shipped — use `project_admin` + `workflow_track: seah` |
 
-**Code gap:** Today `local_admin` maps to generic `is_admin`; implement scope `workflow_track` enforcement in §8.
+**As-built (SH-7):** `workflow_track` enforcement + the 4-tier ladder shipped (migration `q7s9u1w3`); the legacy `local_admin`→`org_admin` mapping is done. See §8.
 
 ---
 
@@ -125,7 +146,7 @@ These rows stay in **Settings → Workflows, roles & permissions → Roles & per
 | L1 / L2 / L3 handlers | `site_safeguards_focal_person`, `pd_piu_safeguards_focal`, `grc_chair`, `grc_member` |
 | SEAH handlers | `seah_national_officer`, `seah_hq_officer` |
 | Observers | `adb_national_project_director`, `adb_hq_safeguards`, `adb_hq_project`, `adb_hq_exec` |
-| System fallback | `country_l1_fallback` — hidden from routine invite UI; `country_admin` / `super_admin` only |
+| System fallback | `country_l1_fallback` — hidden from routine invite UI; `org_admin` / `super_admin` only |
 
 ### 3.1 Seeded roles vs custom roles — LOCKED
 
@@ -134,7 +155,7 @@ Deployments start from a **TOR-aligned seed catalog** (`grm_role_catalog.py`). T
 | `role_origin` | Examples | Who can create | Who can delete |
 |---------------|----------|----------------|----------------|
 | **`system`** | `site_safeguards_focal_person`, `grc_chair`, `seah_national_officer` | Seed / `super_admin` | `super_admin` only, if unused |
-| **`custom`** | `supervision_consultant_field`, `dor_provincial_oversight` | Scoped `country_admin`, `super_admin` | Creator tier, if unused |
+| **`custom`** | `supervision_consultant_field`, `dor_provincial_oversight` | Scoped `org_admin`, `super_admin` | Creator tier, if unused |
 
 **Why custom roles:** On-the-ground titles and responsibility lines differ by project (supervisory consultants country-wide vs package-scoped, extra L2 variants, etc.). Renaming `display_name` on a single global row is **not enough** when two positions need **different permissions** or **different workflow step bindings**.
 
@@ -160,15 +181,17 @@ For **`jurisdiction_mode=field`** officers scoped to a project or package:
 
 ### 3.3 Who manages the operational catalog — LOCKED
 
-| Action | `project_admin` | `country_admin` (by scope track) | `super_admin` |
+| Action | `project_admin` / `officer_admin` | `org_admin` (by scope track) | `super_admin` |
 |--------|-----------------|----------------------------------|---------------|
-| List / use roles in invite | ✅ own track | ✅ own track | ✅ |
-| Edit `display_name`, `description` | ✅ | ✅ own track | ✅ |
-| Edit `workflow_scope`, `jurisdiction_mode`, **permissions** | ❌ | ✅ own track | ✅ |
-| **Create role** | ❌ | ✅ own track | ✅ |
-| **Delete role** | ❌ | ✅ custom unused, own track | ✅ all unused |
+| List / use roles in invite | ✅ in-scope items | ✅ in-scope items | ✅ all |
+| Edit `display_name`, `description` | ❌ | ✅ own track, items it owns | ✅ |
+| Edit `workflow_scope`, `jurisdiction_mode`, **permissions** | ❌ | ✅ own track, items it owns | ✅ |
+| **Create role** | ❌ | ✅ own track — **owned by its scope node** | ✅ global (owner = null) |
+| **Delete role** | ❌ | ✅ custom unused, items it owns | ✅ all unused |
 
-`project_admin` **assigns** roles to officers within scope; **does not** define the catalog (avoids N contractors inventing N incompatible role keys).
+`project_admin` / `officer_admin` **assign** roles to officers within scope; they **do not** author the catalog.
+
+**Org-scoped catalog (as-built 2026-07).** Each catalog item (role, workflow definition, position type) carries an **`owner_organization_id`** and is available **only at its owning org node and below** (`owner IS NULL` = **global**, super-owned; system/TOR seed = global). An `org_admin` authoring at node N creates items **owned by N**, visible to N + `descendant_org_ids(N)` only. This is what makes "org_admin authors at any depth" safe — a district admin's custom role exists only in that district; no global proliferation of N incompatible role keys.
 
 ### 3.4 Smart permission allocation (UX) — LOCKED approach
 
@@ -211,8 +234,8 @@ Show checkboxes in **plain-language groups**, not a flat dev list:
 
 **Rules:**
 
-- Archetype sets defaults; admin may add/remove within groups (`country_admin` / `super_admin`).
-- **`country_admin`** with `workflow_track: seah` cannot grant permissions outside SEAH track (no `grc:*` unless `super_admin`).
+- Archetype sets defaults; admin may add/remove within groups (`org_admin` / `super_admin`).
+- **`org_admin`** with `workflow_track: seah` cannot grant permissions outside SEAH track (no `grc:*` unless `super_admin`).
 - **Dangerous caps:** `users:invite`, `settings:write`, `projects:manage` only on **admin matrix roles**, never on operational archetypes.
 
 #### Step 4 — Workflow linkage (guard rails)
@@ -223,7 +246,7 @@ Roles list shows: **“Used on N workflow steps · M officers”**.
 - **0 steps, M officers** → stronger warning (officers hold a role not on any workflow — auto-assign may fail)
 - Delete blocked if **any** workflow step or officer references the role
 
-**Clone from existing role:** `country_admin` can duplicate a system or custom role as starting point.
+**Clone from existing role:** `org_admin` can duplicate a system or custom role as starting point.
 
 ### 3.5 Workflows-first binding (LOCKED — primary UX path)
 
@@ -250,7 +273,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §5.1.
 
 ### 3.6 Create role API (target)
 
-`POST /api/v1/roles` body: `display_name`, `role_key?`, `workflow_scope`, `jurisdiction_mode`, `permissions[]`, `archetype?`, `role_origin: custom`.
+`POST /api/v1/roles` body: `display_name`, `role_key?`, `workflow_scope`, `jurisdiction_mode`, `permissions[]`, `archetype?`, `role_origin: custom`. **`owner_organization_id` is set server-side to the author's scope node** (§3.3) — `super_admin` may pass `null` for a global role; `org_admin` cannot set it outside its subtree.
 
 `PATCH` may update permissions for custom roles; **system** roles: permissions change `super_admin` only (protect TOR defaults).
 
@@ -258,12 +281,12 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §5.1.
 
 ## 4. Settings UI — access matrix (target)
 
-| Main tab | `super_admin` | `country_admin` | `project_admin` |
-|----------|---------------|-----------------|-----------------|
-| Organizations & officers | ✅ | ✅ per scope track | ✅ per scope track, project |
-| Workflows, roles & permissions | ✅ | ✅ per scope track | ✅ invite only |
-| Projects & packages | ✅ | ✅ create projects (both tracks); standard: packages/orgs/locations; SEAH: SEAH fields | ✅ assigned project(s) |
-| **Settings** (platform) | ✅ | ❌ | ❌ |
+| Main tab | `super_admin` | `org_admin` (subtree, any depth) | `project_admin` | `officer_admin` |
+|----------|---------------|-----------------|-----------------|-----------------|
+| Organizations & officers | ✅ | ✅ per scope track (structure + officers) | ✅ project actors + staffing | ✅ **officers only** (invite/modify/revoke) |
+| Workflows, roles & permissions | ✅ | ✅ per scope track (**authors** catalog) | ✅ invite only (assign existing) | ✅ invite only (assign existing) |
+| Projects & packages | ✅ | ✅ create projects; standard: packages/orgs/locations; SEAH: SEAH fields | ✅ assigned project(s), no edit | ❌ |
+| **Settings** (platform) | ✅ | ❌ | ❌ | ❌ |
 
 ### Platform sub-tabs (`super_admin` only)
 
@@ -273,7 +296,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §5.1.
 | Quarterly reports | Report library + role assignments |
 | Project types | Archetype studio |
 | Advanced (JSON) | `org_roles`, `report_limits`, `archiving_policy` |
-| **Admin access** *(new)* | Assign `country_admin` / `project_admin`; list admin role holders |
+| **Admin access** *(new)* | Assign `org_admin` / `project_admin` / `officer_admin`; create institutional roots (super only); list admin holders |
 
 ---
 
@@ -289,6 +312,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §5.1.
 | `workflow_scope` | `Standard` \| `SEAH` \| `Both` — operational roles; admin roles may use `Both` or null |
 | `jurisdiction_mode` | `global` \| `country` \| `field` — default scope shape for invites |
 | `permissions` | JSON capability strings; `["*"]` for `super_admin` |
+| **`owner_organization_id`** | String(64), **nullable**. `NULL` = **global** (system/TOR seed, super-owned). A value = **org-scoped**: available only at that org node + `descendant_org_ids` (§3.3). Set to the author's scope node on create. Same column added to `workflow_definitions` and (OC-02) `position_types`. |
 
 *Future implementation:* optional `role_kind` column (`admin` \| `operational`) or allowlist in code to split API list endpoints.
 
@@ -298,8 +322,9 @@ Stored on **`user_roles`** + admin scope rows *(reuse `officer_scopes` with `sco
 
 | Admin role | Typical scope fields |
 |------------|---------------------|
-| `country_admin` | `country_code` + **`workflow_track`** (`standard` \| `seah`) |
-| `project_admin` | `project_id`, optional `organization_id` / `package_id`, **`workflow_track`** (must match appointing country admin) |
+| `org_admin` | **`organization_id`** (scope node — **covers its whole subtree**, any depth) + **`workflow_track`** (`standard` \| `seah`) |
+| `project_admin` | `project_id`, optional `organization_id` / `package_id`, **`workflow_track`** (must match appointing `org_admin`) |
+| `officer_admin` | **`organization_id`** (subtree) **or** `project_id`, + **`workflow_track`** (must match appointer) |
 
 **Design rule:** prefer **scope dimensions** over new `role_key`s when the job shape is the same but the data boundary differs (SEAH vs Standard today; other tracks later).
 
@@ -323,7 +348,7 @@ Shipped from `ticketing/constants/grm_role_catalog.py` as **`role_origin: system
 | `seah_hq_officer` | SEAH | SEAH L2 |
 | `adb_hq_exec` | Both | Senior oversight |
 
-Admin keys (`super_admin`, `country_admin`, `project_admin`) live in `ticketing.roles` for JWT consistency but appear only in platform **Admin access**, not the operational Roles tab.
+Admin keys (`super_admin`, `org_admin`, `project_admin`, `officer_admin`) live in `ticketing.roles` for JWT consistency but appear only in platform **Admin access**, not the operational Roles tab.
 
 ---
 
@@ -334,10 +359,11 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | Permission | Typical holders |
 |------------|-----------------|
 | `*` | `super_admin` |
-| `projects:create`, `projects:manage` | `country_admin` (either track, country scope) |
-| `settings:write`, `locations:manage`, `workflows:manage` | `country_admin` (standard track) |
-| SEAH workflow / officer settings (no packages/orgs/locations) | `country_admin` + `workflow_track: seah` |
-| `users:invite`, `users:manage`, `settings:project` | `project_admin` |
+| `projects:create`, `projects:manage` | `org_admin` (either track, **subtree scope**) |
+| `settings:write`, `locations:manage`, `workflows:manage`, `roles:author` | `org_admin` (standard track) — **catalog is org-scoped, see §3.3** |
+| SEAH workflow / officer settings (no packages/orgs/locations) | `org_admin` + `workflow_track: seah` |
+| `projects:staff`, `actors:manage` (add contractors + staffing, no catalog) | `project_admin` |
+| `users:invite`, `users:manage` (assign existing roles only) | `officer_admin` (+ `project_admin`, `org_admin`) |
 | `tickets:*`, `grc:*` | Operational roles |
 
 ---
@@ -346,13 +372,14 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 
 | Item | Status |
 |------|--------|
-| Admin matrix in docs | ✅ Locked — 3 keys; `workflow_track` on country + project scope |
-| `workflow_track` on admin scope + API enforcement | ✅ Migration `a2b4c6d8`; `admin_access.py` + router guards |
+| Admin matrix in docs | ✅ 4 keys (`super_admin` / `org_admin` / `project_admin` / `officer_admin`); `workflow_track` on scope |
+| **4-tier ladder in code** (`org_admin`/`officer_admin` keys, org-subtree scope, org-scoped catalog) | ✅ **Built — SH-7** (migration `q7s9u1w3`). `country_admin` retired → `org_admin` across seeds/`admin_access.py`/tests **and the frontend** (`AuthProvider`, `AdminAccessTab`, `lib/api.ts`); `officer_admin` added; org-subtree scope via `descendant_org_ids`; org-scoped catalog (`owner_organization_id` on roles/workflows/position-types + availability filter). `AdminScopeCreate` now rejects `country_admin` |
+| `workflow_track` on admin scope + API enforcement | ✅ Migration `a2b4c6d8`; `admin_access.py` + router guards (flat scope; SH-7 generalizes to subtree) |
 | `POST /roles` create + archetype permissions UI | ✅ API + Roles tab wizard |
 | Filter operational vs admin in Roles API/UI | ✅ `GET /roles?kind=operational` |
 | `role_origin` column + system role delete guard | ✅ Column + delete rules |
 | Platform **Admin access** sub-tab | ✅ `super_admin` only |
-| `local_admin` → matrix migration | ✅ Seed: `country-admin@grm.local` + scopes |
+| `local_admin` → matrix migration | ✅ Seed: `org_admin` scopes (the demo `country-admin@grm.local` login is a retained email alias; the role key is `org_admin`) |
 | `project_admin` + `workflow_track` on admin scope | ✅ `project-admin@grm.local` KL_ROAD standard |
 
 ---
@@ -365,7 +392,7 @@ Fixed per `role_key` in seed — **not** editable via custom admin role factory 
 | SEAH operational | No | Yes |
 | `super_admin`, `adb_hq_exec` | Yes | Yes |
 
-SEAH workflow/officer management: **`country_admin`** with **`workflow_track: seah`**. **Any** scoped `country_admin` may **create projects** in their country; standard track additionally owns packages, orgs, and locations. SEAH workflow link may come from project type template or SEAH-track country admin edit on the project.
+SEAH workflow/officer management: **`org_admin`** with **`workflow_track: seah`**. **Any** scoped `org_admin` may **create projects** in their subtree; standard track additionally owns packages, orgs, and locations. SEAH workflow link may come from a project type template or a SEAH-track `org_admin` edit on the project.
 
 ---
 
@@ -374,7 +401,7 @@ SEAH workflow/officer management: **`country_admin`** with **`workflow_track: se
 | Method | Path | Access |
 |--------|------|--------|
 | `GET` | `/api/v1/roles?kind=operational` | Authenticated |
-| `POST` | `/api/v1/roles` | Scoped `country_admin` / `super_admin` |
+| `POST` | `/api/v1/roles` | Scoped `org_admin` / `super_admin` |
 | `GET` | `/api/v1/roles?kind=admin` | `super_admin` (platform Admin access tab) |
 | `PATCH` | `/api/v1/roles/{id}` | Track-scoped admin; permissions on system roles: `super_admin` only |
 | `DELETE` | `/api/v1/roles/{id}` | If unused; system roles: `super_admin` only |
@@ -385,12 +412,15 @@ Officer assignment: [07_officer_management_and_assignment.md](07_officer_managem
 
 ## 11. Acceptance criteria
 
-1. Admin keys: **`super_admin`**, **`country_admin`**, **`project_admin`** only; track on scope, not extra role names.
-2. **`workflow_track`** (`standard` \| `seah`) on country and project admin assignments; API enforces on every mutation.
-3. `local_admin`, `seah_admin` deprecated → scoped `country_admin` / `project_admin`.
+1. Admin keys: **`super_admin`**, **`org_admin`**, **`project_admin`**, **`officer_admin`** only (4-tier strict-subset ladder, §2); track on scope, not extra role names.
+2. **`workflow_track`** (`standard` \| `seah`) on every admin assignment; API enforces on every mutation.
+3. `local_admin`, `seah_admin`, `country_admin` deprecated → `org_admin` / `project_admin` / `officer_admin` as appropriate.
+3b. **Org-subtree scope:** `org_admin` on node N administers N + `descendant_org_ids(N)` (cycle-guarded); attenuated appointment (at/below node, same track, ≤ own capabilities).
+3c. **`org_category`** (`government` / `local_government` / `donor` / `third_party`) on orgs, inherited from root; new institutional root = `super_admin` only; `third_party` delegable.
+3d. **Org-scoped catalog:** a role / workflow / position type with `owner_organization_id = N` is listable/usable **only** at `N ∪ descendant_org_ids(N)`; `owner IS NULL` is usable everywhere. Test: an item owned at Jhapa is **invisible** in Ilam (sibling) and in DoR-root pickers; a DoR-owned item is visible across DoR; a global item everywhere.
 4. Operational Roles tab lists operational keys only; admin assignments in platform **Admin access**.
-5. Scoped `country_admin` may **create projects** (either track); standard-track owns packages/orgs/locations; SEAH-track cannot create packages/orgs/locations.
-6. Scoped `country_admin` can **create** custom operational roles (own track); `project_admin` cannot.
+5. Scoped `org_admin` may **create projects** (either track); standard-track owns packages/orgs/locations; SEAH-track cannot create packages/orgs/locations.
+6. Scoped `org_admin` can **create** custom operational roles (own track); `project_admin` cannot.
 7. Country-wide vs project-scoped officers: **default jurisdiction on role** + **officer_scopes** at assignment.
 8. Permissions allocated via **archetype templates** + grouped overrides; admin caps cannot leak onto operational roles.
 9. **Workflows-first:** step editor binds roles; role wizard does not require picking a workflow. Optional inline create from step dropdown.

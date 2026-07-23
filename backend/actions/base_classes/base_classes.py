@@ -6,10 +6,9 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 from rasa_sdk.events import FollowupAction, ActiveLoop
 from typing import Dict, Text, Any, Tuple, List, Callable, Optional
-import inspect
 from .base_mixins import ActionFlowHelpersMixin, ActionMessagingHelpersMixin
 from backend.actions.services.contact.missing_fields import CONTACT_FIELDS_ORDER
-from backend.actions.utils.utterance_mapping_rasa import get_utterance_base, get_buttons_base
+from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
 from backend.config.constants import DEFAULT_VALUES
 
 DEFAULT_LANGUAGE_CODE = DEFAULT_VALUES['DEFAULT_LANGUAGE_CODE']
@@ -115,17 +114,23 @@ class BaseFormValidationAction(FormValidationAction, BaseAction):
         """Return the form name. Must be implemented by subclasses."""
         pass
     
-    def get_utterance(self, utterance_index: int=1):
-        """Get utterance using calling function name"""
-        function_name = inspect.currentframe().f_back.f_code.co_name
-        self.logger.debug(f"get_utterance called from function: {function_name}")
-        return get_utterance_base(self.file_name, function_name, utterance_index, self.language_code)
-    
-    def get_buttons(self, button_index: int=1) -> list:
-        """Get buttons using calling function name"""
-        function_name = inspect.currentframe().f_back.f_code.co_name
-        return get_buttons_base(self.file_name, function_name, button_index, self.language_code)
-    
+    def get_utterance(self, utterance_index: int = 1, *, key: str):
+        """Get an utterance by explicit mapping key.
+
+        `key` is required. It was previously derived from the calling frame
+        (`inspect.currentframe().f_back.f_code.co_name`), which made it impossible to
+        tell statically whether a lookup would resolve — and 3 of the 4 call sites were
+        deriving keys that raised `ValueError` on live user paths (T3-01). Passing the
+        key explicitly is what lets `tests/actions/test_utterance_key_integrity.py`
+        check every call site by walking the AST.
+
+        Note `get_buttons` is deliberately absent here: the introspecting override was
+        dead (0 of 200 call sites reached it) and was deleted rather than fixed. Button
+        lookups all resolve through `ActionHelpersMixin`'s explicit `self.name()` path.
+        """
+        self.logger.debug(f"get_utterance key: {key}")
+        return get_utterance_base(self.file_name, key, utterance_index, self.language_code)
+
 
     # Concrete (shared) methods that subclasses can use
     def _is_skip_requested(self, latest_message: dict) -> Tuple[bool, bool, str]:

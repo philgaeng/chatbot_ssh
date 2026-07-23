@@ -1,0 +1,1559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📐</text></svg>">
+<title>Settings Redesign — Desktop Wireframes</title>
+<style>
+  html, body { margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; }
+  /* ─────────────────────────────────────────────────────────────
+     Two layers:
+     • META (blueprint / drafting-table) — themed light+dark via tokens
+     • MOCK UI — the real GRM design system, held LIGHT in both themes
+       (a wireframe/printout is pinned to the board; product colours
+       must not invert for a design reviewer). This is a deliberate
+       single-world choice for the inner frames only.
+     ───────────────────────────────────────────────────────────── */
+
+  :root {
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --font-ui:   ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    /* META — blueprint layer (light) */
+    --ground:      #e7ebf3;
+    --grid:        rgba(63, 86, 120, 0.08);
+    --board:       #eef1f7;
+    --meta-ink:    #253143;
+    --meta-2:      #56637a;
+    --meta-line:   #c4cddd;
+    --meta-accent: #3d5578;
+    --prose:       #333c49;
+    --prose-2:     #59636f;
+    --pin-bg:      #2b3648;
+    --pin-fg:      #ffffff;
+    --tag-bg:      #dbe2ef;
+    --tag-fg:      #33425c;
+    --stage-shadow: 0 1px 2px rgba(30,45,70,.08), 0 12px 30px rgba(30,45,70,.12);
+    --stage-ring:  #d0d8e6;
+
+    /* PRODUCT — GRM design tokens (fixed, both themes) */
+    --p-paper:#ffffff; --p-bg50:#f9fafb;
+    --p-ink:#1f2937; --p-ink2:#374151; --p-ink3:#4b5563; --p-muted:#6b7280;
+    --p-line:#e5e7eb; --p-line2:#d1d5db;
+    --p-blue:#2563eb; --p-blue700:#1d4ed8; --p-blue50:#eff6ff; --p-blue100:#dbeafe; --p-blue800:#1e40af;
+    --p-red:#dc2626; --p-red50:#fef2f2; --p-red100:#fee2e2; --p-red700:#b91c1c; --p-red800:#991b1b;
+    --p-amber:#d97706; --p-amber50:#fffbeb; --p-amber100:#fef3c7; --p-amber700:#b45309; --p-amber800:#92400e;
+    --p-green:#16a34a; --p-green50:#f0fdf4; --p-green100:#dcfce7; --p-green700:#15803d; --p-green800:#166534;
+    --p-violet:#7c3aed; --p-violet100:#ede9fe; --p-violet800:#5b21b6;
+    --p-slate900:#0f172a; --p-slate800:#1e293b; --p-slate700:#334155; --p-slate600:#475569;
+    --p-slate400:#94a3b8; --p-slate300:#cbd5e1; --p-slate200:#e2e8f0;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:      #0d131d;
+      --grid:        rgba(142, 163, 196, 0.06);
+      --board:       #121a26;
+      --meta-ink:    #dbe3ef;
+      --meta-2:      #93a0b4;
+      --meta-line:   #273240;
+      --meta-accent: #93a9cf;
+      --prose:       #c3ccd9;
+      --prose-2:     #8b96a6;
+      --pin-bg:      #cdd7e6;
+      --pin-fg:      #131a24;
+      --tag-bg:      #1e2a3a;
+      --tag-fg:      #a9b8d1;
+      --stage-shadow: 0 2px 8px rgba(0,0,0,.4), 0 18px 44px rgba(0,0,0,.5);
+      --stage-ring:  #26313f;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#e7ebf3; --grid:rgba(63,86,120,0.08); --board:#eef1f7;
+    --meta-ink:#253143; --meta-2:#56637a; --meta-line:#c4cddd; --meta-accent:#3d5578;
+    --prose:#333c49; --prose-2:#59636f; --pin-bg:#2b3648; --pin-fg:#fff;
+    --tag-bg:#dbe2ef; --tag-fg:#33425c;
+    --stage-shadow:0 1px 2px rgba(30,45,70,.08),0 12px 30px rgba(30,45,70,.12); --stage-ring:#d0d8e6;
+  }
+  :root[data-theme="dark"] {
+    --ground:#0d131d; --grid:rgba(142,163,196,0.06); --board:#121a26;
+    --meta-ink:#dbe3ef; --meta-2:#93a0b4; --meta-line:#273240; --meta-accent:#93a9cf;
+    --prose:#c3ccd9; --prose-2:#8b96a6; --pin-bg:#cdd7e6; --pin-fg:#131a24;
+    --tag-bg:#1e2a3a; --tag-fg:#a9b8d1;
+    --stage-shadow:0 2px 8px rgba(0,0,0,.4),0 18px 44px rgba(0,0,0,.5); --stage-ring:#26313f;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    font-family: var(--font-ui);
+    color: var(--prose);
+    background-color: var(--ground);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 26px 26px;
+    line-height: 1.5;
+  }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px 96px; }
+
+  /* ── Masthead ─────────────────────────────────────────── */
+  header.mast { padding: 56px 0 20px; }
+  .eyebrow {
+    font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--meta-accent); margin: 0 0 14px;
+  }
+  h1.title {
+    font-size: clamp(30px, 5vw, 46px); line-height: 1.02; margin: 0 0 12px;
+    color: var(--meta-ink); font-weight: 680; letter-spacing: -0.015em;
+    text-wrap: balance;
+  }
+  .lede { font-size: 16.5px; max-width: 68ch; margin: 0 0 22px; color: var(--prose); }
+  .lede b { color: var(--meta-ink); font-weight: 620; }
+
+  .ia { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 26px; }
+  .ia__chip {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .02em;
+    padding: 6px 11px; border: 1px solid var(--meta-line); border-radius: 6px;
+    color: var(--meta-2); background: var(--board);
+  }
+  .ia__chip.is-land { color: var(--meta-ink); border-color: var(--meta-accent); font-weight: 600; }
+
+  .key {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px 26px; padding: 18px 20px; border: 1px solid var(--meta-line);
+    border-radius: 10px; background: color-mix(in srgb, var(--board) 82%, transparent);
+    margin-bottom: 12px;
+  }
+  .key h3 {
+    font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .18em;
+    text-transform: uppercase; color: var(--meta-2); margin: 0 0 9px; font-weight: 600;
+  }
+  .key ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13px; color: var(--prose); }
+  .key li { display: flex; align-items: center; gap: 8px; }
+  .sw { width: 13px; height: 13px; border-radius: 3px; flex: none; border: 1px solid rgba(0,0,0,.12); }
+  .sw--block { background: var(--p-red); }
+  .sw--warn  { background: var(--p-amber); }
+  .sw--done  { background: var(--p-green); }
+  .sw--seah  { background: var(--p-red800); }
+  .sw--prim  { background: var(--p-blue); }
+  .sw--grc   { background: var(--p-violet); }
+  .demopin {
+    font-family: var(--font-mono); font-weight: 700; font-size: 10.5px;
+    min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px;
+    background: var(--pin-bg); color: var(--pin-fg); display: inline-flex;
+    align-items: center; justify-content: center; flex: none;
+  }
+  .note-mock { font-size: 12.5px; color: var(--prose-2); margin: 4px 2px 0; }
+  .note-mock b { color: var(--meta-ink); font-weight: 600; }
+
+  /* ── Frame (blueprint) ────────────────────────────────── */
+  .frame { margin-top: 54px; scroll-margin-top: 18px; }
+  .frame__head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+  .frame__no {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: .16em;
+    color: var(--meta-accent); font-weight: 600;
+  }
+  .frame__title { font-size: 20px; font-weight: 650; color: var(--meta-ink); letter-spacing: -0.01em; margin: 0; }
+  .frame__sub { font-size: 13.5px; color: var(--prose-2); margin: 3px 0 16px; max-width: 74ch; }
+  .frame__sub code { font-family: var(--font-mono); font-size: 12px; color: var(--meta-accent); }
+
+  .stage-wrap { overflow-x: auto; padding: 3px; border-radius: 12px; }
+  .stage {
+    background: var(--p-paper); border: 1px solid var(--stage-ring);
+    border-radius: 12px; box-shadow: var(--stage-shadow);
+    min-width: 720px; overflow: hidden; color: var(--p-ink);
+    font-family: var(--font-ui);
+  }
+
+  /* corner tick marks — technical-drawing motif */
+  .stage-wrap { position: relative; }
+  .stage-wrap::before, .stage-wrap::after {
+    content: ""; position: absolute; width: 14px; height: 14px; pointer-events: none;
+    border-color: var(--meta-accent); opacity: .5;
+  }
+  .stage-wrap::before { top: 8px; left: 8px; border-left: 1.5px solid; border-top: 1.5px solid; }
+  .stage-wrap::after  { bottom: 8px; right: 8px; border-right: 1.5px solid; border-bottom: 1.5px solid; }
+
+  /* ── Spec rail ────────────────────────────────────────── */
+  .spec { margin-top: 16px; display: grid; gap: 9px; }
+  .spec__row { display: grid; grid-template-columns: 20px 1fr; gap: 11px; align-items: start; }
+  .spec .pin {
+    font-family: var(--font-mono); font-weight: 700; font-size: 10.5px;
+    width: 20px; height: 20px; border-radius: 999px; background: var(--pin-bg);
+    color: var(--pin-fg); display: inline-flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .spec__row p { margin: 0; font-size: 13.5px; color: var(--prose); }
+  .spec__row b { color: var(--meta-ink); font-weight: 620; }
+  .ref {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: .02em;
+    background: var(--tag-bg); color: var(--tag-fg); padding: 1px 6px;
+    border-radius: 4px; white-space: nowrap;
+  }
+
+  /* ═══════════════ MOCK UI — GRM design system ═══════════════ */
+  .m { font-size: 13.5px; }
+
+  /* app shell */
+  .m-app { display: grid; grid-template-columns: 208px 1fr; min-height: 520px; }
+  .m-side { background: var(--p-slate800); color: var(--p-slate200); padding: 16px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .m-brand { display:flex; align-items:center; gap:9px; padding: 6px 10px 16px; }
+  .m-brand__mark { width: 26px; height: 26px; border-radius: 7px; background: var(--p-blue); flex:none; display:grid; place-items:center; }
+  .m-brand__mark svg { width: 15px; height: 15px; color: #fff; }
+  .m-brand__txt { font-size: 13px; font-weight: 650; color: #fff; letter-spacing: .01em; }
+  .m-nav { display:flex; align-items:center; gap: 10px; padding: 8px 10px; border-radius: 7px; color: var(--p-slate300); font-size: 13px; }
+  .m-nav svg { width: 17px; height: 17px; flex:none; color: var(--p-slate400); }
+  .m-nav.is-active { background: var(--p-slate700); color: #fff; }
+  .m-nav.is-active svg { color: #fff; }
+  .m-nav .m-badge { margin-left: auto; }
+  .m-badge { background: var(--p-red); color:#fff; font-size: 10.5px; font-weight: 700; border-radius: 999px; padding: 1px 6px; min-width: 17px; text-align:center; }
+  .m-side__sep { height:1px; background: var(--p-slate700); margin: 8px 10px; }
+
+  .m-main { background: var(--p-paper); display: flex; flex-direction: column; min-width: 0; }
+  .m-topbar { padding: 16px 22px; border-bottom: 1px solid var(--p-line); display:flex; align-items:center; gap: 12px; }
+  .m-h1 { font-size: 17px; font-weight: 680; color: var(--p-ink); margin: 0; }
+  .m-crumb { font-size: 12px; color: var(--p-muted); }
+  .m-crumb b { color: var(--p-ink2); font-weight: 600; }
+
+  /* tabs */
+  .m-tabs { display:flex; gap: 2px; padding: 0 18px; border-bottom: 1px solid var(--p-line); background: var(--p-bg50); }
+  .m-tab { padding: 11px 14px; font-size: 13px; color: var(--p-ink3); border-bottom: 2px solid transparent; margin-bottom: -1px; display:flex; align-items:center; gap:7px; white-space: nowrap; }
+  .m-tab.is-active { color: var(--p-blue700); border-bottom-color: var(--p-blue); font-weight: 620; background: var(--p-paper); }
+  .m-tab .dotstate { width: 7px; height: 7px; border-radius: 999px; }
+
+  .m-sub { display:flex; gap: 18px; padding: 12px 22px 0; }
+  .m-sub__i { font-size: 12.5px; color: var(--p-ink3); padding-bottom: 9px; border-bottom: 2px solid transparent; }
+  .m-sub__i.is-active { color: var(--p-ink); font-weight: 620; border-bottom-color: var(--p-slate400); }
+
+  .m-body { padding: 22px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+  .m-h2 { font-size: 12.5px; font-weight: 680; color: var(--p-ink2); text-transform: uppercase; letter-spacing: .04em; border-left: 3px solid var(--p-blue); padding-left: 10px; margin: 0; }
+  .m-eyebrow { font-size: 11px; letter-spacing:.06em; text-transform:uppercase; color: var(--p-muted); font-weight: 600; }
+
+  /* generic bits */
+  .m-card { border: 1px solid var(--p-line); border-radius: 10px; padding: 16px; background: var(--p-paper); }
+  .m-card--tint { background: var(--p-bg50); }
+  .m-row { display:flex; align-items:center; gap: 10px; }
+  .m-muted { color: var(--p-muted); }
+  .m-ink2 { color: var(--p-ink2); }
+  .ne { color: var(--p-muted); font-weight: 400; }
+
+  .m-chip { font-size: 11.5px; padding: 2px 8px; border-radius: 999px; border:1px solid var(--p-line2); color: var(--p-ink3); background: var(--p-paper); white-space:nowrap; }
+  .m-chip--blue { background: var(--p-blue50); border-color: var(--p-blue100); color: var(--p-blue800); }
+  .m-chip--terr { background: var(--p-green50); border-color: var(--p-green100); color: var(--p-green800); }
+  .m-chip--seah { background: var(--p-red100); border-color: var(--p-red100); color: var(--p-red800); font-weight: 600; }
+
+  .m-btn { font-size: 12.5px; font-weight: 600; padding: 7px 13px; border-radius: 7px; border: 1px solid var(--p-line2); background: var(--p-paper); color: var(--p-ink2); display:inline-flex; align-items:center; gap:6px; }
+  .m-btn--primary { background: var(--p-blue); border-color: var(--p-blue); color: #fff; }
+  .m-btn--ghost { border-style: dashed; color: var(--p-ink3); }
+  .m-btn--disabled { background: var(--p-bg50); color: var(--p-muted); border-color: var(--p-line); }
+  .m-btnrow { display:flex; gap: 8px; align-items:center; }
+
+  .m-field { display:flex; flex-direction: column; gap: 5px; }
+  .m-label { font-size: 11.5px; font-weight: 600; color: var(--p-ink3); }
+  .m-input { border:1px solid var(--p-line2); border-radius: 7px; padding: 8px 11px; font-size: 13px; color: var(--p-ink); background: var(--p-paper); display:flex; align-items:center; justify-content: space-between; }
+  .m-input .car { color: var(--p-muted); }
+  .m-input.is-filled { border-color: var(--p-slate400); }
+
+  .pin {
+    font-family: var(--font-mono); font-weight: 700; font-size: 10px;
+    width: 18px; height: 18px; border-radius: 999px; background: var(--pin-bg);
+    color: var(--pin-fg); display: inline-flex; align-items: center; justify-content: center;
+    flex: none; vertical-align: middle;
+  }
+  .pin--float { box-shadow: 0 0 0 2px var(--p-paper); }
+
+  /* go-live checklist */
+  .m-next { display:flex; align-items:center; gap: 10px; font-size: 16px; font-weight: 650; color: var(--p-ink); }
+  .m-check { display:grid; gap: 8px; }
+  .m-check__i { display:grid; grid-template-columns: 20px 1fr auto; gap: 11px; align-items: start; padding: 11px 12px; border:1px solid var(--p-line); border-radius: 9px; }
+  .m-check__i--block { border-color: var(--p-red100); background: var(--p-red50); }
+  .m-check__i--warn { border-color: var(--p-amber100); background: var(--p-amber50); }
+  .m-mark { width: 18px; height: 18px; border-radius: 999px; margin-top: 1px; display:grid; place-items:center; }
+  .m-mark--block { background: var(--p-red); }
+  .m-mark--warn { background: transparent; border: 2px solid var(--p-amber); }
+  .m-mark--done { background: var(--p-green); }
+  .m-mark svg { width: 11px; height: 11px; color:#fff; }
+  .m-check__t { font-size: 13px; color: var(--p-ink); }
+  .m-check__f { font-size: 12px; color: var(--p-ink3); margin-top: 2px; }
+  .m-check__f code { font-family: var(--font-mono); font-size: 11px; color: var(--p-blue700); }
+  .sev { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; padding: 2px 7px; border-radius: 5px; white-space:nowrap; }
+  .sev--block { background: var(--p-red100); color: var(--p-red800); }
+  .sev--warn { background: var(--p-amber100); color: var(--p-amber800); }
+  .sev--done { background: var(--p-green100); color: var(--p-green800); }
+
+  /* domain cards */
+  .m-cards { display:grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .m-dcard { border:1px solid var(--p-line); border-radius: 10px; padding: 14px; display:flex; flex-direction: column; gap: 7px; }
+  .m-dcard__h { display:flex; align-items:center; justify-content: space-between; gap: 8px; }
+  .m-dcard__t { font-weight: 640; color: var(--p-ink); font-size: 13.5px; }
+  .m-dcard__d { font-size: 12px; color: var(--p-ink3); }
+
+  /* tree */
+  .m-tree { display:grid; gap: 3px; }
+  .m-tnode { display:flex; align-items:center; gap: 10px; padding: 8px 10px; border-radius: 8px; border: 1px solid transparent; }
+  .m-tnode:hover, .m-tnode.is-focus { background: var(--p-bg50); border-color: var(--p-line); }
+  .m-tnode__tw { color: var(--p-muted); font-family: var(--font-mono); font-size: 12px; }
+  .m-tnode__name { font-size: 13px; color: var(--p-ink); font-weight: 550; }
+  .m-tnode__acts { margin-left: auto; display:flex; gap: 6px; opacity: 1; }
+  .m-iconbtn { font-size: 11.5px; color: var(--p-ink3); border:1px solid var(--p-line2); border-radius: 6px; padding: 3px 8px; background: var(--p-paper); }
+  .m-iconbtn--p { color: var(--p-blue700); border-color: var(--p-blue100); background: var(--p-blue50); }
+  .indent-1 { margin-left: 22px; }
+  .indent-2 { margin-left: 44px; }
+  .indent-3 { margin-left: 66px; }
+
+  /* outcome card (invite) */
+  .m-outcome { border: 1px solid var(--p-blue100); background: var(--p-blue50); border-radius: 11px; padding: 16px; display:flex; flex-direction: column; gap: 11px; }
+  .m-outcome__h { font-size: 11px; letter-spacing:.08em; text-transform: uppercase; color: var(--p-blue800); font-weight: 700; }
+  .m-outcome__title { font-size: 15.5px; font-weight: 680; color: var(--p-ink); }
+  .m-line { display:flex; gap: 10px; align-items: baseline; }
+  .m-line__arrow { color: var(--p-blue); font-weight: 700; flex:none; }
+  .m-line__main { color: var(--p-ink); font-size: 13.5px; }
+  .m-line__main strong { font-weight: 650; }
+  .prov { font-size: 11.5px; color: var(--p-muted); font-style: italic; }
+  .m-adjust { display:flex; align-items:center; gap: 8px; font-size: 12.5px; color: var(--p-blue700); font-weight: 600; border-top: 1px dashed var(--p-blue100); padding-top: 11px; }
+
+  .m-warnbar { display:flex; align-items:center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: var(--p-amber50); border: 1px solid var(--p-amber100); font-size: 12.5px; color: var(--p-amber800); }
+  .m-warnbar b { font-weight: 650; }
+
+  .m-ovbadge { font-size: 10.5px; font-weight: 700; letter-spacing:.03em; padding: 2px 7px; border-radius: 5px; background: var(--p-amber100); color: var(--p-amber800); }
+
+  /* variant caption */
+  .m-variant { border: 1px dashed var(--p-line2); border-radius: 10px; padding: 13px; background: var(--p-bg50); }
+  .m-variant__cap { font-family: var(--font-mono); font-size: 10.5px; letter-spacing:.08em; text-transform: uppercase; color: var(--p-muted); margin-bottom: 9px; }
+
+  /* role picker */
+  .m-picker { border:1px solid var(--p-line2); border-radius: 8px; overflow:hidden; }
+  .m-opt { display:flex; align-items:center; gap: 9px; padding: 8px 12px; font-size: 13px; color: var(--p-ink); border-bottom: 1px solid var(--p-line); }
+  .m-opt:last-child { border-bottom: 0; }
+  .m-opt.is-sel { background: var(--p-blue50); }
+  .m-opt.is-off { color: var(--p-muted); }
+  .m-opt__why { margin-left: auto; font-size: 11px; color: var(--p-red700); background: var(--p-red50); padding: 1px 7px; border-radius: 4px; }
+  .m-opt__tick { width: 15px; color: var(--p-blue); }
+  .m-picker__div { padding: 6px 12px; font-size: 10.5px; letter-spacing:.06em; text-transform: uppercase; color: var(--p-muted); background: var(--p-bg50); border-bottom: 1px solid var(--p-line); }
+
+  /* staffing table */
+  .m-tbl { width:100%; border-collapse: collapse; font-size: 12.5px; }
+  .m-tbl th { text-align:left; font-size: 10.5px; letter-spacing:.05em; text-transform:uppercase; color: var(--p-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--p-line); }
+  .m-tbl td { padding: 9px 10px; border-bottom: 1px solid var(--p-line); color: var(--p-ink2); vertical-align: middle; }
+  .m-tbl tr:last-child td { border-bottom: 0; }
+
+  .m-empty { text-align:center; padding: 26px 16px; border: 1px dashed var(--p-line2); border-radius: 10px; background: var(--p-bg50); }
+  .m-empty__t { font-size: 13px; color: var(--p-ink2); font-weight: 600; margin-bottom: 4px; }
+  .m-empty__d { font-size: 12px; color: var(--p-ink3); margin-bottom: 12px; }
+
+  /* footer */
+  footer.foot { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--meta-line); color: var(--prose-2); font-size: 13px; }
+  footer.foot b { color: var(--meta-ink); }
+  footer.foot code { font-family: var(--font-mono); font-size: 12px; color: var(--meta-accent); }
+
+  a.jump { color: var(--meta-accent); text-decoration: none; border-bottom: 1px solid transparent; }
+  a.jump:hover { border-bottom-color: var(--meta-accent); }
+  :focus-visible { outline: 2px solid var(--meta-accent); outline-offset: 2px; border-radius: 3px; }
+
+  /* ── org forest / authz split / contractor dedup (added) ── */
+  .m-grouphdr { font-size: 10.5px; letter-spacing:.06em; text-transform:uppercase; color: var(--p-ink3); font-weight: 700; padding: 2px 2px 9px; display:flex; align-items:center; gap:8px; }
+  .m-tnode--ghost { color: var(--p-muted); font-style: italic; border:1px dashed var(--p-line2); }
+  .m-tnode--ghost .m-tnode__name { color: var(--p-muted); font-weight: 400; }
+  .m-authznote { margin-top: 12px; font-size: 11.5px; color: var(--p-ink3); background: var(--p-bg50); border:1px solid var(--p-line); border-radius: 8px; padding: 8px 11px; }
+  .m-authznote b { color: var(--p-ink2); }
+  .m-dupflag { margin-top: 10px; border:1px solid var(--p-amber100); background: var(--p-amber50); border-radius: 8px; padding: 11px; font-size: 12.5px; color: var(--p-amber800); display:flex; flex-direction:column; gap: 7px; }
+  .m-duprow { display:flex; align-items:center; gap: 10px; padding: 8px 10px; background: var(--p-paper); border:1px solid var(--p-line); border-radius: 7px; color: var(--p-ink2); font-size: 12.5px; }
+
+  /* ── role concept flow (added) ── */
+  .flow { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+  .flow__node { border:1px solid var(--p-line2); border-radius:9px; padding:7px 11px; font-size:12px; color:var(--p-ink); background:var(--p-paper); line-height:1.3; }
+  .flow__node b { font-weight:650; }
+  .flow__node--role { border-color:var(--p-blue); background:var(--p-blue50); color:var(--p-blue800); }
+  .flow__arrow { color:var(--p-muted); font-size:10.5px; font-family:var(--font-mono); white-space:nowrap; padding:0 2px; }
+  .permgrid { display:grid; grid-template-columns:auto 1fr; gap:7px 12px; font-size:12px; align-items:baseline; }
+  .permgrid__g { font-weight:650; color:var(--p-ink3); font-size:11px; }
+  .perm { display:inline-flex; align-items:center; gap:3px; margin-right:9px; white-space:nowrap; }
+  .perm--on { color:var(--p-ink); }
+  .perm--off { color:var(--p-muted); }
+  .rolerow { display:flex; align-items:center; gap:8px; padding:9px 10px; border:1px solid var(--p-line); border-radius:8px; font-size:12.5px; color:var(--p-ink); }
+  .rolerow.is-sel { border-color:var(--p-blue); background:var(--p-blue50); }
+  .rolerow__use { margin-left:auto; font-size:11px; color:var(--p-muted); white-space:nowrap; }
+  .m-castrole { font-size:11.5px; font-weight:650; color:var(--p-ink2); white-space:nowrap; }
+  .m-castnote { font-size:11px; color:var(--p-muted); white-space:nowrap; }
+  .chan { font-size:10px; padding:1px 5px; border-radius:4px; margin-right:3px; white-space:nowrap; display:inline-block; }
+  .chan--app { background:var(--p-blue50); color:var(--p-blue800); border:1px solid var(--p-blue100); }
+  .chan--email { background:var(--p-bg50); color:var(--p-ink3); border:1px solid var(--p-line2); }
+  .chan--sms { background:var(--p-amber50); color:var(--p-amber800); border:1px solid var(--p-amber100); }
+  .chan--none { color:var(--p-muted); }
+
+  @media (max-width: 640px) {
+    .m-cards { grid-template-columns: 1fr; }
+    .key { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="mast">
+    <p class="eyebrow">GRM · Admin Settings · Redesign — Handover A</p>
+    <h1 class="title">Desktop wireframes</h1>
+    <p class="lede">
+      The redesigned admin Settings surface for the Nepal grievance system, drawn at desktop width.
+      Each frame is a faithful preview in the product's own design system; the numbered pins key every
+      screen back to the <b>OC-06 finding</b> or <b>D-fork decision</b> it implements. The old surface
+      scored <b>48%</b> as a daily driver — the job here is to kill the six cross-tab seams and make the
+      whole thing legible to a low-IT-literacy civil servant.
+    </p>
+
+    <div class="ia" aria-label="Information architecture">
+      <span class="ia__chip is-land">⌂ Setup &amp; go-live</span>
+      <span class="ia__chip">Organisation</span>
+      <span class="ia__chip">Workflows &amp; roles</span>
+      <span class="ia__chip">Projects</span>
+      <span class="ia__chip">Platform</span>
+    </div>
+
+    <div class="key">
+      <div>
+        <h3>Severity — text + colour</h3>
+        <ul>
+          <li><span class="sw sw--block"></span> Blocking — stops go-live</li>
+          <li><span class="sw sw--warn"></span> Warning — allowed, flagged</li>
+          <li><span class="sw sw--done"></span> Done</li>
+          <li><span class="sw sw--seah"></span> SEAH (restricted)</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Product accent hues</h3>
+        <ul>
+          <li><span class="sw sw--prim"></span> Blue — primary / active</li>
+          <li><span class="sw sw--grc"></span> Violet — GRC only</li>
+          <li><span class="demopin">n</span> Pin → spec note below frame</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Jump to frame</h3>
+        <ul>
+          <li><a class="jump" href="#f1">01 · Setup &amp; go-live landing</a></li>
+          <li><a class="jump" href="#f2">02 · Organisation — org tree</a></li>
+          <li><a class="jump" href="#f3">03 · Officers — invite-as-result</a></li>
+          <li><a class="jump" href="#f4">04 · Workflows &amp; roles</a></li>
+          <li><a class="jump" href="#f5">05 · Projects — staffing &amp; go-live</a></li>
+          <li><a class="jump" href="#f6">06 · Position types — review holders</a></li>
+          <li><a class="jump" href="#f7">07 · Platform — Admin access</a></li>
+          <li><a class="jump" href="#f8">08 · Roles &amp; permissions — what a role is</a></li>
+          <li><a class="jump" href="#f9">09 · Notifications — who's alerted, how</a></li>
+          <li><a class="jump" href="#f10">10 · Create a project (+ workflow link)</a></li>
+          <li><a class="jump" href="#f11">11 · Officers — directory &amp; lifecycle at scale</a></li>
+          <li><a class="jump" href="#f12">12 · Org lifecycle ⋯ + tree at scale</a></li>
+          <li><a class="jump" href="#f13">13 · SEAH — setup &amp; invisibility</a></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note-mock"><b>On theming:</b> the drafting board (labels, pins, grid) follows your light/dark
+      theme. The mock UI pinned to it stays in the product's light palette in both themes — a design reviewer
+      needs the real product colours, which must not invert.</p>
+  </header>
+
+  <!-- ══════════════════ FRAME 1 ══════════════════ -->
+  <section class="frame" id="f1">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 01</span>
+      <h2 class="frame__title">Setup &amp; go-live — the landing</h2>
+    </div>
+    <p class="frame__sub">The new answer to OC-06's "I finished tab A — now what?". A landing spine that
+      always names the single next blocker and threads the four domains. Full app shell shown once here for
+      context (sidebar + Settings tab bar); later frames zoom into the content area.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-app">
+          <!-- sidebar -->
+          <aside class="m-side">
+            <div class="m-brand">
+              <span class="m-brand__mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12l9-8 9 8"/><path d="M5 10v9h14v-9"/></svg></span>
+              <span class="m-brand__txt">GRM Portal</span>
+            </div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/></svg>My Queue<span class="m-badge">6</span></div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>All Tickets</div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>Escalated<span class="m-badge">2</span></div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v18M5 7l7-4 7 4M4 21h16M6 10l-2 6h4zM18 10l-2 6h4z"/></svg>GRC</div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Reports</div>
+            <div class="m-side__sep"></div>
+            <div class="m-nav is-active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 00-.1-1l2-1.6-2-3.4-2.4 1a7 7 0 00-1.7-1l-.4-2.6H9.6l-.4 2.6a7 7 0 00-1.7 1l-2.4-1-2 3.4L5 11a7 7 0 000 2l-2 1.6 2 3.4 2.4-1a7 7 0 001.7 1l.4 2.6h4.8l.4-2.6a7 7 0 001.7-1l2.4 1 2-3.4-2-1.6a7 7 0 00.1-1z"/></svg>Settings</div>
+            <div class="m-nav"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 013.5-1.8c1.4.6 1.6 2.3.5 3.2-.9.7-1.5 1-1.5 2M12 17h.01"/></svg>Help</div>
+          </aside>
+
+          <!-- main -->
+          <div class="m-main">
+            <div class="m-topbar"><h1 class="m-h1">Settings</h1><span class="m-crumb">Signed in as <b>Organisation admin</b> · Standard grievances</span></div>
+            <div class="m-tabs">
+              <div class="m-tab is-active">⌂ Setup &amp; go-live</div>
+              <div class="m-tab">Organisation</div>
+              <div class="m-tab">Workflows &amp; roles</div>
+              <div class="m-tab">Projects</div>
+              <div class="m-tab">Platform</div>
+            </div>
+
+            <div class="m-body">
+              <div class="m-next">
+                <span class="pin pin--float">1</span>
+                KL Road is <span style="color:var(--p-blue700)">&nbsp;1 step&nbsp;</span> from going live.
+              </div>
+
+              <div class="m-check">
+                <div class="m-check__i m-check__i--block">
+                  <span class="m-mark m-mark--block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 8v5M12 16h.01"/></svg></span>
+                  <div>
+                    <div class="m-check__t">No L2 officer for package “Section A”</div>
+                    <div class="m-check__f">Fix this → <span style="color:var(--p-blue700);font-weight:600">Projects › Staffing › Section A</span></div>
+                  </div>
+                  <span class="sev sev--block">Blocking <span class="pin pin--float" style="margin-left:4px">2</span></span>
+                </div>
+                <div class="m-check__i m-check__i--warn">
+                  <span class="m-mark m-mark--warn"></span>
+                  <div>
+                    <div class="m-check__t">No Nepali name on 3 organisation units</div>
+                    <div class="m-check__f">Review — won't block go-live</div>
+                  </div>
+                  <span class="sev sev--warn">Warning</span>
+                </div>
+                <div class="m-check__i">
+                  <span class="m-mark m-mark--done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></span>
+                  <div><div class="m-check__t">Workflow published · Actors assigned · Packages defined</div></div>
+                  <span class="sev sev--done">Done</span>
+                </div>
+              </div>
+
+              <div class="m-btnrow">
+                <span class="m-btn m-btn--disabled">Go live →</span>
+                <span class="m-muted" style="font-size:12px">Enabled once no Blocking items remain <span class="pin pin--float">3</span></span>
+              </div>
+
+              <p class="m-h2" style="margin-top:6px">Jump into a journey</p>
+              <div class="m-cards">
+                <div class="m-dcard">
+                  <div class="m-dcard__h"><span class="m-dcard__t">Organisation</span><span class="sev sev--done">Ready</span></div>
+                  <div class="m-dcard__d">Ministry tree · 4 position types · 11 officers</div>
+                </div>
+                <div class="m-dcard">
+                  <div class="m-dcard__h"><span class="m-dcard__t">Workflows &amp; roles</span><span class="sev sev--done">Published</span></div>
+                  <div class="m-dcard__d">Standard GRM (4 levels) · SEAH · 12 roles</div>
+                </div>
+                <div class="m-dcard">
+                  <div class="m-dcard__h"><span class="m-dcard__t">Projects</span><span class="sev sev--block">1 blocker</span></div>
+                  <div class="m-dcard__d">KL Road · 3 packages · staffing incomplete</div>
+                </div>
+                <div class="m-dcard">
+                  <div class="m-dcard__h"><span class="m-dcard__t">Platform</span><span class="m-chip">Admin</span></div>
+                  <div class="m-dcard__d">Locations · reports · project types</div>
+                </div>
+              </div>
+
+              <div class="m-variant" style="margin-top:16px">
+                <div class="m-variant__cap">Variant · first-run — day one, nothing set up yet <span class="pin pin--float">40</span></div>
+                <div class="m-next" style="font-size:14px;margin-bottom:10px">Let's get your grievance system ready — 5 steps.</div>
+                <div class="m-check">
+                  <div class="m-check__i" style="border-color:var(--p-blue100);background:var(--p-blue50)">
+                    <span style="width:20px;height:20px;border-radius:999px;background:var(--p-blue);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700">1</span>
+                    <div><div class="m-check__t">Add your ministry &amp; organisations</div><div class="m-check__f">The structure your officers belong to.</div></div>
+                    <span class="m-btn m-btn--primary" style="padding:4px 10px">Start →</span>
+                  </div>
+                  <div class="m-check__i">
+                    <span style="width:20px;height:20px;border-radius:999px;background:var(--p-bg50);border:1px solid var(--p-line2);color:var(--p-ink3);display:grid;place-items:center;font-size:11px;font-weight:700">2</span>
+                    <div><div class="m-check__t">Set how grievances are handled</div><div class="m-check__f">Workflows &amp; roles — start from a template.</div></div>
+                    <span class="m-muted" style="font-size:11px">Not started</span>
+                  </div>
+                  <div class="m-check__i">
+                    <span style="width:20px;height:20px;border-radius:999px;background:var(--p-bg50);border:1px solid var(--p-line2);color:var(--p-ink3);display:grid;place-items:center;font-size:11px;font-weight:700">3</span>
+                    <div><div class="m-check__t">Create your project &amp; packages</div><div class="m-check__f">What the grievances are about.</div></div>
+                    <span class="m-muted" style="font-size:11px">Not started</span>
+                  </div>
+                  <div class="m-check__i">
+                    <span style="width:20px;height:20px;border-radius:999px;background:var(--p-bg50);border:1px solid var(--p-line2);color:var(--p-ink3);display:grid;place-items:center;font-size:11px;font-weight:700">4</span>
+                    <div><div class="m-check__t">Invite your officers</div><div class="m-check__f">The people who handle cases.</div></div>
+                    <span class="m-muted" style="font-size:11px">Not started</span>
+                  </div>
+                  <div class="m-check__i">
+                    <span style="width:20px;height:20px;border-radius:999px;background:var(--p-bg50);border:1px solid var(--p-line2);color:var(--p-ink3);display:grid;place-items:center;font-size:11px;font-weight:700">5</span>
+                    <div><div class="m-check__t">Go live</div><div class="m-check__f">Turn the system on.</div></div>
+                    <span class="m-muted" style="font-size:11px">Locked until the above are done</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">40</span><p><b>First-run mode — the day-one landing that was missing.</b> On an empty system the spine can't say "KL Road is 1 step from go-live" (no project exists yet), so it shows an ordered, project-agnostic checklist — Add ministry → Workflows &amp; roles → Project → Officers → Go live — each step linking inward, unlocking in order. The per-project go-live spine (above) takes over once a project exists. <span class="ref">§7.A · review A</span></p></div>
+      <div class="spec__row"><span class="pin">1</span><p><b>Single "next blocker" line.</b> Replaces the two terse verdicts (<code>can_activate</code> vs <code>can_accept_tickets</code>) that let a project read "Can activate" yet "Tickets blocked." One plain sentence. <span class="ref">D6 · F17</span></p></div>
+      <div class="spec__row"><span class="pin">2</span><p><b>Text severity beside colour</b>, and each blocker deep-links to the exact surface + field — "Fix" no longer just scrolls. The checklist <b>live-refreshes</b> after every structural edit, so it never silently lies. <span class="ref">D6 · F9 · F11</span></p></div>
+      <div class="spec__row"><span class="pin">3</span><p><b>Go-live promoted out of the buried Projects panel</b> into the landing spine, threading all four journeys. Kills "I finished tab A — now what?". <span class="ref">D1 · D6</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 2 ══════════════════ -->
+  <section class="frame" id="f2">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 02</span>
+      <h2 class="frame__title">Organisation — org tree</h2>
+    </div>
+    <p class="frame__sub">The tree <b>replaces</b> the flat org list — one org surface, not two. Position types
+      and Officers are sibling panels under the same tab, so the whole org-chart feature adds
+      <b>zero new top tabs</b>. Node labels render bilingually where a Nepali name exists.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ <b>Organisation</b></span></div>
+          <div class="m-tabs">
+            <div class="m-tab">⌂ Setup &amp; go-live</div>
+            <div class="m-tab is-active">Organisation</div>
+            <div class="m-tab">Workflows &amp; roles</div>
+            <div class="m-tab">Projects</div>
+            <div class="m-tab">Platform</div>
+          </div>
+          <div class="m-sub">
+            <span class="m-sub__i is-active">Org tree</span>
+            <span class="m-sub__i">Position types <span class="pin pin--float">4</span></span>
+            <span class="m-sub__i">Officers</span>
+          </div>
+
+          <div class="m-body">
+            <div class="m-row" style="justify-content:space-between">
+              <p class="m-h2">Ministry structure</p>
+              <div class="m-btnrow">
+                <span class="m-btn">Import CSV</span>
+                <span class="m-btn m-btn--primary">+ Add unit</span>
+              </div>
+            </div>
+
+            <div class="m-card">
+              <div class="m-grouphdr">Government reporting line <span class="pin pin--float">23</span></div>
+              <div class="m-tree">
+                <div class="m-tnode is-focus">
+                  <span class="m-tnode__tw">▾</span>
+                  <span class="m-tnode__name">Ministry of Physical Infra. &amp; Transport <span class="ne">/ भौतिक पूर्वाधार…</span></span>
+                  <span class="m-chip m-chip--blue">Ministry</span>
+                  <span class="m-chip">root</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode indent-1">
+                  <span class="m-tnode__tw">▾</span>
+                  <span class="m-tnode__name">Department of Roads <span class="ne">/ सडक विभाग</span></span>
+                  <span class="m-chip m-chip--blue">Department</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode indent-2 is-focus">
+                  <span class="m-tnode__tw">▸</span>
+                  <span class="m-tnode__name">Jhapa Division Office <span class="ne">/ झापा डिभिजन कार्यालय</span></span>
+                  <span class="m-chip m-chip--blue">Division office</span>
+                  <span class="m-chip m-chip--terr">covers Jhapa <span class="pin pin--float">6</span></span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode indent-2">
+                  <span class="m-tnode__tw">▸</span>
+                  <span class="m-tnode__name">Ilam Division Office <span class="ne">/ इलाम डिभिजन कार्यालय</span></span>
+                  <span class="m-chip m-chip--blue">Division office</span>
+                  <span class="m-chip">no territory set</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode m-tnode--ghost">
+                  <span class="m-tnode__tw">＋</span>
+                  <span class="m-tnode__name">Add another ministry — the tree is multi-ministry ready</span>
+                </div>
+              </div>
+
+              <div class="m-grouphdr" style="margin-top:16px">Independent organisations — own roots, own subtrees
+                <span class="m-btn" style="padding:3px 9px;margin-left:auto">+ Add organisation</span></div>
+              <div class="m-tree">
+                <div class="m-tnode">
+                  <span class="m-tnode__tw">•</span>
+                  <span class="m-tnode__name">Asian Development Bank (ADB) <span class="ne">/ —</span></span>
+                  <span class="m-chip m-chip--blue">Development partner</span>
+                  <span class="m-chip">root · international donor</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode">
+                  <span class="m-tnode__tw">▾</span>
+                  <span class="m-tnode__name">Kankai–Laukahi Contractor JV <span class="ne">/ —</span> <span class="pin pin--float">5</span></span>
+                  <span class="m-chip m-chip--blue">Company</span>
+                  <span class="m-chip">Main contractor · KL Road</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+                <div class="m-tnode indent-1">
+                  <span class="m-tnode__tw">•</span>
+                  <span class="m-tnode__name">Mechi Sub-contractor Pvt. Ltd. <span class="ne">/ —</span> <span class="pin pin--float">30</span></span>
+                  <span class="m-chip m-chip--blue">Company</span>
+                  <span class="m-chip">Sub-contractor</span>
+                  <span class="m-tnode__acts"><span class="m-iconbtn m-iconbtn--p">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn">⋯</span></span>
+                </div>
+              </div>
+
+              <div class="m-authznote">Only an <b>Organisation admin</b> can change the reporting line; project owners add their own contractors within their project. <span class="pin pin--float">24</span></div>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">Empty state · same surface</div>
+              <div class="m-empty">
+                <div class="m-empty__t">No organisations yet</div>
+                <div class="m-empty__d">Add your ministry, a donor, or a company — each is its own top-level organisation and can hold sub-units. Or import the whole structure.</div>
+                <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Add organisation</span><span class="m-btn">Import from CSV</span> <span class="pin pin--float">7</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">4</span><p><b>Position types is a secondary panel, not a top tab</b> — a set-once ~20–50-row catalog edited rarely. Officers is a sibling panel too. Net new top tabs from the org-chart feature: zero. <span class="ref">D1 · D3 · F8</span></p></div>
+      <div class="spec__row"><span class="pin">5</span><p><b>Devanagari names are creatable.</b> The old client locked the Create button on Devanagari input; here the id derives server-side (ASCII policy) and the Nepali name lives in <code>display_name_ne</code>. An absent <code>_ne</code> shows "/ —" and is marked for the translator — never fabricated. <span class="ref">F1 · SH-6 · D4</span></p></div>
+      <div class="spec__row"><span class="pin">6</span><p><b>Territory chip = routable office.</b> Setting <code>territory_location_code</code> is what lets invite pre-fill and prefer-own-office assignment work; "no territory set" is a visible, fixable state, not silent. <span class="ref">doc 16 §3.1/§5.2</span></p></div>
+      <div class="spec__row"><span class="pin">7</span><p><b>Real CTAs in the empty state</b> — "Add top ministry" / "Import from CSV", never "Run Alembic migrations." CSV import validates the whole file then commits in one transaction. <span class="ref">F10 · OC-01</span></p></div>
+      <div class="spec__row"><span class="pin">23</span><p><b>Forest, not one tree.</b> The government reporting line is a rooted subtree (Ministry → Dept → offices); contractors and donors like <b>ADB are their own roots</b> (<code>parent = null</code>), never nested under a ministry. Keeps "belongs to DoR" subtree checks correct and makes the system replicable per ministry — <b>multiple ministry roots supported</b>. <span class="ref">doc 16 §3.1 · decision</span></p></div>
+      <div class="spec__row"><span class="pin">24</span><p><b>Authz gates the action, not the noun.</b> Editing the reporting tree (re-parent / unit_type / territory / CSV) is a <b>root org_admin</b> (standard); creating an independent participant org and linking it to a project is <code>project_admin</code>, own scope — so subcontractors joining mid-project don't wait on a higher admin. <span class="ref">doc 11 §2.3 · SH-1</span></p></div>
+      <div class="spec__row"><span class="pin">30</span><p><b>Independent roots are subtrees too.</b> A company or donor isn't a flat node — a main contractor holds subcontractors, a donor its regional offices (<code>company</code> may parent <code>company</code>), with the same +child affordance. Subtree checks, territory and admin scope apply just as on the government line; whoever has scope over the root manages its children. <span class="ref">§2.4 · OC-01 unit_type</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 3 ══════════════════ -->
+  <section class="frame" id="f3">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 03</span>
+      <h2 class="frame__title">Officers — invite-as-result <span style="font-size:13px;color:var(--prose-2);font-weight:500">· the make-or-break</span></h2>
+    </div>
+    <p class="frame__sub">Inviting an officer today is a 7-decision puzzle. Here it's <b>three inputs and a confirmation</b>:
+      pick office → position → email, and the system shows the <b>human-readable outcome</b> with role, area,
+      and project pre-filled and hidden behind "Adjust." The override badge appears only on override.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Organisation ▸ Officers ▸ <b>Invite officer</b></span></div>
+          <div class="m-body">
+            <div class="m-card" style="max-width:560px">
+              <p class="m-eyebrow" style="margin-bottom:4px">Step 1 · Who, and where in the ministry?</p>
+              <div style="display:grid;gap:11px;margin:10px 0 16px">
+                <div class="m-field"><span class="m-label">Office</span><span class="m-input is-filled">Jhapa Division Office <span class="ne">/ झापा…</span><span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Position <span class="pin pin--float">9</span></span><span class="m-input is-filled">Senior Divisional Engineer (SDE)<span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Email</span><span class="m-input is-filled">r.thapa@dor.gov.np<span class="car"></span></span></div>
+              </div>
+
+              <div class="m-outcome">
+                <span class="m-outcome__h">This will create <span class="pin pin--float" style="margin-left:6px">8</span></span>
+                <div class="m-outcome__title">SDE, Jhapa Division Office</div>
+                <div class="m-line"><span class="m-line__arrow">→</span><div><span class="m-line__main">acts as <strong>Site Safeguards Focal Person</strong></span><div class="prov">from position: SDE <span class="pin pin--float">10</span></div></div></div>
+                <div class="m-line"><span class="m-line__arrow">→</span><div><span class="m-line__main">covers <strong>Jhapa district</strong></span><div class="prov">from office territory</div></div></div>
+                <div class="m-line"><span class="m-line__arrow">→</span><div><span class="m-line__main">on <strong>KL Road</strong> project</span></div></div>
+                <div class="m-adjust">▸ Adjust role, area, or project<span class="m-muted" style="font-weight:400">(collapsed)</span></div>
+              </div>
+
+              <div class="m-btnrow" style="justify-content:flex-end;margin-top:16px">
+                <span class="m-btn">Cancel</span>
+                <span class="m-btn m-btn--primary">Send invite →</span>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px">
+              <div class="m-variant">
+                <div class="m-variant__cap">Variant · office not on the project (kills seam S5)</div>
+                <div class="m-warnbar"><span>⚠</span><span>Jhapa Division Office isn't on KL Road yet. <b style="text-decoration:underline">Link it and continue</b></span></div>
+                <p class="m-check__f" style="margin-top:9px">One click links the org to the project inline — no dead-end banner, no trip to another tab. <span class="pin pin--float">11</span></p>
+              </div>
+              <div class="m-variant">
+                <div class="m-variant__cap">Variant · Adjust open (override)</div>
+                <div class="m-field"><span class="m-label">Role</span><span class="m-input is-filled">Field Engineer <span class="m-ovbadge">Overridden</span><span class="car">▾</span></span></div>
+                <p class="m-check__f" style="margin-top:9px">Provenance flips to "overridden by you"; badge shows only because it differs from the position's default role (was Site Safeguards Focal). <span class="pin pin--float">12</span></p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">8</span><p><b>Outcome card, not a fourth form.</b> If picking a position dropped four pre-filled editable fields in front of the user, we'd have re-introduced the complexity we're removing. Role/org/scope stay hidden behind Adjust. <span class="ref">D2 · F5 · OC-06 §7</span></p></div>
+      <div class="spec__row"><span class="pin">9</span><p><b>Positions filter by the office's unit type</b> (<code>allowed_unit_types</code>) — you only see positions that can exist at a Division Office. No role pre-selected as a silent default; the position <em>is</em> the choice. <span class="ref">doc 16 §3.2 · F21</span></p></div>
+      <div class="spec__row"><span class="pin">10</span><p><b>Every pre-filled value shows provenance</b> ("from position", "from office territory"), so the admin trusts the outcome without opening Adjust. <span class="ref">D2 · doc 16 §4</span></p></div>
+      <div class="spec__row"><span class="pin">11</span><p><b>The org↔project prerequisite is carried into the flow</b>, not dead-ended on. This is the seam (S5) where the target user stalled hardest — the invite org list was empty unless pre-linked in another tab. <span class="ref">S5 · brief §5.4</span></p></div>
+      <div class="spec__row"><span class="pin">12</span><p><b>Override badge appears only on override.</b> Send fires an irreversible Keycloak email, so a one-sentence confirm precedes it; multi-location invites are all-or-nothing (server transaction). <span class="ref">D2 · F21 · SH-3</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 4 ══════════════════ -->
+  <section class="frame" id="f4">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 04</span>
+      <h2 class="frame__title">Workflows &amp; roles — one guided flow</h2>
+    </div>
+    <p class="frame__sub">The central seam (S1): a step binds a role that must exist and match the workflow's track,
+      but the three surfaces never linked. Merged here into <b>workflow → steps → bind role</b>, with a picker
+      that shows only valid roles and <b>explains why</b> the others are excluded.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ <b>Workflows &amp; roles</b></span></div>
+          <div class="m-tabs">
+            <div class="m-tab">⌂ Setup &amp; go-live</div>
+            <div class="m-tab">Organisation</div>
+            <div class="m-tab is-active">Workflows &amp; roles</div>
+            <div class="m-tab">Projects</div>
+            <div class="m-tab">Platform</div>
+          </div>
+
+          <div class="m-body">
+            <div class="m-row" style="justify-content:space-between">
+              <div class="m-row"><p class="m-h2" style="border:0;padding:0">Standard GRM</p><span class="m-chip m-chip--blue">Standard grievances</span><span class="sev sev--done">Published</span></div>
+              <span class="m-btn">Manage roles →</span>
+            </div>
+
+            <div class="m-row" style="gap:6px;flex-wrap:wrap;align-items:center">
+              <span class="m-castnote" style="font-weight:650;color:var(--p-ink3)">Levels:</span>
+              <span class="m-chip m-chip--blue">1 · Acknowledge</span><span class="m-chip">2 · Review</span><span class="m-chip">3 · GRC</span><span class="m-chip">4 · Resolve</span>
+              <span class="m-btn m-btn--ghost" style="padding:3px 9px">+ Add a level</span>
+              <span class="m-muted" style="font-size:11px">drag to reorder · ⋯ to remove a level <span class="pin pin--float">53</span></span>
+            </div>
+
+            <div class="m-card m-card--tint">
+              <div class="m-row" style="justify-content:space-between;margin-bottom:6px">
+                <div class="m-row" style="gap:8px"><span class="m-chip m-chip--blue">Step 1 · Acknowledge (L1)</span><span class="m-muted" style="font-size:11.5px">from template · Standard GRM</span></div>
+                <span class="m-muted" style="font-size:11.5px">Step 2 · Review (L2) ▸</span>
+              </div>
+
+              <span class="m-label">Who's involved at this level — the cast <span class="pin pin--float">14</span></span>
+              <div style="display:grid;grid-template-columns:auto minmax(180px,1fr) auto;gap:8px 12px;align-items:center;margin:9px 0 4px;max-width:580px">
+                <span class="m-castrole">Handles it</span>
+                <span class="m-input is-filled">Site Safeguards Focal<span class="car">▾</span></span>
+                <span class="m-castnote">owns &amp; works the case</span>
+
+                <span class="m-castrole">Oversees</span>
+                <span class="m-input is-filled">Office Manager (Supervisor)<span class="car">▾</span></span>
+                <span class="m-castnote">escalate / reassign</span>
+
+                <span class="m-castrole">Kept informed</span>
+                <span class="m-input is-filled">Field Officer <span class="m-chip" style="padding:0 6px">×</span> <span class="m-muted">+ add</span></span>
+                <span class="m-castnote">view + notes</span>
+
+                <span class="m-castrole">Can view</span>
+                <span class="m-input" style="color:var(--p-muted)">+ add viewer role<span class="car">▾</span></span>
+                <span class="m-castnote">read-only</span>
+              </div>
+              <p class="m-check__f" style="margin:6px 0 0">Handles it &amp; Oversees take one role each; Informed &amp; Can-view take several. Only <b>Handles it</b> is required. <span class="pin pin--float">16</span></p>
+              <p class="m-check__f" style="margin:7px 0 0"><b>The slot also sets notifications</b> — Handles it &amp; Oversees are alerted on new case, escalation &amp; SLA; Informed is emailed on escalation; Can-view is silent. Full grid → <b>Notifications</b> (Frame 09). <span class="pin pin--float">36</span></p>
+
+              <div class="m-row" style="gap:16px;margin-top:13px;flex-wrap:wrap;align-items:flex-start">
+                <div class="m-field" style="min-width:150px"><span class="m-label">Time limit before escalating <span class="pin pin--float">41</span></span><span class="m-input is-filled">2 days<span class="car">▾</span></span></div>
+                <div><span class="m-label" style="display:block;margin-bottom:3px">If not resolved in time</span><span class="m-muted" style="font-size:12px">goes up to the next step's <b>Handles-it</b> people <span class="ne">— the reporting line never changes this</span></span></div>
+              </div>
+
+              <div style="margin-top:13px;display:grid;gap:6px;max-width:460px">
+                <span class="m-label">Picking a role — valid-only <span class="pin pin--float">15</span></span>
+                <div class="m-picker">
+                  <div class="m-opt is-sel"><span class="m-opt__tick">✓</span> Site Safeguards Focal Person</div>
+                  <div class="m-opt"><span class="m-opt__tick"></span> PD/PIU Safeguards Focal</div>
+                  <div class="m-picker__div">Not shown (3)</div>
+                  <div class="m-opt is-off"><span class="m-opt__tick"></span> SEAH National Officer <span class="m-opt__why">wrong track — SEAH</span></div>
+                  <div class="m-opt is-off"><span class="m-opt__tick"></span> GRC Chair <span class="m-opt__why">bound at L3 only</span></div>
+                  <div class="m-opt is-off"><span class="m-opt__tick"></span> Mechi JV site clerk <span class="m-opt__why">owned by Jhapa district — not here</span></div>
+                </div>
+                <span class="m-muted" style="font-size:11px">Shown by label, never by slug — every excluded role says why (wrong track · wrong level · owned by another office).</span>
+              </div>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">Variant · draft workflow (publish state surfaced)</div>
+              <div class="m-warnbar"><span>⚠</span><span>Not published — this workflow won't appear on any project yet. <b style="text-decoration:underline">Publish</b></span></div>
+              <p class="m-check__f" style="margin-top:9px">Surfacing publish state kills the silent "I made the workflow, why doesn't it show on the project?" seam. <span class="pin pin--float">13</span></p>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">New workflow · start from a template — the least-decisions path <span class="pin pin--float">51</span></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:520px">
+                <div class="m-card" style="padding:12px;border-color:var(--p-blue200)"><div class="m-outcome__title" style="font-size:13px">Standard GRM (4 levels)</div><p class="m-check__f" style="margin-top:4px">L1→L4, cast &amp; SLAs pre-filled. <span style="color:var(--p-blue700);font-weight:600">Use this →</span></p></div>
+                <div class="m-card" style="padding:12px"><div class="m-outcome__title" style="font-size:13px">SEAH</div><p class="m-check__f" style="margin-top:4px">Restricted track, pre-filled.</p></div>
+              </div>
+              <p class="m-check__f" style="margin-top:9px">Clone → tweak names/SLAs → done. "Blank workflow" is the advanced escape, not the default — so a first-timer never has to invent a cast or a role first.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">13</span><p><b>Merged flow + visible publish state.</b> Workflow, its steps, and the role catalog are one guided surface with cross-links, not three sibling sub-tabs the user must reconcile from memory. <span class="ref">D5 · S1</span></p></div>
+      <div class="spec__row"><span class="pin">14</span><p><b>A step is a CAST, not one role.</b> Every step has four slots — <b>Handles it</b> (owner) · <b>Oversees</b> (supervisor) · <b>Kept informed</b> · <b>Can view</b> — so one level involves a safeguards officer, their office-manager supervisor, and a field-officer viewer at once. This is the as-built schema (<code>assigned_role_key</code> + <code>supervisor_role</code> + <code>informed_roles[]</code> + <code>observer_roles[]</code>). <span class="ref">workflow.py:72-83 · doc 11</span></p></div>
+      <div class="spec__row"><span class="pin">15</span><p><b>Valid-only picker per slot; excluded roles show the reason</b> ("wrong track — SEAH"). Only roles whose track matches are selectable (server SH-2 also rejects wrong-track), so the admin learns why a role they expected isn't there instead of it silently never appearing. Labels, not <code>site_safeguards_focal_person</code>. <span class="ref">F2 · SH-2 · F11</span></p></div>
+      <div class="spec__row"><span class="pin">16</span><p><b>Handles it &amp; Oversees take one role each; Informed &amp; Can-view take several.</b> Only <b>Handles it</b> is required. Seed workflow templates pre-fill the whole cast, so admins clone-and-tweak rather than bind every slot from scratch — the least-decisions path. <span class="ref">doc 11 §3.5 · F15</span></p></div>
+      <div class="spec__row"><span class="pin">36</span><p><b>Notifications fall out of the cast — nothing extra to wire per step.</b> The slot a role sits in <em>is</em> its notification tier (in <code>settings.notification_rules</code>). So dropping the office manager into "Oversees" is what makes them get escalation/SLA alerts — the admin doesn't configure notifications separately. The full grid (Frame 09) is track-level and pre-seeded. <span class="ref">notifications.py · doc 12 §9</span></p></div>
+      <div class="spec__row"><span class="pin">41</span><p><b>Each step also carries a time limit (SLA) + where it escalates.</b> The clock before the case auto-escalates, and where it goes — the <em>next</em> step's Handles-it people (shown read-only; the reporting line never redirects escalation, doc 16). Without this a workflow can't go live; new workflows <b>clone a template</b> so SLAs + cast come pre-filled (the least-decisions path). <span class="ref">§7.B · workflow.py · doc 16</span></p></div>
+      <div class="spec__row"><span class="pin">51</span><p><b>Clone-a-template is the primary "new workflow" path.</b> Start from Standard GRM (4 levels) or SEAH — steps, cast and SLAs arrive pre-filled; the admin tweaks names/SLAs and is done. "Blank" is the advanced escape. Removes the Frame-04 empty-state trap (was: invent a role before a step can bind). <span class="ref">§7.B4 · doc 11 §3.5</span></p></div>
+      <div class="spec__row"><span class="pin">53</span><p><b>The workflow structure itself is editable — add / remove / reorder levels.</b> A ministry whose escalation differs from the 4-level template adds or drops a level here (not just edits one step's cast). Combined with clone-a-template + "Start blank," this is the full authoring path the round-2 review found missing. <span class="ref">§7.B2 · review round-2</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 5 ══════════════════ -->
+  <section class="frame" id="f5">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 05</span>
+      <h2 class="frame__title">Projects — staffing &amp; go-live detail</h2>
+    </div>
+    <p class="frame__sub">Giving an org a project role is now an <b>action</b>, not a read-only rollup (seam S2). Staffing
+      keeps the coverage warnings that already work, adds a real empty-state CTA, and the per-project go-live
+      detail feeds the landing spine.</p>
+    <p class="frame__sub" style="border-left:3px solid #b45309;padding-left:.6rem"><b>⚠ Revised 2026-07-10 (DECISION-project-participants-and-supervision.md) — RB-0 rebuilds this frame.</b>
+      The per-project <b>actor-role catalog</b> and the "PROJECT ROLE / + Add role" column below are <b>removed</b>. A project carries one
+      <b>defaulted Implementing agency</b> field (the signing ministry) + an <b>optional Donor</b> include; a donor's roles auto-fill the
+      <b>last step's "Kept informed"</b> cast (go-live blocks if absent; SEAH-suppressed). Each staffing level gains a <b>Supervisor</b>
+      (per-project reassignment authority, default = next level's Handler pool). <b>Go-live gates on staffing</b>, not on org roles.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Projects ▸ <b>KL Road</b></span></div>
+          <div class="m-tabs">
+            <div class="m-tab">⌂ Setup &amp; go-live</div>
+            <div class="m-tab">Organisation</div>
+            <div class="m-tab">Workflows &amp; roles</div>
+            <div class="m-tab is-active">Projects</div>
+            <div class="m-tab">Platform</div>
+          </div>
+
+          <div class="m-body">
+            <p class="m-h2">Project actors</p>
+            <div class="m-card" style="padding:0">
+              <table class="m-tbl">
+                <thead><tr><th>Organisation</th><th>Project role</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Department of Roads <span class="ne">/ सडक विभाग</span></td><td><span class="m-chip m-chip--blue">Implementing agency</span></td><td style="text-align:right"><span class="m-iconbtn">edit</span></td></tr>
+                  <tr><td>Jhapa Division Office</td><td><span class="m-muted">no project role yet</span> <span class="m-iconbtn m-iconbtn--p">+ Add role</span> <span class="pin pin--float">17</span></td><td style="text-align:right"><span class="m-iconbtn">edit</span></td></tr>
+                  <tr><td><span class="m-btn m-btn--ghost">+ New organisation (auto-links)</span></td><td></td><td></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p class="m-h2" style="margin-top:6px">Staffing — Section A</p>
+            <div class="m-warnbar" style="background:var(--p-amber50)"><span>⚠</span><span>No officer scoped for <b>Jhapa Division Office</b> on this package <span class="pin pin--float">18</span></span></div>
+            <div class="m-card" style="padding:0">
+              <table class="m-tbl">
+                <thead><tr><th>Officer</th><th>Level</th><th>Scope</th></tr></thead>
+                <tbody>
+                  <tr><td>R. Thapa — <span class="m-muted">SDE, Jhapa Division Office</span> <span class="pin pin--float">19</span></td><td><span class="m-chip">L1</span></td><td>Jhapa district</td></tr>
+                  <tr><td colspan="3">
+                    <div class="m-empty" style="padding:16px">
+                      <div class="m-empty__t">No L2 officer yet</div>
+                      <div class="m-empty__d">Every package needs an L2 before go-live.</div>
+                      <span class="m-btn m-btn--primary">Invite officer for L2 →</span> <span class="pin pin--float">20</span>
+                    </div>
+                  </td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">Add contractor · fuzzy-match dedup flag — soft, not a block <span class="pin pin--float">25</span></div>
+              <div class="m-field" style="max-width:440px"><span class="m-label">Organisation name</span><span class="m-input is-filled">Kankai Laukahi Construction JV</span></div>
+              <div class="m-dupflag">
+                <b>Possible duplicate — is this the same organisation?</b>
+                <div class="m-duprow"><span>Kankai–Laukahi Contractor JV <span class="m-muted">— company · on KL Road</span></span><span class="m-btn m-btn--primary" style="margin-left:auto;padding:4px 10px">Use existing</span></div>
+                <span class="m-muted" style="font-size:11px">Matched on distinctive name words — ignores generic words like “construction / contractor / JV”. &nbsp;·&nbsp; <span style="text-decoration:underline">Create new anyway</span></span>
+              </div>
+            </div>
+
+            <div class="m-card" style="border-color:var(--p-red100);background:var(--p-red50)">
+              <div class="m-row" style="justify-content:space-between">
+                <div class="m-row" style="gap:9px"><span class="sev sev--block">Blocking</span><span class="m-check__t">1 item stops KL Road going live</span></div>
+                <span class="m-btn">View on Setup ▸ go-live</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">17</span><p><b>Org→project role is an action here</b> ("+ Add role"), closing seam S2 where the org editor's project panel was read-only and you had to author roles on the project side from memory. <span class="ref">S2 · F8</span></p></div>
+      <div class="spec__row"><span class="pin">18</span><p><b>Coverage warnings kept</b> — an OC-06 strength. "No officer scoped for {org}" per uncovered actor stays, now beside the staffing it refers to. <span class="ref">strength · retained</span></p></div>
+      <div class="spec__row"><span class="pin">19</span><p><b>Officers display by position title</b> ("SDE, Jhapa Division Office") with a role-label fallback — the whole point of the org chart, replacing the raw role slug. <span class="ref">doc 16 §5.1</span></p></div>
+      <div class="spec__row"><span class="pin">20</span><p><b>Empty staffing has a real CTA</b> that pre-targets the right actor and level, instead of a disabled "+ Add officer" that silently targeted <code>projectActors[0]</code>. Invite reuses the one invite-as-result component (Frame 03). <span class="ref">F23 · S4</span></p></div>
+      <div class="spec__row"><span class="pin">25</span><p><b>Contractor dedup is a guardrail, not a gate.</b> On create, fuzzy-match the registry — distinctive name tokens (skipping generic words like <em>corporation / construction / contractor</em>), corporate email domain (free providers like gmail ignored), and address — and flag likely duplicates with "Use existing / Create anyway." A soft flag the admin resolves, never a hard block. <span class="ref">decision · extends SH-4</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 6 ══════════════════ -->
+  <section class="frame" id="f6">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 06</span>
+      <h2 class="frame__title">Position types — edit &amp; review holders</h2>
+    </div>
+    <p class="frame__sub">The set-once catalog (secondary panel under Organisation). Editing a type's default role
+      does not silently re-sync existing holders — so the drift is made <b>visible and fixable</b>, reconciled
+      with the transfer-refresh flow into one re-sync surface.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Organisation ▸ <b>Position types</b></span></div>
+          <div class="m-sub">
+            <span class="m-sub__i">Org tree</span>
+            <span class="m-sub__i is-active">Position types</span>
+            <span class="m-sub__i">Officers</span>
+          </div>
+
+          <div class="m-body">
+            <div class="m-card" style="max-width:600px">
+              <p class="m-eyebrow" style="margin-bottom:10px">Edit position type</p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+                <div class="m-field"><span class="m-label">Title (EN)</span><span class="m-input is-filled">Senior Divisional Engineer</span></div>
+                <div class="m-field"><span class="m-label">Title (Nepali)</span><span class="m-input">वरिष्ठ डिभिजनल इन्जिनियर</span></div>
+                <div class="m-field"><span class="m-label">Used at</span><span class="m-input is-filled">Division office ×<span class="car">＋</span></span></div>
+                <div class="m-field"><span class="m-label">Default role for this position</span><span class="m-input is-filled">Field Engineer <span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">This position's supervisor sees</span><span class="m-input is-filled">Their direct reports' cases<span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Grievance type</span><span class="m-input is-filled">Standard (not SEAH)<span class="car">▾</span></span></div>
+              </div>
+              <div class="m-btnrow" style="justify-content:flex-end;margin-top:14px"><span class="m-btn">Cancel</span><span class="m-btn m-btn--primary">Save</span></div>
+            </div>
+
+            <div class="m-card" style="max-width:600px;border-color:var(--p-amber100);background:var(--p-amber50)">
+              <div class="m-row" style="gap:9px;margin-bottom:6px"><span class="sev sev--warn">Heads up</span><span class="m-check__t">Default role changed: Site Safeguards Focal → Field Engineer</span></div>
+              <p class="m-check__f" style="margin-bottom:12px">12 officers currently hold SDE. Their role was <b>not</b> changed. <span class="pin pin--float">21</span></p>
+              <div class="m-btnrow"><span class="m-btn m-btn--primary">Review 12 holders →</span><span class="m-btn">Leave them as they are</span></div>
+            </div>
+
+            <div class="m-variant" style="max-width:600px">
+              <div class="m-variant__cap">Review holders — opt-in re-sync <span class="pin pin--float">22</span></div>
+              <table class="m-tbl">
+                <thead><tr><th>Officer</th><th>Current role</th><th>New default</th><th>Re-sync</th></tr></thead>
+                <tbody>
+                  <tr><td>R. Thapa</td><td>Site Safeguards Focal</td><td>Field Engineer</td><td>☑</td></tr>
+                  <tr><td>S. Karki <span class="m-ovbadge">override</span></td><td>PD/PIU Focal</td><td>Field Engineer</td><td>☐</td></tr>
+                </tbody>
+              </table>
+              <div class="m-btnrow" style="justify-content:flex-end;margin-top:10px"><span class="m-btn m-btn--primary">Re-sync selected</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">21</span><p><b>Drift is visible, not silent.</b> Doc 16 §4 mandates the default-role edit doesn't auto-re-sync holders — so the UI announces it and offers an action, rather than leaving the admin at "…so what?". <span class="ref">D3 · doc 16 §4</span></p></div>
+      <div class="spec__row"><span class="pin">22</span><p><b>One re-sync surface</b>, shared with the transfer-refresh flow. Per-holder opt-in; overrides are flagged so a deliberate exception isn't clobbered; re-sync runs the same <code>user_roles</code>/<code>officer_scopes</code> path, all-or-nothing per batch. <span class="ref">D3</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 7 ══════════════════ -->
+  <section class="frame" id="f7">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 07</span>
+      <h2 class="frame__title">Platform — Admin access <span style="font-size:13px;color:var(--prose-2);font-weight:500">· the hierarchical admin model (§2.5)</span></h2>
+    </div>
+    <p class="frame__sub">Where the org tree becomes an <b>admin</b> hierarchy. An <b>organisation admin</b> administers its subtree +
+      organisations it created + organisations shared with it, and can appoint further admins for offices beneath it (never
+      more powerful than itself). Every list here shows only the organisations that admin is responsible for.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Platform ▸ <b>Admin access</b></span></div>
+          <div class="m-tabs">
+            <div class="m-tab">⌂ Setup &amp; go-live</div>
+            <div class="m-tab">Organisation</div>
+            <div class="m-tab">Workflows &amp; roles</div>
+            <div class="m-tab">Projects</div>
+            <div class="m-tab is-active">Platform</div>
+          </div>
+          <div class="m-sub">
+            <span class="m-sub__i">Locations</span>
+            <span class="m-sub__i">Quarterly reports</span>
+            <span class="m-sub__i">Project types</span>
+            <span class="m-sub__i is-active">Admin access</span>
+          </div>
+
+          <div class="m-body">
+            <div class="m-row" style="justify-content:space-between">
+              <p class="m-h2">Your admin scope</p>
+              <span class="m-muted" style="font-size:12px">Signed in as Organisation admin · Standard grievances</span>
+            </div>
+            <div class="m-card">
+              <div class="m-tree">
+                <div class="m-tnode is-focus"><span class="m-tnode__tw">▾</span><span class="m-tnode__name">Department of Roads <span class="ne">/ सडक विभाग</span></span><span class="m-chip m-chip--blue">your node</span> <span class="pin pin--float">26</span></div>
+                <div class="m-tnode indent-1"><span class="m-tnode__tw">•</span><span class="m-tnode__name">Jhapa Division Office</span><span class="m-chip">subtree · 23 offices</span></div>
+                <div class="m-tnode"><span class="m-tnode__tw">•</span><span class="m-tnode__name">Kankai–Laukahi JV</span><span class="m-chip">shared with you</span></div>
+              </div>
+              <div class="m-authznote">You manage <b>the Department of Roads and every office beneath it</b>, plus organisations you added or that were shared with you. Anything else you can't see at all — not just greyed out.</div>
+            </div>
+
+            <div class="m-row" style="justify-content:space-between">
+              <p class="m-h2">Admin holders in your scope</p>
+              <div class="m-btnrow"><span class="m-btn">Share an organisation <span class="pin pin--float">28</span></span><span class="m-btn m-btn--primary">+ Appoint an admin</span></div>
+            </div>
+            <div class="m-card" style="padding:0">
+              <table class="m-tbl">
+                <thead><tr><th>Person</th><th>Admin role</th><th>Responsible for</th><th>Grievances</th></tr></thead>
+                <tbody>
+                  <tr><td>R. Sharma</td><td><span class="m-chip m-chip--blue">Organisation admin</span></td><td>Jhapa Division Office + below</td><td>Standard</td></tr>
+                  <tr><td>B. Rai</td><td><span class="m-chip">Project admin</span></td><td>KL Road (project)</td><td>Standard</td></tr>
+                  <tr><td>P. Limbu</td><td><span class="m-chip">Officer admin</span></td><td>KL Road (project)</td><td>Standard</td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="m-card m-card--tint" style="max-width:540px">
+              <p class="m-eyebrow" style="margin-bottom:10px">Appoint an admin below you <span class="pin pin--float">27</span></p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+                <div class="m-field"><span class="m-label">Person (email)</span><span class="m-input is-filled">s.karki@dor.gov.np</span></div>
+                <div class="m-field"><span class="m-label">Admin role</span><span class="m-input is-filled">Organisation admin<span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Responsible for (an office/project below you)</span><span class="m-input is-filled">Jhapa Division Office<span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Grievances</span><span class="m-input is-filled">Standard <span class="m-muted">(= yours)</span><span class="car">▾</span></span></div>
+              </div>
+              <p class="m-check__f" style="margin-top:8px"><b>Organisation admin</b> (a whole office + below) · <b>Project admin</b> (one project's contractors + staffing) · <b>Officer admin</b> (invites officers only) — never more powerful than you. Creating a new ministry, donor, or local-government body is <b>super-admin only</b>.</p>
+              <div class="m-btnrow" style="justify-content:flex-end;margin-top:10px"><span class="m-btn">Cancel</span><span class="m-btn m-btn--primary">Appoint</span></div>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">A project admin viewing this tab — tier boundary <span class="pin pin--float">29</span></div>
+              <div class="m-btnrow"><span class="m-btn m-btn--disabled">+ Appoint an admin</span><span class="m-btn m-btn--disabled">Share an organisation</span></div>
+              <p class="m-check__f" style="margin-top:9px">Appointing admins is above the project tier — shown disabled + explained, never enabled-then-403.</p>
+            </div>
+
+            <div class="m-variant">
+              <div class="m-variant__cap">Revoke &amp; bootstrap — the lifecycle the appoint form implied <span class="pin pin--float">52</span></div>
+              <div class="m-card" style="padding:0;max-width:520px">
+                <table class="m-tbl">
+                  <thead><tr><th>Admin</th><th>Scope</th><th></th></tr></thead>
+                  <tbody>
+                    <tr><td>R. Sharma</td><td>Jhapa Division Office</td><td style="text-align:right"><span class="m-iconbtn" style="color:var(--p-red700);border-color:var(--p-red100)">Revoke</span></td></tr>
+                    <tr><td><span class="m-muted">Kankai–Laukahi JV (shared)</span></td><td>shared subtree</td><td style="text-align:right"><span class="m-iconbtn" style="color:var(--p-red700);border-color:var(--p-red100)">Remove</span></td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="m-warnbar" style="margin-top:9px;background:var(--p-amber50);border-color:var(--p-amber100)"><span>ℹ</span><span>Revoking R. Sharma re-homes the <b>3 organisations they created</b> to you — nothing is left ownerless.</span></div>
+              <p class="m-check__f" style="margin-top:8px"><b>Bootstrap:</b> the very first Organisation admin at a ministry root is appointed by the super admin (the empty-admin base case).</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">26</span><p><b>Row-scoped to your reach.</b> The whole surface lists only the orgs in your reach — your subtree, plus the ones you created and any shared with you (server-enforced by SH-7 on OC-01's <code>descendant_org_ids</code>). An org_admin can't even see, let alone edit, outside its scope. <span class="ref">§2.5 · SH-7</span></p></div>
+      <div class="spec__row"><span class="pin">27</span><p><b>Attenuated appointment — four tiers.</b> You appoint an <b>Organisation / Project / Officer admin</b> at or below your node, in your track, never exceeding your own powers. Creating a new <b>institutional root</b> (government / local-gov / donor) is super-admin only; contractors (third-party) are delegable. An org_admin sits at <em>any depth</em> — a DoR admin, a district admin below it (doc 11 §2, as-built). <span class="ref">§2.5 · doc 11 §2</span></p></div>
+      <div class="spec__row"><span class="pin">28</span><p><b>Share an organisation</b> grants an external subtree (an implementing agency, or a contractor you don't own) into scope — the one way authority reaches an independent root, since contractors are never in your reporting subtree. <span class="ref">§2.4 · §2.5</span></p></div>
+      <div class="spec__row"><span class="pin">29</span><p><b>project_admin sees the tier boundary</b>, not a trap — appoint/whitelist are disabled with a plain reason. project_admin manages contractors + officers on its project; appointing admins is a higher tier. <span class="ref">F12</span></p></div>
+      <div class="spec__row"><span class="pin">52</span><p><b>Admin lifecycle — revoke, bootstrap, no orphans.</b> Appointments and whitelists are removable; revoking an admin <b>re-homes the orgs it created</b> to the nearest enclosing scope (never ownerless); and the first admin at a ministry root is bootstrapped by the super admin. The appoint form implied all of this but never showed it. <span class="ref">§7.F5</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 8 ══════════════════ -->
+  <section class="frame" id="f8">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 08</span>
+      <h2 class="frame__title">Roles &amp; permissions <span style="font-size:13px;color:var(--prose-2);font-weight:500">· what a role actually is</span></h2>
+    </div>
+    <p class="frame__sub">The pivot of the whole GRM — a safeguards officer <em>is</em> their role. A role answers one question:
+      <b>what can this person do with a grievance?</b> It's the hinge between a <b>position</b> (who someone is), a
+      <b>workflow step</b> (what they're responsible for), and an <b>officer</b> (the person). This is the
+      "Manage roles →" surface from Frame 04.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Workflows &amp; roles ▸ <b>Roles &amp; permissions</b></span></div>
+          <div class="m-body">
+
+            <p class="m-h2">How a role fits together <span class="pin pin--float">31</span></p>
+            <div class="m-card m-card--tint">
+              <div class="flow" style="margin-bottom:10px">
+                <span class="flow__node">Position type<br><b>SDE</b></span>
+                <span class="flow__arrow">— default role →</span>
+                <span class="flow__node flow__node--role"><b>Role</b><br>Site Safeguards Focal</span>
+                <span class="flow__arrow">— bound to →</span>
+                <span class="flow__node">Workflow step<br><b>L1 · Acknowledge</b></span>
+              </div>
+              <div class="flow">
+                <span class="flow__node">Officer<br><b>R. Thapa</b></span>
+                <span class="flow__arrow">— holds →</span>
+                <span class="flow__node flow__node--role"><b>Role</b><br>Site Safeguards Focal</span>
+                <span class="flow__arrow">— grants →</span>
+                <span class="flow__node">Permissions<br><b>View · Ack · Note · Resolve</b></span>
+              </div>
+            </div>
+
+            <div style="display:grid;grid-template-columns:0.95fr 1.15fr;gap:16px">
+              <div>
+                <div class="m-row" style="justify-content:space-between;margin-bottom:8px"><p class="m-h2" style="border:0;padding:0">Role catalog</p><span class="m-btn m-btn--primary" style="padding:5px 10px">+ New role</span></div>
+                <div style="display:grid;gap:7px">
+                  <div class="rolerow is-sel"><span>Site Safeguards Focal</span><span class="m-chip">System · everywhere</span><span class="rolerow__use">1 step · 3 officers</span></div>
+                  <div class="rolerow"><span>PD/PIU Safeguards Focal</span><span class="m-chip">System · everywhere</span><span class="rolerow__use">1 step · 1 officer</span></div>
+                  <div class="rolerow"><span>GRC Chair</span><span class="m-chip">System · everywhere</span><span class="rolerow__use">1 step</span></div>
+                  <div class="rolerow"><span>Supervision Consultant — Field</span><span class="m-chip m-chip--blue">Custom · DoR &amp; below</span><span class="rolerow__use" style="color:var(--p-amber700)">⚠ 0 steps · 2 officers</span></div>
+                  <div class="rolerow"><span>Mechi JV site clerk</span><span class="m-chip m-chip--terr">Custom · Jhapa district &amp; below</span><span class="rolerow__use">1 step</span></div>
+                </div>
+                <p class="m-check__f" style="margin-top:8px">Each row shows <b>where the role works</b> — System roles everywhere; a custom role only at the office that made it and below (a Jhapa role never appears in Ilam) — plus "Used on N steps · M officers" <span class="pin pin--float">33</span>. Held-but-unbound warns; delete blocked while referenced.</p>
+              </div>
+
+              <div class="m-card">
+                <div class="m-row" style="gap:8px;margin-bottom:2px"><span class="m-outcome__title" style="font-size:14px">Site Safeguards Focal Person</span><span class="m-chip">System role</span><span class="m-chip m-chip--blue">Standard grievances</span></div>
+                <p class="m-check__f" style="margin-bottom:12px">Standard (TOR) role — permissions are set by a super admin, so they're read-only here. <span class="pin pin--float">35</span></p>
+
+                <span class="m-label">Its job in a step</span>
+                <div class="m-field" style="margin:5px 0 6px"><span class="m-input is-filled"><b>Handles it</b> <span class="m-muted">— owns &amp; works the case</span><span class="car">▾</span></span></div>
+                <p class="m-check__f" style="margin:0 0 12px">The <b>same words as the step cast</b> — Handles it / Oversees / Kept informed / Can view (plus GRC panel &amp; SEAH handler, which are "Handles it" for those steps). Sets a starting permission set; fine-tune below. <span class="pin pin--float">32</span></p>
+
+                <div class="permgrid" style="opacity:.72;position:relative">
+                  <div style="grid-column:1/-1;font-size:10.5px;color:var(--p-muted);display:flex;align-items:center;gap:5px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:11px;height:11px"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>Read-only — a super admin sets these for standard roles</div>
+                  <span class="permgrid__g">Cases</span>
+                  <span><span class="perm perm--on">✓ View</span><span class="perm perm--on">✓ Acknowledge</span><span class="perm perm--on">✓ Add notes</span><span class="perm perm--off">☐ Escalate</span><span class="perm perm--off">☐ Add / reassign officers</span><span class="perm perm--on">✓ Resolve</span></span>
+                  <span class="permgrid__g">GRC</span>
+                  <span><span class="perm perm--off">☐ Convene hearing</span><span class="perm perm--off">☐ Record decision</span></span>
+                  <span class="permgrid__g">SEAH</span>
+                  <span><span class="perm perm--off">☐ Access SEAH cases</span></span>
+                  <span class="permgrid__g">Reports</span>
+                  <span><span class="perm perm--off">☐ View / export</span></span>
+                </div>
+
+                <div style="border-top:1px solid var(--p-line);margin-top:12px;padding-top:10px;display:grid;gap:7px">
+                  <div class="m-row" style="gap:8px"><span class="m-label" style="min-width:120px">Default area</span><span class="m-muted" style="font-size:12px">Field — ask for project/package/location at invite <span class="pin pin--float">34</span></span></div>
+                  <div class="m-row" style="gap:8px"><span class="m-label" style="min-width:120px">Used by</span><span class="m-muted" style="font-size:12px">Standard GRM · Step 1 (L1) · held by 3 officers</span></div>
+                </div>
+                <div class="m-warnbar" style="margin-top:10px;background:var(--p-blue50);border-color:var(--p-blue100);color:var(--p-blue800)"><span>ℹ</span><span>The actual area each officer covers is set <b>per person</b> (their scope), not here.</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">31</span><p><b>A role = what you can do with a grievance.</b> It's the hinge the whole GRM turns on: a <b>position type</b> maps to a role (the matrix), a <b>workflow step</b> binds a role (who owns/escalates each level), an <b>officer</b> holds a role, and the role <b>grants permissions</b>. Change the role and you change what that safeguards officer can actually do. <span class="ref">doc 11 §3 · doc 16 §4</span></p></div>
+      <div class="spec__row"><span class="pin">32</span><p><b>One plain vocabulary, no "archetype."</b> The role's "job in a step" uses the <b>exact same words as the step cast</b> — Handles it / Oversees / Kept informed / Can view (GRC panel &amp; SEAH handler are "Handles it" specialisations) — and sets a starting permission set, then fine-tune in plain groups (Cases · GRC · SEAH · Reports). "Add / reassign officers" now sits in Cases. Dangerous admin caps never appear on operational roles. <span class="ref">F20 · doc 11 §3.4</span></p></div>
+      <div class="spec__row"><span class="pin">33</span><p><b>Usage guard rails.</b> Every row shows "Used on N steps · M officers"; a role held by officers but bound to no step warns (auto-assign would fail); delete is blocked while any step or officer references it. <span class="ref">doc 11 §3.4 · F15</span></p></div>
+      <div class="spec__row"><span class="pin">34</span><p><b>Two knobs, never conflated.</b> The role's <em>default area</em> is only an invite-time suggestion; the <b>actual scope</b> each officer covers (country-wide vs one package) is set per person in their scope, not on the role. <span class="ref">doc 11 §3.2</span></p></div>
+      <div class="spec__row"><span class="pin">35</span><p><b>Who manages the catalog.</b> An <b>org_admin</b> (own track) creates and edits roles; <code>project_admin</code> and <code>officer_admin</code> only <em>assign</em> them (can't mint N incompatible roles); system/TOR roles' permissions are super_admin-only. The Roles surface is catalog hygiene — steps (Frame 04) are where roles are consumed. <span class="ref">doc 11 §3.3/§3.5</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 9 ══════════════════ -->
+  <section class="frame" id="f9">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 09</span>
+      <h2 class="frame__title">Notifications <span style="font-size:13px;color:var(--prose-2);font-weight:500">· who's alerted, for what, how</span></h2>
+    </div>
+    <p class="frame__sub">Notifications aren't wired per step — they <b>fall out of the cast</b>. Each slot (Handles it / Oversees /
+      Kept informed / Can view) <em>is</em> a notification tier. This is the one place to tune the defaults: a
+      <b>per-track grid</b> of event × slot × channel, pre-seeded and rarely touched. Part of the Workflows &amp; roles surface.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Workflows &amp; roles ▸ <b>Notifications</b></span></div>
+          <div class="m-body">
+            <div class="m-row" style="justify-content:space-between">
+              <div class="m-row" style="gap:8px"><p class="m-h2" style="border:0;padding:0">When does someone get alerted?</p><span class="pin pin--float">37</span></div>
+              <div class="m-row" style="gap:6px"><span class="m-chip m-chip--blue">Standard grievances</span><span class="m-chip">SEAH ▸</span></div>
+            </div>
+            <div class="m-warnbar" style="background:var(--p-blue50);border-color:var(--p-blue100);color:var(--p-blue800);margin-bottom:2px"><span>ℹ</span><span><b>Right now, officers get in-app alerts only.</b> The Email &amp; SMS shown below are the <b>target</b> setup and switch on later — the grid is safe to leave as-is.</span></div>
+
+            <div class="m-card" style="padding:0;overflow-x:auto">
+              <table class="m-tbl">
+                <thead><tr>
+                  <th>Event</th>
+                  <th>Handles it</th><th>Oversees</th><th>Kept informed</th><th>Can view</th>
+                </tr></thead>
+                <tbody>
+                  <tr><td>New case</td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--none">—</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>Escalated</td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>SLA breached</td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>Resolved</td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--app">In-app</span></td>
+                    <td><span class="chan chan--none">—</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>GRC convened</td>
+                    <td><span class="chan chan--app">In-app</span><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--app">In-app</span></td>
+                    <td><span class="chan chan--app">In-app</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>Assigned to me</td>
+                    <td><span class="chan chan--sms">SMS</span><span class="chan chan--app">In-app</span> <span class="pin pin--float">39</span></td>
+                    <td><span class="chan chan--none">—</span></td>
+                    <td><span class="chan chan--none">—</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                  <tr><td>Quarterly report</td>
+                    <td><span class="chan chan--none">—</span></td>
+                    <td><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--email">Email</span></td>
+                    <td><span class="chan chan--none">—</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="m-check__f" style="margin-top:8px"><b>Can view</b> is silent by design (a whole quiet column) <span class="pin pin--float">38</span>. Tap any cell to toggle a channel. SEAH track omits GRC convened &amp; Quarterly report.</p>
+
+            <div class="m-warnbar" style="margin-top:12px;background:var(--p-blue50);border-color:var(--p-blue100);color:var(--p-blue800)"><span>ℹ</span><span><b>Complainants are notified separately</b> — chatbot first, SMS fallback (new case, acknowledged, resolved, reply). Officer-assignment SMS is set per project under Messaging.</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">37</span><p><b>One grid per track, not per step.</b> The as-built <code>settings.notification_rules</code> is keyed <code>track → event → tier → [channels]</code> — so there's a single Standard grid and a single SEAH grid, no per-step notification config to maintain. Far less to manage than it first looks. <span class="ref">doc 12 §9 · notifications.py</span></p></div>
+      <div class="spec__row"><span class="pin">38</span><p><b>Pre-seeded, safe defaults; observers are silent.</b> The grid ships with sensible values (`_DEFAULT_NOTIFICATION_RULES`); admins rarely touch it. Missing key → no notification (safe by default). "Can view" never fires — read-only really means quiet. <span class="ref">notifications.py `should_notify`</span></p></div>
+      <div class="spec__row"><span class="pin">39</span><p><b>Three channels, phased.</b> In-app is the proto default for officers; Email/SMS layer on (SSE push is a v2 upgrade). "Assigned to me" is the one that SMSes the actor — that leg is configured per project under Messaging, shown here read-only for context. <span class="ref">CLAUDE.md notifications · doc 06 §5</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 10 ══════════════════ -->
+  <section class="frame" id="f10">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 10</span>
+      <h2 class="frame__title">Create a project <span style="font-size:13px;color:var(--prose-2);font-weight:500">· the path the go-live checks assumed existed</span></h2>
+    </div>
+    <p class="frame__sub">The go-live spine checks "packages defined" and "workflow published" — but the <b>create</b> path was never drawn (review B). Name it, add packages, choose how grievances are handled. Created switched <b>off</b> until go-live.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Projects ▸ <b>New project</b></span></div>
+          <div class="m-tabs">
+            <div class="m-tab">⌂ Setup &amp; go-live</div><div class="m-tab">Organisation</div><div class="m-tab">Workflows &amp; roles</div><div class="m-tab is-active">Projects</div><div class="m-tab">Platform</div>
+          </div>
+          <div class="m-body">
+            <div class="m-card" style="max-width:640px">
+              <p class="m-eyebrow" style="margin-bottom:10px">Project details <span class="pin pin--float">42</span></p>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:11px">
+                <div class="m-field"><span class="m-label">Name (English)</span><span class="m-input is-filled">Kakarbhitta–Laukahi Road</span></div>
+                <div class="m-field"><span class="m-label">Name (Nepali)</span><span class="m-input">काकडभिट्टा–लौकही सडक</span></div>
+                <div class="m-field"><span class="m-label">Country</span><span class="m-input is-filled">Nepal<span class="car">▾</span></span></div>
+                <div class="m-field"><span class="m-label">Project type</span><span class="m-input is-filled">Road construction<span class="car">▾</span></span></div>
+              </div>
+            </div>
+
+            <p class="m-h2">Packages <span class="pin pin--float">43</span></p>
+            <div class="m-card" style="padding:0;max-width:640px">
+              <table class="m-tbl">
+                <thead><tr><th>Package</th><th>Area it covers</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Section A (0–18 km)</td><td>Jhapa district</td><td style="text-align:right"><span class="m-iconbtn">edit</span></td></tr>
+                  <tr><td>Section B (18–42 km)</td><td>Jhapa district</td><td style="text-align:right"><span class="m-iconbtn">edit</span></td></tr>
+                  <tr><td colspan="3"><span class="m-btn m-btn--ghost">+ Add package</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+
+            <p class="m-h2">How grievances are handled <span class="pin pin--float">44</span></p>
+            <div class="m-card" style="max-width:640px">
+              <div style="display:grid;gap:11px">
+                <div class="m-field"><span class="m-label">Standard grievances</span>
+                  <div class="m-picker">
+                    <div class="m-opt is-sel"><span class="m-opt__tick">✓</span> Standard GRM (4 levels) <span class="m-chip" style="margin-left:auto">Published</span></div>
+                    <div class="m-opt is-off"><span class="m-opt__tick"></span> Kakarbhitta draft <span class="m-opt__why">publish it first</span></div>
+                  </div>
+                </div>
+                <div class="m-field"><span class="m-label">SEAH grievances <span class="m-muted">(optional)</span></span><span class="m-input is-filled">SEAH workflow<span class="car">▾</span></span></div>
+              </div>
+            </div>
+
+            <div class="m-warnbar" style="max-width:640px;background:var(--p-blue50);border-color:var(--p-blue100);color:var(--p-blue800)"><span>ℹ</span><span>Created <b>switched off</b> — it turns on at go-live, once every package is staffed.</span></div>
+            <div class="m-btnrow" style="max-width:640px;justify-content:flex-end"><span class="m-btn">Cancel</span><span class="m-btn m-btn--primary">Create project</span></div>
+            <div class="m-warnbar" style="max-width:640px;background:var(--p-green50);border-color:var(--p-green100);color:var(--p-green800)"><span>→</span><span><b>Next: invite your officers</b> and staff each package. <span class="pin pin--float">56</span></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">42</span><p><b>The missing create path.</b> A project is created <code>is_active=false</code> and shows in the first-run spine + go-live until activated — so the "no activated-but-blocked limbo" story (F17) holds from creation onward. <span class="ref">§7.B1 · review B</span></p></div>
+      <div class="spec__row"><span class="pin">43</span><p><b>Packages are the unit grievances attach to.</b> Each gets its own staffing and its own go-live check ("every package needs an L2"), which is why they're created here, up front. <span class="ref">§7.B1</span></p></div>
+      <div class="spec__row"><span class="pin">44</span><p><b>Link the workflow — published only.</b> Drafts are greyed with "publish it first" (same valid-only/why-excluded pattern as the step binder), closing the seam the go-live "Workflow published" check implied but never surfaced. <span class="ref">§7.B3 · S1</span></p></div>
+      <div class="spec__row"><span class="pin">56</span><p><b>"Next: …" ends every task surface.</b> §7.A promised each screen names the next step; this is the concrete pattern — a green "Next: invite your officers" strip after create, echoed on the org tree, workflow, and staffing surfaces so the user is never left at "now what?". <span class="ref">§7.A · ease #12</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 11 ══════════════════ -->
+  <section class="frame" id="f11">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 11</span>
+      <h2 class="frame__title">Officers — directory &amp; lifecycle at scale</h2>
+    </div>
+    <p class="frame__sub">With ~5,000 staff under one department you can't scroll a list — the directory is <b>search-first</b>. And officers move, so <b>transfer</b> and <b>deactivate</b> are first-class, not afterthoughts (review F).</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Organisation ▸ <b>Officers</b></span></div>
+          <div class="m-sub">
+            <span class="m-sub__i">Org tree</span><span class="m-sub__i">Position types</span><span class="m-sub__i is-active">Officers</span>
+          </div>
+          <div class="m-body">
+            <div class="m-row" style="gap:8px;flex-wrap:wrap;justify-content:space-between">
+              <div class="m-row" style="gap:8px;flex-wrap:wrap">
+                <span class="m-input" style="min-width:240px;color:var(--p-muted)">Search by name, email, or position… <span class="pin pin--float">45</span></span>
+                <span class="m-chip">Office ▾</span><span class="m-chip">Role ▾</span><span class="m-chip">Project ▾</span>
+              </div>
+              <span class="m-btn m-btn--primary">+ Invite officer</span>
+            </div>
+
+            <div class="m-card" style="padding:0">
+              <table class="m-tbl">
+                <thead><tr><th>Officer</th><th>Office</th><th>Role</th><th>Project</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>R. Thapa <span class="m-muted">— SDE</span></td><td>Jhapa Division Office</td><td>Site Safeguards Focal</td><td>KL Road</td><td style="text-align:right"><span class="m-iconbtn">Manage</span></td></tr>
+                  <tr><td>S. Karki <span class="m-muted">— Sub-Engineer</span></td><td>Jhapa Division Office</td><td>Field Engineer</td><td>KL Road</td><td style="text-align:right"><span class="m-iconbtn">Manage</span></td></tr>
+                  <tr><td>B. Rai <span class="m-muted">— Div. Chief</span></td><td>Ilam Division Office</td><td>PD/PIU Safeguards Focal</td><td>KL Road</td><td style="text-align:right"><span class="m-iconbtn">Manage</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+            <div class="m-row" style="justify-content:space-between"><span class="m-muted" style="font-size:12px">Showing 1–20 of 4,812</span><div class="m-row" style="gap:4px"><span class="m-chip">‹</span><span class="m-chip m-chip--blue">1</span><span class="m-chip">2</span><span class="m-chip">3</span><span class="m-muted" style="font-size:12px">… 241</span><span class="m-chip">›</span></div></div>
+
+            <div class="m-variant" style="max-width:600px">
+              <div class="m-variant__cap">Manage officer — edit · transfer · deactivate <span class="pin pin--float">46</span></div>
+              <div class="m-row" style="gap:8px;margin-bottom:8px"><span class="m-outcome__title" style="font-size:13.5px">R. Thapa — SDE, Jhapa Division Office</span></div>
+              <div class="m-btnrow" style="margin-bottom:10px"><span class="m-btn">Edit role &amp; area</span><span class="m-btn">Transfer</span><span class="m-btn" style="color:var(--p-red700);border-color:var(--p-red100)">Deactivate</span></div>
+              <div class="m-warnbar" style="background:var(--p-amber50);border-color:var(--p-amber100)"><span>⟳</span><span><b>Transfer to a new office/position?</b> We'll offer to re-sync their role &amp; area — old assignment ends, nothing is silently re-scoped.</span></div>
+              <p class="m-check__f" style="margin-top:8px">Deactivate keeps their <b>case history</b> but first asks you to <b>reassign their open cases</b> — no case is ever left with no owner. Transfer does the same for cases that don't move with them. <span class="pin pin--float">55</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">45</span><p><b>Search-first directory — the "5,000 staff" premise made real.</b> Server-side search + filters (office / role / project / track) + pagination; you find one officer among thousands, you don't scroll. A <b>Standard / SEAH filter appears only for a SEAH-capable admin</b> — a standard-only admin never sees that SEAH exists (round-2 fix). <span class="ref">§7.F3 · doc 16 §6</span></p></div>
+      <div class="spec__row"><span class="pin">46</span><p><b>Officers move — lifecycle is first-class.</b> Manage = <b>edit</b> (staged scope rows — the OC-06 strength), <b>transfer</b> (new office/position → offer role/area re-sync via the shared review-holders flow; old rows end, no silent re-scope, doc 16 §3.3), <b>deactivate</b> (ends roles + scopes, keeps history/audit). A <b>dual-hat officer</b> (multiple positions, doc 16 §3.3) shows each position as its own row here. <span class="ref">§7.F1</span></p></div>
+      <div class="spec__row"><span class="pin">55</span><p><b>Transfer &amp; deactivate handle open cases.</b> Before an officer is deactivated (or for cases that don't move on transfer), the flow requires <b>reassigning their open cases</b> — no ticket is ever left owner-less. Closes the round-2 "in-flight tickets undefined" gap. <span class="ref">§7.F1 · review round-2</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 12 ══════════════════ -->
+  <section class="frame" id="f12">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 12</span>
+      <h2 class="frame__title">Organisation — org lifecycle &amp; scale</h2>
+    </div>
+    <p class="frame__sub">The node "⋯" menu was referenced but never defined, and a real Department-of-Roads tree is thousands of nodes (review F). Here's what "⋯" does — including the delete guard — and how the tree copes at scale.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Organisation ▸ <b>Org tree</b></span></div>
+          <div class="m-body">
+            <div class="m-row" style="gap:10px;justify-content:space-between;flex-wrap:wrap">
+              <span class="m-input" style="min-width:240px;color:var(--p-muted)">Find an office by name… <span class="pin pin--float">48</span></span>
+              <span class="m-muted" style="font-size:12px">1,240 offices · showing top level only</span>
+            </div>
+
+            <div class="m-card">
+              <div class="m-tree">
+                <div class="m-tnode"><span class="m-tnode__tw">▾</span><span class="m-tnode__name">Department of Roads <span class="ne">/ सडक विभाग</span></span><span class="m-chip">523 offices</span></div>
+                <div class="m-tnode indent-1"><span class="m-tnode__tw">▸</span><span class="m-tnode__name">Mechi Province Directorate</span><span class="m-chip">48 offices · click to load</span></div>
+                <div class="m-tnode indent-1 is-focus"><span class="m-tnode__tw">▾</span><span class="m-tnode__name">Jhapa Division Office</span><span class="m-chip m-chip--terr">covers Jhapa</span><span class="m-tnode__acts"><span class="m-iconbtn">+ child</span><span class="m-iconbtn">edit</span><span class="m-iconbtn m-iconbtn--p">⋯</span></span></div>
+              </div>
+
+              <div style="margin:6px 0 0 44px;max-width:230px;border:1px solid var(--p-line2);border-radius:9px;box-shadow:var(--stage-shadow);overflow:hidden">
+                <div class="m-opt">Edit name &amp; type</div>
+                <div class="m-opt">Add child office</div>
+                <div class="m-opt">Set territory</div>
+                <div class="m-opt">Move to a new parent</div>
+                <div class="m-opt">Merge a duplicate in</div>
+                <div class="m-opt" style="color:var(--p-red700)">Deactivate · Delete <span class="pin pin--float" style="margin-left:auto">47</span></div>
+              </div>
+            </div>
+
+            <div class="m-variant" style="max-width:640px">
+              <div class="m-variant__cap">Delete guard (SH-4) — a friendly stop, not a raw 409</div>
+              <div class="errnotice">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+                <span><b>Can't delete Jhapa Division Office.</b> It's on 2 projects, holds 3 officers, and has <b>4 open cases</b>. Reassign the cases and move the officers first.</span>
+              </div>
+              <p class="m-check__f" style="margin-top:8px"><b>Move</b> re-parents the node (cycle-guarded). <b>Merge</b> folds a duplicate in: its officers, project-links and child offices re-home here, its <b>open cases move with it</b>, and any conflicting territory/country is flagged for you to resolve (§2.4 dedup). <span class="pin pin--float">54</span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">47</span><p><b>The "⋯" menu, finally defined:</b> edit · add child · set territory · <b>move (re-parent, cycle-guarded)</b> · <b>merge</b> a duplicate in (§2.4) · deactivate/delete. Delete surfaces the <b>SH-4 guard</b> as a plain-language 409 ("on 2 projects, holds 3 officers, 4 open cases") — never a cascade-orphan, never a raw error. <span class="ref">§7.F2 · SH-4 · OC-06 F7/O3</span></p></div>
+      <div class="spec__row"><span class="pin">54</span><p><b>Merge &amp; destructive ops handle in-flight cases, not just data.</b> Delete is blocked until open cases are reassigned; <b>merge</b> re-homes the folded org's officers / project-links / children and moves its <b>open cases</b> with it, flagging territory/country conflicts. The round-2 review flagged both as undefined. <span class="ref">§7.F2 · SH-4</span></p></div>
+      <div class="spec__row"><span class="pin">48</span><p><b>Tree at scale.</b> Search-to-node, collapse/expand, and <b>lazy-load subtrees</b> (don't render thousands of nodes) using the tree endpoint's <code>root_id</code>/<code>tree=true</code> (OC-01). The 4-node happy-path tree in Frame 02 doesn't survive a real ministry — this does. <span class="ref">§7.F3 · OC-01</span></p></div>
+    </div>
+  </section>
+
+  <!-- ══════════════════ FRAME 13 ══════════════════ -->
+  <section class="frame" id="f13">
+    <div class="frame__head">
+      <span class="frame__no">FRAME 13</span>
+      <h2 class="frame__title">SEAH — setup &amp; invisibility <span style="font-size:13px;color:var(--prose-2);font-weight:500">· the compliance half that was near-absent</span></h2>
+    </div>
+    <p class="frame__sub">SEAH (sexual exploitation, abuse &amp; harassment) is a separate, restricted track. Its setup mirrors the standard one but is <b>gated to SEAH admins</b> — and it must stay <b>invisible</b> to standard reporting-line features (doc 16 §6). Both sides shown.</p>
+
+    <div class="stage-wrap">
+      <div class="stage m">
+        <div class="m-main">
+          <div class="m-topbar"><span class="m-crumb">Settings ▸ Workflows &amp; roles ▸ <b>SEAH</b></span></div>
+          <div class="m-body">
+            <div class="m-card" style="border-color:var(--p-red100);border-left:3px solid var(--p-red)">
+              <div class="m-row" style="gap:8px;margin-bottom:10px">
+                <span style="display:inline-flex;align-items:center;gap:5px;color:var(--p-red800);font-weight:650;font-size:13px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>As a SEAH admin</span>
+                <span class="m-chip m-chip--seah">SEAH · restricted</span>
+                <span class="pin pin--float">49</span>
+              </div>
+              <div class="m-row" style="gap:8px;margin-bottom:8px"><span class="m-outcome__title" style="font-size:13px">SEAH workflow</span><span class="m-chip m-chip--seah">SEAH grievances</span><span class="sev sev--done">Published</span></div>
+              <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:12.5px;max-width:460px">
+                <span class="m-castrole">Handles it</span><span class="m-input is-filled">SEAH National Officer<span class="car">▾</span></span>
+                <span class="m-castrole">Oversees</span><span class="m-input is-filled">SEAH HQ Officer<span class="car">▾</span></span>
+              </div>
+              <p class="m-check__f" style="margin-top:9px">Own workflow, own cast, own staffing &amp; invite — the picker only offers <b>SEAH-track</b> roles. Only SEAH admins can see or edit any of this.</p>
+            </div>
+
+            <div class="m-card m-card--tint">
+              <div class="m-row" style="gap:8px;margin-bottom:8px"><span class="m-outcome__title" style="font-size:13px">As a standard Organisation admin</span><span class="pin pin--float">50</span></div>
+              <div class="m-tree">
+                <div class="m-tnode"><span class="m-tnode__tw">•</span>Standard GRM <span class="m-chip">Standard grievances</span></div>
+                <div class="m-tnode"><span class="m-tnode__tw">•</span>S. Sharma — SDE, Jhapa Division Office <span class="m-muted">(appears in the directory as a person)</span></div>
+                <div class="m-tnode" style="color:var(--p-muted);font-style:italic"><span class="m-tnode__tw"></span>(no SEAH workflow, SEAH roles, or SEAH cases appear here)</div>
+              </div>
+              <div class="scopebox" style="margin-top:10px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span><b>SEAH cases are invisible here.</b> SEAH officers still appear as people in the directory (the chart is shared) — but a standard supervisor sees no trace that any subordinate has a SEAH case.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="spec">
+      <div class="spec__row"><span class="pin">49</span><p><b>SEAH setup mirrors standard, but gated.</b> Its own workflow, cast, staffing and invite; the invite only mints SEAH-track roles; the whole surface is restricted to a <b>root org_admin (seah)</b> / super admin. This half of the compliance story was near-absent before. <span class="ref">§7.F4 · doc 16 §6 · doc 11 §9</span></p></div>
+      <div class="spec__row"><span class="pin">50</span><p><b>Invisibility is scoped precisely — only SEAH case *existence* is hidden.</b> The chart is <b>shared for directory purposes</b> (doc 16 §6): SEAH officers appear as people. But SEAH tickets, SEAH roles, and any signal of a SEAH case never render in standard reporting-line, Watching, or notification surfaces — track-scoped at the query layer. <b>SEAH-leak tests are the acceptance gate</b> (OC-04). <span class="ref">doc 16 §6 · OC-04</span></p></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p><b>Scope of this deck.</b> Thirteen desktop frames covering the happy path, the key state variants, and the
+      post-review remediation (first-run spine, project &amp; workflow creation, officer/org lifecycle at scale, SEAH). The systematic
+      <b>state atlas</b> — every surface in loading / empty / error / bilingual / scoped, incl. the
+      <code>ErrorNotice</code> pattern that wires the unused <code>lib/user-messages.ts</code> formatter — is
+      the companion deck <code>settings-state-atlas.html</code>.</p>
+    <p style="margin-top:10px"><b>Traceability.</b> Every pin ties to the Design deliverable
+      (<code>DESIGN-settings-redesign.md</code>), the OC-06 evaluation, or doc 16. Colours, type, and severity
+      obey the GRM design system: 5 hue families + gray/slate, WCAG-AA text, no emoji, no banned hues.</p>
+  </footer>
+</div>
+</body>
+</html>
