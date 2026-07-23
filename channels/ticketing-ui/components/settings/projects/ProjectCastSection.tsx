@@ -1,16 +1,17 @@
 "use client";
 
 /**
- * <ProjectCastSection> — the per-package Cast matrix (DESIGN-cast-model §3.6).
+ * <ProjectCastSection> — the per-package Cast matrix (DESIGN-cast-model §3.6), as an accordion.
  *
- * "Who plays which tier, per package." For the project's bound workflow(s), each step shows its
- * enabled tiers (Actor always; Supervisor / Participants / Observers when the step uses them);
- * an admin staffs officers into each (step, tier) slot per package (or project-wide). Each
- * assignment writes an `officer_scope` through the sanctioned backend writer (`staffCastSlot`),
- * so auto-assign, SEAH isolation, and the reassignment chain all key off the same rows.
+ * "Who plays which tier, per package." One expandable block per scope:
+ *   • Project-wide — the shared cast (upper ladder + observers), set ONCE; covers every package.
+ *   • Each package — its actor orgs, then its staffing for that lot: the same workflow steps ×
+ *     enabled tiers, showing the inherited project-wide officers (greyed) plus package-specific
+ *     overrides. Reads top-to-bottom as actors → staffing, so which lot you're editing is
+ *     unmistakable.
  *
- * Two-level model: the "Project-wide" tab covers every package; a package tab shows the
- * project-wide cast as inherited (greyed) and lets you add package-specific overrides.
+ * Each assignment writes an `officer_scope` through the sanctioned backend writer, so auto-assign,
+ * SEAH isolation and the reassignment chain all key off the same rows.
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -28,6 +29,8 @@ import {
   type WorkflowStep,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
+
+const PROJECT_WIDE = "project-wide";
 
 /** A location code covers another when they share an ancestor path (e.g. P1 covers P1_JHA).
  *  An officer with no location is country-wide and covers everything. */
@@ -79,12 +82,12 @@ export function ProjectCastSection({
   }, [project.workflow_slots, project.standard_workflow_id, project.seah_workflow_id]);
 
   const [selectedWfId, setSelectedWfId] = useState<string | null>(boundWorkflows[0]?.id ?? null);
-  const [selectedPkgId, setSelectedPkgId] = useState<string | null>(null); // null = project-wide
+  const [expanded, setExpanded] = useState<string>(PROJECT_WIDE);
   const [steps, setSteps] = useState<WorkflowStep[]>([]);
-  const [packageCast, setPackageCast] = useState<CastScope[]>([]);
   const [projectWideCast, setProjectWideCast] = useState<CastScope[]>([]);
+  const [packageCasts, setPackageCasts] = useState<Record<string, CastScope[]>>({});
   const [roster, setRoster] = useState<OfficerRosterEntry[]>([]);
-  const [assigning, setAssigning] = useState<{ stepId: string; tier: string } | null>(null);
+  const [assigning, setAssigning] = useState<{ scope: string; stepId: string; tier: string } | null>(null);
   const [pickerQ, setPickerQ] = useState("");
   const [pickerOrg, setPickerOrg] = useState<string>(""); // "" = project actors, id = one org, "__all__" = everyone
   const [pickerLocMatch, setPickerLocMatch] = useState(true);
@@ -93,23 +96,20 @@ export function ProjectCastSection({
   const [busy, setBusy] = useState(false);
 
   const activePkgs = useMemo(() => packages.filter((p) => p.is_active), [packages]);
-  const selectedPkg = useMemo(
-    () => packages.find((p) => p.package_id === selectedPkgId) ?? null,
-    [packages, selectedPkgId],
-  );
   const orgLabel = useCallback(
     (id: string) => orgs.find((o) => o.organization_id === id)?.name ?? id,
     [orgs],
   );
-  // Organizations that are actors on this project (project participants + the package's orgs).
-  const actorOrgIds = useMemo(() => {
-    const s = new Set(project.organizations.map((o) => o.organization_id));
-    (selectedPkg?.organizations ?? []).forEach((o) => s.add(o.organization_id));
-    return s;
-  }, [project.organizations, selectedPkg]);
-  const pkgLocations = selectedPkg?.location_codes ?? [];
   const derivedOrg =
     project.implementing_agency_org_id || project.organizations[0]?.organization_id || "";
+
+  const scopes = useMemo(
+    () => [
+      { id: PROJECT_WIDE, label: "Project-wide", sub: "the shared cast — covers every package", pkg: null as PackageItem | null },
+      ...activePkgs.map((p) => ({ id: p.package_id, label: `${p.package_code} · ${p.name}`, sub: null, pkg: p })),
+    ],
+    [activePkgs],
+  );
 
   // Load the selected workflow's steps (fresh — reflects the latest tier toggles).
   useEffect(() => {
@@ -130,33 +130,34 @@ export function ProjectCastSection({
     };
   }, [selectedWfId]);
 
-  const loadCast = useCallback(async () => {
+  const loadAllCast = useCallback(async () => {
     if (!selectedWfId) {
       setProjectWideCast([]);
-      setPackageCast([]);
+      setPackageCasts({});
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const [pw, pk] = await Promise.all([
-        readCast(project.project_id, { workflow_id: selectedWfId }),
-        selectedPkgId
-          ? readCast(project.project_id, { workflow_id: selectedWfId, package_id: selectedPkgId })
-          : Promise.resolve<CastScope[]>([]),
-      ]);
+      const pw = await readCast(project.project_id, { workflow_id: selectedWfId });
       setProjectWideCast(pw);
-      setPackageCast(pk);
+      const entries = await Promise.all(
+        activePkgs.map(
+          async (pkg) =>
+            [pkg.package_id, await readCast(project.project_id, { workflow_id: selectedWfId, package_id: pkg.package_id })] as const,
+        ),
+      );
+      setPackageCasts(Object.fromEntries(entries));
     } catch (e) {
       setError(friendlyError(e));
     } finally {
       setLoading(false);
     }
-  }, [project.project_id, selectedWfId, selectedPkgId]);
+  }, [project.project_id, selectedWfId, activePkgs]);
 
   useEffect(() => {
-    void loadCast();
-  }, [loadCast]);
+    void loadAllCast();
+  }, [loadAllCast]);
 
   useEffect(() => {
     listOfficerRoster().then(setRoster).catch(() => setRoster([]));
@@ -167,32 +168,49 @@ export function ProjectCastSection({
     [roster],
   );
 
-  // Officers staffed into (step, tier) in the CURRENT scope (package tab → package rows;
-  // project-wide tab → project-wide rows).
-  function currentSlot(stepId: string, tier: string): CastScope[] {
-    const src = selectedPkgId ? packageCast : projectWideCast;
-    return src.filter((c) => c.step_id === stepId && c.tier === tier);
+  function castForScope(scopeId: string): CastScope[] {
+    return scopeId === PROJECT_WIDE ? projectWideCast : packageCasts[scopeId] ?? [];
   }
-  // Project-wide rows shown as inherited context on a package tab.
-  function inheritedSlot(stepId: string, tier: string): CastScope[] {
-    if (!selectedPkgId) return [];
+  function slotOfficers(scopeId: string, stepId: string, tier: string): CastScope[] {
+    return castForScope(scopeId).filter((c) => c.step_id === stepId && c.tier === tier);
+  }
+  function inheritedOfficers(scopeId: string, stepId: string, tier: string): CastScope[] {
+    if (scopeId === PROJECT_WIDE) return [];
     return projectWideCast.filter((c) => c.step_id === stepId && c.tier === tier);
   }
+  function packageActorLine(pkg: PackageItem): string {
+    const ids = (pkg.organizations ?? []).map((o) => o.organization_id);
+    if (ids.length === 0) return "inherits project actors";
+    return ids.map(orgLabel).join(", ");
+  }
+  function scopeCount(scopeId: string): number {
+    return castForScope(scopeId).length;
+  }
+
+  // Officer-picker context — the org/location filters follow the scope being assigned.
+  const assignPkg =
+    assigning && assigning.scope !== PROJECT_WIDE
+      ? packages.find((p) => p.package_id === assigning.scope) ?? null
+      : null;
+  const assignActorOrgIds = useMemo(() => {
+    const s = new Set(project.organizations.map((o) => o.organization_id));
+    (assignPkg?.organizations ?? []).forEach((o) => s.add(o.organization_id));
+    return s;
+  }, [project.organizations, assignPkg]);
+  const assignPkgLocations = assignPkg?.location_codes ?? [];
 
   const pickerResults = useMemo(() => {
     const q = pickerQ.trim().toLowerCase();
     return roster
       .filter((o) => o.is_active !== false)
-      // Org: default to this project's actor orgs; narrow to one; or show everyone.
       .filter((o) => {
         if (pickerOrg === "__all__") return true;
-        if (pickerOrg === "") return o.organization_ids.some((id) => actorOrgIds.has(id));
+        if (pickerOrg === "") return o.organization_ids.some((id) => assignActorOrgIds.has(id));
         return o.organization_ids.includes(pickerOrg);
       })
-      // Location: on a package tab, optionally keep only officers whose scope covers the package.
       .filter((o) => {
-        if (!selectedPkgId || !pickerLocMatch || pkgLocations.length === 0) return true;
-        return locationOverlaps(o.location_codes, pkgLocations);
+        if (!assignPkg || !pickerLocMatch || assignPkgLocations.length === 0) return true;
+        return locationOverlaps(o.location_codes, assignPkgLocations);
       })
       .filter(
         (o) =>
@@ -200,7 +218,7 @@ export function ProjectCastSection({
           `${o.display_name} ${o.email ?? ""} ${(o.positions ?? []).join(" ")}`.toLowerCase().includes(q),
       )
       .slice(0, 40);
-  }, [roster, pickerQ, pickerOrg, actorOrgIds, selectedPkgId, pickerLocMatch, pkgLocations]);
+  }, [roster, pickerQ, pickerOrg, assignActorOrgIds, assignPkg, pickerLocMatch, assignPkgLocations]);
 
   async function assign(officer: OfficerRosterEntry) {
     if (!assigning || !selectedWfId) return;
@@ -217,11 +235,11 @@ export function ProjectCastSection({
         tier: assigning.tier,
         user_id: officer.user_id,
         organization_id: derivedOrg,
-        package_id: selectedPkgId,
+        package_id: assigning.scope === PROJECT_WIDE ? null : assigning.scope,
       });
       setAssigning(null);
       setPickerQ("");
-      await loadCast();
+      await loadAllCast();
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -234,7 +252,7 @@ export function ProjectCastSection({
     setError("");
     try {
       await unstaffCastSlot(project.project_id, scopeId);
-      await loadCast();
+      await loadAllCast();
     } catch (e) {
       setError(friendlyError(e));
     } finally {
@@ -254,88 +272,22 @@ export function ProjectCastSection({
     );
   }
 
-  return (
-    <div className="rounded-lg border border-gray-200 bg-white p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h3 className="text-base font-semibold text-gray-800">Cast — staff the workflow</h3>
-          <p className="mt-1 text-sm text-gray-500">
-            Assign officers to each step&rsquo;s tiers, per package. Project-wide covers every package;
-            override only the packages that differ.
+  function renderSteps(scopeId: string) {
+    if (loading) return <p className="text-xs text-gray-400">Loading…</p>;
+    if (steps.length === 0) return <p className="text-sm text-gray-500">This workflow has no steps yet.</p>;
+    const isPkg = scopeId !== PROJECT_WIDE;
+    return (
+      <div className="space-y-4">
+        {isPkg && (
+          <p className="text-[11px] text-gray-400">
+            Inherits Project-wide unless overridden. Greyed rows come from Project-wide; use
+            &ldquo;+ assign&rdquo; to add an officer for this lot.
           </p>
-        </div>
-        {boundWorkflows.length > 1 && (
-          <select
-            value={selectedWfId ?? ""}
-            onChange={(e) => {
-              setSelectedWfId(e.target.value);
-              setSelectedPkgId(null);
-              setAssigning(null);
-            }}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            {boundWorkflows.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.label}
-                {w.track === "seah" ? " (SEAH)" : ""}
-              </option>
-            ))}
-          </select>
         )}
-      </div>
-
-      {error && (
-        <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
-      )}
-
-      {/* Package tabs — Project-wide + each active package */}
-      <div className="mt-4 flex flex-wrap gap-1 border-b border-gray-100 pb-2">
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedPkgId(null);
-            setAssigning(null);
-          }}
-          className={`rounded px-3 py-1 text-xs font-medium transition ${
-            selectedPkgId === null ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:bg-gray-100"
-          }`}
-        >
-          Project-wide
-        </button>
-        {activePkgs.map((pkg) => (
-          <button
-            key={pkg.package_id}
-            type="button"
-            onClick={() => {
-              setSelectedPkgId(pkg.package_id);
-              setAssigning(null);
-            }}
-            className={`rounded px-3 py-1 text-xs font-medium transition ${
-              selectedPkgId === pkg.package_id ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:bg-gray-100"
-            }`}
-          >
-            {pkg.package_code} · {pkg.name}
-          </button>
-        ))}
-      </div>
-
-      {selectedPkgId && (
-        <p className="mt-2 text-[11px] text-gray-400">
-          Showing this package. Greyed rows are inherited from Project-wide; use “+ assign” to add a
-          package-specific officer.
-        </p>
-      )}
-
-      {loading && <p className="mt-3 text-xs text-gray-400">Loading…</p>}
-      {!loading && steps.length === 0 && (
-        <p className="mt-3 text-sm text-gray-500">This workflow has no steps yet.</p>
-      )}
-
-      <div className="mt-3 space-y-4">
         {steps.map((step) => {
           const tiers = stepTiers(step);
           return (
-            <div key={step.step_id} className="rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+            <div key={step.step_id} className="rounded-lg border border-gray-100 bg-white p-3">
               <div className="mb-2 text-sm font-medium text-gray-700">
                 <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[11px] text-gray-600">
                   {step.step_order}
@@ -344,9 +296,10 @@ export function ProjectCastSection({
               </div>
               <div className="space-y-2">
                 {TIERS.filter((t) => tiers.includes(t.key)).map((t) => {
-                  const current = currentSlot(step.step_id, t.key);
-                  const inherited = inheritedSlot(step.step_id, t.key);
-                  const slotOpen = assigning?.stepId === step.step_id && assigning?.tier === t.key;
+                  const current = slotOfficers(scopeId, step.step_id, t.key);
+                  const inherited = inheritedOfficers(scopeId, step.step_id, t.key);
+                  const slotOpen =
+                    assigning?.scope === scopeId && assigning?.stepId === step.step_id && assigning?.tier === t.key;
                   return (
                     <div key={t.key} className="grid grid-cols-[7rem_1fr] items-start gap-2">
                       <div className={`pt-1 text-xs font-medium ${t.accent}`}>
@@ -357,7 +310,7 @@ export function ProjectCastSection({
                         {inherited.map((c) => (
                           <span
                             key={`inh-${c.scope_id}`}
-                            className="inline-flex items-center gap-1 rounded border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-400"
+                            className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-400"
                             title="Inherited from project-wide"
                           >
                             {officerName(c.user_id)}
@@ -397,14 +350,14 @@ export function ProjectCastSection({
                                 className="rounded border border-gray-300 px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400"
                               >
                                 <option value="">Project actors</option>
-                                {[...actorOrgIds].map((id) => (
+                                {[...assignActorOrgIds].map((id) => (
                                   <option key={id} value={id}>
                                     {orgLabel(id)}
                                   </option>
                                 ))}
                                 <option value="__all__">All officers</option>
                               </select>
-                              {selectedPkgId && pkgLocations.length > 0 && (
+                              {assignPkg && assignPkgLocations.length > 0 && (
                                 <label className="flex items-center gap-1 text-[11px] text-gray-600">
                                   <input
                                     type="checkbox"
@@ -418,7 +371,7 @@ export function ProjectCastSection({
                             <div className="mt-1 max-h-44 overflow-y-auto">
                               {pickerResults.length === 0 && (
                                 <p className="px-1 py-1 text-[11px] text-gray-400">
-                                  No matching officers — try “All officers”, or invite one under
+                                  No matching officers — try &ldquo;All officers&rdquo;, or invite one under
                                   Organizations &amp; officers.
                                 </p>
                               )}
@@ -455,7 +408,7 @@ export function ProjectCastSection({
                           <button
                             type="button"
                             onClick={() => {
-                              setAssigning({ stepId: step.step_id, tier: t.key });
+                              setAssigning({ scope: scopeId, stepId: step.step_id, tier: t.key });
                               setPickerQ("");
                             }}
                             className="rounded border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-500 hover:border-blue-300 hover:text-blue-600"
@@ -468,6 +421,81 @@ export function ProjectCastSection({
                   );
                 })}
               </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-gray-200 bg-white p-5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h3 className="text-base font-semibold text-gray-800">Cast — staff the workflow</h3>
+          <p className="mt-1 text-sm text-gray-500">
+            Set the shared cast once under Project-wide; open a lot to override just the officers
+            that differ for it.
+          </p>
+        </div>
+        {boundWorkflows.length > 1 && (
+          <select
+            value={selectedWfId ?? ""}
+            onChange={(e) => {
+              setSelectedWfId(e.target.value);
+              setExpanded(PROJECT_WIDE);
+              setAssigning(null);
+            }}
+            className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+          >
+            {boundWorkflows.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.label}
+                {w.track === "seah" ? " (SEAH)" : ""}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+
+      {error && (
+        <p className="mt-3 rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
+      )}
+
+      <div className="mt-4 space-y-2">
+        {scopes.map((scope) => {
+          const isOpen = expanded === scope.id;
+          const isPkg = scope.id !== PROJECT_WIDE;
+          const count = scopeCount(scope.id);
+          return (
+            <div
+              key={scope.id}
+              className={`rounded-lg border ${isPkg ? "border-gray-200" : "border-blue-200 bg-blue-50/30"}`}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setExpanded(isOpen ? "" : scope.id);
+                  setAssigning(null);
+                }}
+                className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium text-gray-800">
+                    {scope.label}
+                    {count > 0 && (
+                      <span className="ml-2 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                        {count} staffed
+                      </span>
+                    )}
+                  </div>
+                  <div className="truncate text-xs text-gray-400">
+                    {isPkg && scope.pkg ? `Actors: ${packageActorLine(scope.pkg)}` : scope.sub}
+                  </div>
+                </div>
+                <span className="shrink-0 text-gray-400">{isOpen ? "▾" : "▸"}</span>
+              </button>
+              {isOpen && <div className="border-t border-gray-100 px-4 py-3">{renderSteps(scope.id)}</div>}
             </div>
           );
         })}
