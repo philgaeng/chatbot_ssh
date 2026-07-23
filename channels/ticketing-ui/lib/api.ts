@@ -792,6 +792,10 @@ export interface GrmRole {
   permissions: unknown;
   role_kind?: string | null;
   role_origin?: string | null;
+  /** Permission-template family (role_archetypes) — groups role pickers by function. */
+  archetype?: string | null;
+  /** Actor affiliation (org_category vocab) — soft-narrows the position role picker by office type. */
+  actor_category?: string | null;
   /** SH-7 org-scoped catalog: owning org node (null = global/system). */
   owner_organization_id?: string | null;
   steps_count?: number;
@@ -1032,7 +1036,7 @@ export interface PositionTypeItem {
 }
 
 export interface PositionTypeCreate {
-  position_key: string;
+  // position_key is server-minted from display_name — not part of the create payload.
   display_name: string;
   display_name_ne?: string | null;
   allowed_unit_types?: string[];

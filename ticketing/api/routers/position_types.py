@@ -46,6 +46,23 @@ def _slugify_key(raw: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (raw or "").strip().lower()).strip("_")
 
 
+def _unique_position_key(db: Session, display_name: str) -> str:
+    """Mint a unique, non-null slug from the title. Users never author position keys (the field
+    isn't in PositionTypeCreate), so a numeric suffix (_2, _3…) disambiguates when two positions
+    share a title — guaranteeing the key is always present and unique, and nothing that references
+    it (reports_to_position_key, the reports-to picker) can break on a blank or duplicate value."""
+    base = _slugify_key(display_name) or "position"
+    key = base
+    n = 2
+    while (
+        db.execute(select(PositionType).where(PositionType.position_key == key)).scalar_one_or_none()
+        is not None
+    ):
+        key = f"{base}_{n}"
+        n += 1
+    return key
+
+
 def _role_ok_for_position_track(role_scope: str | None, position_track: str) -> bool:
     """A position's default role must be usable on the position's track.
 
@@ -58,7 +75,8 @@ def _role_ok_for_position_track(role_scope: str | None, position_track: str) -> 
 
 
 class PositionTypeCreate(BaseModel):
-    position_key: str
+    # No position_key: it is server-minted from display_name (see _unique_position_key). Keeping it
+    # off the contract means it can never arrive blank/duplicate and break downstream refs.
     display_name: str
     display_name_ne: str | None = None
     allowed_unit_types: list[str] = []
@@ -182,13 +200,10 @@ def create_position_type(
 ):
     """Create a position type + matrix binding. Standard-track admin / super (doc 16 §7)."""
     require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
-    key = _slugify_key(body.position_key)
-    if not key:
-        raise HTTPException(status_code=400, detail="position_key is required")
     if not body.display_name.strip():
         raise HTTPException(status_code=400, detail="display_name is required")
-    if db.execute(select(PositionType).where(PositionType.position_key == key)).scalar_one_or_none():
-        raise HTTPException(status_code=409, detail=f"position_key already exists: {key}")
+    # Server-minted from the title, always unique & non-null — never user-authored.
+    key = _unique_position_key(db, body.display_name)
 
     # SH-7 §S5: org-scoped catalog — explicit owner wins; otherwise stamp the author's
     # scope node (NULL = global for super_admin / country-wide org_admin).

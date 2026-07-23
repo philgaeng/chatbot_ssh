@@ -8,7 +8,7 @@
  * type (workflow_track), supervisor visibility (visibility_mode), reporting line
  * (reports_to_position_key + reports_to_locus), and owning level (owner_organization_id).
  *
- * `position_key` is immutable after create (mirrors roles.role_key) — shown only on create.
+ * `position_key` is server-minted from the title (never user-authored) and immutable after create.
  * Track/matrix validation is enforced server-side (422); we prevent most of it by only
  * listing track-valid roles, and surface any residual 422/409 via <ErrorNotice>.
  */
@@ -34,6 +34,7 @@ import { ProvenanceHint } from "@/components/shared/ProvenanceHint";
 
 import {
   UNIT_TYPES,
+  UNIT_TYPE_ORG_CATEGORY,
   VISIBILITY_MODES,
   POSITION_TRACKS,
   REPORTS_TO_LOCI,
@@ -42,6 +43,7 @@ import {
   positionTrackLabel,
   reportsToLocusLabel,
   owningLevelLabel,
+  orgCategorySector,
   orgNameMap,
 } from "./orgVocab";
 
@@ -52,6 +54,39 @@ function rolesForTrack(roles: GrmRole[], track: string): GrmRole[] {
   }
   const concrete = track === "seah" ? "seah" : "standard";
   return roles.filter((r) => roleInTrack(r.workflow_scope ?? "", concrete));
+}
+
+/**
+ * Role-picker groups, operational-first (mirrors role_archetypes.ARCHETYPE_LABELS).
+ * Roles whose archetype is null/unlisted (custom rows, admin ladder) fall into "Other".
+ */
+const ARCHETYPE_GROUPS: { key: string; label: string }[] = [
+  { key: "field_actor", label: "Field actors (L1)" },
+  { key: "supervisor", label: "Supervisors (L2)" },
+  { key: "grc_committee", label: "GRC — chair" },
+  { key: "grc_member", label: "GRC — members" },
+  { key: "seah_handler", label: "SEAH handlers" },
+  { key: "observer", label: "Observers (read-only)" },
+];
+
+/** Bucket track-valid roles into ordered archetype groups for <optgroup> rendering. */
+function groupRolesByArchetype(roles: GrmRole[]): { label: string; roles: GrmRole[] }[] {
+  const byArch: Record<string, GrmRole[]> = {};
+  for (const r of roles) {
+    const key = r.archetype ?? "__other__";
+    (byArch[key] ??= []).push(r);
+  }
+  const known = new Set(ARCHETYPE_GROUPS.map((g) => g.key));
+  const groups: { label: string; roles: GrmRole[] }[] = [];
+  for (const g of ARCHETYPE_GROUPS) {
+    const rs = byArch[g.key];
+    if (rs && rs.length) groups.push({ label: g.label, roles: rs });
+  }
+  const other = Object.entries(byArch)
+    .filter(([k]) => !known.has(k))
+    .flatMap(([, rs]) => rs);
+  if (other.length) groups.push({ label: "Other", roles: other });
+  return groups;
 }
 
 export function PositionTypeEditor({
@@ -71,7 +106,6 @@ export function PositionTypeEditor({
   onSaved: (pt: PositionTypeItem) => void;
   onCancel: () => void;
 }) {
-  const [positionKey, setPositionKey] = useState(positionType?.position_key ?? "");
   const [displayName, setDisplayName] = useState(positionType?.display_name ?? "");
   const [displayNameNe, setDisplayNameNe] = useState(positionType?.display_name_ne ?? "");
   const [allowedUnitTypes, setAllowedUnitTypes] = useState<string[]>(
@@ -111,9 +145,40 @@ export function PositionTypeEditor({
 
   const trackRoles = useMemo(() => rolesForTrack(roles, workflowTrack), [roles, workflowTrack]);
 
+  // Soft office-type narrowing: which actor sectors the selected "Used at" office types imply.
+  const selectedSectors = useMemo(() => {
+    const s = new Set<string>();
+    for (const ut of allowedUnitTypes) {
+      const sec = orgCategorySector(UNIT_TYPE_ORG_CATEGORY[ut]);
+      if (sec) s.add(sec);
+    }
+    return s;
+  }, [allowedUnitTypes]);
+
+  // Hard office-type filter: only roles whose affiliation matches the selected office types are
+  // listed (typicalGroups). `otherRoles` (the rest) are hidden from the picker — retained solely to
+  // detect when the CURRENT selection would be hidden, so it is preserved (see currentAtypicalRole).
+  const { typicalGroups, otherRoles } = useMemo(() => {
+    const isTypical = (r: GrmRole): boolean => {
+      if (selectedSectors.size === 0) return true; // no office chosen yet → everything typical
+      const sec = orgCategorySector(r.actor_category);
+      return sec === null || selectedSectors.has(sec); // unclassified role → neutral, never demoted
+    };
+    const typical: GrmRole[] = [];
+    const other: GrmRole[] = [];
+    for (const r of trackRoles) (isTypical(r) ? typical : other).push(r);
+    return { typicalGroups: groupRolesByArchetype(typical), otherRoles: other };
+  }, [trackRoles, selectedSectors]);
+
   // Flag when the current default role isn't valid for the chosen track (server would 422).
   const defaultRoleOutOfTrack =
     !!defaultRoleKey && roles.length > 0 && !trackRoles.some((r) => r.role_key === defaultRoleKey);
+
+  // The hard filter never silently drops the current pick: if it's track-valid but atypical for the
+  // selected office types (hidden from the list), keep it shown as a labelled "current" option.
+  const currentAtypicalRole = defaultRoleOutOfTrack
+    ? undefined
+    : otherRoles.find((r) => r.role_key === defaultRoleKey);
 
   function toggleUnitType(ut: string) {
     setAllowedUnitTypes((prev) =>
@@ -122,10 +187,6 @@ export function PositionTypeEditor({
   }
 
   async function handleSave() {
-    if (mode === "create" && !positionKey.trim()) {
-      setError("Please enter an identifier (it cannot be changed later).");
-      return;
-    }
     if (!displayName.trim()) {
       setError("Please enter a title.");
       return;
@@ -139,7 +200,6 @@ export function PositionTypeEditor({
     try {
       if (mode === "create") {
         const payload: PositionTypeCreate = {
-          position_key: positionKey.trim(),
           display_name: displayName.trim(),
           display_name_ne: displayNameNe.trim() || null,
           allowed_unit_types: allowedUnitTypes,
@@ -224,21 +284,30 @@ export function PositionTypeEditor({
             </div>
           </div>
 
-          {mode === "create" && (
-            <div>
-              <label className="mb-1 block text-xs font-medium text-gray-500">
-                Identifier (cannot change later) *
-              </label>
-              <input
-                value={positionKey}
-                onChange={(e) =>
-                  setPositionKey(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "_"))
-                }
-                placeholder="e.g. senior_divisional_engineer"
-                className="w-full rounded border border-gray-300 px-3 py-1.5 font-mono text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-              />
+          {/* Slicers first: grievance type + office types both narrow the role list below. */}
+          <div>
+            <label className="mb-1 block text-xs font-medium text-gray-500">Used at (office types)</label>
+            <div className="flex flex-wrap gap-2">
+              {UNIT_TYPES.map((ut) => {
+                const on = allowedUnitTypes.includes(ut);
+                return (
+                  <button
+                    key={ut}
+                    type="button"
+                    onClick={() => toggleUnitType(ut)}
+                    aria-pressed={on}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                      on
+                        ? "border-blue-300 bg-blue-100 text-blue-700"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {unitTypeLabel(ut)}
+                  </button>
+                );
+              })}
             </div>
-          )}
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -271,10 +340,20 @@ export function PositionTypeEditor({
                     {roleLabel(defaultRoleKey)} (current — wrong grievance type)
                   </option>
                 )}
-                {trackRoles.map((r) => (
-                  <option key={r.role_key} value={r.role_key}>
-                    {roleLabel(r.role_key, r.display_name)}
+                {currentAtypicalRole && (
+                  <option value={currentAtypicalRole.role_key}>
+                    {roleLabel(currentAtypicalRole.role_key, currentAtypicalRole.display_name)} (current
+                    — atypical for the selected office type{allowedUnitTypes.length === 1 ? "" : "s"})
                   </option>
+                )}
+                {typicalGroups.map((g) => (
+                  <optgroup key={g.label} label={g.label}>
+                    {g.roles.map((r) => (
+                      <option key={r.role_key} value={r.role_key}>
+                        {roleLabel(r.role_key, r.display_name)}
+                      </option>
+                    ))}
+                  </optgroup>
                 ))}
               </select>
               {defaultRoleKey && (
@@ -288,30 +367,6 @@ export function PositionTypeEditor({
                   rejected on save.
                 </ProvenanceHint>
               )}
-            </div>
-          </div>
-
-          <div>
-            <label className="mb-1 block text-xs font-medium text-gray-500">Used at (office types)</label>
-            <div className="flex flex-wrap gap-2">
-              {UNIT_TYPES.map((ut) => {
-                const on = allowedUnitTypes.includes(ut);
-                return (
-                  <button
-                    key={ut}
-                    type="button"
-                    onClick={() => toggleUnitType(ut)}
-                    aria-pressed={on}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
-                      on
-                        ? "border-blue-300 bg-blue-100 text-blue-700"
-                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {unitTypeLabel(ut)}
-                  </button>
-                );
-              })}
             </div>
           </div>
 
