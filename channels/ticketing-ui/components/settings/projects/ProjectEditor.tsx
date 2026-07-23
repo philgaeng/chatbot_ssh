@@ -47,7 +47,6 @@ import { LocationSearch } from "@/components/LocationSearch";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
-import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
 import { ProjectCastSection } from "@/components/settings/projects/ProjectCastSection";
 import { ProjectWorkflowsEditor } from "@/components/settings/workflows/ProjectWorkflowsEditor";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
@@ -548,16 +547,8 @@ export function ProjectEditor({
         )}
       </div>
 
-      {/* doc-13 / DECISION 2026-07-10: the per-project actor-role catalog is retired in
-          favour of a single implementing agency + optional donors (with the last-step
-          donor guardrail). */}
-      <div className="mb-6">
-        <ProjectParticipants
-          project={p}
-          canEdit={canEditProjectWorkflows && !lockTypeConfig}
-          onUpdated={() => onUpdated(p)}
-        />
-      </div>
+      {/* Implementing agency + Donors are now roles in the Project actors table below (setting
+          the role syncs the dedicated implementing_agency_org_id / project_donors fields). */}
 
       {/* Project actors (project-wide org + role) */}
       <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
