@@ -48,6 +48,7 @@ import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
+import { ProjectCastSection } from "@/components/settings/projects/ProjectCastSection";
 import { ProjectWorkflowsEditor } from "@/components/settings/workflows/ProjectWorkflowsEditor";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { PackageRow } from "@/components/settings/projects/PackageRow";
@@ -705,6 +706,10 @@ export function ProjectEditor({
             })}
           </div>
         )}
+      </div>
+
+      <div ref={(el) => { sectionRefs.current.cast = el; }}>
+        <ProjectCastSection project={p} packages={packages} />
       </div>
 
       <div ref={(el) => { sectionRefs.current.staffing = el; }}>

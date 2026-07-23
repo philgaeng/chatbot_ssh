@@ -2681,6 +2681,55 @@ export function deleteScope(userId: string, scopeId: string): Promise<void> {
   });
 }
 
+// ── Per-package cast staffing (DESIGN-cast-model §3.3 / §3.6) ──────────────────
+
+/** One staffed (step, tier) slot for a package (or project-wide when package_id is null). */
+export interface CastScope {
+  scope_id: string;
+  user_id: string;
+  role_key: string;
+  tier: string; // "actor" | "supervisor" | "participant" | "observer"
+  step_id: string;
+  package_id: string | null;
+  location_code: string | null;
+  organization_id: string;
+}
+
+export interface CastAssign {
+  workflow_id: string;
+  step_id: string;
+  tier: string;
+  user_id: string;
+  organization_id: string;
+  package_id?: string | null;
+  location_code?: string | null;
+  includes_children?: boolean;
+}
+
+/** Read the cast for a workflow — project-wide (omit package_id) or for one package. */
+export function readCast(
+  projectId: string,
+  opts: { workflow_id: string; package_id?: string | null },
+): Promise<CastScope[]> {
+  const p = new URLSearchParams();
+  p.set("workflow_id", opts.workflow_id);
+  if (opts.package_id) p.set("package_id", opts.package_id);
+  return apiFetch<CastScope[]>(`/api/v1/projects/${projectId}/cast?${p.toString()}`);
+}
+
+/** Staff one (step, tier) slot — writes an officer_scope via the sanctioned backend writer. */
+export function staffCastSlot(projectId: string, payload: CastAssign): Promise<CastScope> {
+  return apiFetch<CastScope>(`/api/v1/projects/${projectId}/cast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function unstaffCastSlot(projectId: string, scopeId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/cast/${scopeId}`, { method: "DELETE" });
+}
+
 // ── Teammates (for reassign dropdown) ────────────────────────────────────────
 
 export interface TeammatesResponse {
