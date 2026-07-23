@@ -707,7 +707,7 @@ export function ProjectEditor({
       </div>
 
       <div ref={(el) => { sectionRefs.current.staffing = el; }}>
-        <ProjectCastSection project={p} packages={packages} />
+        <ProjectCastSection project={p} packages={packages} orgs={orgs} />
       </div>
     </div>
   );

@@ -22,11 +22,22 @@ import {
   unstaffCastSlot,
   type CastScope,
   type OfficerRosterEntry,
+  type OrganizationItem,
   type PackageItem,
   type ProjectItem,
   type WorkflowStep,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
+
+/** A location code covers another when they share an ancestor path (e.g. P1 covers P1_JHA).
+ *  An officer with no location is country-wide and covers everything. */
+function locationOverlaps(officerLocs: string[] | undefined, pkgLocs: string[]): boolean {
+  if (!officerLocs || officerLocs.length === 0) return true; // country-wide
+  if (pkgLocs.length === 0) return true;
+  return officerLocs.some((ol) =>
+    pkgLocs.some((pl) => ol === pl || ol.startsWith(`${pl}_`) || pl.startsWith(`${ol}_`)),
+  );
+}
 
 const TIERS: { key: string; label: string; hint: string; accent: string }[] = [
   { key: "actor", label: "Actor", hint: "owns & works the case", accent: "text-blue-700" },
@@ -46,9 +57,11 @@ function stepTiers(step: WorkflowStep): string[] {
 export function ProjectCastSection({
   project,
   packages,
+  orgs,
 }: {
   project: ProjectItem;
   packages: PackageItem[];
+  orgs: OrganizationItem[];
 }) {
   const boundWorkflows = useMemo(() => {
     const slots = (project.workflow_slots ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
@@ -73,11 +86,28 @@ export function ProjectCastSection({
   const [roster, setRoster] = useState<OfficerRosterEntry[]>([]);
   const [assigning, setAssigning] = useState<{ stepId: string; tier: string } | null>(null);
   const [pickerQ, setPickerQ] = useState("");
+  const [pickerOrg, setPickerOrg] = useState<string>(""); // "" = project actors, id = one org, "__all__" = everyone
+  const [pickerLocMatch, setPickerLocMatch] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const activePkgs = useMemo(() => packages.filter((p) => p.is_active), [packages]);
+  const selectedPkg = useMemo(
+    () => packages.find((p) => p.package_id === selectedPkgId) ?? null,
+    [packages, selectedPkgId],
+  );
+  const orgLabel = useCallback(
+    (id: string) => orgs.find((o) => o.organization_id === id)?.name ?? id,
+    [orgs],
+  );
+  // Organizations that are actors on this project (project participants + the package's orgs).
+  const actorOrgIds = useMemo(() => {
+    const s = new Set(project.organizations.map((o) => o.organization_id));
+    (selectedPkg?.organizations ?? []).forEach((o) => s.add(o.organization_id));
+    return s;
+  }, [project.organizations, selectedPkg]);
+  const pkgLocations = selectedPkg?.location_codes ?? [];
   const derivedOrg =
     project.implementing_agency_org_id || project.organizations[0]?.organization_id || "";
 
@@ -153,13 +183,24 @@ export function ProjectCastSection({
     const q = pickerQ.trim().toLowerCase();
     return roster
       .filter((o) => o.is_active !== false)
+      // Org: default to this project's actor orgs; narrow to one; or show everyone.
+      .filter((o) => {
+        if (pickerOrg === "__all__") return true;
+        if (pickerOrg === "") return o.organization_ids.some((id) => actorOrgIds.has(id));
+        return o.organization_ids.includes(pickerOrg);
+      })
+      // Location: on a package tab, optionally keep only officers whose scope covers the package.
+      .filter((o) => {
+        if (!selectedPkgId || !pickerLocMatch || pkgLocations.length === 0) return true;
+        return locationOverlaps(o.location_codes, pkgLocations);
+      })
       .filter(
         (o) =>
           !q ||
           `${o.display_name} ${o.email ?? ""} ${(o.positions ?? []).join(" ")}`.toLowerCase().includes(q),
       )
       .slice(0, 40);
-  }, [roster, pickerQ]);
+  }, [roster, pickerQ, pickerOrg, actorOrgIds, selectedPkgId, pickerLocMatch, pkgLocations]);
 
   async function assign(officer: OfficerRosterEntry) {
     if (!assigning || !selectedWfId) return;
@@ -341,7 +382,7 @@ export function ProjectCastSection({
                           </span>
                         ))}
                         {slotOpen ? (
-                          <div className="w-full max-w-sm rounded border border-blue-200 bg-white p-2 shadow-sm">
+                          <div className="w-full max-w-md rounded border border-blue-200 bg-white p-2 shadow-sm">
                             <input
                               autoFocus
                               value={pickerQ}
@@ -349,10 +390,36 @@ export function ProjectCastSection({
                               placeholder="Search officers by name / email / title…"
                               className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                             />
+                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                              <select
+                                value={pickerOrg}
+                                onChange={(e) => setPickerOrg(e.target.value)}
+                                className="rounded border border-gray-300 px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              >
+                                <option value="">Project actors</option>
+                                {[...actorOrgIds].map((id) => (
+                                  <option key={id} value={id}>
+                                    {orgLabel(id)}
+                                  </option>
+                                ))}
+                                <option value="__all__">All officers</option>
+                              </select>
+                              {selectedPkgId && pkgLocations.length > 0 && (
+                                <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                                  <input
+                                    type="checkbox"
+                                    checked={pickerLocMatch}
+                                    onChange={(e) => setPickerLocMatch(e.target.checked)}
+                                  />
+                                  in package locations
+                                </label>
+                              )}
+                            </div>
                             <div className="mt-1 max-h-44 overflow-y-auto">
                               {pickerResults.length === 0 && (
                                 <p className="px-1 py-1 text-[11px] text-gray-400">
-                                  No matching officers. Invite officers under Organizations &amp; officers.
+                                  No matching officers — try “All officers”, or invite one under
+                                  Organizations &amp; officers.
                                 </p>
                               )}
                               {pickerResults.map((o) => (
