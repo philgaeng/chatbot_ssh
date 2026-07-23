@@ -298,4 +298,16 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "description": "Senior oversight — read-only access to both standard and SEAH cases.",
         "permissions": ["tickets:read", "reports:read", "seah:access"],
     },
+    {
+        # Cast-model plumbing (DESIGN-cast-model §3.4): the optional Dispatcher — a staffed
+        # holder of the reassignment capability, resolved before Supervisor in the chain.
+        # Not a cast tier; permissions are tier/capability-derived (empty here).
+        "role_key": "reassign_dispatcher",
+        "display_name": "Dispatcher",
+        "workflow_scope": "Both",
+        "jurisdiction_mode": "field",
+        "role_origin": "system",
+        "description": "Reassignment authority (cast model plumbing — not user-editable).",
+        "permissions": [],
+    },
 ]

@@ -508,6 +508,7 @@ def add_step(
         informed_roles=payload.informed_roles or [],
         observer_roles=payload.observer_roles or [],
         informed_pii_access=payload.informed_pii_access,
+        actor_can_reassign=payload.actor_can_reassign,
         stakeholders=payload.stakeholders,
         expected_actions=payload.expected_actions,
     )
@@ -585,6 +586,8 @@ def update_step(
         step.observer_roles = payload.observer_roles or []
     if "informed_pii_access" in fields_set:
         step.informed_pii_access = bool(payload.informed_pii_access)
+    if "actor_can_reassign" in fields_set:
+        step.actor_can_reassign = bool(payload.actor_can_reassign)
     if "stakeholders" in fields_set:
         step.stakeholders = payload.stakeholders
     if "expected_actions" in fields_set:

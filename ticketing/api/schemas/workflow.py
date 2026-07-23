@@ -23,6 +23,7 @@ class WorkflowStepResponse(BaseModel):
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -45,6 +46,7 @@ class WorkflowStepCreate(BaseModel):
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (DESIGN-cast-model §3.5): when any of these is set, the step's tier
@@ -64,6 +66,7 @@ class WorkflowStepUpdate(BaseModel):
     informed_roles: Optional[list[str]] = None
     observer_roles: Optional[list[str]] = None
     informed_pii_access: Optional[bool] = None
+    actor_can_reassign: Optional[bool] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (see WorkflowStepCreate).

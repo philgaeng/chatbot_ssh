@@ -173,6 +173,7 @@ export interface WorkflowStep {
   informed_roles: string[];
   observer_roles: string[];
   informed_pii_access: boolean;
+  actor_can_reassign?: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -710,6 +711,7 @@ export interface StepPayload {
   informed_roles?: string[];
   observer_roles?: string[];
   informed_pii_access?: boolean;
+  actor_can_reassign?: boolean;
   // Tier-toggle editor (DESIGN-cast-model §3.5): on/off toggles → backend mints synthetic keys.
   supervisor_enabled?: boolean;
   participants_enabled?: boolean;

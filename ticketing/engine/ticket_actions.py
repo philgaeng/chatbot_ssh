@@ -486,30 +486,38 @@ def request_reassignment(db: Session, ticket: Ticket, actor: "CurrentUser", payl
     if reason == "OTHER" and not (payload.reassignment_notes or "").strip():
         raise ActionError("reassignment_notes required when reason is OTHER")
 
-    supervisor_id = _find_supervisor_user_id(db, ticket)
-    if not supervisor_id:
+    # DESIGN-cast-model §3.4: resolve the reassignment authority via the fallback chain
+    # (Dispatcher → Supervisor → project_admin). exclude_self=True — a bounce never targets
+    # the assignee themselves. project_admin is the guaranteed backstop, so this only dead-ends
+    # on a misconfigured project with no admin at all.
+    from ticketing.services.reassignment import resolve_reassignment_authority
+
+    authority = resolve_reassignment_authority(db, ticket, exclude_self=True)
+    target_id = authority.user_id
+    if not target_id:
         raise ActionError(
-            "No supervisor is available for this step. "
-            "Reassign directly to a teammate at the same level instead."
+            "No reassignment authority is configured for this project. "
+            "Ask an admin to staff a Dispatcher or Supervisor, or add a project administrator."
         )
 
     old_assigned = ticket.assigned_to_user_id
-    ticket.assigned_to_user_id = supervisor_id
+    ticket.assigned_to_user_id = target_id
     ticket.updated_by_user_id = actor.user_id
 
     event = _add_event(
         db, ticket, "REASSIGNMENT_REQUESTED",
         old_assigned=old_assigned,
-        new_assigned=supervisor_id,
+        new_assigned=target_id,
         step_id=event_step_id,
         note=(payload.reassignment_notes or "").strip() or None,
         payload={
             "reason_code": reason,
             "reason_notes": (payload.reassignment_notes or "").strip() or None,
             "requested_by": actor.user_id,
+            "authority_source": authority.source,
         },
         seen=False,
-        notify_user_id=supervisor_id,
+        notify_user_id=target_id,
         created_by=actor.user_id,
         actor_role=_actor_role(actor),
         summary_regen_required=True,
@@ -517,19 +525,19 @@ def request_reassignment(db: Session, ticket: Ticket, actor: "CurrentUser", payl
     _add_event(
         db, ticket, "ASSIGNED",
         old_assigned=old_assigned,
-        new_assigned=supervisor_id,
+        new_assigned=target_id,
         step_id=event_step_id,
-        note=f"Reassignment routed to supervisor ({reason.replace('_', ' ').lower()})",
-        payload={"reason_code": reason, "via_reassignment_request": True},
+        note=f"Reassignment routed to {authority.source.replace('_', ' ')} ({reason.replace('_', ' ').lower()})",
+        payload={"reason_code": reason, "via_reassignment_request": True, "authority_source": authority.source},
         seen=False,
-        notify_user_id=supervisor_id,
+        notify_user_id=target_id,
         created_by=actor.user_id,
         actor_role=_actor_role(actor),
         summary_regen_required=False,
     )
     assignment_notify = None
-    if supervisor_id != old_assigned:
-        assignment_notify = (supervisor_id, old_assigned, "reassign")
+    if target_id != old_assigned:
+        assignment_notify = (target_id, old_assigned, "reassign")
     return ActionOutcome(event=event, ticket=ticket, assignment_notify=assignment_notify)
 
 

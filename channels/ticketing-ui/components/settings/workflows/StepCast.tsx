@@ -53,6 +53,8 @@ export function StepCast({
   onObserversEnabled,
   informedPii,
   onInformedPii,
+  actorCanReassign,
+  onActorCanReassign,
   hasNextStep,
 }: {
   supervisorEnabled: boolean;
@@ -63,6 +65,8 @@ export function StepCast({
   onObserversEnabled: (v: boolean) => void;
   informedPii: boolean;
   onInformedPii: (v: boolean) => void;
+  actorCanReassign: boolean;
+  onActorCanReassign: (v: boolean) => void;
   /** Whether a later step exists — drives the read-only escalation-target line. */
   hasNextStep?: boolean;
 }) {
@@ -132,6 +136,16 @@ export function StepCast({
         title="Observers (can view)"
         gloss="Read-only; no notifications."
       />
+
+      {/* Advanced — Actor self-serve reassignment (§3.4 chain otherwise). */}
+      <div className="border-t border-blue-100 pt-2">
+        <TierToggle
+          on={actorCanReassign}
+          onToggle={() => onActorCanReassign(!actorCanReassign)}
+          title="Actor can self-reassign at this step"
+          gloss="Advanced — lets the assigned Actor route the ticket directly. Otherwise the chain is Dispatcher → Supervisor → project admin."
+        />
+      </div>
 
       {/* Escalation target — read-only, derived from step order. */}
       <div className="text-[11px] text-gray-500 bg-white/60 border border-blue-100 rounded px-2 py-1.5">

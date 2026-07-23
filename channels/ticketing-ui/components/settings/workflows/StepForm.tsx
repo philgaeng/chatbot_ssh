@@ -36,6 +36,7 @@ export function StepForm({
   const [participantsEnabled, setParticipantsEnabled] = useState<boolean>((step.informed_roles?.length ?? 0) > 0);
   const [observersEnabled, setObserversEnabled] = useState<boolean>((step.observer_roles?.length ?? 0) > 0);
   const [informedPii, setInformedPii] = useState<boolean>(step.informed_pii_access ?? false);
+  const [actorCanReassign, setActorCanReassign] = useState<boolean>(step.actor_can_reassign ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -58,6 +59,7 @@ export function StepForm({
         participants_enabled: participantsEnabled,
         observers_enabled: observersEnabled,
         informed_pii_access: informedPii,
+        actor_can_reassign: actorCanReassign,
       };
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
@@ -110,6 +112,8 @@ export function StepForm({
         onObserversEnabled={setObserversEnabled}
         informedPii={informedPii}
         onInformedPii={setInformedPii}
+        actorCanReassign={actorCanReassign}
+        onActorCanReassign={setActorCanReassign}
         hasNextStep={hasNextStep}
       />
 

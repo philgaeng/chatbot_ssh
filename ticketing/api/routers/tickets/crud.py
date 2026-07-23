@@ -81,11 +81,25 @@ def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -
     only when no supervisor is resolvable. This will be superseded by the ``can_reassign``
     resolution chain in Phase 4.
     """
-    if current_user.is_admin:
+    if current_user.is_admin:  # covers project_admin+ (the §3.4 backstop)
         return True
     step = get_current_step(ticket, db)
     if step and user_holds_tier_on_step(step, current_user.role_keys, SUPERVISOR):
         return True
+    # §3.4 Dispatcher for the ticket's project/package.
+    from ticketing.services.reassignment import dispatcher_for_ticket
+
+    disp = dispatcher_for_ticket(db, ticket)
+    if disp and current_user.matches_assignee(disp):
+        return True
+    # §3.4 Actor self-serve: the per-step toggle grants the assignee reassignment authority.
+    if (
+        step and getattr(step, "actor_can_reassign", False)
+        and ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id)
+        and user_holds_tier_on_step(step, current_user.role_keys, ACTOR)
+    ):
+        return True
+    # TP-12 legacy fallback: assigned Actor may self-reassign when no supervisor is resolvable.
     if not _step_supervisor_available(db, ticket):
         if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
             if step and user_holds_tier_on_step(step, current_user.role_keys, ACTOR):
