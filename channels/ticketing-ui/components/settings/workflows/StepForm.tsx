@@ -29,8 +29,6 @@ export function StepForm({
   const [stepKey, setStepKey] = useState(step.step_key);
   const [responseH, setResponseH] = useState<string>(step.response_time_hours?.toString() ?? "");
   const [resolutionD, setResolutionD] = useState<string>(step.resolution_time_days?.toString() ?? "");
-  const [actions, setActions] = useState<string[]>(step.expected_actions ?? []);
-  const [newAction, setNewAction] = useState("");
   // Tier toggles derived from the step's current fields.
   const [supervisorEnabled, setSupervisorEnabled] = useState<boolean>(!!step.supervisor_role);
   const [participantsEnabled, setParticipantsEnabled] = useState<boolean>((step.informed_roles?.length ?? 0) > 0);
@@ -53,7 +51,6 @@ export function StepForm({
         step_key: stepKey.trim() || undefined,
         response_time_hours: responseH ? parseInt(responseH) : null,
         resolution_time_days: resolutionD ? parseInt(resolutionD) : null,
-        expected_actions: actions.length ? actions : null,
         // Tier toggles → backend mints/clears synthetic per-step-tier keys.
         supervisor_enabled: supervisorEnabled,
         participants_enabled: participantsEnabled,
@@ -68,12 +65,6 @@ export function StepForm({
     } finally {
       setSaving(false);
     }
-  }
-
-  function addAction() {
-    const t = newAction.trim();
-    if (t && !actions.includes(t)) setActions([...actions, t]);
-    setNewAction("");
   }
 
   return (
@@ -139,35 +130,6 @@ export function StepForm({
             placeholder="e.g. 7"
             className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
-        </div>
-      </div>
-
-      {/* Expected actions (advanced guidance) */}
-      <div>
-        <label className="text-xs font-medium text-gray-500 block mb-1">Expected actions</label>
-        <div className="flex flex-wrap gap-1 mb-1">
-          {actions.map((a) => (
-            <span key={a} className="flex items-center gap-1 text-xs bg-white border border-gray-200 text-gray-700 px-2 py-0.5 rounded">
-              {a}
-              <button onClick={() => setActions(actions.filter((x) => x !== a))} className="text-gray-400 hover:text-red-500 leading-none">×</button>
-            </span>
-          ))}
-        </div>
-        <div className="flex gap-2">
-          <input
-            value={newAction}
-            onChange={(e) => setNewAction(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addAction()}
-            placeholder="e.g. Investigate root cause"
-            className="flex-1 text-xs border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-          />
-          <button
-            onClick={addAction}
-            disabled={!newAction.trim()}
-            className="text-xs bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded disabled:opacity-40 transition"
-          >
-            Add
-          </button>
         </div>
       </div>
 

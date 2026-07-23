@@ -121,10 +121,13 @@ export function WorkflowEditor({
   async function handleAddStep() {
     setAddingStep(true);
     try {
-      // Tier-toggle model: Actor is auto-minted; sending a toggle enables tier-toggle mode.
+      // Tier-toggle model: Actor is auto-minted. Sensible defaults — Supervisor / Participants
+      // / Observers on; Actor self-reassign stays off (the advanced escape hatch).
       const newStep = await addStep(wf.workflow_id, {
         display_name: `Step ${steps.length + 1}`,
         supervisor_enabled: true,
+        participants_enabled: true,
+        observers_enabled: true,
       });
       setWf(prev => ({ ...prev, steps: [...prev.steps, newStep] }));
       setExpanded(newStep.step_id);
