@@ -1,6 +1,8 @@
 # Brief — Roles catalog cleanup (for a fresh agent)
 
-> **Status:** open (unstarted) · **Owner:** settings/roles · **Size:** S–M · **Type:** UI clarity + backend parity
+> **⛔ Status: OBVIATED — do not implement.** Superseded by [`../DESIGN-cast-model-and-package-staffing.md`](../DESIGN-cast-model-and-package-staffing.md), which **removes the operational Roles tab** and **retires the archetype** entirely. Both tasks below polish a surface that is being deleted (Task A relabels the archetype field; Task B de-slugs the role create modal) — there is no user-authored operational role left to mint a key for. Kept for provenance only.
+>
+> ~~**Status:** open (unstarted) · **Owner:** settings/roles · **Size:** S–M · **Type:** UI clarity + backend parity~~
 > **Purpose:** two small, related cleanups to the operational **Roles catalog** (Settings → Workflows, roles & permissions → Roles & permissions), surfaced during a manual review. Self-contained — read this + the linked specs and you can start immediately. Both mirror patterns **already shipped this session** (see §Precedent), so this is "copy the position pattern to roles," not new design.
 
 ---
