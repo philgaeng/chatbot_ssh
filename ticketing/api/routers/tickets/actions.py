@@ -32,6 +32,8 @@ from ticketing.engine.ticket_actions import (
     _auto_acknowledge_if_assigned_actor,
 )
 from ticketing.engine.workflow_engine import get_current_step
+from ticketing.constants.tiers import SUPERVISOR
+from ticketing.services.tier_permissions import user_holds_tier_on_step
 from ticketing.tasks.notifications import enqueue_assignment_notifications, notify_complainant
 from ticketing.tasks.llm import generate_findings, generate_resolved_case_summary, translate_note
 from ticketing.models.ticket import Ticket
@@ -43,13 +45,17 @@ router = APIRouter()
 
 
 def _can_resolve_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
-    """Assignee, admin, or current step supervisor may resolve (spec §2.1 Q1-b)."""
+    """Assignee, admin, or current step Supervisor tier may resolve (spec §2.1 Q1-b).
+
+    The supervisor branch is the Supervisor-tier membership axis (DESIGN-cast-model §6):
+    ``RESOLVE`` is in the Supervisor tier's capabilities, gated by holding that tier.
+    """
     if current_user.is_admin:
         return True
     if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
         return True
     step = get_current_step(ticket, db)
-    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
+    if step and user_holds_tier_on_step(step, current_user.role_keys, SUPERVISOR):
         return True
     return False
 
