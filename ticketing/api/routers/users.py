@@ -141,6 +141,8 @@ def _role_to_response(db: Session, role: Role) -> RoleResponse:
         permissions=role.permissions,
         role_kind=role.role_kind,
         role_origin=role.role_origin,
+        archetype=role.archetype,
+        actor_category=role.actor_category,
         owner_organization_id=role.owner_organization_id,
         steps_count=steps,
         officers_count=officers,
@@ -216,6 +218,9 @@ def create_role(
         permissions=perms,
         role_kind="operational",
         role_origin="custom",
+        # Persist the archetype the author picked (was discarded) so custom roles group with
+        # the seed catalog in the role pickers. "custom" (free-form perms) stays ungrouped.
+        archetype=body.archetype if body.archetype != "custom" else None,
         # SH-7 §S5: stamp the author's scope node (NULL = global for super / country-wide).
         owner_organization_id=catalog_owner_for(current_user, track),
     )

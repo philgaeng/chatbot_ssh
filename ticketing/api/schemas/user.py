@@ -18,6 +18,10 @@ class RoleResponse(BaseModel):
     permissions: Any
     role_kind: str | None = None
     role_origin: str | None = None
+    # Permission-template family (role_archetypes) — groups the role pickers by function.
+    archetype: str | None = None
+    # Actor affiliation (org_category vocab) — soft-narrows the position role picker by office type.
+    actor_category: str | None = None
     # SH-7 org-scoped catalog: the owning org node (NULL = global/system). Drives the
     # "available at DoR & below" owning-level chip in the role picker (RB frame 08).
     owner_organization_id: str | None = None

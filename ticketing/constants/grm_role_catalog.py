@@ -88,15 +88,26 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
         "role_key": "local_admin",
         "display_name": "Local Admin",
         "workflow_scope": "Standard",
+        # Legacy admin key — superseded by the org_admin/project_admin/officer_admin ladder
+        # (doc 11; demo_officers.OFFICER_LOCAL_ADMIN now aliases country-admin). It is NOT in
+        # ADMIN_ROLE_KEYS, but it is still honored as an admin everywhere in the authz layer
+        # (admin_access.is_*_admin, ticket_access, tickets crud/viewers/summary admin sets), so
+        # it must be role_kind="admin". Left unset it defaulted to "operational" and leaked into
+        # the operational role pickers (position default_role, quarterly-report recipients).
+        "role_kind": "admin",
+        "role_origin": "system",
         "description": (
-            "Administrative access scoped to their organization and location."
+            "Legacy admin — access scoped to their organization and location. "
+            "Superseded by org_admin; retained only to honor existing grants."
         ),
         "permissions": ["tickets:read", "tickets:write", "users:manage", "settings:write"],
     },
     {
         "role_key": "site_safeguards_focal_person",
         "display_name": "Site Safeguards Focal Person",
+        "actor_category": "government",
         "workflow_scope": "Standard",
+        "archetype": "field_actor",
         "description": (
             "Level 1 officer — first point of contact for standard grievances."
         ),
@@ -110,7 +121,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "country_l1_fallback",
         "display_name": "Country L1 Fallback Officer",
+        "actor_category": "government",
         "workflow_scope": "Standard",
+        "archetype": "field_actor",
         "jurisdiction_mode": "country",
         "description": (
             "Last-resort L1 assignee when no district- or province-scoped site "
@@ -127,7 +140,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "pd_piu_safeguards_focal",
         "display_name": "PD / PIU Safeguards Focal",
+        "actor_category": "government",
         "workflow_scope": "Standard",
+        "archetype": "supervisor",
         "description": "Level 2 officer — receives escalations from L1.",
         "permissions": [
             "tickets:read",
@@ -140,7 +155,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "grc_chair",
         "display_name": "GRC Chair",
+        "actor_category": "government",
         "workflow_scope": "Standard",
+        "archetype": "grc_committee",
         "description": (
             "Level 3 — convenes GRC hearing and records the committee decision."
         ),
@@ -157,7 +174,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "grc_member",
         "display_name": "GRC Member",
+        "actor_category": "government",
         "workflow_scope": "Standard",
+        "archetype": "grc_member",
         "description": (
             "Level 3 — participates in GRC hearing. Receives hearing notifications."
         ),
@@ -166,7 +185,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "adb_national_project_director",
         "display_name": "ADB National Project Director",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": "Observer — read-only oversight of standard GRM cases.",
         "permissions": ["tickets:read", "reports:read"],
@@ -174,7 +195,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "adb_hq_safeguards",
         "display_name": "ADB HQ Safeguards",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": "Observer — read-only oversight of standard GRM cases.",
         "permissions": ["tickets:read", "reports:read"],
@@ -182,7 +205,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "adb_hq_project",
         "display_name": "ADB HQ Project",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": "Observer — project oversight.",
         "permissions": ["tickets:read", "reports:read"],
@@ -193,7 +218,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "donor_consultant",
         "display_name": "Donor — Consultant",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": (
             "Donor-side consultant — read-only oversight; kept informed on final "
@@ -204,7 +231,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "donor_national",
         "display_name": "Donor — National Officer",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": (
             "Donor national officer — read-only oversight; kept informed on final "
@@ -215,7 +244,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "donor_hq",
         "display_name": "Donor — HQ",
+        "actor_category": "donor",
         "workflow_scope": "Standard",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": (
             "Donor HQ officer — read-only oversight; kept informed on final escalation "
@@ -226,7 +257,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "seah_national_officer",
         "display_name": "SEAH National Officer",
+        "actor_category": "government",
         "workflow_scope": "SEAH",
+        "archetype": "seah_handler",
         "description": (
             "Level 1 SEAH officer — handles SEAH cases. Invisible to standard officers."
         ),
@@ -242,7 +275,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "seah_hq_officer",
         "display_name": "SEAH HQ Officer",
+        "actor_category": "government",
         "workflow_scope": "SEAH",
+        "archetype": "seah_handler",
         "description": "Level 2 SEAH officer — receives SEAH escalations.",
         "permissions": [
             "tickets:read",
@@ -256,7 +291,9 @@ GRM_ROLE_CATALOG: list[dict[str, Any]] = [
     {
         "role_key": "adb_hq_exec",
         "display_name": "ADB HQ Executive",
+        "actor_category": "donor",
         "workflow_scope": "Both",
+        "archetype": "observer",
         "jurisdiction_mode": "country",
         "description": "Senior oversight — read-only access to both standard and SEAH cases.",
         "permissions": ["tickets:read", "reports:read", "seah:access"],

@@ -71,6 +71,15 @@ class Role(Base):
     role_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="operational")
     # system (seed/TOR) | custom (org_admin created)
     role_origin: Mapped[str] = mapped_column(String(16), nullable=False, default="system")
+    # Permission-template family (ticketing.constants.role_archetypes): field_actor | supervisor
+    # | grc_committee | grc_member | observer | informed | seah_handler. Already chosen at custom-
+    # role creation (was discarded); persisted here to group the role pickers by function. NULL for
+    # admin-ladder roles and pre-archetype custom rows.
+    archetype: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Actor affiliation (org_category vocab: government | local_government | donor | third_party) —
+    # soft-narrows the position-type role picker by the office types it is used at. NULL = neutral
+    # (custom rows, admin ladder): never demoted, always shown as typical.
+    actor_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Org-scoped catalog (doc 11 §3.3, SH-7): available at this org node + descendants;
     # NULL = global (super-owned / system-seeded). Mirrors position_types.owner_organization_id.
     owner_organization_id: Mapped[str | None] = mapped_column(
