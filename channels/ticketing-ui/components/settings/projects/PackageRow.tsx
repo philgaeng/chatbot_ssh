@@ -13,6 +13,7 @@ import {
   type PackageItem,
   type OrganizationItem,
   type OrgRole,
+  type ProjectItem,
 } from "@/lib/api";
 import {
   normalizeEntityCodeInput,
@@ -20,8 +21,10 @@ import {
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
+import { CastStaffing } from "@/components/settings/projects/CastStaffing";
 
 export function PackageRow({
+  project,
   projectId,
   pkg,
   orgs,
@@ -33,6 +36,7 @@ export function PackageRow({
   onAddLoc,
   onRemoveLoc,
 }: {
+  project:      ProjectItem;
   projectId:    string;
   pkg:          PackageItem;
   orgs:         OrganizationItem[];
@@ -268,6 +272,14 @@ export function PackageRow({
               excludeCodes={pkg.location_codes}
               onSelect={(code) => onAddLoc(code)}
             />
+          </div>
+
+          {/* Staffing for this lot (DESIGN-cast-model §3.6) — inherits Project-wide, override here. */}
+          <div className="border-t border-gray-200 pt-4">
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2">
+              Staffing — {pkg.name}
+            </h4>
+            <CastStaffing project={project} orgs={orgs} package={pkg} />
           </div>
 
           {dirty && (

@@ -641,6 +641,10 @@ export function ProjectEditor({
       </div>
 
       {/* Packages (lot-level actors + locations) */}
+      <div ref={(el) => { sectionRefs.current.staffing = el; }} className="mt-8 pt-6 border-t border-gray-100">
+        <ProjectCastSection project={p} orgs={orgs} />
+      </div>
+
       <div ref={(el) => { sectionRefs.current.packages = el; }} className="mt-8 pt-6 border-t border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -685,6 +689,7 @@ export function ProjectEditor({
               return (
                 <PackageRow
                   key={pkg.package_id}
+                  project={p}
                   projectId={p.project_id}
                   pkg={pkg}
                   orgs={orgs}
@@ -706,9 +711,6 @@ export function ProjectEditor({
         )}
       </div>
 
-      <div ref={(el) => { sectionRefs.current.staffing = el; }}>
-        <ProjectCastSection project={p} packages={packages} orgs={orgs} />
-      </div>
     </div>
   );
 }
