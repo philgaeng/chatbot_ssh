@@ -156,11 +156,14 @@ def test_assign_prefill_and_override(officer_env):
         app.dependency_overrides.clear(); db.close()
 
 
-def test_assign_untiered_position_requires_explicit_role(officer_env):
-    """DESIGN-cast-model §3.2: a display-only title carries no default role — staffing must
-    pass the tier explicitly. Assign without role_key → 422; with role_key → 201."""
+def test_assign_untiered_position_records_descriptive_only(officer_env):
+    """DESIGN-cast-model: a display-only title carries no role. Adding an untiered position with
+    no role_key is a DESCRIPTIVE add — it records the position but mints NO scope; the role/tier
+    is bound by per-package Cast staffing (Projects tab). An explicit role_key still staffs
+    (mints a scope) for back-compat / direct assignment."""
     from ticketing.models.base import SessionLocal
     from ticketing.models.position_type import PositionType
+    from ticketing.models.officer_position import OfficerPosition
 
     email = officer_env["email"]
     s = SessionLocal()
@@ -173,12 +176,13 @@ def test_assign_untiered_position_requires_explicit_role(officer_env):
 
     app, client, db = _client(_super())
     try:
-        # no default, no override → the tier is required
+        scopes_before = len(_scopes(email))
+        # no default, no override → position recorded, but NO scope minted (Cast binds the tier)
         r = client.post(f"/api/v1/users/{email}/positions", json={
             "position_type_id": pt_id, "organization_id": "DOR", "location_code": "P1_JHA"})
-        assert r.status_code == 422, r.text
-        assert "role_key" in r.text
-        # explicit role_key → the scope is minted with that role
+        assert r.status_code == 201, r.text
+        assert len(_scopes(email)) == scopes_before  # descriptive add — no enforcement row
+        # explicit role_key → the scope IS minted with that role (direct staffing)
         r2 = client.post(f"/api/v1/users/{email}/positions", json={
             "position_type_id": pt_id, "organization_id": "DOR", "location_code": "P1_JHA",
             "role_key": _ROLE_STD})

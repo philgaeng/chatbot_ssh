@@ -844,18 +844,31 @@ def _build_officer_roster(db: Session) -> list[OfficerRosterEntry]:
         ).scalars().all()
         onboard_map = {o.user_id: o.status for o in ob_rows}
 
-    from ticketing.services.officer_admin import (
-        officer_roster_onboarding_status,
-        sync_officer_onboarding_status,
-    )
+    from ticketing.services.officer_admin import activate_officer_onboarding
+    from ticketing.services.keycloak_users import keycloak_onboarding_pending_map
 
+    # Bulk Keycloak onboarding state — ONE realm scan (cached), not one lookup per officer.
+    # This replaces the per-officer _keycloak_find_user calls (with a re-auth each) that made the
+    # roster 30s+ on a large realm. Empty when Keycloak isn't configured → fall back to DB rows.
+    kc_pending = keycloak_onboarding_pending_map()
+
+    def _onboarding_status(uid: str) -> str:
+        if kc_pending:
+            # KC is the badge's source of truth; an unknown user is pending (parity with the old
+            # _keycloak_find_user returning None → pending).
+            return "active" if kc_pending.get(uid.lower(), True) is False else "invited"
+        return "invited" if onboard_map.get(uid) == "invited" else "active"
+
+    # Promote invited → active in the DB when Keycloak says setup is done (bulk, no per-officer
+    # call). Only user_roles officers are in `order` here; that matches the prior behaviour.
     roster_synced = False
-    for uid in order:
-        if onboard_map.get(uid) != "invited":
-            continue
-        if sync_officer_onboarding_status(db, uid):
-            onboard_map[uid] = "active"
-            roster_synced = True
+    if kc_pending:
+        for uid in order:
+            if onboard_map.get(uid) != "invited":
+                continue
+            if kc_pending.get(uid.lower(), True) is False and activate_officer_onboarding(db, uid):
+                onboard_map[uid] = "active"
+                roster_synced = True
     if roster_synced:
         db.commit()
 
@@ -870,6 +883,24 @@ def _build_officer_roster(db: Session) -> list[OfficerRosterEntry]:
             order.append(email)
             if profile.organization_id:
                 orgs_by[email].add(profile.organization_id)
+
+    # Include position-based invitees (DESIGN-cast-model): a role-free invite records an
+    # officer_positions row but no user_roles/officer_scopes until Cast staffing. Without this
+    # they'd be invisible in the Directory (and absent from Keycloak in bypass mode). They show
+    # as "invited, unstaffed" — a position, no roles.
+    from ticketing.models.officer_position import OfficerPosition as _OfficerPosition
+
+    pos_holder_rows = db.execute(
+        select(_OfficerPosition.user_id, _OfficerPosition.organization_id)
+        .where(_OfficerPosition.is_active.is_(True))
+        .distinct()
+    ).all()
+    for uid, org_id in pos_holder_rows:
+        if uid not in role_keys_by:
+            role_keys_by[uid] = []
+            order.append(uid)
+        if org_id:
+            orgs_by[uid].add(org_id)
 
     if order:
         scope_rows = db.execute(
@@ -950,7 +981,7 @@ def _build_officer_roster(db: Session) -> list[OfficerRosterEntry]:
             package_ids=sorted(pkg_by.get(uid, set())),
             scopes=scope_detail_by.get(uid, []),
             positions=positions_by.get(uid, []),
-            onboarding_status=officer_roster_onboarding_status(db, uid),
+            onboarding_status=_onboarding_status(uid),
             is_active=active_map.get(uid, True),
         )
 
@@ -1391,7 +1422,10 @@ def patch_my_profile(
 
 class OfficerInviteRequest(BaseModel):
     email: str
-    role_key: str
+    # Position-based invite (DESIGN-cast-model): role_key is optional. When omitted, the invite
+    # only provisions the account + records the position; the operational role/scope binding is
+    # created later by per-package Cast staffing. A role_key is still accepted for legacy callers.
+    role_key: Optional[str] = None
     organization_id: str
     location_code: Optional[str] = None
     project_id: Optional[str] = None
@@ -1472,9 +1506,74 @@ def invite_officer(
     if not email or "@" not in email:
         raise HTTPException(status_code=422, detail="Valid email is required")
 
+    role_key = (body.role_key or "").strip() or None
+
+    # ── Position-based invite (DESIGN-cast-model §3.4): no operational role is chosen here.
+    # We only provision the account + record the descriptive officer_positions row. The role
+    # and jurisdiction (officer_scopes / user_roles) are minted later by per-package Cast
+    # staffing on the Projects tab. Until then the officer is "invited, unstaffed" — visible in
+    # the Directory (roster surfaces position holders) but with no queue access.
+    if role_key is None:
+        if not body.position_type_id:
+            raise HTTPException(
+                status_code=422,
+                detail="Provide a position (position_type_id) or a role_key.",
+            )
+        from ticketing.models.officer_position import OfficerPosition
+        from ticketing.models.position_type import PositionType
+
+        pt = db.get(PositionType, body.position_type_id)
+        if pt is None:
+            raise HTTPException(status_code=404, detail="Position type not found")
+
+        if keycloak_configured():
+            keycloak_create_user(email, None, body.organization_id, body.temp_password)
+            onboarding_status = "invited"
+        else:
+            onboarding_status = "active"
+
+        db.add(OfficerPosition(
+            user_id=email,
+            position_type_id=pt.position_type_id,
+            organization_id=body.organization_id,
+            is_active=True,
+        ))
+        ob = db.get(OfficerOnboarding, email)
+        if ob:
+            ob.status = onboarding_status
+            ob.updated_at = datetime.now(timezone.utc)
+        else:
+            db.add(OfficerOnboarding(user_id=email, status=onboarding_status))
+
+        log_admin_audit(
+            db,
+            actor_user_id=current_user.user_id,
+            action="officer.invite",
+            target_user_id=email,
+            payload={
+                "position_type_id": pt.position_type_id,
+                "organization_id": body.organization_id,
+            },
+        )
+        from ticketing.services.officer_admin import sync_officer_keycloak_roles
+        from ticketing.services.keycloak_users import invalidate_officer_profiles_cache
+
+        sync_officer_keycloak_roles(db, email)
+        invalidate_officer_profiles_cache()  # new KC user → refresh the roster cache
+        db.commit()
+
+        msg = (
+            "Officer created. Staff them on a package (Projects → Cast) to grant access."
+            if not keycloak_configured()
+            else "Officer invited in Keycloak; setup email sent. Staff them on a package "
+            "(Projects → Cast) to grant access."
+        )
+        return OfficerInviteResponse(ok=True, email=email, message=msg)
+
+    # ── Legacy role-based invite: mint the enforcement rows from the chosen role. ──
     juris = JurisdictionInput(
         organization_id=body.organization_id,
-        role_key=body.role_key,
+        role_key=role_key,
         location_code=body.location_code,
         project_id=body.project_id,
         project_code=body.project_code,
@@ -1482,12 +1581,12 @@ def invite_officer(
         includes_children=body.includes_children,
     )
     resolved_pc = validate_jurisdiction(db, juris, require_jurisdiction=True)
-    role = db.execute(select(Role).where(Role.role_key == body.role_key)).scalar_one_or_none()
+    role = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
     if not role:
-        raise HTTPException(status_code=404, detail=f"Role not found: {body.role_key}")
+        raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
 
     if keycloak_configured():
-        keycloak_create_user(email, body.role_key, body.organization_id, body.temp_password)
+        keycloak_create_user(email, role_key, body.organization_id, body.temp_password)
         onboarding_status = "invited"
     else:
         onboarding_status = "active"
@@ -1527,8 +1626,10 @@ def invite_officer(
         payload=juris.model_dump(),
     )
     from ticketing.services.officer_admin import sync_officer_keycloak_roles
+    from ticketing.services.keycloak_users import invalidate_officer_profiles_cache
 
     sync_officer_keycloak_roles(db, email)
+    invalidate_officer_profiles_cache()  # new KC user → refresh the roster cache
     db.commit()
 
     msg = (
@@ -1654,13 +1755,23 @@ def delete_officer(
             },
         )
 
+    from ticketing.models.officer_position import OfficerPosition
+    from ticketing.services.keycloak_users import invalidate_officer_profiles_cache
+
     roles = db.execute(select(UserRole).where(UserRole.user_id == user_id)).scalars().all()
     scopes = db.execute(select(OfficerScope).where(OfficerScope.user_id == user_id)).scalars().all()
-    had_db = bool(roles or scopes)
+    # Position-only invitees (DESIGN-cast-model) have no roles/scopes — count their position rows
+    # too, else a role-free invitee can't be removed (had_db stays False → 404).
+    positions = db.execute(
+        select(OfficerPosition).where(OfficerPosition.user_id == user_id)
+    ).scalars().all()
+    had_db = bool(roles or scopes or positions)
     kc_deleted = keycloak_delete_user(user_id)
     if not had_db and not kc_deleted:
         raise HTTPException(status_code=404, detail="Officer not found")
 
+    for op in positions:
+        db.delete(op)
     for s in scopes:
         db.delete(s)
     for r in roles:
@@ -1673,8 +1784,13 @@ def delete_officer(
         actor_user_id=current_user.user_id,
         action="officer.delete",
         target_user_id=user_id,
-        payload={"roles_removed": len(roles), "scopes_removed": len(scopes)},
+        payload={
+            "roles_removed": len(roles),
+            "scopes_removed": len(scopes),
+            "positions_removed": len(positions),
+        },
     )
+    invalidate_officer_profiles_cache()
     db.commit()
 
 

@@ -1,20 +1,23 @@
 "use client";
 
 /**
- * <InviteOfficer> — invite-AS-RESULT (DESIGN §4.1 / build sheet frame-03).
+ * <InviteOfficer> — invite an officer by Office · Position · Email (DESIGN-cast-model §3.4).
  *
- * A state machine, not a form. Three always-visible inputs — Office, Position, Email —
- * then the role / organisation / scope / project fall out as a RESULT (<InviteOutcomeCard>),
- * with role/org/scope tucked behind an "Adjust" disclosure (<InviteAdjustDisclosure>) and an
- * <OverrideBadge> shown only where the admin changed a default. A one-sentence confirm gates
- * the irreversible Keycloak invite email.
+ * A position is a literal job title; it carries NO role. The operational role/tier and
+ * jurisdiction are bound later by per-package Cast staffing (Projects → Cast), which writes
+ * the `user_roles` / `officer_scopes` enforcement rows. So the invite here only:
+ *   • provisions the account (Keycloak set-password email, when configured), and
+ *   • records the descriptive officer_positions row.
+ * The invitee shows in the Directory as "invited, unstaffed" until they are cast on a package.
  *
- * Send routing (frame-03 §3 rule 8, dual-hat): if the email already belongs to an officer we
- * ADD a position (assignOfficerPosition — additive, no email); a brand-new email goes through
- * inviteOfficer (provisions Keycloak + emails a set-password link).
+ * Three inputs, that's it — Office, Position, Email. No role, no area, no project.
  *
- * S5 dead-end kill (frame-03 §3 rule 5): if the office isn't on a project, we don't dead-end —
- * we offer "Link it and continue" (addProjectOrg) inline, then the card completes.
+ * Send routing (dual-hat): if the email already belongs to an officer we ADD a position
+ * (assignOfficerPosition — additive, no email); a brand-new email goes through inviteOfficer
+ * (provisions Keycloak + emails a set-password link).
+ *
+ * When no position fits the chosen office, the Position picker offers inline creation via
+ * <PositionTypeEditor>, seeded with the office's unit type so the new title fits.
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -22,35 +25,23 @@ import { useEffect, useMemo, useState } from "react";
 import {
   listOrganizations,
   listPositionTypes,
-  listRoles,
-  listProjects,
   listOfficerRoster,
   getAdminContext,
   inviteOfficer,
   assignOfficerPosition,
-  addProjectOrg,
   type OrganizationItem,
   type PositionTypeItem,
-  type GrmRole,
-  type ProjectItem,
   type OfficerRosterEntry,
   type AdminContext,
   type OfficerInvitePayload,
   type OfficerPositionAssign,
 } from "@/lib/api";
-import { roleMatchesFilter, type TrackFilter } from "@/lib/trackFilter";
 import { Bilingual } from "@/components/shared/Bilingual";
-import { RoleLabel } from "@/components/shared/RoleLabel";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { primary, danger, warning, success, text as textTokens } from "@/lib/design-tokens";
-import { ChevronDown, Search } from "lucide-react";
+import { ChevronDown, Plus, Search } from "lucide-react";
 
-import {
-  InviteOutcomeCard,
-  type OutcomeValues,
-  type OutcomeResolved,
-} from "./InviteOutcomeCard";
-import { InviteAdjustDisclosure, type RoleChoice } from "./InviteAdjustDisclosure";
+import { PositionTypeEditor } from "@/components/settings/org/PositionTypeEditor";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -168,11 +159,14 @@ function PositionPicker({
   value,
   disabled,
   onSelect,
+  onCreateNew,
 }: {
   positions: PositionTypeItem[];
   value: PositionTypeItem | null;
   disabled?: boolean;
   onSelect: (p: PositionTypeItem) => void;
+  /** Open the position-type modal: create a title that fits this office. */
+  onCreateNew?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -226,6 +220,19 @@ function PositionPicker({
               </button>
             ))
           )}
+          {onCreateNew ? (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false);
+                setQ("");
+                onCreateNew();
+              }}
+              className="sticky bottom-0 flex w-full items-center gap-1.5 border-t border-gray-100 bg-white px-3 py-2 text-left text-sm font-medium text-blue-700 hover:bg-blue-50"
+            >
+              <Plus size={14} aria-hidden /> Create a new position…
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -246,8 +253,6 @@ export function InviteOfficer({
 
   const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
   const [positions, setPositions] = useState<PositionTypeItem[]>([]);
-  const [roles, setRoles] = useState<GrmRole[]>([]);
-  const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [roster, setRoster] = useState<OfficerRosterEntry[]>([]);
   const [ctx, setCtx] = useState<AdminContext | null>(null);
 
@@ -255,37 +260,32 @@ export function InviteOfficer({
   const [office, setOffice] = useState<OrganizationItem | null>(null);
   const [position, setPosition] = useState<PositionTypeItem | null>(null);
   const [email, setEmail] = useState("");
-  const [values, setValues] = useState<OutcomeValues | null>(null);
 
   // flow
   const [mode, setMode] = useState<"edit" | "confirm" | "sent">("edit");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<unknown>(null);
-  const [forceAdjust, setForceAdjust] = useState(false);
 
-  // S5 link
-  const [s5ProjectId, setS5ProjectId] = useState("");
-  const [linking, setLinking] = useState(false);
+  // Inline position-type creation: when no title fits the chosen office, mint one without
+  // leaving the invite. Backend stamps owner scope + enforces the real permission (403 → modal).
+  const [creatingPosition, setCreatingPosition] = useState(false);
 
+  // Fast path — only these three (all DB-backed) gate the form. The officer roster is slow on a
+  // large realm (it lists the whole Keycloak directory), so it must NOT block the form: it only
+  // powers the "already an officer" hint and loads separately, below.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         setLoading(true);
-        const [o, pt, r, pr, ro, ac] = await Promise.all([
+        const [o, pt, ac] = await Promise.all([
           listOrganizations(undefined, { tree: true }),
           listPositionTypes(),
-          listRoles({ kind: "operational" }),
-          listProjects(undefined, false),
-          listOfficerRoster().catch(() => [] as OfficerRosterEntry[]),
           getAdminContext().catch(() => null),
         ]);
         if (cancelled) return;
         setOrgs(o);
         setPositions(pt);
-        setRoles(r);
-        setProjects(pr);
-        setRoster(ro);
         setCtx(ac);
       } catch (e) {
         if (!cancelled) setLoadError(e);
@@ -298,14 +298,23 @@ export function InviteOfficer({
     };
   }, []);
 
+  // Roster loads separately (non-blocking) — only for the existing-officer / dual-hat hint.
+  // Until it arrives, a send routes through invite; the backend still handles a dup gracefully.
+  useEffect(() => {
+    let cancelled = false;
+    listOfficerRoster()
+      .then((r) => {
+        if (!cancelled) setRoster(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const orgById = useMemo(
     () => new Map(orgs.map((o) => [o.organization_id, o])),
     [orgs],
-  );
-  const roleByKey = useMemo(() => new Map(roles.map((r) => [r.role_key, r])), [roles]);
-  const projectById = useMemo(
-    () => new Map(projects.map((p) => [p.project_id, p])),
-    [projects],
   );
 
   const depthOf = useMemo(() => {
@@ -335,47 +344,11 @@ export function InviteOfficer({
     });
   }, [positions, office, seahCapable]);
 
-  // Role catalog for Adjust — track-filtered to the chosen position's track.
-  const roleChoices: RoleChoice[] = useMemo(() => {
-    const track = position?.workflow_track ?? "standard";
-    const filter: TrackFilter = track === "seah" ? "seah" : track === "both" ? "all" : "standard";
-    return roles
-      .filter((r) => (seahCapable ? true : (r.workflow_scope ?? "") !== "SEAH"))
-      .filter((r) => roleMatchesFilter(r.workflow_scope ?? "Both", filter))
-      .map((r) => ({ role_key: r.role_key, display_name: r.display_name }));
-  }, [roles, position, seahCapable]);
-
-  // Projects the chosen office is linked to (S5 prerequisite resolved here).
-  const linkedProjects = useMemo(() => {
-    if (!office) return [];
-    return projects.filter(
-      (p) =>
-        p.organizations.some((o) => o.organization_id === office.organization_id) ||
-        p.implementing_agency_org_id === office.organization_id,
-    );
-  }, [projects, office]);
-
-  // Defaults = the matrix + territory pre-fill. The client shows what the server will compute.
-  const defaults: OutcomeValues | null = useMemo(() => {
-    if (!office || !position) return null;
-    const proj = linkedProjects[0] ?? null;
-    return {
-      roleKey: position.default_role_key || null,
-      organizationId: office.organization_id,
-      locationCode: office.territory_location_code ?? null,
-      includesChildren: office.territory_includes_children ?? false,
-      projectId: proj?.project_id ?? null,
-      projectCode: proj?.short_code ?? null,
-    };
-  }, [office, position, linkedProjects]);
-
-  // Reset the working values whenever the resolved defaults change (office/position/link).
+  // Reset the flow whenever the office/position changes.
   useEffect(() => {
-    setValues(defaults);
-    setForceAdjust(false);
     setMode("edit");
     setSendError(null);
-  }, [defaults]);
+  }, [office, position]);
 
   const existingOfficer = useMemo(() => {
     const e = email.trim().toLowerCase();
@@ -384,81 +357,35 @@ export function InviteOfficer({
   }, [roster, email]);
 
   const emailValid = EMAIL_RE.test(email.trim());
-  const showCard = !!office && !!position && !!values && !!defaults;
-  const needsProjectLink =
-    !!office && !!position && linkedProjects.length === 0 && !(values?.projectId);
-  const canSend = !!office && !!position && emailValid && !!values?.roleKey;
-
-  const resolved: OutcomeResolved = useMemo(() => {
-    const overrideOrg =
-      values && office && values.organizationId !== office.organization_id
-        ? orgById.get(values.organizationId)
-        : null;
-    const proj = values?.projectId ? projectById.get(values.projectId) : null;
-    return {
-      roleDisplayName: values?.roleKey ? roleByKey.get(values.roleKey)?.display_name ?? null : null,
-      organizationName: overrideOrg?.name ?? null,
-      organizationNameNe: overrideOrg?.display_name_ne ?? null,
-      projectName: proj?.name ?? null,
-      territoryName: null, // no by-code name resolver yet → card falls back to prettyLocation()
-    };
-  }, [values, office, orgById, roleByKey, projectById]);
-
-  async function linkAndContinue() {
-    if (!office || !s5ProjectId) return;
-    setLinking(true);
-    setSendError(null);
-    try {
-      await addProjectOrg(s5ProjectId, office.organization_id, null);
-      const fresh = await listProjects(undefined, false);
-      setProjects(fresh); // → linkedProjects → defaults → values reset with the new project
-      setS5ProjectId("");
-    } catch (e) {
-      setSendError(e);
-    } finally {
-      setLinking(false);
-    }
-  }
+  const showCard = !!office && !!position;
+  const canSend = !!office && !!position && emailValid;
 
   function resetAll() {
     setOffice(null);
     setPosition(null);
     setEmail("");
-    setValues(null);
     setMode("edit");
     setSendError(null);
-    setForceAdjust(false);
   }
 
   async function doSend() {
-    if (!office || !position || !values || !values.roleKey) return;
+    if (!office || !position) return;
     setSending(true);
     setSendError(null);
     try {
       if (existingOfficer) {
-        // Additive "add a position" path — no Keycloak email (frame-03 §3 rule 8).
-        const roleOverridden = (values.roleKey ?? "") !== (defaults?.roleKey ?? "");
+        // Additive "add a position" path — no Keycloak email, no role (Cast binds the tier).
         const payload: OfficerPositionAssign = {
           position_type_id: position.position_type_id,
-          organization_id: values.organizationId,
-          role_key: roleOverridden ? values.roleKey : null,
-          location_code: values.locationCode,
-          includes_children: values.includesChildren,
-          project_id: values.projectId,
-          project_code: values.projectCode,
+          organization_id: office.organization_id,
         };
         await assignOfficerPosition(existingOfficer.user_id, payload);
       } else {
-        // New email → invite (provisions Keycloak, emails a set-password link).
-        // R7 (M5): carry the chosen position so the invite records the officer_positions row.
+        // New email → invite (provisions Keycloak, emails a set-password link). No role —
+        // the officer is "invited, unstaffed" until cast on a package.
         const payload: OfficerInvitePayload = {
           email: email.trim(),
-          role_key: values.roleKey,
-          organization_id: values.organizationId,
-          location_code: values.locationCode,
-          project_id: values.projectId,
-          project_code: values.projectCode,
-          includes_children: values.includesChildren,
+          organization_id: office.organization_id,
           position_type_id: position.position_type_id,
         };
         await inviteOfficer(payload);
@@ -493,7 +420,6 @@ export function InviteOfficer({
         <div className="h-9 w-full animate-pulse rounded bg-gray-100" />
         <div className="h-9 w-full animate-pulse rounded bg-gray-100" />
         <div className="h-9 w-2/3 animate-pulse rounded bg-gray-100" />
-        <div className="h-28 w-full animate-pulse rounded bg-gray-100" />
       </div>
     );
   }
@@ -519,6 +445,9 @@ export function InviteOfficer({
             </>
           ) : null}
         </p>
+        <p className={`mt-1 text-xs ${textTokens.muted}`}>
+          Staff them on a package (Projects &rarr; Cast) to grant queue access.
+        </p>
         <button type="button" onClick={resetAll} className={`mt-3 ${BTN_GHOST}`}>
           Invite another officer
         </button>
@@ -528,7 +457,7 @@ export function InviteOfficer({
 
   return (
     <div className="space-y-4">
-      {/* Inputs — always visible */}
+      {/* Inputs — Office · Position · Email */}
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1">
           <label className={`text-xs font-medium ${textTokens.secondary}`}>Office</label>
@@ -541,6 +470,7 @@ export function InviteOfficer({
             value={position}
             disabled={!office}
             onSelect={setPosition}
+            onCreateNew={office ? () => setCreatingPosition(true) : undefined}
           />
         </div>
       </div>
@@ -564,63 +494,14 @@ export function InviteOfficer({
         ) : null}
       </div>
 
-      {/* Outcome — a result, not a form */}
-      {showCard && office && position && values && defaults ? (
+      {/* Once office + position are chosen, offer the send action. Role/area are NOT set here —
+          the confirm step below restates the invite before the irreversible email. */}
+      {showCard && office && position ? (
         <div className="space-y-3">
-          {values.roleKey ? null : (
-            <ErrorNotice error="This position has no default role. Choose a role manually under Adjust." />
-          )}
-
-          <InviteOutcomeCard
-            email={email}
-            office={office}
-            position={position}
-            values={values}
-            defaults={defaults}
-            resolved={resolved}
-            onAdjust={() => setForceAdjust(true)}
-          />
-
-          {needsProjectLink ? (
-            <div className={`rounded-md border ${warning.borderLight} ${warning.bgLight} p-3`}>
-              <p className={`text-sm ${warning.text}`}>
-                <Bilingual en={office.name} ne={office.display_name_ne} mode="active" /> isn&rsquo;t
-                on a project yet.
-              </p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <select
-                  className={FIELD + " sm:w-64"}
-                  value={s5ProjectId}
-                  onChange={(e) => setS5ProjectId(e.target.value)}
-                >
-                  <option value="">Choose a project…</option>
-                  {projects.map((p) => (
-                    <option key={p.project_id} value={p.project_id}>
-                      {p.name} ({p.short_code})
-                    </option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  disabled={!s5ProjectId || linking}
-                  onClick={linkAndContinue}
-                  className={BTN_PRIMARY}
-                >
-                  {linking ? "Linking…" : "Link it and continue"}
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          <InviteAdjustDisclosure
-            values={values}
-            defaults={defaults}
-            roleChoices={roleChoices}
-            orgChoices={orgs}
-            projectChoices={projects}
-            onChange={setValues}
-            forceOpen={forceAdjust || !values.roleKey}
-          />
+          <p className={`text-xs ${textTokens.muted}`}>
+            The role and work area are set later when you staff this officer on a package
+            (Projects &rarr; Cast).
+          </p>
 
           {sendError ? <ErrorNotice error={sendError} /> : null}
 
@@ -636,19 +517,17 @@ export function InviteOfficer({
                     </span>{" "}
                     position for{" "}
                     <span className="font-medium">{existingOfficer.display_name}</span> (
-                    {email.trim()})? They&rsquo;ll act as{" "}
-                    <RoleLabel roleKey={values.roleKey} displayName={resolved.roleDisplayName} />
-                    {resolved.projectName ? <> on {resolved.projectName}</> : null}. No email is
-                    sent.
+                    {email.trim()})? No email is sent.
                   </>
                 ) : (
                   <>
-                    Send an invite to <span className="font-medium">{email.trim()}</span>? They join
-                    as{" "}
-                    <RoleLabel roleKey={values.roleKey} displayName={resolved.roleDisplayName} />,{" "}
-                    <Bilingual en={office.name} ne={office.display_name_ne} mode="active" />
-                    {resolved.projectName ? <> on {resolved.projectName}</> : null}. This emails a
-                    set-password link &mdash; it can&rsquo;t be un-sent.
+                    Send an invite to <span className="font-medium">{email.trim()}</span> as{" "}
+                    <span className="font-medium">
+                      <Bilingual en={position.display_name} ne={position.display_name_ne} mode="active" />
+                    </span>{" "}
+                    at{" "}
+                    <Bilingual en={office.name} ne={office.display_name_ne} mode="active" />? This
+                    emails a set-password link &mdash; it can&rsquo;t be un-sent.
                   </>
                 )}
               </p>
@@ -674,16 +553,10 @@ export function InviteOfficer({
             <div>
               <button
                 type="button"
-                disabled={!canSend || needsProjectLink}
+                disabled={!canSend}
                 onClick={() => setMode("confirm")}
                 className={BTN_PRIMARY}
-                title={
-                  !canSend
-                    ? "Pick an office, position, valid email, and role first"
-                    : needsProjectLink
-                      ? "Link the office to a project first"
-                      : undefined
-                }
+                title={!canSend ? "Pick an office, position, and a valid email first" : undefined}
               >
                 Review &amp; send
               </button>
@@ -692,9 +565,24 @@ export function InviteOfficer({
         </div>
       ) : (
         <p className={`text-sm ${textTokens.muted}`}>
-          Pick an office and a position to see what this invite will create.
+          Pick an office and a position to continue.
         </p>
       )}
+
+      {creatingPosition && office ? (
+        <PositionTypeEditor
+          mode="create"
+          allPositionTypes={positions}
+          // Seed "Used at" with the chosen office's unit type so the new title fits it.
+          initialAllowedUnitTypes={office.unit_type ? [office.unit_type] : []}
+          onSaved={(pt) => {
+            setPositions((prev) => [...prev, pt]);
+            setPosition(pt); // auto-select the just-created title
+            setCreatingPosition(false);
+          }}
+          onCancel={() => setCreatingPosition(false)}
+        />
+      ) : null}
     </div>
   );
 }

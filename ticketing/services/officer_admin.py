@@ -628,12 +628,16 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
 
 def keycloak_create_user(
     email: str,
-    role_key: str,
+    role_key: Optional[str],
     organization_id: str,
     temp_password: Optional[str] = None,
 ) -> None:
     admin = _keycloak_admin()
     first_name, last_name = _names_from_email(email)
+    # Position-based invites carry no operational role (DESIGN-cast-model): the account is
+    # provisioned with an empty grm_roles claim; Cast staffing fills it in later via
+    # sync_officer_keycloak_roles once officer_scopes exist.
+    grm_roles = [role_key] if role_key else []
     create_payload = {
         "username": email,
         "email": email,
@@ -642,7 +646,7 @@ def keycloak_create_user(
         "enabled": True,
         "emailVerified": False,
         "attributes": {
-            "grm_roles": [role_key],
+            "grm_roles": grm_roles,
             "organization_id": [organization_id],
             "phone_number": ["9800000000"],
         },

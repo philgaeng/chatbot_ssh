@@ -40,6 +40,7 @@ export function PositionTypeEditor({
   mode,
   positionType,
   allPositionTypes,
+  initialAllowedUnitTypes,
   onSaved,
   onCancel,
 }: {
@@ -47,13 +48,18 @@ export function PositionTypeEditor({
   positionType?: PositionTypeItem;
   /** For the "reports to" picker. */
   allPositionTypes: PositionTypeItem[];
+  /**
+   * Create-mode seed for "Used at" — e.g. the office's unit_type the invite flow launched
+   * from, so the new position immediately fits that office. Ignored in edit mode.
+   */
+  initialAllowedUnitTypes?: string[];
   onSaved: (pt: PositionTypeItem) => void;
   onCancel: () => void;
 }) {
   const [displayName, setDisplayName] = useState(positionType?.display_name ?? "");
   const [displayNameNe, setDisplayNameNe] = useState(positionType?.display_name_ne ?? "");
   const [allowedUnitTypes, setAllowedUnitTypes] = useState<string[]>(
-    positionType?.allowed_unit_types ?? [],
+    positionType?.allowed_unit_types ?? initialAllowedUnitTypes ?? [],
   );
   const [reportsToKey, setReportsToKey] = useState(positionType?.reports_to_position_key ?? "");
   const [reportsToLocus, setReportsToLocus] = useState(positionType?.reports_to_locus ?? "same_unit");

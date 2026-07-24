@@ -2812,7 +2812,8 @@ export function closeReveal(
 
 export interface OfficerInvitePayload {
   email: string;
-  role_key: string;
+  /** Optional (DESIGN-cast-model): a position-based invite carries no role — Cast staffing binds it. */
+  role_key?: string | null;
   organization_id: string;
   location_code?: string | null;
   project_id?: string | null;
