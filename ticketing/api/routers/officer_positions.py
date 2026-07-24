@@ -132,45 +132,40 @@ def assign_officer_position(
         raise HTTPException(status_code=404, detail="Position type not found")
     org = db.get(Organization, body.organization_id)  # validate_jurisdiction re-checks (SH-3)
 
-    # Role/tier is explicit (DESIGN-cast-model §3.2): a title carries no role, so staffing
-    # must say which tier. An explicit role_key wins; a legacy position with a non-null
-    # default still pre-fills for back-compat during the transition; otherwise it is required.
+    # A title carries no role (DESIGN-cast-model §3.2): the role/tier binding is created by
+    # per-package Cast staffing, not here. So the position row is purely descriptive and no
+    # role is required. An explicit role_key (or a legacy position default) is still honoured for
+    # back-compat — when present, we mint the enforcement rows as before; when absent, we only
+    # record the descriptive position and access comes from Cast staffing.
     role_key = body.role_key or pt.default_role_key
-    if not role_key:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "This position type has no default role — pass role_key. "
-                "A title carries no tier; choose the tier when you staff the officer."
-            ),
+    if role_key:
+        location_code = (
+            body.location_code if body.location_code is not None
+            else (org.territory_location_code if org else None)
         )
-    location_code = (
-        body.location_code if body.location_code is not None
-        else (org.territory_location_code if org else None)
-    )
-    includes_children = (
-        body.includes_children if body.includes_children is not None
-        else (org.territory_includes_children if org else False)
-    )
+        includes_children = (
+            body.includes_children if body.includes_children is not None
+            else (org.territory_includes_children if org else False)
+        )
 
-    juris = JurisdictionInput(
-        organization_id=body.organization_id,
-        role_key=role_key,
-        location_code=location_code,
-        project_id=body.project_id,
-        project_code=body.project_code,
-        package_id=body.package_id,
-        includes_children=includes_children,
-    )
-    resolved_pc = validate_jurisdiction(db, juris, require_jurisdiction=True)
+        juris = JurisdictionInput(
+            organization_id=body.organization_id,
+            role_key=role_key,
+            location_code=location_code,
+            project_id=body.project_id,
+            project_code=body.project_code,
+            package_id=body.package_id,
+            includes_children=includes_children,
+        )
+        resolved_pc = validate_jurisdiction(db, juris, require_jurisdiction=True)
 
-    role = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
-    if role is None:
-        raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
+        role = db.execute(select(Role).where(Role.role_key == role_key)).scalar_one_or_none()
+        if role is None:
+            raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
 
-    # Enforcement rows via the only sanctioned writers (no direct inserts).
-    upsert_user_role_row(db, email, role, body.organization_id, location_code)
-    create_scope_row(db, email, juris, resolved_pc)
+        # Enforcement rows via the only sanctioned writers (no direct inserts).
+        upsert_user_role_row(db, email, role, body.organization_id, location_code)
+        create_scope_row(db, email, juris, resolved_pc)
 
     op = OfficerPosition(
         user_id=email,

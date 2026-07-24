@@ -44,7 +44,7 @@ import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { roleLabel } from "@/lib/labels";
 import { primary, text as textTokens } from "@/lib/design-tokens";
-import { prettyLocation } from "./InviteOutcomeCard";
+import { prettyLocation } from "@/lib/prettyLocation";
 
 const BTN_GHOST =
   "inline-flex items-center gap-1.5 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
