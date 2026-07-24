@@ -15,7 +15,9 @@ import {
   createAdminScope,
   deleteAdminScope,
   sendAdminScopeInvite,
+  listOrganizations,
   type AdminScopeRow,
+  type OrganizationItem,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 
@@ -26,7 +28,9 @@ export function AdminAccessTab() {
   const [userId, setUserId] = useState("");
   // SH-7: country_admin retired → org_admin (org-subtree, any depth). 4-tier ladder.
   const [roleKey, setRoleKey] = useState<"org_admin" | "project_admin" | "officer_admin">("org_admin");
-  const [countryCode, setCountryCode] = useState("NP");
+  // org_admin scope = an org node + its whole subtree. Sourced from GET /organizations.
+  const [orgs, setOrgs] = useState<OrganizationItem[]>([]);
+  const [organizationId, setOrganizationId] = useState("");
   const [projectId, setProjectId] = useState("KL_ROAD");
   const [track, setTrack] = useState<"standard" | "seah">("standard");
   const [countryTracks, setCountryTracks] = useState({ standard: true, seah: false });
@@ -47,8 +51,23 @@ export function AdminAccessTab() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    listOrganizations("NP", { tree: true })
+      .then(setOrgs)
+      .catch((e: unknown) => setErr(friendlyError(e)));
+  }, []);
+
+  const orgName = useCallback(
+    (id: string) => orgs.find((o) => o.organization_id === id)?.name ?? id,
+    [orgs],
+  );
+
   async function handleAppoint() {
     if (!userId.trim()) return;
+    if (roleKey === "org_admin" && !organizationId) {
+      setErr("Select the organisation this admin is scoped to.");
+      return;
+    }
     setResendMsg("");
     const workflow_tracks: ("standard" | "seah")[] =
       roleKey === "org_admin"
@@ -62,8 +81,8 @@ export function AdminAccessTab() {
       const created = await createAdminScope({
         user_id: userId.trim(),
         role_key: roleKey,
-        // org_admin: country-wide subtree (country_code, NULL org). project/officer admin: project-scoped.
-        country_code: roleKey === "org_admin" ? countryCode : undefined,
+        // org_admin: scoped to an org node + its subtree (any depth). project/officer admin: project-scoped.
+        organization_id: roleKey === "org_admin" ? organizationId : undefined,
         project_id: roleKey === "org_admin" ? undefined : projectId,
         workflow_tracks,
       });
@@ -113,8 +132,9 @@ export function AdminAccessTab() {
   return (
     <div>
       <p className="text-sm text-gray-500 mb-4">
-        Appoint scoped organisation and project administrators. For <span className="font-medium">org_admin</span>,
-        you may assign Standard, SEAH, or both tracks (two scope rows). New officers receive a Keycloak setup email;
+        Appoint scoped organisation and project administrators. An <span className="font-medium">org_admin</span> is
+        scoped to one organisation and administers that node plus everything beneath it; you may assign Standard, SEAH,
+        or both tracks (two scope rows). New officers receive a Keycloak setup email;
         use <span className="font-medium">Send setup email</span> if it does not arrive.
       </p>
       {err && <p className="text-sm text-red-600 mb-3">{err}</p>}
@@ -157,8 +177,15 @@ export function AdminAccessTab() {
             </select>
           )}
           {roleKey === "org_admin" ? (
-            <input value={countryCode} onChange={(e) => setCountryCode(e.target.value)} placeholder="Country code"
-              className="border border-gray-300 rounded px-2 py-1.5" />
+            <select value={organizationId} onChange={(e) => setOrganizationId(e.target.value)}
+              className="border border-gray-300 rounded px-2 py-1.5">
+              <option value="">Select organisation…</option>
+              {orgs.map((o) => (
+                <option key={o.organization_id} value={o.organization_id}>
+                  {o.name}{o.org_category ? ` · ${o.org_category}` : ""} ({o.organization_id})
+                </option>
+              ))}
+            </select>
           ) : (
             <input value={projectId} onChange={(e) => setProjectId(e.target.value)} placeholder="Project (e.g. KL_ROAD)"
               className="border border-gray-300 rounded px-2 py-1.5" />
@@ -187,7 +214,11 @@ export function AdminAccessTab() {
               <tr key={r.admin_scope_id} className="border-t border-gray-100">
                 <td className="px-3 py-2 font-mono text-xs">{r.user_id}</td>
                 <td className="px-3 py-2">{r.role_key}</td>
-                <td className="px-3 py-2 text-xs">{r.country_code ?? r.project_id ?? "—"}</td>
+                <td className="px-3 py-2 text-xs">
+                  {r.organization_id
+                    ? orgName(r.organization_id)
+                    : r.country_code ?? r.project_id ?? "—"}
+                </td>
                 <td className="px-3 py-2">{r.workflow_track}</td>
                 <td className="px-3 py-2 whitespace-nowrap space-x-3">
                   {r.can_send_setup_email && (
