@@ -9,7 +9,9 @@
  */
 import { type WorkflowDefinition, type ProjectWorkflowSlot } from "@/lib/api";
 
-export type WorkflowRoleOption = { key: string; label: string; origin?: string };
+// `scope` is the role's workflow_scope ("Standard" | "SEAH" | "Both") — carried so the step
+// cast can grey out-of-track roles ("wrong track") instead of hiding them (DESIGN §4.3).
+export type WorkflowRoleOption = { key: string; label: string; origin?: string; scope?: string };
 
 export function statusBadge(status: string) {
   const map: Record<string, string> = {

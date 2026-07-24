@@ -28,19 +28,17 @@ import { AdminAccessTab } from "@/components/settings/platform/AdminAccessTab";
 import { LocationsSection } from "@/components/settings/platform/LocationsSection";
 import { SystemConfigTab } from "@/components/settings/platform/SystemConfigTab";
 import { type RoleEntry, mapGrmRoleToEntry } from "@/components/settings/roles/roleEntry";
-import { RolesTab } from "@/components/settings/roles/RolesTab";
 import { WorkflowsTab } from "@/components/settings/workflows/WorkflowsTab";
 import { ProjectsSection } from "@/components/settings/projects/ProjectsSection";
 
 type MainTab = "setup" | "org_officers" | "workflows_roles" | "projects" | "platform";
 type OrgOfficersSub = "organizations" | "officers";
-type WorkflowsRolesSub = "workflows" | "roles";
 type PlatformSub = "locations" | "reports" | "project_types" | "system_config" | "admin_access";
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: "setup",             label: "Setup & go-live" },   // R8: Frame 01 landing
   { id: "org_officers",      label: "Organizations & officers" },
-  { id: "workflows_roles",   label: "Workflows, roles & permissions" },
+  { id: "workflows_roles",   label: "Workflows" },
   { id: "projects",          label: "Projects & packages" },
   { id: "platform",          label: "Settings" },
 ];
@@ -123,7 +121,6 @@ export default function SettingsPage() {
   }, [isSuperAdmin, isCountryAdmin, isProjectAdmin, isAdmin, adminWorkflowTracks]);
   const [activeMain, setActiveMain] = useState<MainTab>("setup");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
-  const [wfSub, setWfSub] = useState<WorkflowsRolesSub>("workflows");
   const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
   const [jumpProjectId, setJumpProjectId] = useState<string | null>(null);
   const [roleCatalog, setRoleCatalog]     = useState<RoleEntry[]>([]);
@@ -247,31 +244,13 @@ export default function SettingsPage() {
       )}
 
       {activeMain === "workflows_roles" && (
-        <>
-          <SettingsSubTabs
-            tabs={[
-              { id: "workflows", label: "Workflows" },
-              { id: "roles", label: "Roles & permissions" },
-            ]}
-            active={wfSub}
-            onChange={setWfSub}
-          />
-          {wfSub === "workflows" && (
-            <WorkflowsTab
-              roleCatalog={roleCatalog}
-              canCreateRole={canCreateOperationalRoles}
-              onRoleCatalogRefresh={loadRoleCatalog}
-            />
-          )}
-          {wfSub === "roles" && (
-            <RolesTab
-              catalog={roleCatalog}
-              loading={rolesLoading}
-              onReload={loadRoleCatalog}
-              canCreate={canCreateOperationalRoles}
-            />
-          )}
-        </>
+        // Operational Roles tab removed (DESIGN-cast-model §7 Phase 3): tiers live on the step
+        // editor, who + jurisdiction on per-package staffing, Standard/SEAH on the workflow track.
+        <WorkflowsTab
+          roleCatalog={roleCatalog}
+          canCreateRole={canCreateOperationalRoles}
+          onRoleCatalogRefresh={loadRoleCatalog}
+        />
       )}
 
       {activeMain === "projects" && (

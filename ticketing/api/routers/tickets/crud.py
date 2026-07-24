@@ -34,6 +34,8 @@ from ticketing.api.schemas.ticket import (
 )
 from ticketing.clients.grievance_api import patch_complainant, patch_grievance_classification
 from ticketing.constants.classification import OFFICER_CONFIRMED
+from ticketing.constants.tiers import ACTOR, SUPERVISOR
+from ticketing.services.tier_permissions import user_holds_tier_on_step
 from ticketing.services.grievance_content import (
     fetch_grievance_row,
     merge_grievance_into_ticket,
@@ -72,15 +74,35 @@ def _step_supervisor_available(db: Session, ticket: Ticket) -> bool:
 
 
 def _can_assign_ticket(db: Session, ticket: Ticket, current_user: CurrentUser) -> bool:
-    """Supervisor for current step, admin, or assigned actor when no supervisor (TP-12)."""
-    if current_user.is_admin:
+    """Supervisor tier for current step, admin, or assigned Actor when no supervisor (TP-12).
+
+    Tier membership drives both branches (DESIGN-cast-model §6): the Supervisor-tier holder
+    may reassign; the Actor-tier holder may self-reassign only as the assignee-of-record and
+    only when no supervisor is resolvable. This will be superseded by the ``can_reassign``
+    resolution chain in Phase 4.
+    """
+    if current_user.is_admin:  # covers project_admin+ (the §3.4 backstop)
         return True
     step = get_current_step(ticket, db)
-    if step and step.supervisor_role and step.supervisor_role in current_user.role_keys:
+    if step and user_holds_tier_on_step(step, current_user.role_keys, SUPERVISOR):
         return True
+    # §3.4 Dispatcher for the ticket's project/package.
+    from ticketing.services.reassignment import dispatcher_for_ticket
+
+    disp = dispatcher_for_ticket(db, ticket)
+    if disp and current_user.matches_assignee(disp):
+        return True
+    # §3.4 Actor self-serve: the per-step toggle grants the assignee reassignment authority.
+    if (
+        step and getattr(step, "actor_can_reassign", False)
+        and ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id)
+        and user_holds_tier_on_step(step, current_user.role_keys, ACTOR)
+    ):
+        return True
+    # TP-12 legacy fallback: assigned Actor may self-reassign when no supervisor is resolvable.
     if not _step_supervisor_available(db, ticket):
         if ticket.assigned_to_user_id and current_user.matches_assignee(ticket.assigned_to_user_id):
-            if step and step.assigned_role_key in current_user.role_keys:
+            if step and user_holds_tier_on_step(step, current_user.role_keys, ACTOR):
                 return True
     return False
 

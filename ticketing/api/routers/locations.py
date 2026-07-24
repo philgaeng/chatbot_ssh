@@ -1665,6 +1665,51 @@ class OrgRoleBody(BaseModel):
     org_role: str | None = None
 
 
+def _sync_participant_role(
+    db: Session, project: Project, organization_id: str, old_role: str | None, new_role: str | None
+) -> None:
+    """Keep the dedicated ``implementing_agency_org_id`` + ``project_donors`` in sync with the
+    Project-actors "Implementing Agency" / "Donor" roles, so the actors table is the single
+    surface (the separate Implementing-agency / Donors panel retired). Raises 422 for an org
+    that is invalid for the role (non-government IA / non-donor Donor). Idempotent per role.
+    """
+    # Implementing agency — single, government/local-government org; mirrors the dedicated field.
+    if new_role == "implementing_agency" and old_role != "implementing_agency":
+        try:
+            donor_guardrail_svc.validate_implementing_agency(db, organization_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Only one implementing agency — demote any other org that holds the role.
+        for other in db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.org_role == "implementing_agency",
+                ProjectOrganization.organization_id != organization_id,
+            )
+        ).scalars().all():
+            other.org_role = None
+        project.implementing_agency_org_id = organization_id
+    elif old_role == "implementing_agency" and new_role != "implementing_agency":
+        if project.implementing_agency_org_id == organization_id:
+            project.implementing_agency_org_id = None
+
+    # Donor — mirrors project_donors + pre-fills the final step's informed cast (go-live A5).
+    if new_role == "donor" and old_role != "donor":
+        try:
+            donor_guardrail_svc.validate_donor_org(db, organization_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if db.get(ProjectDonor, (project.project_id, organization_id)) is None:
+            db.add(ProjectDonor(project_id=project.project_id, organization_id=organization_id))
+            db.flush()
+        donor_guardrail_svc.apply_donor_informed_defaults(db, project)
+    elif old_role == "donor" and new_role != "donor":
+        row = db.get(ProjectDonor, (project.project_id, organization_id))
+        if row is not None:
+            db.delete(row)
+            db.flush()
+
+
 @router.post("/projects/{project_id}/organizations/{organization_id}", status_code=201,
              response_model=ProjectOrgItem)
 def add_project_organization(
@@ -1675,7 +1720,8 @@ def add_project_organization(
     _admin: CurrentUser = Depends(require_admin),
 ):
     """Link an organization to a project with an optional role. Admin only."""
-    if not db.get(Project, project_id):
+    project = db.get(Project, project_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
@@ -1694,7 +1740,9 @@ def add_project_organization(
 
     if existing:
         # Allow updating the role on an existing link
+        old_role = existing.org_role
         existing.org_role = body.org_role
+        _sync_participant_role(db, project, organization_id, old_role, body.org_role)
         db.commit()
         return {"organization_id": organization_id, "org_role": existing.org_role}
 
@@ -1704,6 +1752,7 @@ def add_project_organization(
         org_role=body.org_role,
     )
     db.add(po)
+    _sync_participant_role(db, project, organization_id, None, body.org_role)
     db.commit()
     return {"organization_id": organization_id, "org_role": po.org_role}
 
@@ -1727,11 +1776,16 @@ def update_project_organization_role(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Organization not linked to this project")
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
     try:
         actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    old_role = row.org_role
     row.org_role = body.org_role
+    _sync_participant_role(db, project, organization_id, old_role, body.org_role)
     db.commit()
     return {"organization_id": organization_id, "org_role": row.org_role}
 

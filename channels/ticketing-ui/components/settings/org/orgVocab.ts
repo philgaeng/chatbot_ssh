@@ -71,6 +71,37 @@ export function unitTypeLabel(ut: string | null | undefined): string {
   return UNIT_TYPE_LABELS[ut] ?? humanizeSlug(ut);
 }
 
+/**
+ * unit_type → its usual org_category. SOFT hint only: the two are independent columns
+ * (organization.py — a company can rarely be donor-adjacent), so this drives prioritisation,
+ * never a hard rule. Used to narrow the position-type role picker by "Used at" office types.
+ */
+export const UNIT_TYPE_ORG_CATEGORY: Record<string, OrgCategory> = {
+  ministry: "government",
+  department: "government",
+  directorate: "government",
+  provincial_office: "government",
+  division_office: "government",
+  province_assembly: "government",
+  municipality: "local_government",
+  development_partner: "donor",
+  company: "third_party",
+};
+
+/**
+ * Coarse sector for role↔office affinity: public sector (government + local government) vs
+ * donor vs company. Both a role's actor_category and an office's org_category fold into this,
+ * so a government office and a local-government office both suggest the same public-sector roles.
+ */
+export function orgCategorySector(
+  cat: string | null | undefined,
+): "public" | "donor" | "third_party" | null {
+  if (cat === "government" || cat === "local_government") return "public";
+  if (cat === "donor") return "donor";
+  if (cat === "third_party") return "third_party";
+  return null;
+}
+
 /** visibility_mode (position_types.py) → plain prose (Frame 06 §5). */
 export const VISIBILITY_MODES = ["none", "direct_reports", "subtree"] as const;
 

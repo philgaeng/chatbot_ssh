@@ -173,6 +173,7 @@ export interface WorkflowStep {
   informed_roles: string[];
   observer_roles: string[];
   informed_pii_access: boolean;
+  actor_can_reassign?: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -698,17 +699,23 @@ export function deleteWorkflow(id: string): Promise<void> {
 
 export interface StepPayload {
   display_name: string;
-  assigned_role_key: string;
+  // Optional now: the tier-toggle editor omits it (Actor auto-minted a synthetic per-step key).
+  assigned_role_key?: string;
   step_key?: string;
   response_time_hours?: number | null;
   resolution_time_days?: number | null;
   stakeholders?: string[] | null;
   expected_actions?: string[] | null;
-  // Spec 12 tier model fields
+  // Spec 12 tier model fields (legacy named-key path)
   supervisor_role?: string | null;
   informed_roles?: string[];
   observer_roles?: string[];
   informed_pii_access?: boolean;
+  actor_can_reassign?: boolean;
+  // Tier-toggle editor (DESIGN-cast-model §3.5): on/off toggles → backend mints synthetic keys.
+  supervisor_enabled?: boolean;
+  participants_enabled?: boolean;
+  observers_enabled?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {
@@ -792,6 +799,10 @@ export interface GrmRole {
   permissions: unknown;
   role_kind?: string | null;
   role_origin?: string | null;
+  /** Permission-template family (role_archetypes) — groups role pickers by function. */
+  archetype?: string | null;
+  /** Actor affiliation (org_category vocab) — soft-narrows the position role picker by office type. */
+  actor_category?: string | null;
   /** SH-7 org-scoped catalog: owning org node (null = global/system). */
   owner_organization_id?: string | null;
   steps_count?: number;
@@ -1010,7 +1021,7 @@ export function reactivateOfficer(userId: string): Promise<OfficerLifecycleResul
 
 // ── Position types + position→role matrix (OC-02, doc 16 §3.2/§9) ─────────────
 
-/** ticketing.position_types row — a position title + its default-role/reporting matrix. */
+/** ticketing.position_types row — a display-only job title (DESIGN-cast-model §3.2). */
 export interface PositionTypeItem {
   position_type_id: string;
   position_key: string;
@@ -1020,7 +1031,8 @@ export interface PositionTypeItem {
   reports_to_position_key: string | null;
   /** "same_unit" | "parent_unit" | null */
   reports_to_locus: string | null;
-  default_role_key: string;
+  /** Legacy role link — nullable; a title carries no role (tier chosen at staffing). */
+  default_role_key: string | null;
   /** "none" | "direct_reports" | "subtree" */
   visibility_mode: string;
   /** "standard" | "seah" | "both" */
@@ -1032,16 +1044,13 @@ export interface PositionTypeItem {
 }
 
 export interface PositionTypeCreate {
-  position_key: string;
+  // position_key is server-minted from display_name — not part of the create payload.
+  // A title carries no role/track/visibility (DESIGN-cast-model §3.2); owner is server-set.
   display_name: string;
   display_name_ne?: string | null;
   allowed_unit_types?: string[];
   reports_to_position_key?: string | null;
   reports_to_locus?: string | null;
-  default_role_key: string;
-  visibility_mode?: string;
-  workflow_track?: string;
-  owner_organization_id?: string | null;
 }
 
 /** All fields optional; position_key is immutable and cannot be updated. */
@@ -2670,6 +2679,55 @@ export function deleteScope(userId: string, scopeId: string): Promise<void> {
   return apiFetch<void>(`/api/v1/users/${userId}/scopes/${scopeId}`, {
     method: "DELETE",
   });
+}
+
+// ── Per-package cast staffing (DESIGN-cast-model §3.3 / §3.6) ──────────────────
+
+/** One staffed (step, tier) slot for a package (or project-wide when package_id is null). */
+export interface CastScope {
+  scope_id: string;
+  user_id: string;
+  role_key: string;
+  tier: string; // "actor" | "supervisor" | "participant" | "observer"
+  step_id: string;
+  package_id: string | null;
+  location_code: string | null;
+  organization_id: string;
+}
+
+export interface CastAssign {
+  workflow_id: string;
+  step_id: string;
+  tier: string;
+  user_id: string;
+  organization_id: string;
+  package_id?: string | null;
+  location_code?: string | null;
+  includes_children?: boolean;
+}
+
+/** Read the cast for a workflow — project-wide (omit package_id) or for one package. */
+export function readCast(
+  projectId: string,
+  opts: { workflow_id: string; package_id?: string | null },
+): Promise<CastScope[]> {
+  const p = new URLSearchParams();
+  p.set("workflow_id", opts.workflow_id);
+  if (opts.package_id) p.set("package_id", opts.package_id);
+  return apiFetch<CastScope[]>(`/api/v1/projects/${projectId}/cast?${p.toString()}`);
+}
+
+/** Staff one (step, tier) slot — writes an officer_scope via the sanctioned backend writer. */
+export function staffCastSlot(projectId: string, payload: CastAssign): Promise<CastScope> {
+  return apiFetch<CastScope>(`/api/v1/projects/${projectId}/cast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function unstaffCastSlot(projectId: string, scopeId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/cast/${scopeId}`, { method: "DELETE" });
 }
 
 // ── Teammates (for reassign dropdown) ────────────────────────────────────────

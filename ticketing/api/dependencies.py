@@ -93,6 +93,9 @@ class CurrentUser:
     location_code: str | None = None
     keycloak_sub: str | None = None
     admin_scopes: list[AdminScopeRow] = field(default_factory=list)
+    # Track-derived SEAH access (DESIGN-cast-model §3.1): True when the officer is cast on a
+    # SEAH-track workflow. Computed once per request in enrich_user; augments SEAH_ROLES.
+    seah_track_member: bool = False
 
     def matches_assignee(self, assignee_id: str | None) -> bool:
         """True when assignee_id is this officer (email, Keycloak sub, or legacy mock id)."""
@@ -260,6 +263,11 @@ def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
         if not officer_is_active(db, user.user_id):
             user.role_keys = []
             user.admin_scopes = []
+    # Track-derived SEAH membership (DESIGN-cast-model §3.1) — computed after role_keys are
+    # finalized (so a deactivated officer, now role-less, is not a track member).
+    from ticketing.services.seah_visibility import user_is_seah_track_member
+
+    user.seah_track_member = user_is_seah_track_member(db, user.role_keys)
     return user
 
 
@@ -312,6 +320,29 @@ def get_authenticated_user(
 
 def require_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:
     """Transitional: any tier admin (super, scoped country/project, or legacy local_admin)."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user
+
+
+def require_admin_or_bypass(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> CurrentUser:
+    """Admin-gated under real auth; open to any authenticated identity in dev bypass.
+
+    The officer roster (names / emails / jurisdictions) stays admin-only under Keycloak.
+    In bypass mode (APP_ENV=dev + AUTH_MODE=bypass) it is a demo convenience: the officer
+    switcher must be able to render the roster while acting as a *non-admin* officer,
+    otherwise switching away from admin is a one-way door — the switcher can no longer load
+    the list that would switch you back (D-65, 2026-07-16). `bypass_enabled` is dev-only
+    (HR-01 pins it to APP_ENV=dev + AUTH_MODE=bypass), so this never widens access under
+    real auth.
+    """
+    if get_settings().bypass_enabled:
+        return current_user
     if not current_user.is_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

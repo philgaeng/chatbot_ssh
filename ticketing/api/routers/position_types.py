@@ -46,6 +46,23 @@ def _slugify_key(raw: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", (raw or "").strip().lower()).strip("_")
 
 
+def _unique_position_key(db: Session, display_name: str) -> str:
+    """Mint a unique, non-null slug from the title. Users never author position keys (the field
+    isn't in PositionTypeCreate), so a numeric suffix (_2, _3…) disambiguates when two positions
+    share a title — guaranteeing the key is always present and unique, and nothing that references
+    it (reports_to_position_key, the reports-to picker) can break on a blank or duplicate value."""
+    base = _slugify_key(display_name) or "position"
+    key = base
+    n = 2
+    while (
+        db.execute(select(PositionType).where(PositionType.position_key == key)).scalar_one_or_none()
+        is not None
+    ):
+        key = f"{base}_{n}"
+        n += 1
+    return key
+
+
 def _role_ok_for_position_track(role_scope: str | None, position_track: str) -> bool:
     """A position's default role must be usable on the position's track.
 
@@ -58,16 +75,18 @@ def _role_ok_for_position_track(role_scope: str | None, position_track: str) -> 
 
 
 class PositionTypeCreate(BaseModel):
-    position_key: str
+    # A position is a display-only job title (DESIGN-cast-model §3.2). The modal is 4 fields,
+    # one required (title). No position_key (server-minted from display_name). No role/tier
+    # link (default_role_key), no workflow_track, no visibility_mode — those parallel
+    # mechanisms retire; the tier is chosen at per-package staffing. owner_organization_id is
+    # server-stamped from the author's scope (catalog_owner_for), never taken from the body.
     display_name: str
     display_name_ne: str | None = None
-    allowed_unit_types: list[str] = []
+    allowed_unit_types: list[str] = []  # optional, now purely descriptive
     reports_to_position_key: str | None = None
     reports_to_locus: str | None = Field(None, pattern="^(same_unit|parent_unit)$")
-    default_role_key: str
-    visibility_mode: str = Field("none", pattern="^(none|direct_reports|subtree)$")
-    workflow_track: str = Field("standard", pattern="^(standard|seah|both)$")
-    owner_organization_id: str | None = None
+    # No default_role_key / workflow_track / visibility_mode: a title carries no role/tier
+    # (DESIGN-cast-model §3.2). The tier is chosen at per-package staffing.
 
 
 class PositionTypeUpdate(BaseModel):
@@ -91,7 +110,7 @@ class PositionTypeResponse(BaseModel):
     allowed_unit_types: list[str]
     reports_to_position_key: str | None
     reports_to_locus: str | None
-    default_role_key: str
+    default_role_key: str | None
     visibility_mode: str
     workflow_track: str
     owner_organization_id: str | None
@@ -104,34 +123,37 @@ class PositionTypeResponse(BaseModel):
 def _validate_matrix(
     db: Session,
     *,
-    default_role_key: str,
+    default_role_key: str | None,
     workflow_track: str,
     reports_to_position_key: str | None,
     allowed_unit_types: list[str] | None,
     owner_organization_id: str | None,
     self_position_key: str | None,
 ) -> None:
-    """Validate the matrix references against the current effective state. Raises 422."""
+    """Validate the (now optional) matrix references against the current effective state.
+    Raises 422. A null ``default_role_key`` is the new normal (a title carries no role) —
+    only a *provided* role is checked for existence/track."""
     for ut in allowed_unit_types or []:
         if ut not in UNIT_TYPES:
             raise HTTPException(status_code=422, detail=f"Invalid unit_type '{ut}' in allowed_unit_types")
 
-    role = db.execute(
-        select(Role).where(Role.role_key == default_role_key)
-    ).scalar_one_or_none()
-    if role is None:
-        raise HTTPException(
-            status_code=422,
-            detail=f"default_role_key '{default_role_key}' does not exist in the role catalog",
-        )
-    if not _role_ok_for_position_track(role.workflow_scope, workflow_track):
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                f"default_role_key '{default_role_key}' is a {role.workflow_scope or 'unscoped'} "
-                f"role, incompatible with a {workflow_track}-track position"
-            ),
-        )
+    if default_role_key:
+        role = db.execute(
+            select(Role).where(Role.role_key == default_role_key)
+        ).scalar_one_or_none()
+        if role is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"default_role_key '{default_role_key}' does not exist in the role catalog",
+            )
+        if not _role_ok_for_position_track(role.workflow_scope, workflow_track):
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"default_role_key '{default_role_key}' is a {role.workflow_scope or 'unscoped'} "
+                    f"role, incompatible with a {workflow_track}-track position"
+                ),
+            )
 
     if reports_to_position_key:
         if self_position_key and reports_to_position_key == self_position_key:
@@ -182,22 +204,23 @@ def create_position_type(
 ):
     """Create a position type + matrix binding. Standard-track admin / super (doc 16 §7)."""
     require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
-    key = _slugify_key(body.position_key)
-    if not key:
-        raise HTTPException(status_code=400, detail="position_key is required")
     if not body.display_name.strip():
         raise HTTPException(status_code=400, detail="display_name is required")
-    if db.execute(select(PositionType).where(PositionType.position_key == key)).scalar_one_or_none():
-        raise HTTPException(status_code=409, detail=f"position_key already exists: {key}")
+    # Server-minted from the title, always unique & non-null — never user-authored.
+    key = _unique_position_key(db, body.display_name)
 
-    # SH-7 §S5: org-scoped catalog — explicit owner wins; otherwise stamp the author's
-    # scope node (NULL = global for super_admin / country-wide org_admin).
-    owner_org = body.owner_organization_id or catalog_owner_for(current_user, body.workflow_track)
+    # SH-7 §S5: org-scoped catalog — owner is server-stamped from the author's scope node
+    # (NULL = global for super_admin / country-wide org_admin), never taken from the body.
+    # Track is not a title attribute anymore, so the owner lookup is track-agnostic.
+    owner_org = catalog_owner_for(current_user)
 
+    # A title carries no role/track/visibility anymore (DESIGN-cast-model §3.2); those columns
+    # keep their model defaults (default_role_key NULL). Only the still-present references
+    # (unit types, reports-to, owner) are validated.
     _validate_matrix(
         db,
-        default_role_key=body.default_role_key,
-        workflow_track=body.workflow_track,
+        default_role_key=None,
+        workflow_track="standard",
         reports_to_position_key=body.reports_to_position_key,
         allowed_unit_types=body.allowed_unit_types,
         owner_organization_id=owner_org,
@@ -211,9 +234,6 @@ def create_position_type(
         allowed_unit_types=body.allowed_unit_types or [],
         reports_to_position_key=body.reports_to_position_key,
         reports_to_locus=body.reports_to_locus,
-        default_role_key=body.default_role_key,
-        visibility_mode=body.visibility_mode,
-        workflow_track=body.workflow_track,
         owner_organization_id=owner_org,
     )
     db.add(pt)

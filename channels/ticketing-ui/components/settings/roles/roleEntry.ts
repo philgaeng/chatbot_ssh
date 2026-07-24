@@ -20,6 +20,8 @@ export type RoleEntry = {
   officers_count?: number;
   // R6 (BUILD-REVIEW M7): SH-7 org-scoped catalog owning level (NULL = System · everywhere).
   owner_organization_id?: string | null;
+  // Actor affiliation (org_category vocab) — drives the Roles catalog "actor type" filter.
+  actor_category?: string | null;
 };
 
 export function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
@@ -34,6 +36,7 @@ export function mapGrmRoleToEntry(r: GrmRole): RoleEntry {
     steps_count: r.steps_count ?? 0,
     officers_count: r.officers_count ?? 0,
     owner_organization_id: r.owner_organization_id ?? null,
+    actor_category: r.actor_category ?? null,
   };
 }
 

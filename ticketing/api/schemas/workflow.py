@@ -23,6 +23,7 @@ class WorkflowStepResponse(BaseModel):
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -36,15 +37,23 @@ class WorkflowStepResponse(BaseModel):
 class WorkflowStepCreate(BaseModel):
     display_name: str
     step_key: Optional[str] = None          # auto-generated if omitted
-    assigned_role_key: str
+    # Optional: the tier-toggle editor omits it (Actor is auto-minted a synthetic per-step
+    # key). Legacy/template callers may still pass a named key.
+    assigned_role_key: str = ""
     response_time_hours: Optional[int] = None
     resolution_time_days: Optional[int] = None
     supervisor_role: Optional[str] = None
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
+    # Tier-toggle editor (DESIGN-cast-model §3.5): when any of these is set, the step's tier
+    # fields are (re)derived from on/off toggles — enabled empty slots mint synthetic keys.
+    supervisor_enabled: Optional[bool] = None
+    participants_enabled: Optional[bool] = None
+    observers_enabled: Optional[bool] = None
 
 
 class WorkflowStepUpdate(BaseModel):
@@ -57,8 +66,13 @@ class WorkflowStepUpdate(BaseModel):
     informed_roles: Optional[list[str]] = None
     observer_roles: Optional[list[str]] = None
     informed_pii_access: Optional[bool] = None
+    actor_can_reassign: Optional[bool] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
+    # Tier-toggle editor (see WorkflowStepCreate).
+    supervisor_enabled: Optional[bool] = None
+    participants_enabled: Optional[bool] = None
+    observers_enabled: Optional[bool] = None
 
 
 class StepReorderRequest(BaseModel):

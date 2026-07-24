@@ -89,6 +89,9 @@ class WorkflowStep(Base):
     observer_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # informed_pii_access: if True, Informed-tier users can see complainant PII
     informed_pii_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # actor_can_reassign: per-step self-serve toggle (DESIGN-cast-model §3.4) — when on, the
+    # Actor is a reassignment authority for this step (chain: Dispatcher → Supervisor → Actor → PA)
+    actor_can_reassign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # stakeholders: legacy display field (human-readable names, not role keys) — kept for UI compat
     stakeholders: Mapped[list | None] = mapped_column(JSON, nullable=True)
     expected_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)

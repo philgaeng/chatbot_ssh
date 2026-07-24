@@ -9,7 +9,7 @@
  *
  * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
  */
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   updateProject,
   addProjectOrg,
@@ -22,6 +22,7 @@ import {
   addPackageLocation,
   removePackageLocation,
   listWorkflows,
+  readCast,
   listTemplates,
   listWorkflowRoutingOptions,
   getProjectActorRoles,
@@ -43,11 +44,10 @@ import {
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
-import { ProjectStaffingSection } from "@/components/settings/ProjectStaffingSection";
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
 import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
-import { ProjectParticipants } from "@/components/settings/projects/ProjectParticipants";
+import { ProjectCastSection } from "@/components/settings/projects/ProjectCastSection";
 import { ProjectWorkflowsEditor } from "@/components/settings/workflows/ProjectWorkflowsEditor";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { PackageRow } from "@/components/settings/projects/PackageRow";
@@ -246,7 +246,45 @@ export function ProjectEditor({
   const [showCreatePkg, setShowCreatePkg] = useState(false);
   const [expandedPkg, setExpandedPkg]     = useState<string | null>(null);
   const [officerModalOrg, setOfficerModalOrg] = useState<{ id: string; name: string } | null>(null);
-  const [staffingTick, setStaffingTick] = useState(0);
+  // Lots with no L1 Actor coverage (neither package-specific nor project-wide) — drives the
+  // "⚠ L1 actor unstaffed" header badge (go-live C1/C5).
+  const [unstaffedActorPkgs, setUnstaffedActorPkgs] = useState<Set<string>>(new Set());
+
+  const loadCastCoverage = useCallback(async () => {
+    const slots = p.workflow_slots ?? [];
+    const wfId =
+      (slots.find((s) => s.is_default) ?? slots.find((s) => s.workflow_track === "standard"))
+        ?.workflow_id ?? p.standard_workflow_id ?? null;
+    const activePkgs = packages.filter((pk) => pk.is_active);
+    const wf = workflows.find((w) => w.workflow_id === wfId);
+    const firstStep = (wf?.steps ?? [])
+      .filter((s) => !s.is_deleted)
+      .slice()
+      .sort((a, b) => a.step_order - b.step_order)[0];
+    if (!wfId || !firstStep || activePkgs.length === 0) {
+      setUnstaffedActorPkgs(new Set());
+      return;
+    }
+    try {
+      const pw = await readCast(p.project_id, { workflow_id: wfId });
+      const pwHasActor = pw.some((c) => c.step_id === firstStep.step_id && c.tier === "actor");
+      const unstaffed = new Set<string>();
+      await Promise.all(
+        activePkgs.map(async (pk) => {
+          const pc = await readCast(p.project_id, { workflow_id: wfId, package_id: pk.package_id });
+          const hasActor = pwHasActor || pc.some((c) => c.step_id === firstStep.step_id && c.tier === "actor");
+          if (!hasActor) unstaffed.add(pk.package_id);
+        }),
+      );
+      setUnstaffedActorPkgs(unstaffed);
+    } catch {
+      /* leave indicators as-is on transient error */
+    }
+  }, [p.project_id, p.workflow_slots, p.standard_workflow_id, packages, workflows]);
+
+  useEffect(() => {
+    void loadCastCoverage();
+  }, [loadCastCoverage]);
 
   useEffect(() => {
     listPackages(p.project_id)
@@ -509,16 +547,8 @@ export function ProjectEditor({
         )}
       </div>
 
-      {/* doc-13 / DECISION 2026-07-10: the per-project actor-role catalog is retired in
-          favour of a single implementing agency + optional donors (with the last-step
-          donor guardrail). */}
-      <div className="mb-6">
-        <ProjectParticipants
-          project={p}
-          canEdit={canEditProjectWorkflows && !lockTypeConfig}
-          onUpdated={() => onUpdated(p)}
-        />
-      </div>
+      {/* Implementing agency + Donors are now roles in the Project actors table below (setting
+          the role syncs the dedicated implementing_agency_org_id / project_donors fields). */}
 
       {/* Project actors (project-wide org + role) */}
       <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
@@ -610,7 +640,7 @@ export function ProjectEditor({
           organizationName={officerModalOrg.name}
           roleChoices={grmRoleChoices}
           onClose={() => setOfficerModalOrg(null)}
-          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); setStaffingTick((n) => n + 1); }}
+          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); }}
         />
       )}
 
@@ -642,6 +672,10 @@ export function ProjectEditor({
       </div>
 
       {/* Packages (lot-level actors + locations) */}
+      <div ref={(el) => { sectionRefs.current.staffing = el; }} className="mt-8 pt-6 border-t border-gray-100">
+        <ProjectCastSection project={p} orgs={orgs} onChanged={loadCastCoverage} />
+      </div>
+
       <div ref={(el) => { sectionRefs.current.packages = el; }} className="mt-8 pt-6 border-t border-gray-100">
         <div className="flex items-center justify-between mb-3">
           <div>
@@ -686,11 +720,14 @@ export function ProjectEditor({
               return (
                 <PackageRow
                   key={pkg.package_id}
+                  project={p}
                   projectId={p.project_id}
                   pkg={pkg}
                   orgs={orgs}
                   actorRoles={projectActorRoles}
                   expanded={expanded}
+                  needsActor={unstaffedActorPkgs.has(pkg.package_id)}
+                  onStaffingChanged={loadCastCoverage}
                   onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
                   onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
                   onActorsChange={(organizations) =>
@@ -707,16 +744,6 @@ export function ProjectEditor({
         )}
       </div>
 
-      <div ref={(el) => { sectionRefs.current.staffing = el; }}>
-        <ProjectStaffingSection
-          key={staffingTick}
-          project={p}
-          projectActors={p.organizations}
-          orgs={orgs}
-          grmRoleChoices={grmRoleChoices}
-          packages={packages}
-        />
-      </div>
     </div>
   );
 }

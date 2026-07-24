@@ -221,6 +221,33 @@ straight in — no login — via **"Continue to demo queue"**.
 The portal has a **role switcher** in the header (bypass builds only — it writes a
 `grm_bypass_user` cookie the API proxy turns into an identity).
 
+> ## ✅ The switcher one-way door is FIXED (**D-65**, 2026-07-16) — switch freely
+>
+> Switching to a non-admin officer used to lock you out of admin (the roster the switcher
+> needs was admin-gated). **Fixed:** in bypass mode any officer can read the roster, so you can
+> switch to a role, check its tabs, and switch straight back via the dropdown. **Just switch
+> normally** — no workaround needed.
+>
+> **If you are testing against an image built _before_ 2026-07-16** (you didn't rebuild
+> `ticketing_api`), you may still hit the old behaviour: the dropdown shows `API 403
+> /api/v1/users/roster`, the header stays **"DEMO GRM Admin"**, and queues look empty. Two
+> options: rebuild (`docker compose … build ticketing_api && … up -d ticketing_api`), or use the
+> escape hatch below between roles. Either way **your data is fine** — the empty queue was the
+> correct answer to the wrong question.
+>
+> ### 🔑 Escape hatch (only needed on a pre-fix image) — DevTools → Console, portal tab
+>
+> ```js
+> document.cookie = "grm_bypass_user=; path=/; max-age=0";
+> document.cookie = "grm_mock_user=; path=/; max-age=0";
+> location.reload();
+> ```
+>
+> On reload the backend answers as super_admin (no cookie) and the portal re-picks a privileged
+> officer — you're back to admin.
+>
+> Full write-up: [`../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md`](../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md)
+
 For each role below: switch, then click **My Queue → All Tickets → Escalated → GRC → Reports
 → Settings**.
 
@@ -238,6 +265,14 @@ For each role below: switch, then click **My Queue → All Tickets → Escalated
 | Every tab renders (no blank page, no crash) | A tab throws / white-screens |
 | **Gating is unchanged** — non-admins see no Settings | An L1 can reach Settings |
 | **A non-SEAH role never sees a 🔒 SEAH ticket** | SEAH leaks to a standard role |
+
+> **An empty or small queue for a non-admin role is a PASS, not a finding.** Scope + SEAH +
+> visibility filtering (HR-02) is *supposed* to hide tickets outside an officer's jurisdiction.
+> Two separate reasons it may be **completely** empty, both known and neither a bug in what
+> you're testing: **(a)** D-65 above — the API is still using the officer identity while the UI
+> claims admin; **(b)** `docs/TODO.md` tracks that the seed creates `UserRole` rows but **no
+> `OfficerScope` rows**, and an officer with zero scope rows matches nothing. **What you are
+> checking here is that tabs *render* and that gating *holds* — not that tickets appear.**
 
 > **Why this one is worth the clicks:** T3-05 moved **4,372 lines** out of `page.tsx` into 6
 > clusters. `tsc`/`eslint`/`build`/vitest were green at every commit and the bodies were moved

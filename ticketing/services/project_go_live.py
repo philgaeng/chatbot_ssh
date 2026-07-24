@@ -484,6 +484,46 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         )
     )
 
+    # R1 Reassignment authority (block; DESIGN-cast-model §3.4). Every standard step must
+    # resolve to a reassignment authority so a bounced ticket never dead-ends — the chain is
+    # Dispatcher → Supervisor → Actor self-serve → project_admin (guaranteed backstop). This
+    # fails only when the project has no project_admin and no staffed Supervisor/Dispatcher.
+    from ticketing.services.reassignment import step_has_reachable_reassigner
+
+    r1_gaps: list[str] = []
+    if project.standard_workflow_id:
+        r1_steps = db.execute(
+            select(WorkflowStep)
+            .where(
+                WorkflowStep.workflow_id == project.standard_workflow_id,
+                WorkflowStep.is_deleted.is_(False),
+            )
+            .order_by(WorkflowStep.step_order)
+        ).scalars().all()
+        for st in r1_steps:
+            if not step_has_reachable_reassigner(db, project=project, step=st):
+                r1_gaps.append(st.display_name or st.step_key)
+    r1_ok = not r1_gaps
+    checks.append(
+        GoLiveCheck(
+            id="R1",
+            label="Reassignment authority",
+            group="officers",
+            severity="block",
+            status="pass" if r1_ok else "fail",
+            message=(
+                "Every step has a reachable reassignment authority"
+                if r1_ok
+                else (
+                    "No reassignment authority for: "
+                    + ", ".join(r1_gaps[:5])
+                    + " — staff a Supervisor/Dispatcher or add a project administrator"
+                )
+            ),
+            section="staffing",
+        )
+    )
+
     # C4 SEAH L1 (when seah workflow set)
     if project.seah_workflow_id:
         seah_l1 = _step_role_at_order(db, project.seah_workflow_id, 1)
@@ -631,7 +671,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
 
     # Activation blocks on any block-severity check that failed (A3 implementing agency,
     # A5 donor guardrail, C5 all-levels-staffed). Intake blocks on C1 (L1 staffed).
-    _ACTIVATION_BLOCK_IDS = {"A3", "A5", "C5"}
+    _ACTIVATION_BLOCK_IDS = {"A3", "A5", "C5", "R1"}
     can_activate = not any(
         c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
     )

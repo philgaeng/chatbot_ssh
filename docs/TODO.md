@@ -6,6 +6,37 @@
 
 ---
 
+## Cast-model follow-ups (2026-07-23, `DESIGN-cast-model-and-package-staffing.md`)
+
+- **[Phase 2] Owning-level re-scope has no UI.** Position owner is server-stamped; the modal
+  dropped the picker. `PATCH /position-types/{id}` still accepts `owner_organization_id`, so
+  re-homing a title is API-only. Add an "advanced" edit affordance if needed.
+  (`followups/phase2-positions-followups.md`)
+- **[Phase 2] `assign_officer_position` default-role fallback.** Assign requires an explicit
+  `role_key` for null-default positions; legacy non-null defaults still pre-fill. Drop the
+  `or pt.default_role_key` fallback once the seed drops position defaults (Phase 3/§8).
+- **[Phase 3e] Cast matrix screen — BUILT** (`ProjectCastSection`, in Projects & packages).
+  Remaining §3.6 *niceties*: Copy-from-package, explicit per-cell Override/revert, inline
+  "Add officer" (invite + position) in the picker, contractor-org picker (today org = implementing
+  agency). (`followups/phase3-cast-ui-followup.md`)
+- **[Phase 3e] Seed refresh (§8) optional.** Demo seeds still use named role keys (coexist with
+  synthetic keys, §6) — refreshing to the staffing model is fidelity, not correctness.
+- **[Phase 5 remainder] GRC per-step `is_grc` flag** — retire the `grc_committee` archetype;
+  gate `GRC_CONVENE` on the flag; derive GRC members from the step cast. Working today via the
+  role model; deferred (cross-file test + seed coupling). (`followups/phase5-remainder-followup.md`)
+- **[Phase 5 remainder] Remove archetype apparatus + user-facing `/roles` CRUD** — already dead at
+  runtime (Phase 1); coupled to invariant `test_authz_matrix_extended` + `test_roles_crud`, so
+  remove endpoints **with** those test rewrites. Keep `GET /roles`. Completes "stop writing
+  per-role permissions". (`followups/phase5-remainder-followup.md`)
+- **[Phase 1] Per-role permission writes retire in Phase 5.** Tier is the source of truth now;
+  `create_role`/`update_role` still write `roles.permissions` until the archetype apparatus is
+  removed (Phase 5). (`followups/tier-permissions-reconciliation.md`)
+- **[Perf §6/§3.6] Supervisor-tab hot path — verified, no work needed.** Supervisor membership is
+  already materialized at write-time into `ticket_viewers` (`escalation._apply_step_tier_roles`);
+  no MV/tier column. (`followups/phase5-remainder-followup.md`)
+
+---
+
 ## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
 
 All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):
@@ -326,6 +357,7 @@ H2-01…08: OIDC refresh-grant, `tickets.py` split + engine extraction, authz/es
 
 | Item | File | Notes |
 |------|------|-------|
+| 🟡 **Demo officer switcher one-way door — ROOT FIX LANDED 2026-07-16; C4 unblocked. Optional portal hardening remains.** | `ticketing/api/dependencies.py` (`require_admin_or_bypass`) · `ticketing/api/routers/users.py` (roster routes) | Root cause: `GET /users/roster` was `require_admin`, so switching to a non-admin officer 403'd the roster the switcher needs to switch back. **Fixed:** roster now `require_admin_or_bypass` — admin-only under Keycloak, any authenticated identity in dev bypass. Verified live (officer 403→200), pinned by `tests/ticketing/test_demo_switcher_roster.py`, full suite 607 passed. **Bypass builds only; Keycloak posture unchanged.** Residual (optional, defense-in-depth, now moot for the normal flow): the portal catch branch at `AuthProvider.tsx:264-269` still doesn't clear the cookie on a roster failure, and `fallbackBypassToken` still hardcodes super_admin. Tracked: [`sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md`](sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md) · PROGRESS **D-65** |
 | ~~`add_more_info_flow` completes into a **silent turn** when `story_route` is unset~~ ✅ **FIXED 2026-07-15** | `backend/orchestrator/state_machine.py` (turn postcondition) | Closed by the **`run_flow_turn` postcondition** — the general guard both followups recommended over point fixes: *no turn returns zero messages*, logged at error with state/intent/active_loop/next_state, then the user is recovered. **One guard closed four instances: D-08, D-51, D-52 and D-59.** Safe to *recover* rather than merely log because the precondition was **measured, not assumed**: instrumenting all three of `run_flow_turn`'s returns across 208 tests found **3 zero-message turns and all 3 were bugs** — `attachment_ids_sync` and the `/introduce` restart never return empty, so there was no legitimate silence to protect and the blast radius is exactly the already-broken turns. That measurement also **found D-59**, a fourth instance nobody knew about. Owned by `tests/orchestrator/test_no_silent_turns.py` (8 tests, verified red). The characterization pin was deleted on the signal its docstring specified. |
 | Seed log message still says `PROVINCE_1` | `kl_road_standard.py:319` | Cosmetic — actual stored value is `NP_P1` |
 | `_scope_candidates` calls `_location_and_ancestors` twice (branches B + C) | `workflow_engine.py` | Minor perf — combine into one call |
@@ -346,6 +378,7 @@ H2-01…08: OIDC refresh-grant, `tickets.py` split + engine extraction, authz/es
 | ~~Silent OIDC refresh not applied to 4 non-`apiFetch` fetch sites (2 uploads can lose a file selection on token expiry)~~ | — | ✅ **RESOLVED 2026-07-15.** New shared `authedFetch` (proactive refresh + 401→refresh→retry-once) wraps all 4 blob/multipart sites; multipart bodies rebuilt in the thunk so the retry re-sends them; `isSessionExpiredResponse` retired. Vitest 61 (+3 new) / tsc / eslint / next build green. See [`sprints/archive/2026-08_tier2_quality/followups/apifetch-refresh-non-json-sites.md`](sprints/archive/2026-08_tier2_quality/followups/apifetch-refresh-non-json-sites.md). |
 | ~~Pre-existing dead imports/local in `routers/tickets.py` (4 unused imports + unused `rerouted` local)~~ | — | ✅ Resolved in H2-02 Pass 4 (package split rewrote the import block — the 4 dead imports weren't carried across; `rerouted` binding dropped, reroute call preserved). Also dropped 3 dead private helpers (`_lookup_workflow`, `_first_step`, `_is_viewer`). Followup doc closed. |
 | ~~Authz gaps surfaced by H2-03: (1) 15 unauthenticated reference/config GET endpoints, (2) `DELETE /roles/{id}` no gate on non-system roles, (3) `PATCH /projects/{id}` metadata no gate~~ | — | ✅ **RESOLVED 2026-07-15.** (2) delete gates on `CREATE_OPERATIONAL_ROLE`; (3) patch gates on `MANAGE_PROJECT` (xfail flipped to passing); (1) 10 project-config GET reads locked to `get_authenticated_user`, geography stays public, sweep allowlist trimmed to 5. Full ticketing suite 545 passed / 0 xfailed. Optional later step: per-project scope-gating (not just authenticate). See [`sprints/archive/2026-08_tier2_quality/followups/authz-gaps-h2-03.md`](sprints/archive/2026-08_tier2_quality/followups/authz-gaps-h2-03.md). |
+| `StepCast` greys **wrong-track** roles only; the other two "why-excluded" reasons need a backend endpoint, and role labels are EN-only (`ticketing.roles` has no `_ne`) | `channels/ticketing-ui/components/settings/workflows/StepCast.tsx` · `ticketing/api/routers/users.py` · `ticketing/models/user.py` | Deferred from the step-cast parity build (v1 = `frame-04.md` §6 GAP1 recommended subset). "owned by another office" roles are filtered server-side (client never sees them); "bound at L3 only" has no endpoint — both need a picker endpoint returning in+out-of-scope roles flagged with a reason. Role `_ne` is RB-1 i18n. Nothing broken; wrong-track greying + roles-clarity shipped. Tracked: [`sprints/2026-07_org_chart_positions/followups/step-cast-why-excluded-and-role-ne.md`](sprints/2026-07_org_chart_positions/followups/step-cast-why-excluded-and-role-ne.md) |
 
 ---
 

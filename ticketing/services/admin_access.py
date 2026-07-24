@@ -345,6 +345,10 @@ def can_create_operational_role(user: CurrentUser, *, track: str) -> bool:
 def can_see_seah_extended(user: CurrentUser) -> bool:
     from ticketing.models.user import SEAH_ROLES
 
+    # Track-derived membership (DESIGN-cast-model §3.1): cast on a SEAH-track workflow. Computed
+    # at enrich time; additive to the legacy named-role / oversight / admin-track paths below.
+    if getattr(user, "seah_track_member", False):
+        return True
     if bool(set(user.role_keys) & SEAH_ROLES):
         return True
     if is_super_admin(user) or "adb_hq_exec" in user.role_keys:

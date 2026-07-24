@@ -19,7 +19,6 @@ import {
   type WorkflowDefinition,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { roleInTrack } from "@/lib/trackFilter";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { type RoleEntry } from "@/components/settings/roles/roleEntry";
 import {
@@ -96,13 +95,18 @@ export function WorkflowsTab({
     }
   }
 
-  const wfRoleOptions: WorkflowRoleOption[] = useMemo(() => {
-    if (!editing) return [];
-    const wfType = workflowTrackOf(editing);
-    return roleCatalog
-      .filter((r) => roleInTrack(r.workflow, wfType))
-      .map((r) => ({ key: r.key, label: r.label, origin: r.role_origin }));
-  }, [roleCatalog, editing]);
+  // Full operational catalog with each role's track scope. The step cast (StepCast) filters/greys
+  // per the workflow's own track, so out-of-track roles surface as "wrong track" rather than vanish.
+  const wfRoleOptions: WorkflowRoleOption[] = useMemo(
+    () =>
+      roleCatalog.map((r) => ({
+        key: r.key,
+        label: r.label,
+        origin: r.role_origin,
+        scope: r.workflow,
+      })),
+    [roleCatalog],
+  );
 
   // Editor view
   if (editing) {

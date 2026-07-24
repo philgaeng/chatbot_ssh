@@ -124,10 +124,6 @@ def _client(user):
     return app, TestClient(app), db
 
 
-def _key(prefix: str) -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:6]}"
-
-
 # The seed guarantees these standard-track roles exist in the test DB.
 _ROLE_STD = "site_safeguards_focal_person"
 
@@ -136,22 +132,20 @@ _ROLE_STD = "site_safeguards_focal_person"
 def test_create_and_list(cleanup_pts):
     app, client, db = _client(_super())
     try:
-        key = _key("sde")
+        title = "Senior Divisional Engineer " + uuid.uuid4().hex[:6]
         res = client.post("/api/v1/position-types", json={
-            "position_key": key.upper() + " raw",  # exercises slugify
-            "display_name": "Senior Divisional Engineer",
+            "display_name": title,
             "display_name_ne": "वरिष्ठ इन्जिनियर",
             "allowed_unit_types": ["division_office"],
-            "default_role_key": _ROLE_STD,
-            "visibility_mode": "none",
-            "workflow_track": "standard",
         })
         assert res.status_code == 201, res.text
         body = res.json()
         cleanup_pts.append(body["position_type_id"])
-        assert body["position_key"] == _slugify_key(key.upper() + " raw")
-        assert body["default_role_key"] == _ROLE_STD
-        # visible in the standard-track filtered list
+        # position_key is server-minted from the title (never user-supplied)
+        assert body["position_key"] == _slugify_key(title)
+        # a title carries no role at create (DESIGN-cast-model §3.2)
+        assert body["default_role_key"] is None
+        # visible in the standard-track filtered list (positions default to standard track)
         listed = client.get("/api/v1/position-types?workflow_track=standard").json()
         assert any(p["position_type_id"] == body["position_type_id"] for p in listed)
     finally:
@@ -163,48 +157,65 @@ def test_create_and_list(cleanup_pts):
 def test_create_validations(cleanup_pts):
     app, client, db = _client(_super())
     try:
-        # unknown default_role_key
+        # invalid unit_type (default_role_key is no longer a create field — a title has no role)
         assert client.post("/api/v1/position-types", json={
-            "position_key": _key("x"), "display_name": "X", "default_role_key": "no_such_role",
-        }).status_code == 422
-        # invalid unit_type
-        assert client.post("/api/v1/position-types", json={
-            "position_key": _key("x"), "display_name": "X", "default_role_key": _ROLE_STD,
+            "display_name": "X",
             "allowed_unit_types": ["spaceship"],
         }).status_code == 422
-        # self-reference
-        selfkey = _key("selfref")
+        # self-reference: the minted key equals slugify(title), so point reports_to at it
+        selftitle = "Self " + uuid.uuid4().hex[:6]
         assert client.post("/api/v1/position-types", json={
-            "position_key": selfkey, "display_name": "Self", "default_role_key": _ROLE_STD,
-            "reports_to_position_key": _slugify_key(selfkey),
+            "display_name": selftitle,
+            "reports_to_position_key": _slugify_key(selftitle),
         }).status_code == 422
         # unknown reports_to
         assert client.post("/api/v1/position-types", json={
-            "position_key": _key("x"), "display_name": "X", "default_role_key": _ROLE_STD,
+            "display_name": "X",
             "reports_to_position_key": "ghost_position",
         }).status_code == 422
-        # unknown owner org
-        assert client.post("/api/v1/position-types", json={
-            "position_key": _key("x"), "display_name": "X", "default_role_key": _ROLE_STD,
-            "owner_organization_id": "NO_SUCH_ORG",
-        }).status_code == 422
+        # owner_organization_id is server-stamped, not taken from the body — an unknown owner
+        # in the body is ignored (no longer a create field), so this now succeeds.
     finally:
         app.dependency_overrides.clear()
         db.close()
 
 
 @pytest.mark.integration
-def test_duplicate_key_conflict(cleanup_pts):
+def test_create_without_default_role(cleanup_pts):
+    """DESIGN-cast-model §3.2: a position is a display-only title — creatable with no role.
+    The tier is chosen later at per-package staffing."""
     app, client, db = _client(_super())
     try:
-        key = _key("dup")
+        title = "Untiered Title " + uuid.uuid4().hex[:6]
+        res = client.post("/api/v1/position-types", json={"display_name": title})
+        assert res.status_code == 201, res.text
+        body = res.json()
+        cleanup_pts.append(body["position_type_id"])
+        assert body["position_key"] == _slugify_key(title)
+        assert body["default_role_key"] is None
+    finally:
+        app.dependency_overrides.clear()
+        db.close()
+
+
+@pytest.mark.integration
+def test_duplicate_title_gets_unique_key(cleanup_pts):
+    """Two positions with the same title get distinct server-minted keys (auto-suffixed).
+    The old user-supplied-key 409 path is gone — a duplicate key can no longer be requested."""
+    app, client, db = _client(_super())
+    try:
+        title = "Dup " + uuid.uuid4().hex[:6]
         r1 = client.post("/api/v1/position-types", json={
-            "position_key": key, "display_name": "First", "default_role_key": _ROLE_STD})
-        assert r1.status_code == 201, r1.text
-        cleanup_pts.append(r1.json()["position_type_id"])
+            "display_name": title, "default_role_key": _ROLE_STD})
         r2 = client.post("/api/v1/position-types", json={
-            "position_key": key, "display_name": "Second", "default_role_key": _ROLE_STD})
-        assert r2.status_code == 409, r2.text
+            "display_name": title, "default_role_key": _ROLE_STD})
+        assert r1.status_code == 201, r1.text
+        assert r2.status_code == 201, r2.text
+        cleanup_pts.extend([r1.json()["position_type_id"], r2.json()["position_type_id"]])
+        k1, k2 = r1.json()["position_key"], r2.json()["position_key"]
+        assert k1 == _slugify_key(title)
+        assert k2 == f"{_slugify_key(title)}_2"  # auto-suffixed, never a collision
+        assert k1 != k2
     finally:
         app.dependency_overrides.clear()
         db.close()
@@ -214,16 +225,16 @@ def test_duplicate_key_conflict(cleanup_pts):
 def test_patch_key_immutable_and_fields(cleanup_pts):
     app, client, db = _client(_super())
     try:
-        key = _key("patch")
         created = client.post("/api/v1/position-types", json={
-            "position_key": key, "display_name": "Before", "default_role_key": _ROLE_STD}).json()
+            "display_name": "Before " + uuid.uuid4().hex[:6], "default_role_key": _ROLE_STD}).json()
         pid = created["position_type_id"]
+        genkey = created["position_key"]  # server-minted
         cleanup_pts.append(pid)
         # sending position_key is ignored (field not on the update schema); display_name changes
         res = client.patch(f"/api/v1/position-types/{pid}", json={
             "position_key": "hacked_key", "display_name": "After", "visibility_mode": "direct_reports"})
         assert res.status_code == 200, res.text
-        assert res.json()["position_key"] == _slugify_key(key)  # unchanged
+        assert res.json()["position_key"] == genkey  # immutable
         assert res.json()["display_name"] == "After"
         assert res.json()["visibility_mode"] == "direct_reports"
     finally:
@@ -235,12 +246,11 @@ def test_patch_key_immutable_and_fields(cleanup_pts):
 def test_delete_guard_on_reports_to(cleanup_pts):
     app, client, db = _client(_super())
     try:
-        parent_key = _key("parent")
         parent = client.post("/api/v1/position-types", json={
-            "position_key": parent_key, "display_name": "Parent", "default_role_key": _ROLE_STD}).json()
+            "display_name": "Parent " + uuid.uuid4().hex[:6], "default_role_key": _ROLE_STD}).json()
         child = client.post("/api/v1/position-types", json={
-            "position_key": _key("child"), "display_name": "Child", "default_role_key": _ROLE_STD,
-            "reports_to_position_key": _slugify_key(parent_key), "reports_to_locus": "parent_unit"}).json()
+            "display_name": "Child " + uuid.uuid4().hex[:6], "default_role_key": _ROLE_STD,
+            "reports_to_position_key": parent["position_key"], "reports_to_locus": "parent_unit"}).json()
         cleanup_pts.extend([parent["position_type_id"], child["position_type_id"]])
         # parent is referenced by child.reports_to → blocked
         blocked = client.delete(f"/api/v1/position-types/{parent['position_type_id']}")
@@ -259,7 +269,7 @@ def test_authz_blocks_project_admin():
     app, client, db = _client(_project())
     try:
         assert client.post("/api/v1/position-types", json={
-            "position_key": "x", "display_name": "X", "default_role_key": _ROLE_STD}).status_code == 403
+            "display_name": "X", "default_role_key": _ROLE_STD}).status_code == 403
     finally:
         app.dependency_overrides.clear()
         db.close()

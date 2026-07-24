@@ -391,3 +391,45 @@ def test_donor_cast_on_standard_ticket_but_suppressed_on_seah(ctx):
     assert _donor_is_viewer(ctx.db, seah.ticket_id, donor_uid) is False, (
         "SEAH leak: donor tier must never be cast on a SEAH ticket"
     )
+
+
+# ── Project-actors role sync (implementing agency + donors are actor roles now) ──
+
+def test_participant_role_sync(db):
+    """Setting the 'Implementing Agency' / 'Donor' role in the Project-actors table syncs the
+    dedicated implementing_agency_org_id / project_donors fields (the separate panel retired),
+    and rejects an org that is invalid for the role."""
+    from fastapi import HTTPException
+
+    from ticketing.api.routers.locations import _sync_participant_role
+    from ticketing.models.project import ProjectDonor
+
+    proj = Project(
+        project_id=f"sync-{uuid.uuid4().hex[:8]}", country_code="NP",
+        short_code=f"SYNC{uuid.uuid4().hex[:4].upper()}", name="Sync Test",
+    )
+    db.add(proj)
+    db.commit()
+    try:
+        # DOR (government) → implementing_agency stamps the dedicated field; clearing reverts.
+        _sync_participant_role(db, proj, ORG_DOR, None, "implementing_agency")
+        assert proj.implementing_agency_org_id == ORG_DOR
+        _sync_participant_role(db, proj, ORG_DOR, "implementing_agency", None)
+        assert proj.implementing_agency_org_id is None
+
+        # ADB (donor) → donor creates the ProjectDonor row; removing the role deletes it.
+        _sync_participant_role(db, proj, ORG_ADB, None, "donor")
+        assert db.get(ProjectDonor, (proj.project_id, ORG_ADB)) is not None
+        _sync_participant_role(db, proj, ORG_ADB, "donor", None)
+        assert db.get(ProjectDonor, (proj.project_id, ORG_ADB)) is None
+
+        # A donor org cannot be the implementing agency (validation preserved).
+        with pytest.raises(HTTPException) as exc:
+            _sync_participant_role(db, proj, ORG_ADB, None, "implementing_agency")
+        assert exc.value.status_code == 422
+    finally:
+        db.execute(delete(ProjectDonor).where(ProjectDonor.project_id == proj.project_id))
+        obj = db.get(Project, proj.project_id)
+        if obj:
+            db.delete(obj)
+        db.commit()

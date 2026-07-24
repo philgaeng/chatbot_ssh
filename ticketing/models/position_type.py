@@ -59,8 +59,10 @@ class PositionType(Base):
     # Default reporting rule — by position_key (string ref, no hard FK), + locus.
     reports_to_position_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     reports_to_locus: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    # The matrix — FK-by-key into ticketing.roles.role_key (validated app-side, no hard FK).
-    default_role_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Legacy role link — nullable (DESIGN-cast-model §3.2): a position is a display-only
+    # title with no role/tier, so new titles carry no default. Kept as a soft String(64)
+    # ref for back-compat; the tier is chosen at per-package staffing, never here.
+    default_role_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     visibility_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
     workflow_track: Mapped[str] = mapped_column(String(16), nullable=False, default="standard")
     # Org-scoped catalog (doc 11 §3.3): available at this org node + descendants; NULL = global.

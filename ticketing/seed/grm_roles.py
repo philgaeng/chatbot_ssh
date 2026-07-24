@@ -38,6 +38,8 @@ def upsert_grm_roles(db: Session) -> None:
             else "operational"
         )
         rorigin = entry.get("role_origin", "system")
+        archetype = entry.get("archetype")
+        actor_category = entry.get("actor_category")
         if existing:
             existing.display_name = dname
             existing.permissions = perms
@@ -45,6 +47,8 @@ def upsert_grm_roles(db: Session) -> None:
             existing.workflow_scope = wf
             existing.role_kind = rkind
             existing.role_origin = rorigin
+            existing.archetype = archetype
+            existing.actor_category = actor_category
             if jmode:
                 existing.jurisdiction_mode = jmode
             logger.info("  = role updated from catalog: %s", rk)
@@ -60,6 +64,8 @@ def upsert_grm_roles(db: Session) -> None:
                     jurisdiction_mode=jmode,
                     role_kind=rkind,
                     role_origin=rorigin,
+                    archetype=archetype,
+                    actor_category=actor_category,
                 )
             )
             logger.info("  + role from catalog: %s", rk)

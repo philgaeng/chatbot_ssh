@@ -132,8 +132,18 @@ def assign_officer_position(
         raise HTTPException(status_code=404, detail="Position type not found")
     org = db.get(Organization, body.organization_id)  # validate_jurisdiction re-checks (SH-3)
 
-    # Pre-fill: matrix role, office territory scope — admin's explicit fields win.
+    # Role/tier is explicit (DESIGN-cast-model §3.2): a title carries no role, so staffing
+    # must say which tier. An explicit role_key wins; a legacy position with a non-null
+    # default still pre-fills for back-compat during the transition; otherwise it is required.
     role_key = body.role_key or pt.default_role_key
+    if not role_key:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "This position type has no default role — pass role_key. "
+                "A title carries no tier; choose the tier when you staff the officer."
+            ),
+        )
     location_code = (
         body.location_code if body.location_code is not None
         else (org.territory_location_code if org else None)
