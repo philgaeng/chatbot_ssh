@@ -522,7 +522,13 @@ def create_admin_scope(
             AdminScope.workflow_track == track,
         )
         if body.role_key == "org_admin":
-            dup_stmt = dup_stmt.where(AdminScope.country_code == body.country_code)
+            # Org-scoped org_admins carry organization_id (country_code NULL); the legacy
+            # country-wide variant carries country_code (organization_id NULL). Key dedup on
+            # both so the same user can be org_admin of two different subtree nodes on a track.
+            dup_stmt = dup_stmt.where(
+                AdminScope.organization_id == body.organization_id,
+                AdminScope.country_code == body.country_code,
+            )
         else:
             dup_stmt = dup_stmt.where(AdminScope.project_id == project_ref)
         existing = db.execute(dup_stmt).scalar_one_or_none()
