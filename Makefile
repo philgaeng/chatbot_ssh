@@ -175,6 +175,11 @@ case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :500
 echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
 endef
 
+# nginx is brought up with --force-recreate (not a plain `up -d nginx`): the .conf is a
+# single-file bind mount, and the `git reset --hard` below replaces it with a NEW inode. A
+# plain `up -d nginx` sees no service-spec change and won't recreate, so the running container
+# keeps the OLD inode's config — even `nginx -s reload` re-reads the stale mount. Recreating
+# re-binds the mount to the current file. (wsl-nginx already does this locally for the same reason.)
 define REMOTE_DEPLOY_LIGHT
 set -e; \
 	cd $(1) && \
@@ -186,7 +191,7 @@ set -e; \
 	echo "$(3): rebuilding $(2) (sequential)" && \
 	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL,$(filter-out nginx,$(2)),$(3)) && \
 	$(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
-	$(REMOTE_COMPOSE) up -d nginx && \
+	$(REMOTE_COMPOSE) up -d --force-recreate nginx && \
 	ui_auth_port="$$(docker compose --env-file env.local \
 	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
 	  --profile auth port grm_ui 3001 2>/dev/null || true)" && \
