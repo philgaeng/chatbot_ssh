@@ -22,7 +22,11 @@ from ticketing.models.base import get_db
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.project import Project
 from ticketing.models.workflow import WorkflowDefinition, WorkflowStep
-from ticketing.services.admin_access import SettingsAction, require_settings_write
+from ticketing.services.admin_access import (
+    SettingsAction,
+    require_org_admin_project_scope,
+    require_settings_write,
+)
 from ticketing.services.cast_staffing import is_synthetic_key, self_escalation_conflict
 
 router = APIRouter()
@@ -93,6 +97,10 @@ def staff_cast_slot(
     project = db.get(Project, project_id)
     if project is None:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Gap B: an org_admin may staff only projects its subtree manages (project's implementing
+    # agency ∈ subtree; unanchored projects stay open). The staffed officer's org is NOT
+    # constrained — cross-org (donor/contractor) staffing stays allowed.
+    require_org_admin_project_scope(db, current_user, project)
 
     wf, step = _load_workflow_step(db, body.workflow_id, body.step_id)
     role_key = resolve_step_tier_role_key(step, body.tier)

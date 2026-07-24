@@ -80,6 +80,19 @@ class Organization(Base):
     )
     display_name_ne: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ── Owned third_party authorship (Gap A, 2026-07-24) ───────────────────────
+    # A contractor an org_admin creates is a `third_party` root (parent NULL) that sits
+    # outside every subtree, so the plain subtree guard would let only super_admin edit it.
+    # This stamps the creator's org node so the creator + any ancestor-org admin can still
+    # maintain it (authority = owner ∈ caller subtree). NULL = not owned (institutional
+    # roots, seeded orgs). Mirrors the catalog owner_organization_id on
+    # workflow_definitions / roles / position_types.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
     # ── Duplicate-candidate signals (SH-4, migration k1m3o5q7) ─────────────────
     # Added to the DB by SH-4 but previously left unmapped; mapped here so the model
     # reflects the table (autogenerate no longer emits spurious drops for these).
@@ -94,13 +107,17 @@ class Organization(Base):
     )
 
     # Self-referential tree relationships (read convenience; subtree queries use the
-    # recursive CTE in ticketing.services.org_tree, not these).
+    # recursive CTE in ticketing.services.org_tree, not these). Since Gap A added a second
+    # self-FK (owner_organization_id), these must name parent_organization_id explicitly —
+    # otherwise SQLAlchemy can't pick between the two FK paths and the mapper fails to init.
     parent: Mapped["Organization | None"] = relationship(
         "Organization",
         remote_side=[organization_id],
+        foreign_keys=[parent_organization_id],
         back_populates="children",
     )
     children: Mapped[list["Organization"]] = relationship(
         "Organization",
+        foreign_keys=[parent_organization_id],
         back_populates="parent",
     )

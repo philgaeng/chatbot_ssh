@@ -37,6 +37,24 @@
 
 ---
 
+## ✅ Admin-scope org-staffing (2026-07-25, `followups/admin-scope-org-staffing-gaps-followup.md`)
+
+> Surfaced auditing the Admin-access org-scoping change (org_admin now scoped to an `organization_id`
+> node, not a country code). All three audited capabilities (child-org create / add donor officer /
+> create contractor) already worked; the two adjacent guard gaps below were **logged as debt
+> 2026-07-24, then built 2026-07-25** (migration `h4j6l8n0`; ticketing suite 649 passed / 0 failed).
+
+- **✅ [Gap A] Contractor authorship.** `owner_organization_id` on `ticketing.organizations` (self-FK;
+  `parent`/`children` relationships now pin `foreign_keys`). `create_organization` stamps the
+  creator's org node on a non-super org_admin's `third_party`; `can_admin_org_or_owned` (super OR
+  `owner ∈ caller subtree`) gates `update`/`delete` → maintainable by creator + ancestor-org admins.
+- **✅ [Gap B] Project-staffing scope.** `require_org_admin_project_scope` constrains the org_admin
+  tier to projects its subtree manages (project IA ∈ subtree; unanchored → open); actor orgs stay
+  unconstrained; other tiers unchanged. Wired into `staff_cast_slot`, `add/update/remove_project_organization`,
+  `add/remove_package_organization`, and `_require_project_scope` (donors).
+
+---
+
 ## ✅ WEEK 2 — Frontend (complete as of 2026-04-27)
 
 All screens confirmed built and running on port 3001 (`NEXT_PUBLIC_BYPASS_AUTH=true` for local):

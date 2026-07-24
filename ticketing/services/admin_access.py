@@ -261,6 +261,64 @@ def can_admin_org(db: Session, user: CurrentUser, org_id: str, track: str | None
     return org_id in reach
 
 
+def can_admin_org_or_owned(db: Session, user: CurrentUser, org, track: str | None = None) -> bool:
+    """Gap A (2026-07-24): like :func:`can_admin_org`, but also grants authority over a
+    ``third_party`` the caller — or an admin of an *ancestor* org — created.
+
+    Such a contractor is an independent root (``parent_organization_id`` NULL) that sits
+    outside every subtree, so :func:`can_admin_org` alone would lock its creator out (only
+    super_admin covers a rootless node). It is instead reachable when its
+    ``owner_organization_id`` (the creator's org node, stamped at create) falls inside the
+    caller's subtree — which resolves to the creating org_admin + any ancestor-org admin.
+    Used by the org update/delete guards; create/reparent keep the plain subtree check.
+    """
+    if can_admin_org(db, user, org.organization_id, track):
+        return True
+    owner = getattr(org, "owner_organization_id", None)
+    if not owner:
+        return False
+    reach = admin_org_scope_ids(db, user, track)
+    # reach is None ⇒ super_admin / country-wide org_admin, already handled by can_admin_org.
+    return reach is not None and owner in reach
+
+
+def org_admin_manages_project(db: Session, user: CurrentUser, project) -> bool:
+    """Gap B (2026-07-24): does an ``org_admin``'s subtree manage ``project``?
+
+    True when the project's implementing agency (the accountable org) is inside the user's
+    subtree, OR the project is **unanchored** (no IA yet) — so first-time setup / IA
+    assignment is not locked out. Assumes ``user`` is an org_admin; call it through
+    :func:`require_org_admin_project_scope`.
+    """
+    from ticketing.services.donor_guardrail import implementing_agency_org_id
+
+    ia = implementing_agency_org_id(db, project)
+    if not ia:
+        return True
+    return can_admin_org(db, user, ia)
+
+
+def require_org_admin_project_scope(db: Session, user: CurrentUser, project) -> None:
+    """Gap B: constrain the ``org_admin`` tier to projects its subtree manages.
+
+    Only the org_admin tier is checked here — ``super_admin`` and the other admin tiers
+    (project_admin, officer_admin) keep whatever access their own guard already granted, so
+    this closes the org_admin hole (any org_admin could staff any project) without regressing
+    the narrower tiers. The referenced actor/officer org is **not** constrained — cross-org
+    donor/contractor staffing stays allowed.
+    """
+    if is_super_admin(user):
+        return
+    if is_org_admin(user) and not org_admin_manages_project(db, user, project):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Your org_admin scope does not manage this project — its implementing "
+                "agency is outside your organisation subtree."
+            ),
+        )
+
+
 def catalog_owner_for(user: CurrentUser, track: str | None = None) -> str | None:
     """The ``owner_organization_id`` to stamp on a catalog item (role / workflow /
     position type) authored by ``user`` (doc 11 §3.3).

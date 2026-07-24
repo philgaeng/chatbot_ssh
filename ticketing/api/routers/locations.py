@@ -45,10 +45,13 @@ from ticketing.services import entity_codes as entity_codes_svc
 from ticketing.services.admin_access import (
     SettingsAction,
     can_admin_org,
+    can_admin_org_or_owned,
     can_assign_project_workflow,
+    catalog_owner_for,
     is_org_admin,
     is_project_admin,
     is_super_admin,
+    require_org_admin_project_scope,
     require_settings_write,
     require_track_for_mutation,
 )
@@ -471,6 +474,14 @@ def create_organization(
                 detail="Could not derive organization_id from name; provide organization_id explicitly.",
             )
         org_id = allocate_unique_organization_id(db, base)
+
+    # Gap A: a `third_party` contractor created by a (non-super) org_admin is a root outside
+    # every subtree — stamp the creator's org node as owner so the creator + ancestor-org
+    # admins can still maintain it (super_admin / global creations stay owner-less).
+    owner_org_id: str | None = None
+    if not is_super_admin(current_user) and org_category == "third_party":
+        owner_org_id = catalog_owner_for(current_user, "standard")
+
     org = Organization(
         organization_id=org_id,
         name=name_clean,
@@ -485,6 +496,7 @@ def create_organization(
         display_name_ne=body.display_name_ne,
         email=(body.email or "").strip() or None,
         address=(body.address or "").strip() or None,
+        owner_organization_id=owner_org_id,
     )
     db.add(org)
     db.commit()
@@ -613,9 +625,10 @@ def update_organization(
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    # SH-7 §S3: an org_admin may only edit within its own subtree.
-    if not is_super_admin(current_user) and not can_admin_org(
-        db, current_user, organization_id, "standard"
+    # SH-7 §S3: an org_admin may only edit within its own subtree. Gap A: plus a `third_party`
+    # it (or an ancestor-org admin) created, which lives outside every subtree as a root.
+    if not is_super_admin(current_user) and not can_admin_org_or_owned(
+        db, current_user, org, "standard"
     ):
         raise HTTPException(
             status_code=403, detail="Your org_admin scope does not cover this organization"
@@ -734,9 +747,10 @@ def delete_organization(
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
-    # SH-7 §S3: an org_admin may only delete within its own subtree.
-    if not is_super_admin(current_user) and not can_admin_org(
-        db, current_user, organization_id, "standard"
+    # SH-7 §S3: an org_admin may only delete within its own subtree. Gap A: plus a `third_party`
+    # it (or an ancestor-org admin) created, which lives outside every subtree as a root.
+    if not is_super_admin(current_user) and not can_admin_org_or_owned(
+        db, current_user, org, "standard"
     ):
         raise HTTPException(
             status_code=403, detail="Your org_admin scope does not cover this organization"
@@ -1717,12 +1731,14 @@ def add_project_organization(
     organization_id: str,
     body: OrgRoleBody = OrgRoleBody(),
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Link an organization to a project with an optional role. Admin only."""
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    require_org_admin_project_scope(db, current_user, project)
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
 
@@ -1764,7 +1780,7 @@ def update_project_organization_role(
     organization_id: str,
     body: OrgRoleBody,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Update the role of an already-linked organization. Admin only."""
     row = db.execute(
@@ -1779,6 +1795,8 @@ def update_project_organization_role(
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    require_org_admin_project_scope(db, current_user, project)
     try:
         actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
     except ValueError as exc:
@@ -1792,17 +1810,27 @@ def update_project_organization_role(
 
 # ── Project donors (doc 13 / DECISION 2026-07-10 §3) ──────────────────────────
 
-def _require_project_scope(current_user: CurrentUser, project_id: str) -> None:
+def _require_project_scope(current_user: CurrentUser, project_id: str, db: Session) -> None:
     """R2 (BUILD-REVIEW M1b): a ``project_admin`` may only mutate a project they administer.
 
     ``MANAGE_PROJECT`` alone returns True for *any* project_admin (tier predicate, no
     ``project_id``), so without this a project_admin of project A could edit project B's
     donors — and trigger ``apply_donor_informed_defaults`` on B's (possibly shared) workflow
-    step. Super/org admins keep the broader access the other project mutations grant.
+    step.
+
+    Gap B (2026-07-24): the same hole existed for ``org_admin`` (any org_admin could mutate
+    any project). An org_admin is now constrained to projects its subtree manages (the
+    project's implementing agency ∈ subtree; unanchored projects stay open for setup).
+    Super_admin keeps the broad access the other project mutations grant.
     """
-    if is_super_admin(current_user) or is_org_admin(current_user):
+    if is_super_admin(current_user):
         return
     if is_project_admin(current_user, project_id, "standard"):
+        return
+    if is_org_admin(current_user):
+        project = db.get(Project, project_id)
+        if project is not None:
+            require_org_admin_project_scope(db, current_user, project)
         return
     raise HTTPException(status_code=403, detail="You do not administer this project")
 
@@ -1843,7 +1871,7 @@ def add_project_donor(
     """
     require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
     require_track_for_mutation(current_user, "standard")
-    _require_project_scope(current_user, project_id)
+    _require_project_scope(current_user, project_id, db)
 
     project = db.get(Project, project_id)
     if not project:
@@ -1876,7 +1904,7 @@ def remove_project_donor(
     go-live guardrail requirement."""
     require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
     require_track_for_mutation(current_user, "standard")
-    _require_project_scope(current_user, project_id)
+    _require_project_scope(current_user, project_id, db)
 
     if not db.get(Project, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
@@ -1947,7 +1975,7 @@ def remove_project_organization(
     project_id: str,
     organization_id: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Unlink an organization from a project. Admin only."""
 
@@ -1960,6 +1988,10 @@ def remove_project_organization(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Link not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     db.delete(row)
     db.commit()
 
@@ -2296,10 +2328,14 @@ def add_package_organization(
     organization_id: str,
     body: PackageOrgRoleBody,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Assign an organization + role to a package (overrides project-wide for this lot)."""
     _get_package_or_404(db, project_id, package_id)
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
     try:
@@ -2337,10 +2373,14 @@ def remove_package_organization(
     organization_id: str,
     org_role: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Remove a package-level actor assignment."""
     _get_package_or_404(db, project_id, package_id)
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     row = db.execute(
         select(PackageOrganization).where(
             PackageOrganization.package_id == package_id,
