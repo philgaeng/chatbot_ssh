@@ -39,7 +39,7 @@ const TABS: TabDef[] = [
   { id: "informed",      label: "Informed",       redBadge: false, showBadge: true,  alwaysVisible: false, description: "Tickets I've been added to as an informed member" },
   { id: "observer",      label: "Observer",       redBadge: false, showBadge: false, alwaysVisible: false, description: "Tickets I'm watching in read-only mode" },
   { id: "high_priority", label: "High Priority",  redBadge: true,  showBadge: true,  alwaysVisible: true,  description: "HIGH / CRITICAL priority or SLA-breached tickets" },
-  { id: "all",           label: "All Tickets",    redBadge: false, showBadge: false, alwaysVisible: true,  description: "All tickets visible to my role" },
+  { id: "all",           label: "All Tickets",    redBadge: false, showBadge: false, alwaysVisible: true,  description: "All tickets visible to me" },
 ];
 
 // ── Summary tile ──────────────────────────────────────────────────────────────

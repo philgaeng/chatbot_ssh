@@ -121,7 +121,7 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
         <div>
           <h2 className={`text-lg font-semibold ${textTokens.heading}`}>Position types</h2>
           <p className={`text-sm ${textTokens.secondary}`}>
-            The set of job titles officers can hold, each with a default role.
+            The set of job titles officers can hold, each with a default responsibility.
           </p>
         </div>
         {canEdit && (
@@ -165,7 +165,7 @@ export function PositionTypesPanel({ canEdit }: { canEdit: boolean }) {
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by title or role…"
+              placeholder="Search by title…"
               className="w-full rounded border border-gray-300 px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400 sm:max-w-xs"
             />
             {(query || unitFilter.length > 0) && (

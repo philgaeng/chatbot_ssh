@@ -203,7 +203,7 @@ export function AdminAccessTab() {
           <thead>
             <tr className="bg-slate-700 text-slate-100 text-left">
               <th className="px-3 py-2">User</th>
-              <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Access level</th>
               <th className="px-3 py-2">Scope</th>
               <th className="px-3 py-2">Track</th>
               <th className="px-3 py-2">Actions</th>

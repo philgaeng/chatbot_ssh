@@ -132,7 +132,7 @@ export function InviteOfficerModal({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Role *</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Responsibility *</label>
             <select
               value={roleKey}
               onChange={(e) => setRoleKey(e.target.value)}
@@ -356,7 +356,7 @@ export function EditOfficerModal({
               {officerHasMultipleOrgs && (
                 <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   This officer has scopes in more than one organization. Pick the correct organization below — saving
-                  will align all roles and scopes to that org.
+                  will align all responsibilities and scopes to that org.
                 </p>
               )}
               <div className="space-y-3 max-w-md">
