@@ -2,7 +2,7 @@
 
 /**
  * <SetupOverview> — R8 (BUILD-REVIEW M6 / DESIGN §2.3/§7.A): the Setup & go-live landing.
- * Mode 1 (empty system) — the first-run ordered spine (Organisation → Workflows & roles →
+ * Mode 1 (empty system) — the first-run ordered spine (Organisation → Workflows →
  * Project → Officers → Go live). Mode 2 (projects exist) — a per-project go-live spine that
  * always names the next blocker. Composes existing data (listProjects + go-live report); no
  * new backend.
@@ -16,7 +16,7 @@ import { GoLiveSpine } from "./GoLiveSpine";
 
 const FIRST_RUN_STEPS: { title: string; detail: string }[] = [
   { title: "Add your organisation", detail: "Create the reporting-line ministry/department and any partners." },
-  { title: "Set up workflows & roles", detail: "Define the escalation levels and who handles / oversees each step." },
+  { title: "Set up workflows", detail: "Define the escalation levels and who handles / oversees each step." },
   { title: "Create a project", detail: "Set the implementing agency, link workflows, and add locations." },
   { title: "Invite officers", detail: "Staff each level — invite officers by their position." },
   { title: "Go live", detail: "Clear the go-live checklist and activate the project." },
