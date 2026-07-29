@@ -215,7 +215,7 @@ function ScopeRowEditor({
       <td colSpan={5} className="px-3 py-3">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs font-medium text-gray-500 block mb-1">Role</label>
+            <label className="text-xs font-medium text-gray-500 block mb-1">Responsibility</label>
             <select
               value={draft.role_key}
               onChange={(e) => patchDraft({ role_key: e.target.value })}
@@ -425,7 +425,7 @@ export function OfficerScopeTable({
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              <th className="px-3 py-2.5">Role</th>
+              <th className="px-3 py-2.5">Responsibility</th>
               <th className="px-3 py-2.5">Project</th>
               <th className="px-3 py-2.5">Package</th>
               <th className="px-3 py-2.5">Location</th>

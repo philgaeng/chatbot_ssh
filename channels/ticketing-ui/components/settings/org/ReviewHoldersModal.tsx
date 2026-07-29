@@ -68,8 +68,8 @@ export function ReviewHoldersModal({
         <div className="max-h-[calc(85vh-8rem)] space-y-3 overflow-y-auto p-6">
           <p className={`text-sm ${textTokens.body}`}>
             These officers hold{" "}
-            <span className="font-medium">{positionType.display_name}</span>. Their role was not
-            changed automatically.
+            <span className="font-medium">{positionType.display_name}</span>. Their responsibility
+            was not changed automatically.
             {newDefaultRoleKey && (
               <>
                 {" "}

@@ -71,7 +71,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "What is the AI Case Findings panel?",
-        a: "Visible to GRC Chair, ADB Safeguards, and admin roles — the Findings panel shows a structured summary of the case: key facts, actions taken, outstanding issues, and a recommended next step. It is generated from all officer notes and key status events. Click Regenerate to refresh it after adding new notes.",
+        a: "Visible to the GRC Chair, ADB Safeguards, and administrators — the Findings panel shows a structured summary of the case: key facts, actions taken, outstanding issues, and a recommended next step. It is generated from all officer notes and key status events. Click Regenerate to refresh it after adding new notes.",
       },
       {
         q: "What does the translation chip on notes mean?",
@@ -86,7 +86,7 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "What is SEAH?",
-        a: "Sexual Exploitation, Abuse, and Harassment. SEAH cases follow a separate confidential workflow and are visible only to designated SEAH officers and senior ADB roles. They are marked with a red 🔒 SEAH badge and a red left border.",
+        a: "Sexual Exploitation, Abuse, and Harassment. SEAH cases follow a separate confidential workflow and are visible only to designated SEAH officers and senior ADB staff. They are marked with a red 🔒 SEAH badge and a red left border.",
       },
       {
         q: "Why can't I see a ticket my colleague mentioned?",
@@ -105,7 +105,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "How do I record the GRC decision?",
-        a: "After the hearing, return to the ticket (status: GRC Hearing Scheduled) and click GRC Decide. Choose either Resolved (case closed) or Escalate to Legal (Level 4). The outcome is recorded in the case timeline.",
+        a: "After the hearing, return to the ticket (status: GRC Hearing Scheduled) and record the outcome: click Resolve to close the case, or Escalate to Level 4 (Legal) if it needs legal review. The outcome is recorded in the case timeline.",
       },
       {
         q: "What is the Informed tier?",
@@ -124,7 +124,7 @@ const SECTIONS: Section[] = [
       },
       {
         q: "Are reports sent automatically?",
-        a: "Yes. Admins can save report templates and assign them in the Quarterly email tab. The system sends one email per assignment based on the current quarter plan, with assignment limits enforced per role for each calendar quarter.",
+        a: "Yes. Admins can save report templates and assign them in the Quarterly email tab. The system sends one email per assignment based on the current quarter plan, with assignment limits enforced per recipient group for each calendar quarter.",
       },
     ],
   },
@@ -135,11 +135,11 @@ const SECTIONS: Section[] = [
     items: [
       {
         q: "Who can access Settings?",
-        a: "Only officers with super_admin or local_admin roles see the Settings link in the sidebar. Settings covers: workflow definitions, officer accounts and scopes, organisations and project packages, locations, and notification / report schedules.",
+        a: "Only administrators see the Settings link in the sidebar — a super admin sees everything, while organisation and project admins see the areas they manage. Settings covers: workflow definitions, officer accounts and scopes, organisations and project packages, locations, and notification / report schedules.",
       },
       {
         q: "How do I add a new officer?",
-        a: "Go to Settings → Officers. Add the officer's name, email, role, and scope (organisation + location). The system creates their account and sends an invitation email via Cognito. Officers set their own password on first login.",
+        a: "Go to Settings → Officers → Invite. Enter the officer's office (organisation), position, and email — that is all you need. The system creates their account and emails a set-password link via Keycloak, and the officer sets their own password on first login. Their responsibilities and work area are set later, when you staff them on a package (Projects → Cast).",
       },
     ],
   },

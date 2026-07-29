@@ -4,9 +4,8 @@
  * <OfficersDirectory> — officer roster + lifecycle at scale (DESIGN §7.F / build sheet frame-11).
  *
  * Search-first directory. A dual-hat officer (multiple active positions, doc 16 §3.3) shows
- * one row per position (§5.1, pin 46). Role column via <RoleLabel> (never a raw slug); office /
- * position names via <Bilingual>. A ⋯ menu exposes Manage (identity, positions, wired resend +
- * end-position) and Deactivate.
+ * one row per position (§5.1, pin 46). Office / position names via <Bilingual>. A ⋯ menu
+ * exposes Manage (identity, positions, wired resend + end-position) and Deactivate.
  *
  * SCOPE NOTES (honest about backend gaps flagged in frame-11 §4/§6):
  *   • Search + filters run CLIENT-side on the full `listOfficerRoster()` payload.
@@ -39,18 +38,13 @@ import {
   type OfficerPositionItem,
 } from "@/lib/api";
 import { Bilingual } from "@/components/shared/Bilingual";
-import { RoleLabel } from "@/components/shared/RoleLabel";
 import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
-import { roleLabel } from "@/lib/labels";
 import { primary, text as textTokens } from "@/lib/design-tokens";
 import { prettyLocation } from "@/lib/prettyLocation";
 
 const BTN_GHOST =
   "inline-flex items-center gap-1.5 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
-const FIELD =
-  "rounded border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-gray-800 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-400";
-
 type TrackFilterValue = "all" | "standard" | "seah";
 
 interface FlatRow {
@@ -70,7 +64,6 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
   const [ctx, setCtx] = useState<AdminContext | null>(null);
 
   const [q, setQ] = useState("");
-  const [roleFilter, setRoleFilter] = useState("");
   const [trackFilter, setTrackFilter] = useState<TrackFilterValue>("all");
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
@@ -135,32 +128,18 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
     void reload();
   }, []);
 
-  const roleByKey = useMemo(() => new Map(roles.map((r) => [r.role_key, r])), [roles]);
   const orgById = useMemo(() => new Map(orgs.map((o) => [o.organization_id, o])), [orgs]);
   const projectByCode = useMemo(
     () => new Map(projects.map((p) => [p.short_code, p])),
     [projects],
   );
+  // SEAH classification is derived from role_keys internally (not shown to users) so the
+  // Standard/SEAH track filter keeps working.
   const seahRoleKeys = useMemo(
     () => new Set(roles.filter((r) => (r.workflow_scope ?? "") === "SEAH").map((r) => r.role_key)),
     [roles],
   );
   const seahCapable = !!ctx && (ctx.is_super_admin || ctx.admin_workflow_tracks.includes("seah"));
-
-  // role_keys present across the roster → the Role filter options.
-  const rosterRoleKeys = useMemo(() => {
-    const s = new Set<string>();
-    for (const o of roster) {
-      o.role_keys.forEach((rk) => s.add(rk));
-      (o.scopes ?? []).forEach((sc) => s.add(sc.role_key));
-    }
-    return [...s].sort((a, b) => roleLabel(a, roleByKey.get(a)?.display_name).localeCompare(
-      roleLabel(b, roleByKey.get(b)?.display_name),
-    ));
-  }, [roster, roleByKey]);
-
-  const officerHasRole = (o: OfficerRosterEntry, rk: string) =>
-    o.role_keys.includes(rk) || (o.scopes ?? []).some((s) => s.role_key === rk);
 
   const officerIsSeah = (o: OfficerRosterEntry) =>
     o.role_keys.some((rk) => seahRoleKeys.has(rk)) ||
@@ -169,23 +148,17 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
   const filteredOfficers = useMemo(() => {
     const term = q.trim().toLowerCase();
     return roster.filter((o) => {
-      if (roleFilter && !officerHasRole(o, roleFilter)) return false;
       if (trackFilter === "seah" && !officerIsSeah(o)) return false;
       if (trackFilter === "standard" && officerIsSeah(o) && o.role_keys.every((rk) => seahRoleKeys.has(rk)))
         return false;
       if (!term) return true;
-      const haystack = [
-        o.display_name,
-        o.email ?? "",
-        ...(o.positions ?? []),
-        ...o.role_keys.map((rk) => roleLabel(rk, roleByKey.get(rk)?.display_name)),
-      ]
+      const haystack = [o.display_name, o.email ?? "", ...(o.positions ?? [])]
         .join(" ")
         .toLowerCase();
       return haystack.includes(term);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roster, q, roleFilter, trackFilter, seahRoleKeys, roleByKey]);
+  }, [roster, q, trackFilter, seahRoleKeys]);
 
   // Dual-hat: one row per active position; fall back to a single row for legacy no-position officers.
   const rows: FlatRow[] = useMemo(() => {
@@ -266,18 +239,10 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, email, role, or position…"
+            placeholder="Search name, email, or position…"
             className="w-full text-sm outline-none"
           />
         </div>
-        <select className={FIELD} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value)}>
-          <option value="">All roles</option>
-          {rosterRoleKeys.map((rk) => (
-            <option key={rk} value={rk}>
-              {roleLabel(rk, roleByKey.get(rk)?.display_name)}
-            </option>
-          ))}
-        </select>
         {seahCapable ? (
           <div className="inline-flex overflow-hidden rounded border border-gray-300 text-sm">
             {(["all", "standard", "seah"] as TrackFilterValue[]).map((t) => (
@@ -312,7 +277,6 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
               <tr className={`border-b border-gray-200 bg-gray-50 text-xs ${textTokens.secondary}`}>
                 <th className="px-3 py-2 font-medium">Officer</th>
                 <th className="px-3 py-2 font-medium">Position</th>
-                <th className="px-3 py-2 font-medium">Role(s)</th>
                 <th className="px-3 py-2 font-medium">Office</th>
                 <th className="px-3 py-2 font-medium">Project / area</th>
                 <th className="px-3 py-2 font-medium">Status</th>
@@ -338,24 +302,6 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">
                       {row.position ?? <span className={textTokens.muted}>No position</span>}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      {row.isFirst ? (
-                        <div className="flex flex-wrap gap-1">
-                          {o.role_keys.length === 0 ? (
-                            <span className={textTokens.muted}>—</span>
-                          ) : (
-                            o.role_keys.map((rk) => (
-                              <span
-                                key={rk}
-                                className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700"
-                              >
-                                <RoleLabel roleKey={rk} displayName={roleByKey.get(rk)?.display_name} />
-                              </span>
-                            ))
-                          )}
-                        </div>
-                      ) : null}
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">{row.isFirst ? officeCell(o) : null}</td>
                     <td className="px-3 py-2.5">{row.isFirst ? projectAreaCell(o) : null}</td>
@@ -434,7 +380,6 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
       {manageOfficer ? (
         <ManageOfficerModal
           officer={manageOfficer}
-          roleByKey={roleByKey}
           onClose={() => setManageOfficer(null)}
           onChanged={() => void reload()}
         />
@@ -447,12 +392,10 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
 function ManageOfficerModal({
   officer,
-  roleByKey,
   onClose,
   onChanged,
 }: {
   officer: OfficerRosterEntry;
-  roleByKey: Map<string, GrmRole>;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -528,25 +471,6 @@ function ManageOfficerModal({
         <div className="space-y-4 px-4 py-4">
           {error ? <ErrorNotice error={error} /> : null}
 
-          {/* Roles */}
-          <section>
-            <h4 className={`mb-1 text-xs font-medium ${textTokens.secondary}`}>Roles</h4>
-            <div className="flex flex-wrap gap-1">
-              {officer.role_keys.length === 0 ? (
-                <span className={`text-sm ${textTokens.muted}`}>None</span>
-              ) : (
-                officer.role_keys.map((rk) => (
-                  <span
-                    key={rk}
-                    className="inline-flex items-center rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-700"
-                  >
-                    <RoleLabel roleKey={rk} displayName={roleByKey.get(rk)?.display_name} />
-                  </span>
-                ))
-              )}
-            </div>
-          </section>
-
           {/* Positions */}
           <section>
             <h4 className={`mb-1 text-xs font-medium ${textTokens.secondary}`}>Positions</h4>
@@ -589,14 +513,14 @@ function ManageOfficerModal({
           ) : null}
 
           {/* Backend-pending lifecycle actions (frame-11 §6). Disabled with reason.
-              TODO: wire Edit role & area, Transfer, and open-case-guarded Deactivate once
+              TODO: wire Edit position & area, Transfer, and open-case-guarded Deactivate once
               the server endpoints (paged roster, soft-deactivate, open-case guard) land. */}
           <section className="space-y-1 border-t border-gray-100 pt-3">
             <p className={`text-xs ${textTokens.muted}`}>Coming soon (backend pending):</p>
             <div className="flex flex-wrap gap-2">
               {/* R12 (BUILD-REVIEW MO5): Deactivate is wired in the row ⋯ menu — removed from
                   this "coming soon" list to kill the self-contradiction. */}
-              {["Edit role & area", "Transfer"].map((label) => (
+              {["Edit position & area", "Transfer"].map((label) => (
                 <button
                   key={label}
                   type="button"

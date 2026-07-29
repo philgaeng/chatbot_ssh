@@ -437,7 +437,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     <>
       {countryRole && orgId && (
         <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-          <span className="font-medium">Country-wide role:</span> this officer sees all projects where{" "}
+          <span className="font-medium">Country-wide scope:</span> this officer sees all projects where{" "}
           <span className="font-mono">{orgId}</span> is a project actor. Optionally pick one project below to narrow.
         </p>
       )}
@@ -651,7 +651,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
       <p className="text-xs text-gray-500">
         {countryRole ? (
           <>
-            For this role, <strong>organization</strong> is enough for country-wide access. Add a project, package, or
+            For this responsibility, <strong>organization</strong> is enough for country-wide access. Add a project, package, or
             location only if you want to narrow coverage.
           </>
         ) : (

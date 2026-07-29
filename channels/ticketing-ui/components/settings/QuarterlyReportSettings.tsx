@@ -93,13 +93,13 @@ export function QuarterlyReportSettings() {
       <div>
         <h2 className="text-base font-semibold text-gray-800 mb-0.5">Quarterly report plan</h2>
         <p className="text-xs text-gray-500 leading-relaxed">
-          Save up to <strong>{maxPerRole}</strong> reports per role per calendar quarter. On the
-          scheduled day, each saved report is emailed once to every officer with that role (one
+          Save up to <strong>{maxPerRole}</strong> reports per recipient group per calendar quarter. On the
+          scheduled day, each saved report is emailed once to every officer in that recipient group (one
           attachment per email).
         </p>
         {plan?.limits && (
           <p className="text-xs text-gray-600 mt-2">
-            IT cap: {plan.limits.max_reports_per_role_per_quarter} reports / role / quarter.
+            IT cap: {plan.limits.max_reports_per_role_per_quarter} reports / recipient group / quarter.
             {!plan.limits.quarterly_email_enabled && (
               <span className="text-red-600"> Email dispatch is disabled.</span>
             )}
@@ -164,11 +164,11 @@ export function QuarterlyReportSettings() {
             <Link href="/reports" className="text-blue-600 hover:underline">
               Reports → Pivot table
             </Link>{" "}
-            — build a report, then <strong>Save for quarterly send</strong> and pick role(s).
+            — build a report, then <strong>Save for quarterly send</strong> and pick recipients.
           </p>
           {allowedRoles && (
             <p className="text-xs text-gray-500 mt-2">
-              Allowed roles: {allowedRoles.join(", ")}
+              Allowed recipients: {allowedRoles.join(", ")}
             </p>
           )}
         </div>
@@ -215,7 +215,7 @@ export function QuarterlyReportSettings() {
               </ul>
               {block.count >= block.max && (
                 <p className="text-xs text-amber-700 mt-2">
-                  Slot full — remove a report or pick another role to add more.
+                  Slot full — remove a report or pick another recipient group to add more.
                 </p>
               )}
             </section>
@@ -227,7 +227,7 @@ export function QuarterlyReportSettings() {
         <Link href="/reports" className="text-blue-600 hover:underline">
           Open Reports → Quarterly email
         </Link>{" "}
-        to schedule saved reports and assign roles.
+        to schedule saved reports and assign recipients.
       </p>
     </div>
   );

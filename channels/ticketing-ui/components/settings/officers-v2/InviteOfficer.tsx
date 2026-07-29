@@ -499,8 +499,8 @@ export function InviteOfficer({
       {showCard && office && position ? (
         <div className="space-y-3">
           <p className={`text-xs ${textTokens.muted}`}>
-            The role and work area are set later when you staff this officer on a package
-            (Projects &rarr; Cast).
+            Their responsibilities and work area are set later when you staff this officer on a
+            package (Projects &rarr; Cast).
           </p>
 
           {sendError ? <ErrorNotice error={sendError} /> : null}

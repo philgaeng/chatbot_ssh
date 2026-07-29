@@ -136,7 +136,7 @@ export function FieldReportComposeCard({
             type="text"
             value={personMet}
             onChange={(e) => setPersonMet(e.target.value)}
-            placeholder="Name and role"
+            placeholder="Name and title"
             className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
           />
         </label>
