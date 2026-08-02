@@ -81,8 +81,8 @@ Policy helpers (no DB): `ticketing/services/grievance_sync_policy.py`.
 
 `ticketing/services/project_routing.py` → `resolve_ticket_organization(db, project_code=…, package_id=…)`:
 
-1. If `package_id` → `package_organizations` for project type **routing role** (default `implementing_agency`).
-2. Else → `project_organizations` for that role.
+1. **Prefer** the project's `implementing_agency_org_id` ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
+2. **Legacy fallback** (projects predating that field): `package_organizations` (if `package_id`) then `project_organizations` for the routing role (default `implementing_agency`) — deprecated.
 
 Used on **ticket create** and on **field-officer invite / add scope** (`validate_jurisdiction` overrides wrong org, e.g. contractor vs DOR). Country/global observer roles (`jurisdiction_mode=country`) keep the submitted org (e.g. ADB).
 
@@ -273,7 +273,7 @@ Full contract in [12_workflows_configuration.md](12_workflows_configuration.md) 
 | `GET` | `/projects/{id}/go-live` | Go-live readiness check |
 | `GET/PATCH` | `/projects/{id}/messaging` | Project officer SMS/WhatsApp config |
 | `GET/PUT` | `/projects/{id}/workflows` | Workflow slot bindings |
-| `GET/POST/PATCH/DELETE` | `/projects/{id}/organizations…`, `…/actor-roles` | Project actors + org role links |
+| ~~`/projects/{id}/organizations…`, `…/actor-roles`~~ | **deprecated** — legacy project actors / actor-role links (superseded by implementing agency + donors + staffing, [13](13_projects_and_packages.md)); still present |
 | `GET/POST/DELETE` | `/projects/{id}/locations…` | Project location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages…` | Package CRUD |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/{code}`, `…/organizations/{org}` | Package location + org links |

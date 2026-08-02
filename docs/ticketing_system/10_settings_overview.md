@@ -70,11 +70,11 @@ Additional gates:
 |---------|------------------|-----------|--------------|
 | **Admin roles** | Settings → Settings → **Admin access** (`super_admin`) | `ticketing.roles` + scoped assignments | `super_admin`, `org_admin`, `project_admin` (+ `workflow_track` on scope) |
 | **Operational GRM roles** | Workflows → **Roles & permissions** | `ticketing.roles`, `workflow_steps`, `user_roles`, `officer_scopes` | `site_safeguards_focal_person`, `grc_chair` |
-| **Project party roles** | Projects & packages → Actor roles / project actors | `project_actor_roles`, `project_organizations.org_role` | `donor`, `main_contractor`, `implementing_agency` |
+| **Project participants** | Projects & packages → Partner organizations | `projects.implementing_agency_org_id` + `project_donors` *(actor-role catalog deprecated — legacy, still present; DECISION 2026-07-10)* | implementing agency (1) + donors (0..n) |
 
-No confusion between operational tab and party roles: different tabs, different tables. Admin roles are not mixed into the operational Roles tab.
+No confusion between operational roles and project participants: different tabs, different tables. Admin roles are not mixed into the operational Roles tab.
 
-Global **party role vocabulary** (`settings.org_roles` JSON) seeds new projects only. See [13_projects_and_packages.md](13_projects_and_packages.md).
+Global party-role vocabulary (`settings.org_roles`) is **deprecated** (DECISION 2026-07-10) — the per-project actor-role catalog it seeds is legacy/back-compat, superseded by one **implementing agency** + optional **donors**. See [13_projects_and_packages.md](13_projects_and_packages.md).
 
 ---
 
@@ -97,7 +97,7 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 |-----|------------|---------------|------|
 | `notification_rules` | Workflow editor panel | `org_admin`+ | [12_workflows_configuration.md](12_workflows_configuration.md) |
 | `complainant_notifications` | Seeded; no dedicated UI yet | Admin | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
-| `org_roles` | Advanced (JSON) | `super_admin` only | [14_platform_settings.md](14_platform_settings.md) |
+| `org_roles` | Advanced (JSON) | `super_admin` only | **Deprecated** (DECISION 2026-07-10) — legacy party-role vocabulary; still seeds the deprecated actor-role catalog on project create |
 | `report_limits` | Advanced (JSON) | `super_admin` only | [09_reports_and_report_builder.md](09_reports_and_report_builder.md) |
 | `archiving_policy` | Advanced (JSON) | `super_admin` only | [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md) |
 
@@ -111,7 +111,7 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 |-----|----------|
 | [11_roles_and_permissions.md](11_roles_and_permissions.md) | Admin ladder (3 levels) + operational GRM roles, UI placement |
 | [12_workflows_configuration.md](12_workflows_configuration.md) | Workflow definitions, steps, SLAs, templates, notification matrix |
-| [13_projects_and_packages.md](13_projects_and_packages.md) | Project editor, actor roles, packages, go-live, QR |
+| [13_projects_and_packages.md](13_projects_and_packages.md) | Project editor, partner orgs (implementing agency + donors), staffing, packages, go-live, QR |
 | [14_platform_settings.md](14_platform_settings.md) | Locations, quarterly report settings, project types, system JSON |
 | [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) | Officer invite, scopes, auto-assign |
 | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) | Staff WhatsApp/SMS policy |

@@ -87,7 +87,7 @@ Full index: [`ticketing_system/README.md`](ticketing_system/README.md). Highligh
 - Officers, resolution, reports, queue: [`07`](ticketing_system/07_officer_management_and_assignment.md) / [`08`](ticketing_system/08_ticket_resolution_and_case_summary.md) / [`09`](ticketing_system/09_reports_and_report_builder.md) / [`15`](ticketing_system/15_ticket_queue_search_and_filters.md)
 - Settings & admin: [`10`](ticketing_system/10_settings_overview.md)–[`14`](ticketing_system/14_platform_settings.md), org chart [`16`](ticketing_system/16_org_chart_and_positions.md)
 - Data models: classification [`17`](ticketing_system/17_classification_status.md), geography [`18`](ticketing_system/18_geography_and_locations.md), [`LOCATION_CODES.md`](ticketing_system/LOCATION_CODES.md), [`Escalation_rules.md`](ticketing_system/Escalation_rules.md)
-- **Officer UI**: [`ui/01_ui_spec.md`](ticketing_system/ui/01_ui_spec.md) + [`ui/02_design_system.md`](ticketing_system/ui/02_design_system.md)
+- **Officer UI**: [`ui/01_ui_spec.md`](ticketing_system/ui/01_ui_spec.md) + [`ui/02_design_system.md`](ticketing_system/ui/02_design_system.md) + [`ui/05_ui_copy_style.md`](ticketing_system/ui/05_ui_copy_style.md) (plain-language / on-screen wording — the copy source of truth)
 
 ---
 

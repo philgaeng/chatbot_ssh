@@ -54,7 +54,9 @@ Admins may add **custom** `slot_key` values (slug) on a project via `PUT /projec
 | `assigned_role_key` | GRM role from [11_roles_and_permissions.md](11_roles_and_permissions.md) |
 | `response_time_hours` | First-response SLA (optional) |
 | `resolution_time_days` | Escalation trigger; `NULL` = no auto-escalation |
-| `supervisor_role`, `informed_roles`, `observer_roles` | Tier model (spec 12) |
+| `supervisor_role`, `informed_roles`, `observer_roles` | Tier model (spec 12) — the step **cast** (actor = `assigned_role_key`) |
+| `tier_labels` | Per-step, per-tier **display name + description** — each **defaults from the tier type** (e.g. supervisor → "oversees; can reassign") and is **editable by the author in the Workflows step editor**. Shown **read-only** on staffing / case UI instead of generic tier words. See §6.2 |
+| `required_tiers` | JSON list ⊆ {`supervisor`, `informed`, `observer`} — the non-actor tiers the author marks **mandatory** on this step. The **actor tier is always required**. Drives the project staffing go-live gate ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). See §6.2 |
 | `is_deleted` | Soft delete; blocked if active tickets on step |
 
 ### `ticketing.project_workflows` (project ↔ stream ↔ workflow)
@@ -147,6 +149,17 @@ Admins edit workflows **more often** than they create roles. The step editor is 
 | **+ Create role…** | Role archetype wizard; returns with new `role_key` selected |
 | **Step without role** | Block publish until every step has `assigned_role_key` |
 
+### 6.2 Step cast — tiers, names, and required flags
+
+A step is a **cast**, not one role ([13 §5A.1](13_projects_and_packages.md)): **actor** (`assigned_role_key`) · **supervisor** (`supervisor_role`) · **participant / informed** (`informed_roles[]`) · **observer** (`observer_roles[]`). In the step editor the workflow author controls two things per tier:
+
+- **Name + description** (`tier_labels`) — each tier starts from a **default** (from its type — e.g. supervisor → "oversees; can reassign") that the author can **edit per step, here in the Workflows tab**; e.g. L1 actor named "Safeguard Officer", L3 actor "GRC Chairman". These (default or edited) labels — never generic words like "Handles it" — are what the staffing and case UI display (**read-only there; edited only here**).
+- **Mandatory or not** (`required_tiers`) — the **actor is always required**; the author decides, **per step**, whether **supervisor / participant / observer** are mandatory. A tier not marked mandatory is optional and never blocks go-live.
+
+**Effect on project go-live (staffing gate):** a project blocks activation if any step has a **required** tier with no officer staffed for it ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). The supervisor's default (next-step handler pool, [DECISION §5](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) satisfies a mandatory supervisor **except on the top step**, where an explicit one is required. Requiredness is a **workflow** property, so it is consistent across every project that uses the workflow.
+
+**UI (wireframe):** the step-cast editor — bind a role, name each tier + add a description, mark required — is mocked at [`ui/06_workflows_step_cast_editor.html`](ui/06_workflows_step_cast_editor.html). The author-set names + required flags then drive the **read-only** Staffing screen ([13 §5A](13_projects_and_packages.md); mockup [`ui/04`](ui/04_projects_packages_redesign.html)).
+
 ---
 
 ## 7. Settings UI — Project grievance workflows
@@ -159,7 +172,7 @@ Section lists **all built-in slots** (safeguards, hazards, CA, SEAH) plus any cu
 | **+ Create new workflow…** | Opens clone modal; on save, assigns to that slot |
 | Save | `PUT /api/v1/projects/{id}/workflows` |
 
-Officers for the same project can hold **different roles on different steps** across streams — e.g. L1 safeguards focal on `safeguards`, a contractor liaison on `ca`, a rapid-response role on `hazards`. Staffing is configured under **Project actors** and **Staffing** ([07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)).
+Officers for the same project can hold **different roles on different steps** across streams — e.g. L1 safeguards focal on `safeguards`, a contractor liaison on `ca`, a rapid-response role on `hazards`. Staffing is **position-first** ([13 §5A](13_projects_and_packages.md)): fill each level's cast under **Project-wide staffing**, with per-lot overrides in **Packages**.
 
 ---
 
@@ -230,3 +243,4 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 4. Ticket intake selects the correct workflow from slot inference or explicit `workflow_slot`.
 5. Published workflow version is snapshotted on the ticket; publishing does not rewrite open tickets.
 6. Auto-escalation respects `resolution_time_days` on the current step.
+7. The step editor lets the author name each cast tier and mark **supervisor / participant / observer** mandatory (`required_tiers`); actor is always required. Only required tiers gate project go-live ([13 §5A.5](13_projects_and_packages.md)).

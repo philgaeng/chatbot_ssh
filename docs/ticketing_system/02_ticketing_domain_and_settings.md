@@ -113,7 +113,7 @@ A physical asset within a project (e.g. a road segment). Each package can have m
 Fields: `package_id`, `project_id`, `name`, `location_code`.
 
 `ticketing.package_locations` — many-to-many join: one package can span multiple locations.
-`ticketing.package_organizations` — package → allowed organizations.
+`ticketing.package_organizations` — package → allowed organizations. **Deprecated** (legacy, still present; DECISION 2026-07-10) — per-lot variation is now staffing override ([13 §5A](13_projects_and_packages.md)).
 
 ### ProjectType (`ticketing.project_types`)
 

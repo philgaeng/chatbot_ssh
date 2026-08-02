@@ -393,9 +393,9 @@ location_code   VARCHAR(64)   FK → ticketing.locations
 PRIMARY KEY (package_id, location_code)
 ```
 
-### `ticketing.package_organizations`
+### `ticketing.package_organizations` — deprecated (legacy, still present)
 
-Many-to-many: package → allowed organizations.
+Many-to-many: package → allowed organizations (the package-level **actor override**). **Deprecated** (DECISION 2026-07-10) — superseded by per-lot **staffing override** ([13 §5A](13_projects_and_packages.md)); table remains for back-compat, not yet dropped. (Same status: `project_organizations`, `project_actor_roles`.)
 
 ```sql
 package_id          VARCHAR(36)   FK → ticketing.packages

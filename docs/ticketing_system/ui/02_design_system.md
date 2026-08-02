@@ -2,6 +2,7 @@
 
 > **Status:** As-built, July 2026. Consolidated from `docs/sprints/archive/claude-tickets/UI_DESIGN_SYSTEM.md` (April 2026), reconciled with the thread redesign (`UI_HANDOFF_thread_redesign.md`) and current code in `channels/ticketing-ui/`.
 > Applies to all new components in `channels/ticketing-ui/`.
+> **On-screen wording (voice, plain language, glossary):** see [`05_ui_copy_style.md`](05_ui_copy_style.md) — the copy source of truth. This doc covers the *visual* system; that one covers *words*.
 
 ---
 

@@ -83,10 +83,11 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 |---------------|----------------------|
 | `type_key`, `label` | `project.project_type_key` |
 | `standard_workflow_id`, `seah_workflow_id` | Project workflow links |
-| Required actor role keys | `project_actor_roles` rows |
-| `routing_org_role` | Go-live implementing-agency check |
+| **Implementing agency** (defaulted to owning ministry) | `project.implementing_agency_org_id` (primary, [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
+| ~~Required actor role keys~~ *(deprecated)* | Legacy `project_actor_roles` seed — superseded by the implementing agency + donors |
+| ~~`routing_org_role`~~ *(deprecated)* | Legacy — go-live now checks the implementing-agency field + staffing ([13 §7](13_projects_and_packages.md)) |
 
-`org_admin` and `project_admin` **cannot** edit type definitions or actor role keys on instantiated projects.
+`org_admin` and `project_admin` **cannot** edit type definitions on instantiated projects. *(The actor-role-key rows above are deprecated — DECISION 2026-07-10; still seeded, superseded by implementing agency + donors + staffing.)*
 
 See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
@@ -116,7 +117,7 @@ Full role semantics: [11_roles_and_permissions.md](11_roles_and_permissions.md) 
 
 Three JSON editors:
 
-### 6.1 `org_roles` (organization role vocabulary)
+### 6.1 `org_roles` (organization role vocabulary) — deprecated
 
 **Key:** `settings.org_roles`  
 **Shape:** JSON array:
@@ -128,7 +129,7 @@ Three JSON editors:
 ]
 ```
 
-**Usage:** Template when **creating** a new project — copied into `project_actor_roles`. Editing this key does **not** retroactively change existing projects.
+**Usage (deprecated):** Legacy template — still copied into `project_actor_roles` on project create, but that catalog is **deprecated** (DECISION 2026-07-10; superseded by the implementing agency + donors). Editing this key does **not** retroactively change existing projects.
 
 Default keys include: `donor`, `executing_agency`, `implementing_agency`, `main_contractor`, `subcontractor_t1`, `subcontractor_t2`, `supervision_consultant`, `specialized_consultant`.
 

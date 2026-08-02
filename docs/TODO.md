@@ -8,6 +8,10 @@
 
 ## Cast-model follow-ups (2026-07-23, `DESIGN-cast-model-and-package-staffing.md`)
 
+- **[Participants DECISION — DECIDED 2026-07-30: keep (B)] Actor-role catalog is deprecated back-compat, not dropped.**
+  New model (`implementing_agency_org_id` + `project_donors` + the staffing go-live gate) is primary; the legacy
+  tables/service are kept as a dormant fallback (still seeded on create). **No cleanup planned.** Docs 02/03/04/10/11/13/14
+  reflect "deprecated, present". (`sprints/2026-07_org_chart_positions/followups/actor-role-catalog-not-dropped.md`)
 - **[Phase 2] Owning-level re-scope has no UI.** Position owner is server-stamped; the modal
   dropped the picker. `PATCH /position-types/{id}` still accepts `owner_organization_id`, so
   re-homing a title is API-only. Add an "advanced" edit affordance if needed.

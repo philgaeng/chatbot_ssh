@@ -3,7 +3,7 @@
 **Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation: as-built** — the 4-tier ladder + org-subtree scope + org-scoped catalog shipped in SH-7 (migration `q7s9u1w3`); `country_admin` removed from backend **and** frontend. See §8.  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [14_platform_settings.md](14_platform_settings.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [13_projects_and_packages.md](13_projects_and_packages.md)
 
-This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project actor roles** (`donor`, `contractor`, …) in `ticketing.project_actor_roles`; those are configured per project in [13_projects_and_packages.md](13_projects_and_packages.md).
+This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project participants** (the implementing agency + donors); those are project fields configured in [13_projects_and_packages.md](13_projects_and_packages.md) — the per-project actor-role catalog is **deprecated** (legacy, still present; DECISION 2026-07-10).
 
 ---
 
@@ -14,7 +14,7 @@ This document covers **`ticketing.roles`** — both the **admin ladder** (who co
 | **Admin roles** | `admin` | Who can configure the system and delegate to others? | Settings → **Admin access** — `super_admin` + `org_admin` |
 | **Operational roles** | `operational` | Who acts on grievance tickets in the workflow? | Settings → **Workflows, roles & permissions** → **Roles & permissions** — catalog authored by `super_admin` + `org_admin`; **used** (not authored) by `project_admin` / `officer_admin` when inviting |
 
-**Party types** (`implementing_agency`, `main_contractor`, …) are **not** in `ticketing.roles`. They live in `project_actor_roles` on each project.
+**Project participants** (implementing agency + donors) are **not** in `ticketing.roles`. They are project fields (`implementing_agency_org_id` + `project_donors`) — see [13_projects_and_packages.md](13_projects_and_packages.md) (actor-role catalog deprecated — legacy, still present; DECISION 2026-07-10).
 
 **Delegation model (as-built, 2026-07):** **Four** admin **`role_key`s** — `super_admin`, **`org_admin`** (org-subtree-scoped, **any depth**), `project_admin`, `officer_admin`. **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** — not a separate role name.
 
@@ -109,7 +109,7 @@ Shared rules (both tracks):
 - **Cannot** appoint `project_admin` or `org_admin` (may appoint `officer_admin` within its project).
 - **Cannot** access platform **Settings → Settings** tab.
 
-**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` links **third-party** orgs to party roles without waiting for an `org_admin`.
+**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` adds **third-party** orgs (contractors) and staffs their officers via workflow roles without waiting for an `org_admin` ([DECISION §4](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
 
 **Implementation:** extend admin scope model (reuse `officer_scopes` pattern or `admin_scopes` table) with `organization_id` (subtree) + `workflow_track`; API enforces subtree + track on every Settings mutation.
 
