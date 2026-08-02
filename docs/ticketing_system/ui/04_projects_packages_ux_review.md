@@ -286,6 +286,9 @@ _Reviewed 2026-07-24 (Draft 2). Format: Q-id · decision · rationale._
 - **Q-A11Y-1** — Device floor: **14″ / ~1366px, sub-$1000 laptop, slow 4G**.
 - **Q-STAFF-1 (2026-07-30)** — **Position-first, two-step** assignment (position → person), **narrow-first** location scope (municipality auto-climbing to district/province), invite/create escape hatches. → doc 13 §5A.
 - **Q-STAFF-2 (2026-07-30)** — Workflow author **names each tier per step** and **marks supervisor/participant/observer mandatory** (actor always required); go-live gates on **required** tiers. → doc 12 §6.2.
+- **Q-WF-1 (2026-08-02)** — **"Stream" is dead.** The screen shows **one card per workflow**: a **name the admin chooses** + the **published workflow** it uses — the project never inherits the workflow's own name. The fixed slot vocabulary (safeguards/hazards/CA/SEAH) had already been dropped in code (migration `c5e7f9a1`); the mockup was following a stale doc 12. → doc 12 §1/§2, doc 13 §5B, [ui/05 §4](05_ui_copy_style.md).
+- **Q-WF-2 (2026-08-02)** — **Default first, then the rest.** The default workflow is its own block at the top ("used when nothing else matches"); everything else is added under it. Choosing it is step 1 of the section.
+- **Q-WF-3 (2026-08-02)** — **Classifications is no longer a section.** Category routing lives **on the workflow card** it applies to (chips), next to the chatbot menu, so all routing for a project is one screen. → doc 13 §5 order (9 sections → 8), §5B.
 - **Retractions kept inline for the record:** D1 #1/#3 (translation), D2 #1 (role labels — narrowed then superseded by §13), D8 #1/#2 (QR + roles).
 
 ## Appendix C — One-sentence thesis

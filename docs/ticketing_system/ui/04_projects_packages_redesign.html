@@ -81,7 +81,7 @@
   .rail-head .big b{font-size:22px;color:var(--bad);font-weight:720;letter-spacing:-.02em;}
   .rail-head .big span{font-size:12.5px;color:var(--ink-3);}
   .progressbar{height:5px;border-radius:var(--r-pill);background:var(--border);margin-top:11px;overflow:hidden;}
-  .progressbar i{display:block;height:100%;width:77%;background:var(--good);border-radius:inherit;}
+  .progressbar i{display:block;height:100%;width:75%;background:var(--good);border-radius:inherit;}
   .rail-head .meta{font-size:11px;color:var(--muted);margin-top:8px;font-family:var(--mono);}
 
   .navgroup{padding:9px 8px 3px;}
@@ -113,7 +113,6 @@
   #sec-overview:checked~.wrap #pane-overview,
   #sec-identity:checked~.wrap #pane-identity,
   #sec-workflows:checked~.wrap #pane-workflows,
-  #sec-classifications:checked~.wrap #pane-classifications,
   #sec-messaging:checked~.wrap #pane-messaging,
   #sec-actors:checked~.wrap #pane-actors,
   #sec-staffing:checked~.wrap #pane-staffing,
@@ -123,7 +122,6 @@
   #sec-overview:checked~.wrap label.navitem[for="sec-overview"],
   #sec-identity:checked~.wrap label.navitem[for="sec-identity"],
   #sec-workflows:checked~.wrap label.navitem[for="sec-workflows"],
-  #sec-classifications:checked~.wrap label.navitem[for="sec-classifications"],
   #sec-messaging:checked~.wrap label.navitem[for="sec-messaging"],
   #sec-actors:checked~.wrap label.navitem[for="sec-actors"],
   #sec-staffing:checked~.wrap label.navitem[for="sec-staffing"],
@@ -133,7 +131,6 @@
   #sec-overview:checked~.wrap label.navitem[for="sec-overview"] .nm,
   #sec-identity:checked~.wrap label.navitem[for="sec-identity"] .nm,
   #sec-workflows:checked~.wrap label.navitem[for="sec-workflows"] .nm,
-  #sec-classifications:checked~.wrap label.navitem[for="sec-classifications"] .nm,
   #sec-messaging:checked~.wrap label.navitem[for="sec-messaging"] .nm,
   #sec-actors:checked~.wrap label.navitem[for="sec-actors"] .nm,
   #sec-staffing:checked~.wrap label.navitem[for="sec-staffing"] .nm,
@@ -211,7 +208,6 @@
   .legend span{display:inline-flex;align-items:center;gap:6px;}
 
   .placeholder{padding:26px;text-align:center;color:var(--muted);font-size:13px;border:1px dashed var(--border-strong);border-radius:var(--r);background:var(--surface);}
-  .tinyrole{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-pill);padding:4px 10px;margin:0 6px 6px 0;}
 
   /* Deactivate confirm — checkbox-driven modal */
   .deact-modal{display:none;position:fixed;inset:0;background:rgba(16,24,40,.45);z-index:50;align-items:center;justify-content:center;padding:20px;}
@@ -323,6 +319,53 @@
   .anchor-line .pin{color:var(--brand);}
   .anchor-line b{color:var(--ink-2);font-weight:600;}
 
+  /* toggle switch (messaging) */
+  .switch{position:relative;width:34px;height:19px;border-radius:var(--r-pill);background:var(--border-strong);flex:none;display:inline-block;vertical-align:middle;}
+  .switch.on{background:var(--good);}
+  .switch::after{content:"";position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;}
+  .switch.on::after{left:17px;}
+  /* shared form controls */
+  .sel{font-size:13px;color:var(--ink);background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r-sm);padding:7px 9px;font-family:inherit;}
+  .linky{font-size:12px;font-weight:600;color:var(--brand);cursor:pointer;flex:none;}
+  .linky:hover{text-decoration:underline;}
+
+  /* workflow cards — a project-named workflow bound to a published one (§5 / doc 12 §2) */
+  .eyebrow{font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700;margin:0 0 9px;}
+  .eyebrow em{text-transform:none;letter-spacing:0;font-weight:500;font-style:normal;color:var(--muted);}
+  .wfcard{border:1px solid var(--border);border-radius:var(--r);margin-bottom:12px;overflow:hidden;background:var(--bg);}
+  .wfcard.isdef{border-color:var(--brand-border);}
+  .wfcard.needs{border-color:var(--warn-border);}
+  .wfcard.seahwf{border-color:var(--bad-border);}
+  .wfcard-h{display:flex;align-items:center;gap:9px;padding:10px 13px;background:var(--surface);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+  .wfcard.needs .wfcard-h{background:var(--warn-weak);}
+  .wfcard.seahwf .wfcard-h{background:var(--bad-weak);}
+  .wfcard-h .wl{font-size:12px;color:var(--ink-3);font-weight:600;flex:none;}
+  .wfcard-h .wfname{flex:1;min-width:150px;max-width:320px;font-size:13.5px;font-weight:600;padding:6px 9px;}
+  .wfcard-b{padding:13px;}
+  .wfgrid{display:grid;grid-template-columns:104px 1fr;gap:10px 12px;align-items:center;}
+  .wfgrid .wl{font-size:12px;color:var(--ink-3);font-weight:600;}
+  .wfgrid .wv{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+  .wfgrid .wv .sel{flex:1;min-width:190px;max-width:340px;}
+  .wfwhen{margin-top:13px;padding-top:12px;border-top:1px dashed var(--border);}
+  .wfwhen .wh{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:700;margin-bottom:10px;}
+  .wfnote{font-size:12.5px;color:var(--ink-3);}
+  .wfnote b{color:var(--ink-2);font-weight:600;}
+  .removelink{font-size:11.5px;font-weight:600;color:var(--bad);cursor:pointer;flex:none;margin-left:auto;}
+  .catchip{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-2);background:var(--surface);border:1px solid var(--border-strong);border-radius:var(--r-pill);padding:4px 11px;}
+  .catchip .x{color:var(--muted);cursor:pointer;font-weight:700;}
+  /* per-level SMS pills */
+  .lvlpick{display:flex;flex-wrap:wrap;gap:7px;margin-top:10px;}
+  .lvlpill{font-size:12px;color:var(--ink-2);background:var(--bg);border:1px solid var(--border-strong);border-radius:var(--r-pill);padding:4px 11px;cursor:pointer;}
+  .lvlpill.on{background:var(--brand-weak);border-color:var(--brand-border);color:var(--brand);font-weight:600;}
+  /* location search results */
+  .locresult{border:1px solid var(--border-strong);border-radius:var(--r-sm);overflow:hidden;margin-top:8px;}
+  .locrow{display:flex;align-items:center;gap:10px;padding:9px 11px;border-bottom:1px solid var(--border);background:var(--bg);cursor:pointer;}
+  .locrow:last-child{border-bottom:none;}
+  .locrow:hover{background:var(--brand-weak);}
+  .locrow .lname{font-size:13px;color:var(--ink);font-weight:550;}
+  .locrow .lmeta{font-size:11px;color:var(--muted);flex:1;}
+  .locrow .ladd{font-size:11.5px;font-weight:600;color:var(--brand);flex:none;}
+
   @media (prefers-reduced-motion:reduce){.console *{transition:none!important;}}
   @media (max-width:900px){
     .body{grid-template-columns:1fr;}
@@ -337,8 +380,7 @@
   <!-- section router: which pane is visible (default = overview) -->
   <input class="secradio" type="radio" name="section" id="sec-overview" checked aria-label="Overview and go-live">
   <input class="secradio" type="radio" name="section" id="sec-identity" aria-label="Identity">
-  <input class="secradio" type="radio" name="section" id="sec-workflows" aria-label="Workflows">
-  <input class="secradio" type="radio" name="section" id="sec-classifications" aria-label="Classifications">
+  <input class="secradio" type="radio" name="section" id="sec-workflows" aria-label="Grievance workflows">
   <input class="secradio" type="radio" name="section" id="sec-messaging" aria-label="Officer messaging">
   <input class="secradio" type="radio" name="section" id="sec-actors" aria-label="Partner organizations">
   <input class="secradio" type="radio" name="section" id="sec-staffing" aria-label="Project-wide staffing">
@@ -368,7 +410,7 @@
       </div>
       <div class="topbar-actions">
         <span class="statuspill blocked"><span class="dot" style="background:var(--bad)"></span> 3 blockers · can&rsquo;t activate yet</span>
-        <span class="btn primary disabled" title="Resolve the 2 blockers first">Activate project</span>
+        <span class="btn primary disabled" title="Clear the 3 blockers first">Activate project</span>
         <label class="btn ghost" for="deact">Deactivate</label>
       </div>
     </div>
@@ -382,14 +424,14 @@
           <div class="lbl">Setup progress</div>
           <div class="big"><b>3</b><span>blockers before go-live</span></div>
           <div class="progressbar"><i></i></div>
-          <div class="meta">10 of 13 checks passing</div>
+          <div class="meta">9 of 12 checks passing</div>
         </div>
 
         <div class="navgroup">
           <div class="gl">Setup</div>
           <label class="navitem" for="sec-overview">
             <span class="sd block"></span>
-            <span class="txt"><span class="nm">Overview &amp; go-live</span><span class="vs">2 blockers to clear</span></span>
+            <span class="txt"><span class="nm">Overview &amp; go-live</span><span class="vs">3 blockers to clear</span></span>
           </label>
           <label class="navitem" for="sec-identity">
             <span class="sd pass"></span>
@@ -401,12 +443,8 @@
           <div class="gl">Routing</div>
           <label class="navitem" for="sec-workflows">
             <span class="sd block"></span>
-            <span class="txt"><span class="nm">Workflows</span><span class="vs">No default set</span></span>
+            <span class="txt"><span class="nm">Grievance workflows</span><span class="vs">No default chosen</span></span>
             <span class="flag">FIX</span>
-          </label>
-          <label class="navitem" for="sec-classifications">
-            <span class="sd pass"></span>
-            <span class="txt"><span class="nm">Classifications</span><span class="vs">All routed</span></span>
           </label>
           <label class="navitem" for="sec-messaging">
             <span class="sd opt"></span>
@@ -461,11 +499,10 @@
               <div class="h">Routing</div>
               <div class="check blk">
                 <span class="mark no">✕</span>
-                <div class="cmain"><div class="cname">Set a default workflow</div><div class="cdesc">Grievances that don&rsquo;t match any classification need a workflow to fall back to. None is marked default yet.</div></div>
+                <div class="cmain"><div class="cname">Choose a default workflow</div><div class="cdesc">A grievance that matches no other workflow needs one to fall back to. None is chosen yet.</div></div>
                 <label class="fixlink" for="sec-workflows">Fix →</label>
               </div>
-              <div class="check"><span class="mark ok">✓</span><div class="cmain"><div class="cname">SEAH workflow bound</div><div class="cdesc">Sensitive stream routes to SEAH officers only.</div></div></div>
-              <div class="check"><span class="mark ok">✓</span><div class="cmain"><div class="cname">Classifications covered</div><div class="cdesc">All categories are routed; anything unmatched uses the default.</div></div></div>
+              <div class="check"><span class="mark ok">✓</span><div class="cmain"><div class="cname">SEAH workflow chosen</div><div class="cdesc">Sensitive grievances go to SEAH officers only.</div></div></div>
               <div class="check"><span class="mark ok">✓</span><div class="cmain"><div class="cname">Implementing agency assigned</div><div class="cdesc">Department of Roads (DOR).</div></div></div>
               <div class="check"><span class="mark ok">✓</span><div class="cmain"><div class="cname">Donor informed on escalation</div><div class="cdesc">ADB kept in the loop at the final level.</div></div></div>
             </div>
@@ -521,45 +558,118 @@
           </div>
         </section>
 
-        <!-- WORKFLOWS -->
+        <!-- GRIEVANCE WORKFLOWS (categories merged in — one screen for all routing) -->
         <section class="pane" id="pane-workflows">
           <div class="pane-head">
-            <div><h2>Workflows</h2><p>Map grievance categories to a published workflow. One row must be the default — used when nothing else matches.</p></div>
+            <div><h2>Grievance workflows</h2><p>One default workflow is required. Add more workflows to send different grievances to different officers.</p></div>
             <div class="save"><span class="state" style="color:var(--bad)">● Blocks go-live</span></div>
           </div>
           <div class="pane-body">
-            <div class="callout warn"><span class="ic">▲</span><div><b>This section blocks go-live.</b> No row is marked <b>Default</b>. Pick the workflow that should handle grievances that don&rsquo;t match any category below.</div></div>
+            <div class="eyebrow">Default workflow <em>— required; used when nothing else matches</em></div>
+            <div class="wfcard needs">
+              <div class="wfcard-h">
+                <span class="wl">Name</span>
+                <input class="inp wfname" placeholder="e.g. General grievances">
+                <span class="badge uns">Not chosen</span>
+              </div>
+              <div class="wfcard-b">
+                <div class="wfgrid">
+                  <div class="wl">Workflow</div>
+                  <div class="wv">
+                    <select class="sel">
+                      <option>— choose a workflow —</option>
+                      <option>KL Road Standard (v3)</option>
+                      <option>Road hazards (v2)</option>
+                      <option>Contract administration (v1)</option>
+                      <option>+ Create a new workflow…</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="wfwhen">
+                  <div class="wh">Grievances come here when</div>
+                  <div class="wfnote">Nothing else matches. <b>All categories</b> not listed below come here.</div>
+                </div>
+              </div>
+            </div>
 
-            <div class="level" style="margin-bottom:10px;">
-              <div class="level-h"><span class="level-n" style="border-style:dashed;color:var(--bad)">!</span><div><div class="ln">Standard safeguards</div><div class="lt">Cultural · Social · Environmental · Economic · Agrarian resources</div></div><span class="assign" style="margin-left:auto">Mark as default</span></div>
-            </div>
-            <div class="level" style="margin-bottom:10px;">
-              <div class="level-h"><span class="level-n">✓</span><div><div class="ln">SEAH</div><div class="lt">Sensitive — routes to SEAH officers only</div></div><span class="grc-tag" style="color:var(--bad);background:var(--bad-weak)">Bound</span></div>
-            </div>
-            <div class="level">
-              <div class="level-h"><span class="level-n">✓</span><div><div class="ln">Road hazards</div><div class="lt">Destruction of agrarian resources · site hazards</div></div></div>
-            </div>
-          </div>
-        </section>
+            <div class="eyebrow" style="margin-top:22px">Other workflows <em>— optional</em></div>
 
-        <!-- CLASSIFICATIONS -->
-        <section class="pane" id="pane-classifications">
-          <input class="edittoggle" type="checkbox" id="edit-classifications" aria-label="Edit classifications">
-          <div class="pane-head">
-            <div><h2>Classifications</h2><p>How grievance categories map to workflows after an officer re-classifies a grievance.</p></div>
-            <div class="save"><span class="state saved">✓ Saved</span><span class="state editing">● Editing</span><label class="btn editbtn" for="edit-classifications">✎ Edit</label></div>
-          </div>
-          <div class="pane-body">
-            <div class="callout info"><span class="ic">ℹ</span><div>All 9 classifications route to a workflow. Unmatched categories fall back to the <b>default</b>, so coverage is complete.</div></div>
-            <div>
-              <span class="tinyrole">Cultural, Social → Standard</span>
-              <span class="tinyrole">Environmental → Standard</span>
-              <span class="tinyrole">Economic, Social → Standard</span>
-              <span class="tinyrole">Destruction of Agrarian Resources → Road hazards</span>
-              <span class="tinyrole">Environmental, Social → Standard</span>
-              <span class="tinyrole">SEAH → SEAH</span>
+            <div class="wfcard">
+              <div class="wfcard-h">
+                <span class="wl">Name</span>
+                <input class="inp wfname" value="Road hazards">
+                <span class="removelink">Remove</span>
+              </div>
+              <div class="wfcard-b">
+                <div class="wfgrid">
+                  <div class="wl">Workflow</div>
+                  <div class="wv">
+                    <select class="sel">
+                      <option>Road hazards (v2)</option>
+                      <option>KL Road Standard (v3)</option>
+                      <option>+ Create a new workflow…</option>
+                    </select>
+                    <span class="linky">Edit steps ↗</span>
+                  </div>
+                </div>
+                <div class="wfwhen">
+                  <div class="wh">Grievances come here when</div>
+                  <div class="wfgrid">
+                    <div class="wl">Chatbot menu</div>
+                    <div class="wv">
+                      <select class="sel">
+                        <option>Report a road hazard</option>
+                        <option>File a grievance</option>
+                        <option>— any —</option>
+                      </select>
+                    </div>
+                    <div class="wl">Categories</div>
+                    <div class="wv">
+                      <span class="catchip">Road hazard <span class="x">×</span></span>
+                      <span class="catchip">Destruction of agrarian resources <span class="x">×</span></span>
+                      <span class="addbtn">+ Add a category</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="editonly" style="margin-top:12px"><span class="assign">+ Add a mapping</span></div>
+
+            <div class="wfcard seahwf">
+              <div class="wfcard-h">
+                <span class="wl">Name</span>
+                <input class="inp wfname" value="SEAH">
+                <span class="seah">🔒 SEAH officers only</span>
+              </div>
+              <div class="wfcard-b">
+                <div class="wfgrid">
+                  <div class="wl">Workflow</div>
+                  <div class="wv">
+                    <select class="sel">
+                      <option>KL Road SEAH (v1)</option>
+                      <option>+ Create a new workflow…</option>
+                    </select>
+                    <span class="linky">Edit steps ↗</span>
+                  </div>
+                </div>
+                <div class="wfwhen">
+                  <div class="wh">Grievances come here when</div>
+                  <div class="wfgrid">
+                    <div class="wl">Chatbot menu</div>
+                    <div class="wv"><select class="sel"><option>SEAH report</option></select></div>
+                    <div class="wl">Categories</div>
+                    <div class="wv">
+                      <span class="catchip">Gender <span class="x">×</span></span>
+                      <span class="catchip">Malicious behaviour <span class="x">×</span></span>
+                      <span class="addbtn">+ Add a category</span>
+                    </div>
+                  </div>
+                  <div class="wfnote" style="margin-top:10px">These grievances are hidden from every other officer. This workflow can&rsquo;t be removed or made the default.</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:4px"><span class="assign">+ Add a workflow</span></div>
+            <div class="sub" style="font-size:11.5px;margin:12px 2px 0">A category can be used by one workflow only.</div>
           </div>
         </section>
 
@@ -571,9 +681,22 @@
             <div class="save"><span class="state saved">✓ Off</span><span class="state editing">● Editing</span><label class="btn editbtn" for="edit-messaging">✎ Edit</label></div>
           </div>
           <div class="pane-body">
-            <div class="viewonly placeholder">Officer SMS is <b>off</b>. This is optional and doesn&rsquo;t affect go-live. Turn it on to notify officers by link when a grievance is assigned.</div>
+            <div class="viewonly placeholder">Officer SMS is <b>off</b>. Optional — doesn&rsquo;t affect go-live. Turn it on to text officers a link when a grievance is assigned to them.</div>
             <div class="editonly">
-              <div class="slot" style="border:1px solid var(--border);border-radius:var(--r-sm)"><div class="who"><div><div class="nm">Send officers a link-only SMS on assignment</div><div class="org">No complainant details are included</div></div></div><span class="badge inh" style="margin-left:auto">Off ▸ On</span></div>
+              <div class="slot" style="border:1px solid var(--border);border-radius:var(--r-sm);align-items:center">
+                <div class="who"><div><div class="nm">Text officers a link-only SMS on assignment</div><div class="org">No complainant details are included</div></div></div>
+                <span class="switch on" style="margin-left:auto"></span>
+              </div>
+              <div style="margin-top:14px">
+                <div class="casth" style="margin-bottom:2px">Which levels get the SMS</div>
+                <div class="lvlpick">
+                  <span class="lvlpill on">Level 1 · Site Safeguards</span>
+                  <span class="lvlpill on">Level 2 · PD/PIU</span>
+                  <span class="lvlpill">Level 3 · GRC</span>
+                  <span class="lvlpill">Level 4 · Legal</span>
+                </div>
+                <div class="sub" style="font-size:11px;margin-top:7px">Officers need a phone number in their profile to receive it.</div>
+              </div>
             </div>
           </div>
         </section>
@@ -582,19 +705,24 @@
         <section class="pane" id="pane-actors">
           <input class="edittoggle" type="checkbox" id="edit-actors" aria-label="Edit partner organizations">
           <div class="pane-head">
-            <div><h2>Partner organizations</h2><p>Each partner and its role on this project. Add an officer to a row to invite or scope someone.</p></div>
+            <div><h2>Partner organizations</h2><p>The accountable <b>implementing agency</b> (defaults to the owning ministry) and any <b>donors</b>. Officers are staffed under Project-wide staffing, not here.</p></div>
             <div class="save"><span class="state saved">✓ Saved</span><span class="state editing">● Editing</span><label class="btn editbtn" for="edit-actors">✎ Edit</label></div>
           </div>
           <div class="pane-body">
-            <div class="slot" style="border:1px solid var(--border);border-radius:var(--r-sm);margin-bottom:8px;">
-              <div class="who"><span class="avatar" style="background:var(--good-weak);color:var(--good)">AD</span><div><div class="nm">Asian Development Bank</div><div class="org">ADB</div></div></div>
-              <span class="badge inh">Donor</span><span class="assign editonly inl">Add officer</span>
-            </div>
+            <div class="casth" style="margin-top:0">Implementing agency</div>
             <div class="slot" style="border:1px solid var(--border);border-radius:var(--r-sm);">
-              <div class="who"><span class="avatar">DO</span><div><div class="nm">Department of Roads</div><div class="org">DOR</div></div></div>
-              <span class="badge ovr">Implementing agency</span><span class="assign editonly inl">Add officer</span>
+              <div class="who"><span class="avatar">DO</span><div><div class="nm">Department of Roads (DOR)</div><div class="org">Ministry of Physical Infrastructure &amp; Transport · default</div></div></div>
+              <span class="badge ovr">Accountable</span><span class="changelink editonly inl" style="margin-left:8px">Change</span>
             </div>
-            <div class="editonly" style="margin-top:10px"><span class="assign">+ Add organization</span></div>
+            <div class="sub" style="font-size:11.5px;margin:6px 2px 16px">The signing ministry — routing &amp; reporting anchor. Government bodies only.</div>
+
+            <div class="casth">Donors — optional</div>
+            <div class="slot" style="border:1px solid var(--border);border-radius:var(--r-sm);">
+              <div class="who"><span class="avatar" style="background:var(--good-weak);color:var(--good)">AD</span><div><div class="nm">Asian Development Bank (ADB)</div><div class="org">Donor</div></div></div>
+              <span class="changelink editonly inl" style="margin-left:auto">Remove</span>
+            </div>
+            <div class="editonly" style="margin-top:10px"><span class="assign">+ Add donor</span></div>
+            <div class="sub" style="font-size:11.5px;margin-top:8px">Donors are kept informed on final escalation — pick which role in <b>Project-wide staffing</b> (last level).</div>
           </div>
         </section>
 
@@ -605,9 +733,15 @@
             <div class="save"><span class="state" style="color:var(--bad)">● Blocks go-live</span></div>
           </div>
           <div class="pane-body">
-            <div class="callout warn"><span class="ic">▲</span><div><b>This section blocks go-live.</b> No locations are linked yet. Search below — matching is tolerant of spelling and script (Kakarbhitta / काकडभिट्टा).</div></div>
-            <div class="field"><label>Add a location</label><input class="inp" placeholder="Search province, district or municipality…"></div>
-            <div class="placeholder">No locations linked yet.</div>
+            <div class="callout warn"><span class="ic">▲</span><div><b>Link at least one location.</b> Grievances are matched to this project by location — nothing is linked yet.</div></div>
+            <div class="field"><label>Add a location</label><input class="inp" value="kakar" style="max-width:420px"></div>
+            <div class="sub" style="font-size:11.5px;margin-top:5px">Search is forgiving of spelling and script — <span style="font-family:var(--mono)">kakar</span> matches Kakarbhitta / Kakadbhitta / काकडभिट्टा.</div>
+            <div class="locresult" style="max-width:520px">
+              <div class="locrow"><span class="lname">Kakarbhitta</span><span class="lmeta">Municipality · Jhapa, Koshi</span><span class="ladd">+ Add</span></div>
+              <div class="locrow"><span class="lname">Jhapa</span><span class="lmeta">District · covers all its municipalities</span><span class="ladd">+ Add</span></div>
+              <div class="locrow"><span class="lname">Koshi</span><span class="lmeta">Province · covers all its districts</span><span class="ladd">+ Add</span></div>
+            </div>
+            <div class="sub" style="font-size:11.5px;margin-top:8px">Linking a <b>district</b> automatically covers its municipalities; a <b>province</b> covers its districts.</div>
           </div>
         </section>
 

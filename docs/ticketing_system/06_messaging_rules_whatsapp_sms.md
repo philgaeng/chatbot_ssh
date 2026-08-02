@@ -110,7 +110,7 @@ Copy hint: *“Officers receive a link-only SMS when assigned at checked levels.
 
 ### 5.3 Granularity
 
-- **One config block per project** — same L1–Ln toggles apply to **all** workflow streams on that project (safeguards, hazards, CA, SEAH, custom slots).
+- **One config block per project** — the same L1–Ln toggles apply to **every workflow linked to that project** ([12 §1](12_workflows_configuration.md)).
 - Not per-slot and not on the workflow definition template.
 
 ### 5.4 Relationship to global `notification_rules`
@@ -272,6 +272,6 @@ Optional: include `officer_messaging` on `GET /projects/{id}` response for fewer
 
 - WhatsApp 1:1 delivery
 - SMS to supervisor / informed / observer tiers
-- Per workflow-stream overrides on the same project
+- Per-workflow overrides on the same project
 - SLA-breach SMS without reassignment
 - Complainant SMS (separate path — orchestrator + `complainant_notifications` settings)

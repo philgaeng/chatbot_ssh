@@ -141,7 +141,7 @@ One row per level. Fields: `step_order`, `step_key`, `display_name`, `assigned_r
 
 ### ProjectWorkflow (`ticketing.project_workflows`)
 
-Active project ↔ workflow binding ("slots"): a project can attach N workflow streams. Fields: `project_id`, `workflow_id` (FK → published definition), `display_label`, `classifications` (JSON — taxonomy groups for re-route after category edit), `intake_route` (chatbot `story_main`: `new_grievance`, `seah_intake`, `road_hazard_grievance`; scalar since migration `e7f9a1b3`), `is_default` (catch-all), `sort_order`.
+Active project ↔ workflow link: a project can link N workflows, each under a name the admin chooses (no `slot_key` — dropped 2026-07). Fields: `project_id`, `workflow_id` (FK → published definition), `display_label`, `classifications` (JSON — taxonomy groups for re-route after category edit), `intake_route` (chatbot `story_main`: `new_grievance`, `seah_intake`, `road_hazard_grievance`; scalar since migration `e7f9a1b3`), `is_default` (catch-all), `sort_order`.
 
 `resolve_workflow()` picks the ticket's workflow from these bindings (classification/intake-route match → default), falling back to legacy `projects.standard_workflow_id`/`seah_workflow_id`, then legacy `workflow_assignments`.
 

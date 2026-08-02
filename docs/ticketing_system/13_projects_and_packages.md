@@ -17,7 +17,7 @@ This document covers **`ticketing.projects`** and related package/QR configurati
 
 A **project** is the routing hub for a financed infrastructure intervention (e.g. KL Road):
 
-- Which **workflow streams** apply (safeguards, hazards, CA, SEAH, + custom)
+- Which **workflows** handle its grievances — one **default**, plus any others the project needs (§5B)
 - Its **implementing agency** (the accountable ministry) and optional **donors**
 - Which **locations** and **packages** (lots/segments) exist
 - Whether the project is **active** and can **accept tickets**
@@ -58,8 +58,9 @@ See [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.
 
 ### `ticketing.project_workflows`
 
-N rows per project: `(slot_key, workflow_id)` — see [12_workflows_configuration.md](12_workflows_configuration.md).
-| `chatbot_url` | Optional override for QR redirect |
+N rows per project — each one a **named link**: `display_label` (the project's own name for it) + `workflow_id` + routing (`intake_route`, `classifications`) + `is_default`. **No `slot_key`** — dropped 2026-07 by `c5e7f9a1_workflow_classifications`. See [12_workflows_configuration.md](12_workflows_configuration.md) §2.
+
+(The stray `chatbot_url` row that used to sit here belongs to `ticketing.projects` and is called **`chatbot_base_url`** as built — optional override for the QR redirect, `ticketing/models/project.py`.)
 
 ### `ticketing.project_donors`
 
@@ -114,18 +115,19 @@ List columns: name, short code, actor org summary, location count.
 ## 5. Project editor — section order
 
 > **Redesigned 2026-07-30 (target — see mockup [`ui/04`](ui/04_projects_packages_redesign.html)).** Two-pane console: a sticky go-live rail + one section at a time. This order supersedes the old actor-role sections.
+>
+> **Amended 2026-08-02:** **Classifications is no longer its own section** — category routing moved onto the workflow card it belongs to, so all of a project's routing is one screen (§5B).
 
 | # | Section | Purpose |
 |---|---------|---------|
 | 1 | **Identity** | Name, short code, description |
 | 2 | **Overview & go-live** | Binary readiness checks (§7) + Activate / Deactivate |
-| 3 | **Grievance workflows** | Pick a published workflow per stream; mark one Default |
-| 4 | **Classifications** | Category → workflow mapping |
-| 5 | **Messaging** | Optional officer assignment SMS — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5 |
-| 6 | **Partner organizations** | Implementing agency + optional donors *(no actor-role catalog — DECISION 2026-07-10)* |
-| 7 | **Project-wide staffing** | Fill each workflow level's cast — position-first (§5A) |
-| 8 | **Linked locations** | Province / district / municipality coverage |
-| 9 | **Packages** | Lots: metadata, locations, QR, per-lot **staffing override** (§5A) |
+| 3 | **Grievance workflows** | Name each workflow, bind it to a published one, set the **default**, and say which chatbot menu + categories come to it (§5B) |
+| 4 | **Officer messaging** | Optional officer assignment SMS — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5 |
+| 5 | **Partner organizations** | Implementing agency + optional donors *(no actor-role catalog — DECISION 2026-07-10)* |
+| 6 | **Project-wide staffing** | Fill each workflow level's cast — position-first (§5A) |
+| 7 | **Linked locations** | Province / district / municipality coverage |
+| 8 | **Packages** | Lots: metadata, locations, QR, per-lot **staffing override** (§5A) |
 
 Current as-built components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal` (the redesign replaces the old `ProjectActorAddRow` + actor sections).
 
@@ -171,13 +173,51 @@ Position-first picker mockup: [`ui/04_projects_packages_redesign.html`](ui/04_pr
 
 ---
 
+## 5B. Grievance workflows — the project editor screen
+
+**Status: authoritative (2026-08-02).** Replaces the old "one row per stream" layout **and** the separate **Classifications** section — category routing now sits on the workflow card it belongs to, so a project's whole routing picture is one screen. Wireframe: [`ui/04`](ui/04_projects_packages_redesign.html) (Grievance workflows pane). Data model + resolution order: [12 §2 / §8](12_workflows_configuration.md). **No backend change** — the screen edits the as-built `project_workflows` columns.
+
+### 5B.1 What the admin does, in order
+1. **Choose the default workflow** — name it, then bind it to a published workflow. It is used **when nothing else matches**. Until it is set the project cannot go live (§7 A1).
+2. **Add more workflows only if some grievances need a different one** — same two fields, plus the rules that send grievances there.
+3. There is **no third step**: categories are set on the card, not in a separate section.
+
+### 5B.2 The card — one per link
+| Field | Column | Notes |
+|---|---|---|
+| **Name** | `display_label` | The project's own name for this workflow, **independent of the workflow's own name** — the same published workflow can appear under different names on different projects. Required. |
+| **Workflow** | `workflow_id` | Published workflows only, filtered by `workflow_type` (SEAH hidden without `canSeeSeah`). **+ Create a new workflow…** opens the clone modal; **Edit steps ↗** deep-links to the step-cast editor ([12 §6.2](12_workflows_configuration.md), [`ui/06`](ui/06_workflows_step_cast_editor.html)). |
+| **Default** | `is_default` | Exactly one per project. The default carries **no** routing rules — that is what makes it the catch-all. |
+| **Chatbot menu** | `intake_route` | Non-default cards only, and **required** there (`new_grievance` · `road_hazard_grievance` · `seah_intake`). |
+| **Categories** | `classifications` | Chips. Applied at intake and when an officer changes the category — the re-route only moves grievances that came in on the safeguards menu ([12 §8](12_workflows_configuration.md)). A category belongs to **one** card. |
+| **Remove** | — | Not offered on the default or the SEAH card. |
+
+### 5B.3 SEAH
+**Corrected 2026-08-02** — an earlier draft of this section claimed the SEAH card "cannot be removed" and "cannot be made the default". **Neither is true in the code**: `ticketing/services/project_workflows.py` has **no SEAH special-casing at all** — any link can be removed and any published workflow can be `is_default`.
+
+What is actually as-built:
+
+- **SEAH-ness is a property of the bound workflow, not of the card.** `ticket.is_seah = workflow_is_seah(workflow)` — i.e. `workflow_definitions.workflow_type == 'seah'` (`services/ticket_intake.py`, `services/workflow_routing.py`).
+- **Visibility is track-derived, not a role allow-list.** `services/seah_visibility.py`: *"you can see a SEAH case because you are cast on a SEAH-track workflow's step."* Ticket queries then hide `is_seah` rows from everyone else (`api/routers/tickets/crud.py`).
+- Only an admin with the SEAH track may edit a SEAH workflow ([11_roles_and_permissions.md](11_roles_and_permissions.md) §2), and `validate_step_roles` forbids a standard-scoped role on a SEAH step.
+
+**Open guard (not built):** nothing stops a SEAH workflow from being marked **default**, which would route every unmatched grievance into the sensitive track and mis-set the legacy `standard_workflow_id` mirror (`_sync_legacy_columns`). Logged in the [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md).
+
+**Open design question (2026-08-02):** whether SEAH should stop being a `workflow_type` enum and become **an ordinary optional workflow carrying a "sensitive" property** (restricted visibility + PII-vault display), set when the workflow is authored. See the followup — the engine is already most of the way there.
+
+### 5B.4 Copy (LOCKED)
+**"Stream" and "slot" never appear on screen** — the word is **workflow** ([ui/05 §4](ui/05_ui_copy_style.md)). The default is explained as *"used when nothing else matches"*, never "catch-all", "fallback", or "binding". The chatbot-menu options are complainant-facing menu names, so they follow the same guide — the current `INTAKE_ROUTE_CATALOG` labels still carry jargon ("safeguards GRM", "fast path") and are logged for cleanup ([followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md)).
+
+---
+
 ## 6. Ticket routing (uses project config)
 
 ### Workflow selection
 
 ```
-ticket.project_id + workflow_slot | is_seah | intake_fast_path
-  → project_workflows[slot] (fallback: standard_workflow_id | seah_workflow_id)
+ticket.project_id + intake_route (story_main) | is_seah
+  → project_workflows: intake_route match → (re-classify) category match → default
+     (fallback: standard_workflow_id | seah_workflow_id)
 ```
 
 See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
@@ -218,24 +258,26 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 **Binary (2026-07-30, Q-GL-1/2):** every check is either a **Blocker** (must pass to Activate) or **Optional** (never blocks). No "warning" tier. A blocked check states the one thing to fix.
 
+> **⚠ Target, not as-built (verified 2026-08-02).** `project_go_live.py` still carries a three-way `severity` (`block` / `warn` / `info`) and blocks activation on **`{A3, A5, C5, R1}` only** — so **A1 (default workflow), D1 (locations), E1 (name + code) and A2/C4 (SEAH)** are listed as Blockers below but ship as **warnings**. The tables below are the target; the mockup ([`ui/04`](ui/04_projects_packages_redesign.html)) shows the target. Gap logged: [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md).
+
 ### Blockers (must pass to activate)
 
 | ID | Check | Notes |
 |----|-------|-------|
 | A3 | **Implementing agency set** | Defaults to the owning ministry ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) — so effectively always satisfied |
-| A1 | **A Default workflow is chosen** for intake | Routing falls through without it |
+| A1 | **A default workflow is chosen** | Routing has nowhere to fall back without it (§5B.1) |
 | A4 | **Every step's required cast tiers staffed** | Actor always; plus supervisor / participant / observer the workflow marks mandatory (`required_tiers`, [12 §6.2](12_workflows_configuration.md)) |
 | C1 | **L1 actor staffed** | Also **gates ticket intake** — fail ⇒ create rejected |
 | A5 | **Donor guardrail** | Donor present ⇒ ≥1 donor role in the last **standard** step's Informed cast (SEAH-suppressed, [DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
 | D1 | **≥1 project location linked** | Routing needs it |
-| A2 / C4 | **SEAH workflow published + L1 staffed** | Blocker **only if** the project runs a SEAH stream; else N/A |
+| A2 / C4 | **SEAH workflow published + L1 staffed** | Blocker **only if** the project links a SEAH workflow; else N/A |
 | E1 | **Name + short code set** | — |
 
 ### Optional (never blocks activation)
 
 | Check | Notes |
 |-------|-------|
-| Classification coverage | Unmatched categories fall back to the Default — that's what it's for |
+| ~~Classification coverage~~ | **To delete (2026-08-02).** A category no card claims goes to the default — that is what the default is for (§5B.2), so "uncovered classifications" is not a finding. As-built the service still emits it as check **`A4`** (warn), which also **collides with this doc's `A4`** (required cast tiers). See [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md) |
 | Package QR tokens | Generate anytime from the main QR menu |
 | Officer-SMS phone coverage | Only relevant if officer SMS is on ([06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5.8) |
 
@@ -249,7 +291,7 @@ Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is fal
 |--------|------|-------|
 | `GET/POST` | `/projects` | List / create (admin) |
 | `GET/PATCH/DELETE` | `/projects/{id}` | CRUD; activation gated |
-| `GET/PUT` | `/projects/{id}/workflows` | Workflow stream assignments |
+| `GET/PUT` | `/projects/{id}/workflows` | Workflow links — name + workflow + routing + default (§5B) |
 | `GET/PATCH` | `/projects/{id}/messaging` | Officer assignment SMS config — [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
 | `GET` | `/projects/{id}/go-live` | Checklist report |
 | `GET/PUT` | `/projects/{id}/implementing-agency` | Set the one accountable org (`government`/`local_government`) — [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md) |

@@ -261,7 +261,7 @@ updated_at              TIMESTAMPTZ
 
 ### `ticketing.project_workflows`
 
-Active project ↔ workflow bindings (N streams per project) — see [12_workflows_configuration.md](12_workflows_configuration.md).
+Active project ↔ workflow links (N **named** links per project; no `slot_key`) — see [12_workflows_configuration.md](12_workflows_configuration.md) §2.
 
 ```sql
 project_workflow_id VARCHAR(36)   PK

@@ -1,8 +1,8 @@
 # Workflows configuration
 
-**Status:** Target architecture (June 2026) — multi-stream per project  
+**Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
-**Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_slots.py`, `ticketing/services/project_workflows.py`, `ticketing/engine/workflow_engine.py`  
+**Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
 
 ---
@@ -11,20 +11,21 @@
 
 Workflows define the **linear escalation chain** for grievances: ordered steps, SLA timers, GRM role per step, and optional stakeholder/action metadata.
 
-A **single project** may attach **N workflow streams** (not just one Standard + one SEAH). Each stream is a **slot** with its own published workflow definition. Different officers handle different steps within each workflow; scoping is unchanged (`officer_scopes` + step `assigned_role_key`).
+A **single project** may link **N workflows** (not just one Standard + one SEAH). Each link carries a **name the admin chooses** (`display_label`), the **published workflow** it uses (`workflow_id`), and the rules that send grievances to it — the **chatbot menu path** the complainant took (`intake_route`) and/or the grievance **categories** (`classifications`). Exactly one link is the **default** (`is_default`): it takes every grievance nothing else matches. Different officers handle different steps within each workflow; scoping is unchanged (`officer_scopes` + step `assigned_role_key`).
 
-### Built-in intake streams (minimum on road projects)
+> **⚠ Vocabulary + model correction (2026-08-02).** The fixed-slot model (`slot_key` ∈ `safeguards` / `hazards` / `ca` / `seah`, unique per project) **no longer exists** — migration `c5e7f9a1_workflow_classifications` dropped the column and moved to `display_label` + `intake_route` + `classifications` + `is_default`. The project name is therefore **independent of the workflow's own name**: two projects may bind the same published workflow under different names. **"Stream" and "slot" are dead words** — never in UI copy, where the on-screen word is **workflow** ([ui/05 §4](ui/05_ui_copy_style.md)).
 
-| `slot_key` | Label | `workflow_type` | Routed when |
-|------------|-------|-----------------|-------------|
-| `safeguards` | Safeguards GRM | `standard` | Default grievance intake |
-| `hazards` | Road hazards | `standard` | Chatbot `intake_fast_path` = `road_hazard` or `dust` |
-| `ca` | Contract administration | `standard` | Explicit `workflow_slot=ca` (or future CA intake) |
-| `seah` | SEAH | `seah` | `is_seah=true` or `workflow_slot=seah` |
+### Links seeded on a new road project (all renamable/removable)
 
-Admins may add **custom** `slot_key` values (slug) on a project via `PUT /projects/{id}/workflows`.
+| Name (`display_label`) | Published workflow type | Chatbot menu (`intake_route`) | Categories | Default? |
+|---|---|---|---|---|
+| Safeguards GRM | `standard` | `new_grievance` | — (catch-all) | ✅ |
+| Road hazard | `standard` | `road_hazard_grievance` | Road Hazard | — |
+| SEAH | `seah` | `seah_intake` | Gender · Gender, Social · Malicious Behavior · Malicious Behavior, Environmental | — |
 
-`workflow_type` (`standard` \| `seah`) still controls **visibility** and the SEAH gate — it is not the routing dimension anymore.
+Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_types.py`. Admins add, rename, or remove links via `PUT /projects/{id}/workflows`.
+
+`workflow_type` (`standard` \| `seah`) still controls **visibility** and the SEAH gate — it is not the routing dimension.
 
 ---
 
@@ -59,20 +60,22 @@ Admins may add **custom** `slot_key` values (slug) on a project via `PUT /projec
 | `required_tiers` | JSON list ⊆ {`supervisor`, `informed`, `observer`} — the non-actor tiers the author marks **mandatory** on this step. The **actor tier is always required**. Drives the project staffing go-live gate ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). See §6.2 |
 | `is_deleted` | Soft delete; blocked if active tickets on step |
 
-### `ticketing.project_workflows` (project ↔ stream ↔ workflow)
+### `ticketing.project_workflows` (project ↔ named link ↔ workflow)
 
 | Field | Notes |
 |-------|-------|
 | `project_workflow_id` | UUID PK |
 | `project_id` | FK → `ticketing.projects` |
-| `slot_key` | e.g. `safeguards`, `hazards`, `ca`, `seah`, or custom slug |
 | `workflow_id` | FK → published `workflow_definitions` |
-| `label` | Optional display override |
+| `display_label` | **Required** — the name the admin gives this workflow **on this project** (independent of `workflow_definitions.display_name`) |
+| `intake_route` | Chatbot `story_main`: `new_grievance` \| `road_hazard_grievance` \| `seah_intake`. **Required on non-default links**, `NULL` on the default |
+| `classifications` | JSON list of category classifications routed here (also used to re-route when an officer changes the category) |
+| `is_default` | Exactly one per project — takes everything nothing else matches |
 | `sort_order` | UI ordering |
 
-Unique: `(project_id, slot_key)`.
+No `slot_key` (dropped 2026-07 by `c5e7f9a1_workflow_classifications`), so no `(project_id, slot_key)` uniqueness; the invariant is **exactly one `is_default` row per project**, enforced in `ticketing/services/project_workflows.py`.
 
-**Legacy columns** on `ticketing.projects` (`standard_workflow_id`, `seah_workflow_id`) are **mirrors** of the `safeguards` and `seah` slots for backward compatibility.
+**Legacy columns** on `ticketing.projects` (`standard_workflow_id`, `seah_workflow_id`) are **mirrors** of the default standard link and the SEAH link, kept for backward compatibility.
 
 ### `ticketing.tickets.workflow_version`
 
@@ -89,9 +92,9 @@ Maps (org, project_code, location, priority) → workflow. **Not configured in U
 | Action | `super_admin` | `org_admin` `track=standard` | `org_admin` `track=seah` |
 |--------|---------------|----------------------------------|------------------------------|
 | Create / edit / publish workflows | ✅ all tracks | ✅ `standard` workflows | ✅ `seah` workflows |
-| Assign `safeguards` / `hazards` / `ca` on project | ✅ | ✅ | ❌ |
-| Assign `seah` on project | ✅ | ❌ | ✅ |
-| Add custom slot on project | ✅ | ✅ (standard track slots) | ✅ (seah slots only) |
+| Link a `standard` workflow on a project | ✅ | ✅ | ❌ |
+| Link a `seah` workflow on a project | ✅ | ❌ | ✅ |
+| Add / rename / remove a link on a project | ✅ | ✅ (standard links) | ✅ (SEAH link only) |
 
 `project_admin`: read project workflow links; manage officers for their track ([13_projects_and_packages.md](13_projects_and_packages.md)).
 
@@ -106,9 +109,9 @@ Returned by `GET /api/v1/workflows/templates` (includes virtual built-ins):
 | **Default GRM** | `standard` | L1 Site (2d) → L2 PIU (7d) → L3 GRC (21d) → L4 Legal (no SLA) |
 | **Default SEAH** | `seah` | L1 National (7d) → L2 HQ (14d) |
 
-Admin flow: clone template → edit steps / roles → publish → link on project per slot.
+Admin flow: clone template → edit steps / roles → publish → link on a project under a name the admin chooses.
 
-Slot catalog: `GET /api/v1/workflows/slots`.
+Routing options for the project editor (category classifications + chatbot menu paths): `GET /api/v1/workflows/routing-options`.
 
 ---
 
@@ -137,7 +140,7 @@ draft → publish → (in use on projects) → archive
 
 - List active workflows + templates; **Clone** creates a draft.
 - Step editor: role dropdown, SLAs, tier fields.
-- Footer: *Assign streams on a project under Settings → Projects & packages → Grievance workflows.*
+- Footer: *Put a workflow on a project under Settings → Projects & packages → Grievance workflows.*
 
 ### 6.1 Role picker on each step
 
@@ -164,15 +167,18 @@ A step is a **cast**, not one role ([13 §5A.1](13_projects_and_packages.md)): *
 
 ## 7. Settings UI — Project grievance workflows
 
-Section lists **all built-in slots** (safeguards, hazards, CA, SEAH) plus any custom slots already on the project.
+One card per linked workflow — the **default first**, then the others. Routing (chatbot menu + categories) sits **on the same card**, so a project's whole routing picture is one screen. Spec + wireframe: [13 §5B](13_projects_and_packages.md#5b-grievance-workflows--the-project-editor-screen) / [`ui/04`](ui/04_projects_packages_redesign.html).
 
 | Control | Behaviour |
 |---------|-----------|
-| Per-slot workflow picker | Published workflows filtered by `workflow_type` |
-| **+ Create new workflow…** | Opens clone modal; on save, assigns to that slot |
-| Save | `PUT /api/v1/projects/{id}/workflows` |
+| **Name** | `display_label` — free text, the project's own name for this workflow |
+| **Workflow** picker | Published workflows filtered by `workflow_type` (SEAH hidden without `canSeeSeah`) |
+| **+ Create a new workflow…** | Opens the clone modal; on save, binds the new workflow to this card |
+| **Default** | Exactly one card; the default takes no routing rules |
+| **Chatbot menu** / **Categories** | `intake_route` (required on non-default) + `classifications` |
+| Save | `PUT /api/v1/projects/{id}/workflows` (replaces all links) |
 
-Officers for the same project can hold **different roles on different steps** across streams — e.g. L1 safeguards focal on `safeguards`, a contractor liaison on `ca`, a rapid-response role on `hazards`. Staffing is **position-first** ([13 §5A](13_projects_and_packages.md)): fill each level's cast under **Project-wide staffing**, with per-lot overrides in **Packages**.
+Officers on the same project can hold **different roles on different steps** across the linked workflows — e.g. an L1 safeguards focal on the default, a contractor liaison on a CA workflow, a rapid-response role on road hazards. Staffing is **position-first** ([13 §5A](13_projects_and_packages.md)): fill each level's cast under **Project-wide staffing**, with per-lot overrides in **Packages**.
 
 ---
 
@@ -180,25 +186,27 @@ Officers for the same project can hold **different roles on different steps** ac
 
 ```
 if ticket.project_id / project_code:
-    slot = workflow_slot
-        ?? (is_seah → seah)
-        ?? (intake_fast_path → hazards | ca)
-        ?? safeguards
-    workflow_id = project_workflows[slot]
-    fallback: projects.standard_workflow_id | seah_workflow_id
+    route = intake_route (story_main)  ?? (is_seah → seah_intake)
+    link  = 1. non-default link whose intake_route == route
+            2. (re-route only) non-default link whose classifications match the categories
+            3. the default link (is_default = true)
+    workflow_id = link.workflow_id
+    fallback: projects.seah_workflow_id | standard_workflow_id (track-aware)
 else:
     legacy workflow_assignments
 ```
 
-Implemented in `ticketing/engine/workflow_engine.py` → `resolve_workflow()`.
+Implemented in `ticketing/services/workflow_routing.py` → `pick_project_workflow_binding()` / `resolve_project_workflow()`, called from `ticketing/engine/workflow_engine.py` → `resolve_workflow()`.
+
+**Re-classification.** When an officer changes a grievance's categories, `ticketing/services/ticket_workflow_reroute.py` re-derives the route — but **only from the safeguards menu path** (`new_grievance`). A grievance that came in on the SEAH or road-hazard menu stays on it.
 
 **Webhook fields** (`POST /api/v1/tickets`):
 
 | Field | Purpose |
 |-------|---------|
-| `workflow_slot` | Explicit stream (overrides inference) |
-| `intake_fast_path` | `road_hazard`, `dust`, `ca`, … |
-| `is_seah` | Maps to `seah` when `workflow_slot` omitted |
+| `intake_route` | Chatbot `story_main` — the menu path the complainant took |
+| `is_seah` | Legacy — maps to `seah_intake` when `intake_route` is omitted |
+| `intake_fast_path` | **Deprecated** — legacy aliases (`dust`, `road_hazard`, …) normalized to `intake_route` |
 
 ---
 
@@ -223,24 +231,24 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 | Method | Path | Notes |
 |--------|------|-------|
 | `GET` | `/workflows` | List workflows |
-| `GET` | `/workflows/slots` | Built-in slot catalog |
+| `GET` | `/workflows/routing-options` | Category classifications + chatbot menu paths for the project editor |
 | `GET` | `/workflows/templates` | Templates only |
 | `GET` | `/workflows/{id}` | Detail + steps |
 | `POST` | `/workflows` | Create |
 | `PATCH` | `/workflows/{id}` | Metadata |
 | `POST` | `/workflows/{id}/publish` | Publish |
-| `GET` | `/projects/{id}/workflows` | Slots on project |
-| `PUT` | `/projects/{id}/workflows` | Replace all slot assignments |
-| `PATCH` | `/projects/{id}` | Legacy `standard_workflow_id` / `seah_workflow_id` (syncs slots) |
+| `GET` | `/projects/{id}/workflows` | Workflow links on the project |
+| `PUT` | `/projects/{id}/workflows` | Replace all links (name + workflow + routing + default) |
+| `PATCH` | `/projects/{id}` | Legacy `standard_workflow_id` / `seah_workflow_id` (syncs links) |
 
 ---
 
 ## 12. Acceptance criteria
 
 1. `super_admin` and scoped `org_admin` can create, publish, and assign workflows on their track.
-2. A project can link **at least three** standard streams (safeguards, hazards, CA) plus SEAH.
-3. Each step binds exactly one `assigned_role_key`; different streams may use different roles on the same project.
-4. Ticket intake selects the correct workflow from slot inference or explicit `workflow_slot`.
+2. A project can link **N named workflows** — the admin names each one and picks the published workflow it uses; exactly one is the default.
+3. Each step binds exactly one `assigned_role_key`; different links may use different roles on the same project.
+4. Ticket intake selects the link by `intake_route`, then by categories on re-classification, then the default.
 5. Published workflow version is snapshotted on the ticket; publishing does not rewrite open tickets.
 6. Auto-escalation respects `resolution_time_days` on the current step.
 7. The step editor lets the author name each cast tier and mark **supervisor / participant / observer** mandatory (`required_tiers`); actor is always required. Only required tiers gate project go-live ([13 §5A.5](13_projects_and_packages.md)).

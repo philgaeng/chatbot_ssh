@@ -45,6 +45,8 @@
 | Actor / Handles it (generic) | the workflow's **named role** for that step |
 | catch-all / default binding | **"used when nothing else matches"** |
 | binding · slot (internal) | **workflow** / **level** |
+| stream · intake stream (dead model, [12 §1](../12_workflows_configuration.md)) | **workflow** — the name the admin gave it |
+| intake route (internal) | **"chatbot menu"** — the menu the complainant picked |
 | seat · anchor | **position** (position type @ office) |
 | handler pool · provenance | **"whoever handles Level N"** |
 | reach (as a control label) | **"Search area"** |
