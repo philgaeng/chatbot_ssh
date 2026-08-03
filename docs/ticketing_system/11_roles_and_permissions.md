@@ -18,6 +18,8 @@ This document covers **`ticketing.roles`** — both the **admin ladder** (who co
 
 **Delegation model (as-built, 2026-07):** **Four** admin **`role_key`s** — `super_admin`, **`org_admin`** (org-subtree-scoped, **any depth**), `project_admin`, `officer_admin`. **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** — not a separate role name.
 
+> **⚠ Amended 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** The SEAH track splits into **configure** and **read**, and admins keep only the first. `workflow_track = seah` becomes a **capability to configure sensitive workflows** (author them, staff them, invite officers onto them) and **grants no access to any sensitive grievance or its PII** — for any admin tier, `super_admin` included. Access to a sensitive case comes from **one place only: being cast on that workflow's steps.** Every "read SEAH tickets" capability below is struck.
+
 > **As-built 2026-07 (Handover A):** admin authority attaches to an **org node** and cascades over its **subtree at any depth** — a Department-of-Roads admin, and beneath it a district admin — which is what handles ministry scale (DoR ≈ 5,000 staff) and Nepal's federal structure (province assemblies with no national parent). A narrow **`officer_admin`** tier delegates officer onboarding; and org **actor types** (`government` / `local_government` / `donor` / `third_party`) gate who may create each kind of root. Full model: [design §2.5](../sprints/2026-07_org_chart_positions/DESIGN-settings-redesign.md); backend = Handover B **SH-7**.
 
 ---
@@ -81,7 +83,7 @@ One **`role_key`** for all org-tier admins; **`workflow_track` on the assignment
 | Author **custom operational roles / position types** (§3) | ✅ standard track | ✅ SEAH track only |
 | Appoint **lower admins** (`org_admin` below · `project_admin` · `officer_admin`) in its subtree | ✅ ≤ own capabilities | ✅ `track=seah` |
 | Invite/manage operational officers | ✅ standard roles, in subtree | ✅ SEAH roles only |
-| Read tickets in subtree | ✅ standard | ✅ SEAH only (`is_seah`) |
+| Read tickets in subtree | ✅ standard | ❌ **struck 2026-08-02** — administering sensitive workflows grants no case access ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §3) |
 | Manage other track | ❌ | ❌ |
 
 **Appointment:** `super_admin` (top-level org_admins) **or a higher `org_admin`** in the same subtree + track — **attenuated**: never granting a capability the appointer doesn't hold. Sets `organization_id` + `workflow_track`.

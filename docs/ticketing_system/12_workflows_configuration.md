@@ -25,7 +25,9 @@ A **single project** may link **N workflows** (not just one Standard + one SEAH)
 
 Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_types.py`. Admins add, rename, or remove links via `PUT /projects/{id}/workflows`.
 
-`workflow_type` (`standard` \| `seah`) still controls **visibility** and the SEAH gate — it is not the routing dimension.
+> **⚠ Superseded 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** `workflow_type ∈ {standard, seah}` becomes a single boolean **`is_sensitive`** set by the workflow author. **SEAH is not a mode — it is the name of a workflow.** A sensitive workflow's grievances are visible **only to officers cast on its steps** (no admin, no oversight role, not `super_admin`), and their PII is vault-gated to that same cast. Sensitive workflows are **optional** on a project and **may not be the default**. Sections below still written in track terms are superseded by the DECISION; code change is outstanding (DECISION §7).
+
+`workflow_type` (`standard` \| `seah`) still controls **visibility** as-built — it is not the routing dimension.
 
 ---
 
@@ -39,7 +41,7 @@ Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_t
 | `workflow_key` | Slug (auto from name) |
 | `display_name` | Admin-facing name |
 | `description` | Optional |
-| `workflow_type` | `standard` \| `seah` (visibility / SEAH gate) |
+| `workflow_type` | `standard` \| `seah` (visibility gate) — **being replaced by `is_sensitive` (bool)**, [DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §6 |
 | `status` | `draft` \| `published` \| `archived` |
 | `version` | Incremented on publish |
 | `is_template` | Reusable blueprint; not assigned to tickets directly |

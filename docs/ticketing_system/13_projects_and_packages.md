@@ -203,7 +203,13 @@ What is actually as-built:
 
 **Open guard (not built):** nothing stops a SEAH workflow from being marked **default**, which would route every unmatched grievance into the sensitive track and mis-set the legacy `standard_workflow_id` mirror (`_sync_legacy_columns`). Logged in the [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md).
 
-**Open design question (2026-08-02):** whether SEAH should stop being a `workflow_type` enum and become **an ordinary optional workflow carrying a "sensitive" property** (restricted visibility + PII-vault display), set when the workflow is authored. See the followup — the engine is already most of the way there.
+**DECIDED 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** SEAH stops being a `workflow_type` enum and becomes **an ordinary optional workflow carrying a `is_sensitive` property**, set when the workflow is authored. On this screen that means:
+
+- The sensitive card is **like any other**: renamable, removable, optional — a project may have none.
+- It **cannot be the default** (422). The default must be a non-sensitive workflow, so unmatched grievances never disappear into the restricted track.
+- Its badge states the property, not a mode: *"Sensitive — only officers staffed on this workflow can see these grievances."*
+- **Admins do not gain access by administering it.** Configuring a sensitive workflow (authoring, staffing, inviting) grants no case or PII access to anyone, `super_admin` included — access is **cast-derived only** (DECISION §3).
+- Go-live check **A2** ("SEAH workflow configured") is **removed** — §7.
 
 ### 5B.4 Copy (LOCKED)
 **"Stream" and "slot" never appear on screen** — the word is **workflow** ([ui/05 §4](ui/05_ui_copy_style.md)). The default is explained as *"used when nothing else matches"*, never "catch-all", "fallback", or "binding". The chatbot-menu options are complainant-facing menu names, so they follow the same guide — the current `INTAKE_ROUTE_CATALOG` labels still carry jargon ("safeguards GRM", "fast path") and are logged for cleanup ([followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md)).
@@ -270,7 +276,7 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 | C1 | **L1 actor staffed** | Also **gates ticket intake** — fail ⇒ create rejected |
 | A5 | **Donor guardrail** | Donor present ⇒ ≥1 donor role in the last **standard** step's Informed cast (SEAH-suppressed, [DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
 | D1 | **≥1 project location linked** | Routing needs it |
-| A2 / C4 | **SEAH workflow published + L1 staffed** | Blocker **only if** the project links a SEAH workflow; else N/A |
+| ~~A2~~ / C4 | **Sensitive workflow L1 staffed** | **A2 removed 2026-08-02** — a project needs no sensitive workflow ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §1.3). C4 still applies **if** one is linked: its levels are staffed like any other workflow's (A4) |
 | E1 | **Name + short code set** | — |
 
 ### Optional (never blocks activation)

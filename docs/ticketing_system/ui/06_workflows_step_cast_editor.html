@@ -44,6 +44,12 @@
   .title-row h1{font-size:19px;line-height:1.2;color:var(--ink);font-weight:680;margin:0;letter-spacing:-.01em;}
   .badge{font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:var(--r-pill);display:inline-flex;align-items:center;gap:4px;}
   .badge.track{background:var(--brand-weak);color:var(--brand);border:1px solid var(--brand-border);}
+  /* workflow-level property strip — "sensitive" is a property of the workflow, not a separate track (DECISION 2026-08-02) */
+  .wfprops{background:var(--bg);border:1px solid var(--border);border-radius:var(--r);box-shadow:var(--shadow);padding:12px 16px;margin-top:12px;display:flex;align-items:flex-start;gap:11px;}
+  .wfprops input{margin:2px 0 0;flex:none;width:15px;height:15px;}
+  .wfprops .pt{font-size:13px;font-weight:640;color:var(--ink);}
+  .wfprops .pd{font-size:12px;color:var(--muted);max-width:78ch;}
+  .wfprops .pd b{color:var(--ink-3);font-weight:600;}
   .badge.draft{background:var(--warn-weak);color:#92400e;border:1px solid var(--warn-border);}
   .ver{font-family:var(--mono);font-size:11.5px;color:var(--muted);}
   .topbar-actions{margin-left:auto;display:flex;align-items:center;gap:9px;}
@@ -63,9 +69,9 @@
   .navstep{width:100%;display:flex;align-items:center;gap:10px;padding:10px 12px;border:none;background:none;text-align:left;cursor:pointer;border-bottom:1px solid var(--border);}
   .navstep:hover{background:var(--surface);}
   .navstep .n{width:22px;height:22px;border-radius:50%;background:var(--surface);border:1px solid var(--border-strong);display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--ink-2);flex:none;}
-  .navstep .t{flex:1;min-width:0;}
+  .navstep .t{flex:1;min-width:0;display:flex;flex-direction:column;}
   .navstep .tn{font-size:13px;color:var(--ink-2);font-weight:550;line-height:1.2;}
-  .navstep .tm{font-size:11px;color:var(--muted);}
+  .navstep .tm{font-size:11px;color:var(--muted);line-height:1.3;}
   .navstep .sd{width:8px;height:8px;border-radius:50%;flex:none;}
   .sd.ok{background:var(--good);}
   .sd.warn{background:var(--bad);}
@@ -156,7 +162,6 @@
     <div class="topbar">
       <div class="title-row">
         <h1>KL Road Standard</h1>
-        <span class="badge track">Standard</span>
         <span class="badge draft">Draft</span>
         <span class="ver">v3 · edited 12 Shrawan 2082 BS</span>
       </div>
@@ -166,6 +171,15 @@
         <button class="btn primary">Publish</button>
       </div>
     </div>
+
+    <!-- workflow-level property: sensitive (replaces the standard/SEAH track) -->
+    <label class="wfprops">
+      <input type="checkbox">
+      <span>
+        <span class="pt">Sensitive workflow</span>
+        <span class="pd">Only officers staffed on this workflow can see these grievances. Contact details stay hidden until an officer opens them, and every time is recorded. <b>A sensitive workflow can&rsquo;t be a project&rsquo;s default.</b></span>
+      </span>
+    </label>
 
     <div class="body">
 
@@ -201,7 +215,7 @@
             <div class="slot actor">
               <div class="slot-h"><span class="fn">Handles it</span><span class="ty">· owns the grievance (actor)</span><span class="alerts"><b>Alerts:</b> new grievance · escalation · SLA</span></div>
               <div class="slot-b">
-                <div class="field"><label>Officer role</label><select class="sel"><option>Site Safeguards Focal Person</option><option>Country L1 fallback</option></select><div class="whyx">Only Standard-track roles shown. <span class="linky">Why some are hidden</span></div></div>
+                <div class="field"><label>Officer role</label><select class="sel"><option>Site Safeguards Focal Person</option><option>Country L1 fallback</option></select><div class="whyx">Roles used on sensitive workflows aren&rsquo;t listed here. <span class="linky">Why some are hidden</span></div></div>
                 <div class="field"><label>Required?</label><div class="req"><span class="reqlock">Always required</span> every level needs someone to handle it</div></div>
                 <div class="field"><label>Name shown to officers</label><input class="inp" value="Safeguard Officer"></div>
                 <div class="field"><label>Short description <span class="u">(optional)</span></label><input class="inp" value="receives and works the grievance on site"></div>

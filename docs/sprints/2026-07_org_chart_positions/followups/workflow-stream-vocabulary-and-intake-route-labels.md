@@ -50,8 +50,10 @@ Fix: promote those four to blocking IDs, collapse `severity` to blocker/optional
 ### 4. No guard against a **sensitive workflow as the default**
 `project_workflows.replace_project_workflows()` has **no SEAH special-casing**: a `workflow_type='seah'` workflow can be marked `is_default`. Consequences: every unmatched grievance enters the sensitive track (invisible to standard officers), and `_sync_legacy_columns()` writes it into `projects.standard_workflow_id`. Add a 422 (or at minimum a go-live blocker).
 
-### 5. Open design question — should SEAH just be "a workflow with a sensitive flag"?
-**Asked 2026-08-02.** The original design intent: SEAH is an ordinary optional workflow; the only real difference is **how PII is displayed**, which could be a property set when authoring the workflow — leaving **one** kind of default and SEAH optional like any other.
+### 5. ~~Open design question~~ → **DECIDED 2026-08-02: [`DECISION-sensitive-workflows.md`](../DECISION-sensitive-workflows.md)**
+**Decided as recommended below, plus:** the quarterly report **excludes** sensitive cases, and — the admin-track question — **configuring a sensitive workflow grants no access to its grievances or PII**, for any admin tier including `super_admin`. Access is **cast-only**. `can_see_seah_extended()` loses its `super_admin`, `adb_hq_exec`, and `workflow_track=='seah'` branches. Code change outstanding (DECISION §7); note §4 above is now part of it — the reveal endpoint's policy check **does not exist** (`clients/grievance_api.py` always returns `granted: true`), so today any admin who can see a sensitive case can reveal its PII.
+
+The original question and analysis, kept for the record. The design intent: SEAH is an ordinary optional workflow; the only real difference is **how PII is displayed**, which could be a property set when authoring the workflow — leaving **one** kind of default and SEAH optional like any other.
 
 **How close the engine already is:**
 

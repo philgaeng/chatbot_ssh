@@ -6,6 +6,24 @@
 
 ---
 
+## 🔴 Sensitive workflows — DECIDED 2026-08-02, code outstanding (`DECISION-sensitive-workflows.md`)
+
+SEAH stops being a `workflow_type` track and becomes **an ordinary optional workflow with `is_sensitive`**. Specs updated (09/11/12/13, ui/04, ui/06); **no code written yet** — full touch list in the DECISION §7. The three highest-risk items:
+
+- **[Security] The PII reveal has no policy check.** `POST /tickets/{id}/reveal` is gated only by
+  `require_ticket_access`, and `clients/grievance_api.py` is a proto fallback that **always returns
+  `granted: true`** — the real `POST /api/grievance/{id}/reveal` was never built in `backend/`. So today
+  any admin who can see a sensitive case can reveal its complainant PII. Gate on **cast membership**,
+  deny otherwise, log both outcomes. (DECISION §4)
+- **[Access] `can_see_seah_extended()` must become cast-only** — drop the `super_admin`, `adb_hq_exec`
+  and `admin_scopes.workflow_track == 'seah'` branches (`services/admin_access.py`). Admins configure
+  sensitive workflows; they don't read them. `super_admin` break-glass = staff yourself onto the
+  workflow (audited). (DECISION §3)
+- **[Routing] Reject a sensitive workflow as a project's default** (422) and drop the SEAH branch in
+  `_sync_legacy_columns`; delete go-live check **A2** — a project needs no sensitive workflow.
+
+---
+
 ## Grievance-workflows screen follow-ups (2026-08-02, `followups/workflow-stream-vocabulary-and-intake-route-labels.md`)
 
 - **[Copy] `INTAKE_ROUTE_CATALOG` labels carry jargon.** "File a grievance (safeguards GRM)" /
