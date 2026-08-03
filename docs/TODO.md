@@ -34,10 +34,10 @@ reveal-policy endpoint, and docs/seah/.
   "Report a road hazard (fast path)" surface in the project editor's **Chatbot menu** picker, so
   they are governed by [ui/05](ticketing_system/ui/05_ui_copy_style.md). Rename to plain wording —
   ideally mirroring the chatbot's own `story_main` menu text. (`ticketing/constants/workflow_routing.py`)
-- **[Go-live] Delete the "Classification coverage" check.** A category no workflow claims goes to
-  the **default** — that is the default's job ([13 §5B](ticketing_system/13_projects_and_packages.md)),
-  so "uncovered classifications" is not a finding. It also ships under ID **`A4`**, which collides
-  with doc 13 §7's `A4` (required cast tiers). (`project_go_live.py`, `workflow_routing.uncovered_classifications`)
+- ~~**[Go-live] Delete the "Classification coverage" check.**~~ ✅ **done 2026-08-02** — check and
+  `workflow_routing.uncovered_classifications()` removed; the `A4` ID collision with doc 13 §7 is
+  gone. Go-live copy de-jargoned in the same pass (no "binding"/"catch-all"/"actors"/`L1`; the
+  panel says "Accepting grievances", not "Tickets OK").
 - **[Go-live] Binary severity is spec-only.** `_ACTIVATION_BLOCK_IDS = {A3, A5, C5, R1}`, so **A1**
   (default workflow), **D1** (locations), **E1** (name + code) and **A2/C4** (SEAH) are documented
   Blockers that ship as warnings and don't stop Activate. Promote them and collapse `severity` to

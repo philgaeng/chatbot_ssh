@@ -228,7 +228,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     checks: list[GoLiveCheck] = []
 
     from ticketing.services.project_workflows import list_project_workflows
-    from ticketing.services.workflow_routing import uncovered_classifications
 
     bindings = list_project_workflows(db, project_id)
     default_binding = next((b for b in bindings if b.is_default), None)
@@ -242,9 +241,9 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             group="routing",
             severity="warn",
             status="pass" if a1_ok else "warn",
-            message="Default published workflow set"
+            message="Chosen"
             if a1_ok
-            else "Mark exactly one workflow binding as Default (catch-all)",
+            else "None chosen yet. The default is used when nothing else matches.",
             section="workflows",
         )
     )
@@ -253,20 +252,10 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     # a sensitive workflow is optional, so its absence is not a finding. When a project does
     # link one, its levels are staffed like any other workflow's (A4 / C5).
 
-    missing_cls = uncovered_classifications(db, bindings)
-    if missing_cls:
-        checks.append(
-            GoLiveCheck(
-                id="A4",
-                label="Classification coverage",
-                group="routing",
-                severity="warn",
-                status="warn",
-                message=f"Classifications not mapped to a non-default workflow: {', '.join(missing_cls[:5])}"
-                + ("…" if len(missing_cls) > 5 else ""),
-                section="workflows",
-            )
-        )
+    # "Classification coverage" (was also id="A4", colliding with doc 13 §7's A4 = required cast
+    # tiers) removed 2026-08-02. A category no workflow claims goes to the **default** — that is
+    # the default's whole job (doc 13 §5B.2) — so an uncovered category was never a finding, only
+    # noise on every project that doesn't enumerate the whole catalog.
 
     # A3 Implementing agency (block for activation). doc 13 / DECISION §2: read the
     # dedicated implementing_agency_org_id field (back-compat fallback to the legacy
@@ -304,19 +293,19 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         checks.append(
             GoLiveCheck(
                 id="A5",
-                label="Donor notified on escalation",
+                label="Donor kept informed",
                 group="routing",
                 severity="block",
                 status="pass" if a5_ok else "fail",
                 message=(
-                    "Donor kept informed at the final standard step"
+                    "Kept informed at the last level"
                     if a5_ok
                     else (
-                        "Add a donor role (donor_national / donor_hq / donor_consultant) to "
+                        "Add the donor to the people kept informed at "
                         + (
-                            f"the final step's Kept-informed cast (L{last_step.step_order})"
+                            f"the last level (Level {last_step.step_order})"
                             if last_step
-                            else "the standard workflow's final step"
+                            else "the workflow's last level"
                         )
                     )
                 ),
@@ -332,11 +321,11 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         checks.append(
             GoLiveCheck(
                 id="B1",
-                label="Required project actors",
+                label="Partner organizations",
                 group="commercial",
                 severity="warn",
                 status="pass" if b1_ok else "warn",
-                message="All required actors assigned"
+                message="All required organizations assigned"
                 if b1_ok
                 else f"Missing: {', '.join(missing)}",
                 section="actors",
@@ -421,17 +410,17 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     checks.append(
         GoLiveCheck(
             id="C1",
-            label="L1 officer coverage",
+            label="Level 1 officers",
             group="officers",
             severity="block",
             status="pass" if c1_ok else ("fail" if l1_role else "warn"),
             message=(
-                "Every package has an L1 officer (or project-wide L1 / country fallback)"
+                "Every lot has a Level 1 officer"
                 if c1_ok
                 else (
-                    f"Add L1 ({l1_role}) for packages: {', '.join(l1_gaps[:5])}"
+                    f"Add a Level 1 officer ({l1_role}) for these lots: {', '.join(l1_gaps[:5])}"
                     if l1_gaps
-                    else "Link a standard workflow with an L1 step"
+                    else "Add a workflow with a Level 1 to this project"
                 )
             ),
             section="staffing",
@@ -452,17 +441,17 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     checks.append(
         GoLiveCheck(
             id="C2",
-            label="L2 officer coverage",
+            label="Level 2 officers",
             group="officers",
             severity="warn",
             status="pass" if c2_ok else ("warn" if l2_role else "info"),
             message=(
-                "Every package has an L2 officer (or project-wide L2 fallback)"
+                "Every lot has a Level 2 officer"
                 if c2_ok
                 else (
-                    f"Add L2 ({l2_role}) for packages: {', '.join(l2_gaps[:5])}"
+                    f"Add a Level 2 officer ({l2_role}) for these lots: {', '.join(l2_gaps[:5])}"
                     if l2_gaps
-                    else "Link a standard workflow with an L2 step"
+                    else "Add a workflow with a Level 2 to this project"
                 )
             ),
             section="staffing",
@@ -492,17 +481,17 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     checks.append(
         GoLiveCheck(
             id="R1",
-            label="Reassignment authority",
+            label="Someone to reassign to",
             group="officers",
             severity="block",
             status="pass" if r1_ok else "fail",
             message=(
-                "Every step has a reachable reassignment authority"
+                "Every level has someone who can reassign a grievance"
                 if r1_ok
                 else (
-                    "No reassignment authority for: "
+                    "No one can reassign at: "
                     + ", ".join(r1_gaps[:5])
-                    + " — staff a Supervisor/Dispatcher or add a project administrator"
+                    + " — staff a supervisor, or add a project administrator"
                 )
             ),
             section="staffing",
@@ -528,11 +517,11 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         checks.append(
             GoLiveCheck(
                 id="C4",
-                label="SEAH L1 officer",
+                label="Sensitive workflow staffing",
                 group="officers",
                 severity="warn",
                 status="pass" if c4_ok else "warn",
-                message="SEAH step-1 officer scoped to project" if c4_ok else "Add SEAH L1 officer scope on this project",
+                message="Level 1 officer assigned" if c4_ok else "Assign a Level 1 officer for this project",
                 section="staffing",
             )
         )
@@ -551,9 +540,9 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 severity="block",
                 status="pass" if c5_ok else "fail",
                 message=(
-                    "Every standard workflow level has an officer"
+                    "Every level has an officer"
                     if c5_ok
-                    else f"Unstaffed levels: {', '.join(level_gaps[:5])}"
+                    else f"No officer at: {', '.join(level_gaps[:5])}"
                 ),
                 section="staffing",
             )
@@ -568,7 +557,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             group="geography",
             severity="warn",
             status="pass" if d1_ok else "warn",
-            message="At least one location linked" if d1_ok else "Link provinces, districts, or municipalities",
+            message="At least one location linked" if d1_ok else "Link the provinces, districts or municipalities this project covers",
             section="locations",
         )
     )
@@ -632,9 +621,9 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 severity="warn",
                 status="pass" if not f1_gaps else "warn",
                 message=(
-                    "SMS-enabled levels have officers with phones"
+                    "Officers on SMS levels have a phone number"
                     if not f1_gaps
-                    else f"Add phones for SMS levels: {', '.join(f1_gaps[:5])}"
+                    else f"Add a phone number for officers at: {', '.join(f1_gaps[:5])}"
                 ),
                 section="messaging",
             )
@@ -649,7 +638,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             group="metadata",
             severity="warn",
             status="pass" if e1_ok else "warn",
-            message="Project name and short code set" if e1_ok else "Set name and short code",
+            message="Name and short code set" if e1_ok else "Set the project name and short code",
             section=None,
         )
     )

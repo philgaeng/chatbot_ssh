@@ -5,10 +5,10 @@ import { getProjectGoLive, type GoLiveReport } from "@/lib/api";
 
 const GROUP_LABELS: Record<string, string> = {
   routing: "Routing",
-  commercial: "Commercial",
+  commercial: "Organizations & lots",
   officers: "Officers",
   geography: "Geography",
-  metadata: "Metadata",
+  metadata: "Project details",
 };
 
 function statusDot(status: string) {
@@ -73,8 +73,8 @@ export function ProjectGoLivePanel({
         <div>
           <h3 className="text-sm font-semibold text-gray-800">Go-live status</h3>
           <p className="text-xs text-gray-500 mt-0.5">
-            {report.summary.pass} passed · {report.summary.warn} warnings
-            {report.summary.fail > 0 ? ` · ${report.summary.fail} blocking` : ""}
+            {report.summary.pass} ready · {report.summary.warn} to review
+            {report.summary.fail > 0 ? ` · ${report.summary.fail} blocks go-live` : ""}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs">
@@ -82,7 +82,7 @@ export function ProjectGoLivePanel({
             {report.can_activate ? "Can activate" : "Cannot activate yet"}
           </span>
           <span className={report.can_accept_tickets ? "text-green-700 font-medium" : "text-red-700 font-medium"}>
-            {report.can_accept_tickets ? "Tickets OK" : "Tickets blocked"}
+            {report.can_accept_tickets ? "Accepting grievances" : "Not accepting grievances"}
           </span>
           <button type="button" onClick={() => void load()} className="text-blue-600 hover:underline">
             Refresh

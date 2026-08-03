@@ -22,7 +22,10 @@ The Projects mockup showed **one row per "intake stream"** (safeguards · hazard
 
 These strings surface in the project editor's **Chatbot menu** picker, so they are governed by the copy guide. Ideally they mirror the chatbot's own menu wording — check `story_main` before renaming.
 
-### 2. Delete the "Classification coverage" go-live check
+### 2. ~~Delete the "Classification coverage" go-live check~~ ✅ **done 2026-08-02**
+Deleted, along with `workflow_routing.uncovered_classifications()` (its only caller). The `A4` ID collision with doc 13 §7 is gone. The go-live check copy was de-jargoned in the same pass — no "binding", "catch-all", "actors", "step", "scope", or `L1`/`L2` shorthand on screen; the panel says "Accepting grievances" rather than "Tickets OK". Original note below.
+
+
 `project_go_live.py` emits check **`A4` "Classification coverage"** (warn) from `uncovered_classifications()`. A category no card claims routes to the **default** — that is the default's whole job — so an uncovered category is not a finding. Two problems:
 - The check is noise on every project that doesn't enumerate all categories.
 - Its ID **collides** with doc 13 §7's `A4` (required cast tiers staffed).

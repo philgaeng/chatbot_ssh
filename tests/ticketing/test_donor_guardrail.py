@@ -117,7 +117,11 @@ def test_go_live_blocks_when_donor_not_informed(db, kl_road_project):
         a5 = next(c for c in report.checks if c.id == "A5")
         assert a5.status == "fail" and a5.severity == "block"
         assert report.can_activate is False
-        assert "donor role" in (go_live_svc.activation_block_message(report) or "").lower()
+        # Assert the intent — the block message names the donor and points at the last level —
+        # not the exact phrasing, which is user-facing copy governed by ui/05 and re-worded
+        # 2026-08-02 ("Add a donor role (donor_national / …)" → plain language).
+        block_msg = (go_live_svc.activation_block_message(report) or "").lower()
+        assert "donor" in block_msg and "last level" in block_msg
     finally:
         step.informed_roles = saved
         db.flush()

@@ -282,7 +282,7 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 | Check | Notes |
 |-------|-------|
-| ~~Classification coverage~~ | **To delete (2026-08-02).** A category no card claims goes to the default — that is what the default is for (§5B.2), so "uncovered classifications" is not a finding. As-built the service still emits it as check **`A4`** (warn), which also **collides with this doc's `A4`** (required cast tiers). See [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md) |
+| ~~Classification coverage~~ | **Deleted 2026-08-02** (with `workflow_routing.uncovered_classifications`). A category no card claims goes to the default — that is what the default is for (§5B.2) — so it was never a finding, only noise on any project that doesn't enumerate the whole catalog. It also shipped as id **`A4`**, colliding with this doc's `A4` (required cast tiers); that collision is gone. |
 | Package QR tokens | Generate anytime from the main QR menu |
 | Officer-SMS phone coverage | Only relevant if officer SMS is on ([06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5.8) |
 
