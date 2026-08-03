@@ -422,11 +422,11 @@ export function ProjectEditor({
         <div>
           <h3 className="text-sm font-semibold text-gray-700">Grievance workflows</h3>
           <p className="text-xs text-gray-500 mt-1">
-            Add published workflows and map taxonomy <strong>classifications</strong> and intake paths.
-            One row must be <strong>Default</strong> (catch-all). Officers match each step&apos;s role via project staffing.
+            One default workflow is required. Add more workflows to send different grievances to
+            different officers.
             {lockTypeConfig
               ? " Defaults come from the project type; super admin may override."
-              : " Edit step chains under Settings → Workflows."}
+              : " Edit a workflow's levels under Settings → Workflows, roles & permissions."}
           </p>
         </div>
         <ProjectWorkflowsEditor
