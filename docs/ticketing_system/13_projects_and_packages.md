@@ -186,30 +186,29 @@ Position-first picker mockup: [`ui/04_projects_packages_redesign.html`](ui/04_pr
 | Field | Column | Notes |
 |---|---|---|
 | **Name** | `display_label` | The project's own name for this workflow, **independent of the workflow's own name** — the same published workflow can appear under different names on different projects. Required. |
-| **Workflow** | `workflow_id` | Published workflows only, filtered by `workflow_type` (SEAH hidden without `canSeeSeah`). **+ Create a new workflow…** opens the clone modal; **Edit steps ↗** deep-links to the step-cast editor ([12 §6.2](12_workflows_configuration.md), [`ui/06`](ui/06_workflows_step_cast_editor.html)). |
-| **Default** | `is_default` | Exactly one per project. The default carries **no** routing rules — that is what makes it the catch-all. |
+| **Workflow** | `workflow_id` | Published workflows only. Sensitive ones are listed only for an admin with the **configure** capability (`can_configure_sensitive`) — *not* `can_see_seah`, which is case access ([DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md)). **+ Create a new workflow…** opens the clone modal; **Edit steps ↗** deep-links to the step-cast editor ([12 §6.2](12_workflows_configuration.md), [`ui/06`](ui/06_workflows_step_cast_editor.html)). |
+| **🔒 Sensitive** badge | `is_sensitive` **on the bound workflow** (as-built: `workflow_definitions.workflow_type == 'seah'`) | **Derived and read-only here.** It is not a property of the card or of the project — the card *reflects* the workflow it points at, so the badge appears, disappears, and re-styles the card **when the Workflow picker changes**. It is set in one place only: the **Sensitive workflow** checkbox in the workflow editor ([12 §6.2](12_workflows_configuration.md), [`ui/06`](ui/06_workflows_step_cast_editor.html)). Never editable from the project screen — a project cannot make someone else's workflow sensitive, or stop it being so. |
+| **Default** | `is_default` | Exactly one per project. The default carries **no** routing rules — that is what makes it the catch-all. **A sensitive workflow cannot be the default**, so the default card's picker does not offer them (server: 422, §5B.3). |
 | **Chatbot menu** | `intake_route` | Non-default cards only, and **required** there (`new_grievance` · `road_hazard_grievance` · `seah_intake`). |
 | **Categories** | `classifications` | Chips. Applied at intake and when an officer changes the category — the re-route only moves grievances that came in on the safeguards menu ([12 §8](12_workflows_configuration.md)). A category belongs to **one** card. |
-| **Remove** | — | Not offered on the default or the SEAH card. |
+| **Remove** | — | On every card except the default. A sensitive card is removable like any other. |
 
-### 5B.3 SEAH
-**Corrected 2026-08-02** — an earlier draft of this section claimed the SEAH card "cannot be removed" and "cannot be made the default". **Neither is true in the code**: `ticketing/services/project_workflows.py` has **no SEAH special-casing at all** — any link can be removed and any published workflow can be `is_default`.
+### 5B.3 Sensitive workflows (SEAH)
+**Governed by [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) (2026-08-02).** SEAH is **not a mode** — it is the name someone gave a workflow. The one thing that makes it different is the workflow's **sensitive** property.
 
-What is actually as-built:
+**On this screen there is no special SEAH card.** A sensitive card is renamable, removable and optional exactly like the others; a project may have none. Three things follow from the *bound workflow*, not from the card:
 
-- **SEAH-ness is a property of the bound workflow, not of the card.** `ticket.is_seah = workflow_is_seah(workflow)` — i.e. `workflow_definitions.workflow_type == 'seah'` (`services/ticket_intake.py`, `services/workflow_routing.py`).
-- **Visibility is track-derived, not a role allow-list.** `services/seah_visibility.py`: *"you can see a SEAH case because you are cast on a SEAH-track workflow's step."* Ticket queries then hide `is_seah` rows from everyone else (`api/routers/tickets/crud.py`).
-- Only an admin with the SEAH track may edit a SEAH workflow ([11_roles_and_permissions.md](11_roles_and_permissions.md) §2), and `validate_step_roles` forbids a standard-scoped role on a SEAH step.
+| | |
+|---|---|
+| **The 🔒 Sensitive badge** | Derived from the bound workflow, read-only here (§5B.2). Change the Workflow picker and the badge follows. |
+| **It cannot be the default** | The default takes every grievance matching nothing else; if it were sensitive those would land where only its cast can see them. Enforced server-side — **422**, `services/project_workflows.py` (built 2026-08-02, pinned by `tests/ticketing/test_sensitive_workflow_access.py`). The default card's picker therefore does not list sensitive workflows. |
+| **Who can see the grievances** | **Only officers cast on that workflow's steps.** Not admins, not oversight roles, not `super_admin` — configuring a sensitive workflow (authoring, staffing, inviting) grants no case or PII access (DECISION §3, built). A `super_admin` who needs a case staffs themselves onto the workflow: an audited assignment. ADB safeguards staff get access the same way — cast on the workflow, observer tier is enough. |
 
-**Open guard (not built):** nothing stops a SEAH workflow from being marked **default**, which would route every unmatched grievance into the sensitive track and mis-set the legacy `standard_workflow_id` mirror (`_sync_legacy_columns`). Logged in the [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md).
+Also as-built: `validate_step_roles` forbids a standard-scoped role on a sensitive step, and only an admin with the configure capability may edit a sensitive workflow ([11_roles_and_permissions.md](11_roles_and_permissions.md) §2). Go-live check **A2** ("SEAH workflow configured") is **removed** — §7.
 
-**DECIDED 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** SEAH stops being a `workflow_type` enum and becomes **an ordinary optional workflow carrying a `is_sensitive` property**, set when the workflow is authored. On this screen that means:
+> **Correction kept for the record.** An earlier draft of this section claimed the SEAH card "cannot be removed" and "cannot be made the default". The first was never true and is not true now; the second was aspiration — `project_workflows.py` had **no** SEAH special-casing until the 422 above was built.
 
-- The sensitive card is **like any other**: renamable, removable, optional — a project may have none.
-- It **cannot be the default** (422). The default must be a non-sensitive workflow, so unmatched grievances never disappear into the restricted track.
-- Its badge states the property, not a mode: *"Sensitive — only officers staffed on this workflow can see these grievances."*
-- **Admins do not gain access by administering it.** Configuring a sensitive workflow (authoring, staffing, inviting) grants no case or PII access to anyone, `super_admin` included — access is **cast-derived only** (DECISION §3).
-- Go-live check **A2** ("SEAH workflow configured") is **removed** — §7.
+> **Naming lag.** The code still says `workflow_type == 'seah'` / `is_seah` / `workflow_track`; the *behaviour* above is as-built. The rename to `is_sensitive` follows with its migration ([DECISION §6–7](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md)).
 
 ### 5B.4 Copy (LOCKED)
 **"Stream" and "slot" never appear on screen** — the word is **workflow** ([ui/05 §4](ui/05_ui_copy_style.md)). The default is explained as *"used when nothing else matches"*, never "catch-all", "fallback", or "binding". The chatbot-menu options are complainant-facing menu names, so they follow the same guide — the current `INTAKE_ROUTE_CATALOG` labels still carry jargon ("safeguards GRM", "fast path") and are logged for cleanup ([followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md)).

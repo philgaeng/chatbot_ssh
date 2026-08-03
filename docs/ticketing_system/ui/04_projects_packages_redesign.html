@@ -582,6 +582,8 @@
                       <option>+ Create a new workflow…</option>
                     </select>
                   </div>
+                  <div class="wl"></div>
+                  <div class="wv"><span class="sub" style="font-size:11.5px">Sensitive workflows aren&rsquo;t listed here — the default can&rsquo;t be sensitive.</span></div>
                 </div>
                 <div class="wfwhen">
                   <div class="wh">Grievances come here when</div>
@@ -632,6 +634,10 @@
               </div>
             </div>
 
+            <!-- The 🔒 Sensitive badge + red card styling are DERIVED from the bound workflow's
+                 sensitive property (doc 13 §5B.2) — not a property of the card and not editable
+                 here. Change the Workflow picker and the badge follows. It is set in one place:
+                 the "Sensitive workflow" checkbox in the workflow editor (ui/06, doc 12 §6.0). -->
             <div class="wfcard seahwf">
               <div class="wfcard-h">
                 <span class="wl">Name</span>

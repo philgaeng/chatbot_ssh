@@ -142,7 +142,28 @@ draft → publish → (in use on projects) → archive
 
 - List active workflows + templates; **Clone** creates a draft.
 - Step editor: role dropdown, SLAs, tier fields.
+- **Sensitive workflow** checkbox — see §6.0.
 - Footer: *Put a workflow on a project under Settings → Projects & packages → Grievance workflows.*
+
+### 6.0 The **Sensitive** checkbox — the one place the property is set
+
+A workflow-level property (`is_sensitive`; as-built `workflow_type == 'seah'`), edited **here and nowhere else**. Wireframe: [`ui/06`](ui/06_workflows_step_cast_editor.html), the strip under the workflow title.
+
+On-screen copy (LOCKED — [ui/05](ui/05_ui_copy_style.md)):
+
+> ☐ **Sensitive workflow**
+> Only officers staffed on this workflow can see these grievances. Contact details stay hidden until an officer opens them, and every time is recorded. **A sensitive workflow can't be a project's default.**
+
+What ticking it does — the whole contract, in one place ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md)):
+
+| | |
+|---|---|
+| **Access** | Grievances on this workflow are visible **only to officers cast on its steps** — not to admins, oversight roles, or `super_admin`. They do not appear in anyone else's queue, counts, notifications, or reports. |
+| **PII** | Complainant contact is masked in the case view and readable only through a **logged vault reveal**, by that same cast. |
+| **Routing** | The workflow can still be linked to any project, but **never as the default** (422). |
+| **Authoring** | Only an admin with the configure capability sees or edits it; a standard-scoped role cannot be cast on its steps (`validate_step_roles`). |
+
+Everywhere else the property is **read-only and derived**: the project screen's 🔒 Sensitive badge reflects the bound workflow ([13 §5B.2](13_projects_and_packages.md)), and a ticket's sensitivity is copied from the workflow it resolves to at intake (`ticket.is_seah = workflow_is_seah(workflow)`) — never set by hand.
 
 ### 6.1 Role picker on each step
 
