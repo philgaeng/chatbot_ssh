@@ -398,7 +398,15 @@ def test_get_ticket_pii_serves_plaintext_for_standard_ticket(pii_client, monkeyp
 
 
 def test_get_ticket_pii_masks_contact_for_seah_ticket(pii_client, monkeypatch):
-    """TP-15 at the router level — pinned so steps 2-4 cannot loosen SEAH masking."""
+    """TP-15 at the router level — pinned so steps 2-4 cannot loosen SEAH masking.
+
+    Since DECISION-sensitive-workflows §3 (2026-08-02) the fixture's `super_admin` persona can
+    no longer reach a sensitive ticket at all, so masking is asserted through a **cast member**
+    — and the admin's 403 is asserted alongside it, because the two rules protect the same data.
+    """
+    from ticketing.api.dependencies import CurrentUser, get_authenticated_user
+    from ticketing.api.main import app
+
     client, ctx, user_id = pii_client
     ticket = ctx.add_open_ticket(user_id)
     ticket.is_seah = True
@@ -410,6 +418,13 @@ def test_get_ticket_pii_masks_contact_for_seah_ticket(pii_client, monkeypatch):
         lambda gid: _api_envelope(_grievance()),
     )
 
+    # Non-cast admin: walled off entirely (no card, masked or otherwise).
+    assert client.get(f"/api/v1/tickets/{ticket.ticket_id}/pii").status_code == 403
+
+    # Cast member (same user, so assignment/scope are unchanged): card served, contact masked.
+    app.dependency_overrides[get_authenticated_user] = lambda: CurrentUser(
+        user_id=user_id, role_keys=["seah_national_officer"]
+    )
     body = client.get(f"/api/v1/tickets/{ticket.ticket_id}/pii").json()
 
     assert body["pii_masked"] is True

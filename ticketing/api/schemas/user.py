@@ -115,6 +115,11 @@ class AdminContextResponse(BaseModel):
     can_access_platform_settings: bool
     can_manage_structure: bool
     can_create_project: bool
+    #: May open sensitive (SEAH) grievances — **cast membership only**, never granted by an
+    #: admin tier. DECISION-sensitive-workflows §3.
+    can_see_seah: bool = False
+    #: May administer sensitive workflows (author / list / bind / staff). Grants no case access.
+    can_configure_sensitive: bool = False
     admin_scopes: list[dict]
 
 

@@ -3,7 +3,10 @@ Workflow management endpoints — full CRUD for the no-code workflow editor.
 
 Read endpoints: any authenticated officer
 Mutating endpoints: matrix-aware admin (org_admin by track, super_admin)
-SEAH workflows: additionally gated by can_see_seah
+Sensitive (SEAH) workflows: additionally gated by ``can_configure_sensitive`` — the
+**configure** capability. This is deliberately *not* ``can_see_seah`` (case access, cast-only):
+an admin administers the sensitive catalog without being able to open a single sensitive
+grievance. See `DECISION-sensitive-workflows.md` §3.
 """
 import re
 import uuid
@@ -87,8 +90,10 @@ def _require_workflow_write(current_user: CurrentUser, workflow_type: str) -> No
 
 
 def _require_seah(current_user: CurrentUser) -> None:
-    if not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="SEAH admin access required")
+    """Configure-side gate for the sensitive-workflow catalog — not case access.
+    DECISION-sensitive-workflows §3."""
+    if not current_user.can_configure_sensitive:
+        raise HTTPException(status_code=403, detail="Sensitive-workflow admin access required")
 
 
 def _load_workflow(workflow_id: str, db: Session, current_user: CurrentUser) -> WorkflowDefinition:
@@ -102,8 +107,8 @@ def _load_workflow(workflow_id: str, db: Session, current_user: CurrentUser) -> 
     ).scalar_one_or_none()
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if workflow_track_from_type(wf.workflow_type) == "seah" and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="SEAH admin access required")
+    if workflow_track_from_type(wf.workflow_type) == "seah" and not current_user.can_configure_sensitive:
+        raise HTTPException(status_code=403, detail="Sensitive-workflow admin access required")
     return wf
 
 
@@ -121,8 +126,8 @@ def list_workflows(
         selectinload(WorkflowDefinition.steps),
         selectinload(WorkflowDefinition.assignments),
     )
-    # Hide SEAH workflows from non-SEAH users
-    if not current_user.can_see_seah:
+    # Hide sensitive workflow definitions from admins without the configure capability
+    if not current_user.can_configure_sensitive:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     if workflow_type:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) == workflow_type.lower())
@@ -149,7 +154,7 @@ def list_workflow_routing_options(
     from ticketing.services.workflow_routing import list_catalog_classifications
 
     intake_routes = list(INTAKE_ROUTE_CATALOG)
-    if not current_user.can_see_seah:
+    if not current_user.can_configure_sensitive:
         intake_routes = [r for r in intake_routes if r["key"] != "seah_intake"]
     return {
         "classifications": list_catalog_classifications(db),
@@ -165,7 +170,7 @@ def list_templates(
     """Returns built-in template definitions + admin-created templates."""
     built_ins = []
     for key, tpl in BUILT_IN_TEMPLATES.items():
-        if key == "default_seah" and not current_user.can_see_seah:
+        if key == "default_seah" and not current_user.can_configure_sensitive:
             continue
         built_ins.append({
             "workflow_id": f"__builtin_{key}",
@@ -194,7 +199,7 @@ def list_templates(
         selectinload(WorkflowDefinition.steps),
         selectinload(WorkflowDefinition.assignments),
     ).where(WorkflowDefinition.is_template.is_(True))
-    if not current_user.can_see_seah:
+    if not current_user.can_configure_sensitive:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     db_templates = db.execute(q).scalars().all()
 

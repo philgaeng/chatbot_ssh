@@ -401,15 +401,43 @@ def can_create_operational_role(user: CurrentUser, *, track: str) -> bool:
 
 
 def can_see_seah_extended(user: CurrentUser) -> bool:
+    """**Case access** to sensitive (SEAH) grievances — cast membership only.
+
+    `DECISION-sensitive-workflows.md` §3 (2026-08-02): *administering* a sensitive workflow is
+    not a reason to read its grievances. Three branches were removed here — ``super_admin``,
+    ``adb_hq_exec``, and ``admin_scopes.workflow_track == 'seah'`` — so no admin tier and no
+    oversight role sees a sensitive case by virtue of who they are. `super_admin` break-glass
+    is to **staff themselves onto the workflow**: an audited assignment, not a standing
+    invisible privilege. Donor oversight (ADB safeguards staff) works the same way — cast them
+    on the workflow, observer tier is enough.
+
+    Do **not** reintroduce an admin branch here. The configure-side capability lives in
+    :func:`can_configure_sensitive_workflows` and deliberately grants no case access.
+    """
     from ticketing.models.user import SEAH_ROLES
 
-    # Track-derived membership (DESIGN-cast-model §3.1): cast on a SEAH-track workflow. Computed
-    # at enrich time; additive to the legacy named-role / oversight / admin-track paths below.
+    # Track-derived membership (DESIGN-cast-model §3.1): cast on a SEAH-track workflow step.
     if getattr(user, "seah_track_member", False):
         return True
-    if bool(set(user.role_keys) & SEAH_ROLES):
-        return True
-    if is_super_admin(user) or "adb_hq_exec" in user.role_keys:
+    # Legacy fast-path: the named SEAH operational roles. These are only ever held by SEAH
+    # officers, and the seeded SEAH workflow casts them, so this is cast membership by another
+    # name — kept so access survives a project with no published SEAH workflow yet. Retires
+    # with SEAH_ROLES (DECISION §7).
+    return bool(set(user.role_keys) & SEAH_ROLES)
+
+
+def can_configure_sensitive_workflows(user: CurrentUser) -> bool:
+    """**Configure** side of the old SEAH track: author, list, bind and staff sensitive
+    workflows, and invite officers onto them.
+
+    Grants **no** access to any sensitive grievance or its PII — that is
+    :func:`can_see_seah_extended`, which is cast-only. `DECISION-sensitive-workflows.md` §3.
+
+    This carries the branches removed from ``can_see_seah_extended`` so the admin catalog keeps
+    working: a `super_admin` (or any admin scoped to the sensitive track) still administers
+    sensitive workflows without being able to open a single case.
+    """
+    if is_super_admin(user):
         return True
     for s in getattr(user, "admin_scopes", []) or []:
         if s.workflow_track == "seah":
@@ -549,6 +577,10 @@ def admin_context_payload(user: CurrentUser) -> dict:
         "can_access_platform_settings": can_access_platform_settings(user),
         "can_manage_structure": can_manage_structure(user),
         "can_create_project": can_create_project(user),
+        # DECISION-sensitive-workflows §3 — two different answers, sent separately so the
+        # portal stops deriving case access from role keys (it can't see cast membership).
+        "can_see_seah": can_see_seah_extended(user),
+        "can_configure_sensitive": can_configure_sensitive_workflows(user),
         "admin_scopes": [
             {
                 "admin_scope_id": s.admin_scope_id,

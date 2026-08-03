@@ -249,24 +249,9 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         )
     )
 
-    seah_bindings = [
-        b for b in bindings
-        if _workflow_published(db, b.workflow_id)
-        and db.get(WorkflowDefinition, b.workflow_id)
-        and (db.get(WorkflowDefinition, b.workflow_id).workflow_type or "").lower() == "seah"
-    ]
-    a2_ok = len(seah_bindings) > 0
-    checks.append(
-        GoLiveCheck(
-            id="A2",
-            label="SEAH workflow",
-            group="routing",
-            severity="warn",
-            status="pass" if a2_ok else "warn",
-            message="SEAH workflow binding configured" if a2_ok else "Add a SEAH workflow binding",
-            section="workflows",
-        )
-    )
+    # A2 ("SEAH workflow configured") removed 2026-08-02 — DECISION-sensitive-workflows §1.3:
+    # a sensitive workflow is optional, so its absence is not a finding. When a project does
+    # link one, its levels are staffed like any other workflow's (A4 / C5).
 
     missing_cls = uncovered_classifications(db, bindings)
     if missing_cls:

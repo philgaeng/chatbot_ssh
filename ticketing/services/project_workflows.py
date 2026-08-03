@@ -103,7 +103,16 @@ def replace_project_workflows(
 
     normalized = [_normalize_item(item) for item in items]
     for n in normalized:
-        validate_workflow_binding(db, n["workflow_id"])
+        wf = validate_workflow_binding(db, n["workflow_id"])
+        # DECISION-sensitive-workflows §1.2: the default is the catch-all for everything that
+        # matches nothing else. If it were sensitive, every unmatched grievance would land in a
+        # workflow only its cast can see — invisible to the officers who normally triage.
+        if n["is_default"] and (wf.workflow_type or "").lower() == "seah":
+            raise HTTPException(
+                status_code=422,
+                detail="A sensitive workflow cannot be the default — the default takes every "
+                       "grievance that matches nothing else",
+            )
 
     for row in list_project_workflows(db, project.project_id):
         db.delete(row)

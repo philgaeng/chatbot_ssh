@@ -6,21 +6,25 @@
 
 ---
 
-## 🔴 Sensitive workflows — DECIDED 2026-08-02, code outstanding (`DECISION-sensitive-workflows.md`)
+## 🟠 Sensitive workflows — access slice SHIPPED 2026-08-02; rename outstanding (`DECISION-sensitive-workflows.md`)
 
-SEAH stops being a `workflow_type` track and becomes **an ordinary optional workflow with `is_sensitive`**. Specs updated (09/11/12/13, ui/04, ui/06); **no code written yet** — full touch list in the DECISION §7. The three highest-risk items:
+SEAH stops being a `workflow_type` track and becomes **an ordinary optional workflow with `is_sensitive`**. Specs updated (09/11/12/13, ui/04, ui/06).
 
-- **[Security] The PII reveal has no policy check.** `POST /tickets/{id}/reveal` is gated only by
-  `require_ticket_access`, and `clients/grievance_api.py` is a proto fallback that **always returns
-  `granted: true`** — the real `POST /api/grievance/{id}/reveal` was never built in `backend/`. So today
-  any admin who can see a sensitive case can reveal its complainant PII. Gate on **cast membership**,
-  deny otherwise, log both outcomes. (DECISION §4)
-- **[Access] `can_see_seah_extended()` must become cast-only** — drop the `super_admin`, `adb_hq_exec`
-  and `admin_scopes.workflow_track == 'seah'` branches (`services/admin_access.py`). Admins configure
-  sensitive workflows; they don't read them. `super_admin` break-glass = staff yourself onto the
-  workflow (audited). (DECISION §3)
-- **[Routing] Reject a sensitive workflow as a project's default** (422) and drop the SEAH branch in
-  `_sync_legacy_columns`; delete go-live check **A2** — a project needs no sensitive workflow.
+**✅ Built (660 passed, 5 skipped):** case access is **cast-only** — `can_see_seah_extended()` lost its
+`super_admin`, `adb_hq_exec` and `workflow_track=='seah'` branches; the configure side moved to a new
+`can_configure_sensitive_workflows()` so admins still author/bind sensitive workflows while seeing no
+case. Both PII disclosure endpoints gate on cast membership — **this closed a real hole**: the reveal
+had no policy check at all (`clients/grievance_api.py` is a proto fallback that always returns
+`granted: true`; the backend's `POST /api/grievance/{id}/reveal` was never built), so any admin who
+could see a sensitive case could reveal its PII. Also: sensitive-as-default rejected (422), go-live A2
+deleted, portal takes the server's answer instead of deriving access from role keys. Pinned by
+`tests/ticketing/test_sensitive_workflow_access.py`.
+
+**Outstanding** (DECISION §7): the **rename** (`workflow_type`/`is_seah`/`workflow_track` →
+`is_sensitive` + a configure capability, with migration), `include_seah` → `include_sensitive` in
+reports, `archiving_policy` + `tasks/notifications` track keys, retiring the `SEAH_ROLES` fast-path,
+the **Sensitive** checkbox in the workflow editor (mocked in ui/06, not built), the real backend
+reveal-policy endpoint, and docs/seah/.
 
 ---
 

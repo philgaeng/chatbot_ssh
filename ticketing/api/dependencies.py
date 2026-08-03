@@ -28,6 +28,7 @@ from ticketing.services.admin_access import (
     SettingsAction,
     admin_workflow_tracks,
     can_access_platform_settings,
+    can_configure_sensitive_workflows,
     can_create_operational_role,
     can_manage_structure,
     can_see_seah_extended,
@@ -163,7 +164,14 @@ class CurrentUser:
 
     @property
     def can_see_seah(self) -> bool:
+        """May open **sensitive grievances** — cast membership only (DECISION §3)."""
         return can_see_seah_extended(self)
+
+    @property
+    def can_configure_sensitive(self) -> bool:
+        """May **administer** sensitive workflows (author / list / bind / staff). Grants no
+        case access — see :attr:`can_see_seah`. DECISION-sensitive-workflows §3."""
+        return can_configure_sensitive_workflows(self)
 
     @property
     def can_view_archived(self) -> bool:

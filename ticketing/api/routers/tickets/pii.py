@@ -33,6 +33,26 @@ class RevealCloseRequest(_BaseModel):
     close_reason: str = "user_closed"
 
 
+def _require_sensitive_cast(ticket: Ticket, current_user: CurrentUser) -> None:
+    """On a **sensitive** ticket, only the workflow's cast may see complainant PII.
+
+    `require_ticket_access` already enforces this (its SEAH gate is cast-only since
+    `DECISION-sensitive-workflows.md` §3). It is repeated here **deliberately**: this is the
+    endpoint that discloses PII, and the invariant must be stated where the disclosure happens,
+    not only in a shared dependency someone could later relax or swap.
+
+    Context (DECISION §4): the reveal had **no policy check at all** — the backend's
+    `POST /api/grievance/{id}/reveal` was never built, so `clients/grievance_api.py` falls back
+    to a synthetic session that always grants. Until that endpoint exists, ticketing is the only
+    gate on this path.
+    """
+    if ticket.is_seah and not current_user.can_see_seah:
+        raise HTTPException(
+            status_code=403,
+            detail="Only officers staffed on this workflow can see these contact details",
+        )
+
+
 @router.get(
     "/tickets/{ticket_id}/pii",
     summary="Fetch complainant PII from the grievance backend (brokered — no direct browser call)",
@@ -48,6 +68,7 @@ def get_ticket_pii(
     # HR-02: previously SEAH-gated but NOT jurisdiction-gated — any officer could pull
     # PII for any standard ticket by ID. require_ticket_access adds the scope gate.
     # PII masking rules (TP-15: standard decrypted / SEAH masked) below are unchanged.
+    _require_sensitive_cast(ticket, current_user)
     if not ticket.grievance_id:
         return {}
 
@@ -105,6 +126,7 @@ def begin_reveal(
     from ticketing.clients.grievance_api import begin_reveal_session
     from ticketing.services.demo_reveal import ticket_reveal_fallback_grievance
 
+    _require_sensitive_cast(ticket, current_user)
     if not ticket.grievance_id:
         raise HTTPException(status_code=422, detail="Ticket has no linked grievance_id")
 

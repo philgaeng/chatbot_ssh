@@ -30,15 +30,22 @@ def user_holds_seah_role(db: Session, user_id: str) -> bool:
 
 def user_can_see_seah(db: Session, user_id: str) -> bool:
     """R1 SEAH-leak guard for **notification recipients** (arbitrary user_ids): True if the
-    user may see SEAH cases at all — a SEAH operational role OR a both-workflows oversight
-    role (``super_admin`` / ``adb_hq_exec``). Broader than :func:`user_holds_seah_role` so
-    a legitimately SEAH-cleared recipient is not over-suppressed; the mirror, per-user_id,
-    of ``CurrentUser.can_see_seah``. Use this before addressing any notification/@mention/
-    GRC-convene event about a ticket to a user other than the request user."""
-    from ticketing.models.user import BOTH_WORKFLOWS_ROLES, SEAH_ROLES
-    from ticketing.services.admin_access import load_effective_role_keys
+    user may see sensitive cases at all. The per-user_id mirror of ``CurrentUser.can_see_seah``
+    — so it follows the same rule: **cast membership only**. Use this before addressing any
+    notification/@mention/GRC-convene event about a ticket to a user other than the request user.
 
-    return bool(set(load_effective_role_keys(db, user_id)) & (SEAH_ROLES | BOTH_WORKFLOWS_ROLES))
+    DECISION-sensitive-workflows §3 (2026-08-02) dropped ``BOTH_WORKFLOWS_ROLES``
+    (``super_admin`` / ``adb_hq_exec``) from this set: an oversight role is not a reason to be
+    told a sensitive grievance exists. A donor's safeguards staff who need them are cast on the
+    workflow (observer tier), which this predicate then matches."""
+    from ticketing.models.user import SEAH_ROLES
+    from ticketing.services.admin_access import load_effective_role_keys
+    from ticketing.services.seah_visibility import user_is_seah_track_member
+
+    role_keys = set(load_effective_role_keys(db, user_id))
+    if role_keys & SEAH_ROLES:
+        return True
+    return user_is_seah_track_member(db, role_keys)
 
 
 def visible_report_user_ids(db: Session, user_id: str) -> set[str]:

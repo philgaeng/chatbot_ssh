@@ -875,6 +875,10 @@ export interface AdminContext {
   can_access_platform_settings: boolean;
   can_manage_structure: boolean;
   can_create_project: boolean;
+  /** May open sensitive (SEAH) grievances — cast membership only, never an admin tier. */
+  can_see_seah: boolean;
+  /** May administer sensitive workflows (author / list / bind / staff). No case access. */
+  can_configure_sensitive: boolean;
   admin_scopes: AdminScopeRow[];
 }
 

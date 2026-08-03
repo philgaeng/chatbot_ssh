@@ -114,7 +114,10 @@ export interface AuthContextValue {
   user: TokenPayload | null;
   error: string | null;
   roleKeys: string[];
+  /** May open sensitive grievances (cast-only). */
   canSeeSeah: boolean;
+  /** May administer sensitive workflows — grants no case access. */
+  canConfigureSensitive: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isCountryAdmin: boolean;
@@ -150,7 +153,11 @@ export function useAuth(): AuthContextValue {
 // SH-7: country_admin retired → org_admin (org-subtree admin, any depth). The derived
 // `isCountryAdmin` flag is kept (many consumers read it) but now sources from org_admin;
 // RB-3 renames it to isOrgAdmin across the tree.
-const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "org_admin", "project_admin"]);
+// Sensitive-case access is NOT derivable from role keys — it is cast membership on a sensitive
+// workflow, which only the server can answer (DECISION-sensitive-workflows §3). This set is the
+// offline fallback used before /admin-context resolves, and holds only the SEAH *operational*
+// roles: no admin tier and no oversight role belongs here.
+const SEAH_CAN_SEE_ROLES = new Set(["seah_national_officer", "seah_hq_officer"]);
 const ADMIN_ROLES = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
@@ -163,7 +170,8 @@ function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
   };
   if (!adminCtx) return fromRoles;
   return {
-    canSeeSeah: fromRoles.canSeeSeah || adminCtx.admin_workflow_tracks.includes("seah"),
+    // Server is authoritative: cast membership, never an admin track.
+    canSeeSeah: adminCtx.can_see_seah ?? fromRoles.canSeeSeah,
     isAdmin: fromRoles.isAdmin || adminCtx.is_org_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
     isSuperAdmin: fromRoles.isSuperAdmin || adminCtx.is_super_admin,
     isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_org_admin,
@@ -450,6 +458,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         error,
         roleKeys,
         canSeeSeah: perms.canSeeSeah,
+        canConfigureSensitive: adminContext?.can_configure_sensitive ?? perms.isSuperAdmin,
         isAdmin: perms.isAdmin,
         isSuperAdmin: perms.isSuperAdmin,
         isCountryAdmin: perms.isCountryAdmin,

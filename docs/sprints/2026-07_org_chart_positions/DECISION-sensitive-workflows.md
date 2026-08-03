@@ -1,6 +1,6 @@
 # DECISION — SEAH becomes an ordinary workflow with a "sensitive" property
 
-**Decided:** 2026-08-02 (Philippe). **Status:** locked — specs updated; code change outstanding (see §7).
+**Decided:** 2026-08-02 (Philippe). **Status:** locked. **The access slice is built** (2026-08-02) — §3 and §4 are as-built and pinned by `tests/ticketing/test_sensitive_workflow_access.py`; the **rename** (§6) and the report/retention/notification key changes are outstanding (§7).
 **Supersedes:** the `workflow_type ∈ {standard, seah}` track model wherever the two disagree.
 **Related:** [12_workflows_configuration.md](../../ticketing_system/12_workflows_configuration.md) · [13 §5B](../../ticketing_system/13_projects_and_packages.md) · [11_roles_and_permissions.md](../../ticketing_system/11_roles_and_permissions.md) · [docs/seah/](../../seah/) · [followup](followups/workflow-stream-vocabulary-and-intake-route-labels.md) §5
 
@@ -45,14 +45,14 @@ Today `workflow_track = seah` on an admin scope does **two unrelated jobs at onc
 
 ### Consequences, accepted
 - **`super_admin` loses blanket visibility of sensitive cases.** Break-glass is to **staff themselves onto the workflow** — an explicit, audited assignment rather than an invisible standing privilege. This is the point, not a side effect.
-- **`adb_hq_exec` (senior oversight) loses sensitive case read.** Oversight of sensitive work is by aggregate only — and per §1.4 the quarterly report excludes it, so oversight of sensitive cases is a deliberate gap to be filled, if ever, by a separate report for the cast.
+- **`adb_hq_exec` (senior oversight) loses sensitive case read *as a standing privilege*** — and **this leaves no gap**: ADB has its own safeguards experts, and ADB staff who need sensitive cases are **cast onto the sensitive workflow** like any other officer (observer tier is enough for read-only oversight). Donor oversight of sensitive work is therefore explicit, per-person, and auditable rather than implied by a role name.
 - A sensitive grievance with an **unstaffed** level is visible to nobody until an admin staffs it. Acceptable: the same admin can staff it without reading it.
 
-## 4. PII reveal — an open hole this decision closes
+## 4. PII reveal — the hole this decision closes ✅ **built 2026-08-02**
 
-As-built, `POST /tickets/{id}/reveal` is gated only by `require_ticket_access`, and the backend policy check it calls **does not exist yet**: `clients/grievance_api.py` is a proto fallback that **always returns `granted: true`**. So today anyone who can see a sensitive case can reveal its PII, admins included.
+The hole: `POST /tickets/{id}/reveal` was gated only by `require_ticket_access`, and the backend policy check it calls **does not exist** — `clients/grievance_api.py` is a proto fallback that **always returns `granted: true`**. So any admin who could see a sensitive case could reveal its PII.
 
-Required: the reveal must check **cast membership on the sensitive workflow**, deny otherwise, and log both outcomes. Until the real `POST /api/grievance/{id}/reveal` lands in `backend/`, the check belongs in ticketing.
+**Built:** `_require_sensitive_cast()` in `api/routers/tickets/pii.py` now gates **both** disclosure endpoints (`/pii` and `/reveal`) on cast membership. It duplicates what `require_ticket_access` enforces since §3 — deliberately, because this is the endpoint that discloses PII and the invariant must be stated where the disclosure happens, not only in a shared dependency someone could later relax. Ticketing remains the **only** gate on this path until the real `POST /api/grievance/{id}/reveal` lands in `backend/`.
 
 ## 5. What does not change
 
@@ -72,15 +72,29 @@ Required: the reveal must check **cast membership on the sensitive workflow**, d
 | `archiving.seah_years_before_archiving` | `sensitive_years_before_archiving` |
 | UI: "SEAH track / SEAH officer" | the workflow's own name; the property reads **Sensitive** |
 
-## 7. Touch list (code change outstanding)
+## 7. Touch list
 
-**Model + migration** `models/workflow.py`, `models/ticket.py`, admin scope model · a migration mapping `workflow_type='seah'` → `is_sensitive=true`, keeping the old column readable for one release.
-**Access** `services/admin_access.py` (`can_see_seah_extended` → cast-only), `api/dependencies.py`, `api/routers/tickets/crud.py` (visibility predicate), `services/seah_visibility.py` (rename, keep the logic — it is already right).
-**PII** `api/routers/tickets/pii.py` + `clients/grievance_api.py` (§4 — the reveal gate).
-**Routing** `services/project_workflows.py` (reject a sensitive default; drop the SEAH branch in `_sync_legacy_columns`), `services/workflow_routing.py`.
-**Go-live** `services/project_go_live.py` (delete A2).
-**Reports / retention** `services/quarterly_report.py`, `report_export.py`, `pivot_table.py`, `archiving_policy.py`.
-**Notifications** `tasks/notifications.py` (`should_notify(workflow_slug=…)` keyed by track).
+### ✅ Built 2026-08-02 — the access slice
+
+| Area | What landed |
+|---|---|
+| **Access** | `can_see_seah_extended()` → **cast-only**; new `can_configure_sensitive_workflows()` carries the removed admin branches. `CurrentUser.can_configure_sensitive` added. The ticket/task/viewer/report/notification gates inherit the new rule through `can_see_seah` — no change needed at those call sites, which is the payoff of having one predicate. |
+| **Catalog** | `api/routers/workflows.py` switched its six gates to `can_configure_sensitive` — an admin still authors, lists, clones and binds sensitive workflows while seeing none of their cases. |
+| **Notifications** | `chart_behaviors.user_can_see_seah()` (per-user_id mirror) dropped `BOTH_WORKFLOWS_ROLES`, so `super_admin`/`adb_hq_exec` are no longer told a sensitive grievance exists. |
+| **PII** | `_require_sensitive_cast()` on `/pii` and `/reveal` (§4). |
+| **Routing** | `project_workflows.replace_project_workflows()` rejects a sensitive default (422). |
+| **Go-live** | A2 deleted. |
+| **Portal** | `/users/me/admin-context` now returns `can_see_seah` + `can_configure_sensitive`; `AuthProvider` stops deriving case access from role keys (it cannot see cast membership) and takes the server's answer; `ProjectEditor` passes the **configure** capability to the workflow editor. |
+| **Tests** | `tests/ticketing/test_sensitive_workflow_access.py` (11 tests). `test_ticket_access_matrix.py` (`SEAH_ALLOW` no longer contains `super_admin`) and `test_pii_boundary.py` (masking asserted through a cast member; admin gets 403) updated to the new rule. Suite: **660 passed, 5 skipped**. |
+
+**Not renamed yet** — the code still says `workflow_type='seah'` / `is_seah` / `workflow_track`. The *behaviour* is the decision's; the vocabulary follows in the rename below.
+
+### Outstanding
+
+**Model + migration** `models/workflow.py`, `models/ticket.py`, admin scope model · a migration mapping `workflow_type='seah'` → `is_sensitive=true`, keeping the old column readable for one release · then `services/seah_visibility.py`, `lib/trackFilter.ts`, `lib/labels.ts` rename with it.
+**Reports / retention** `services/quarterly_report.py` (`include_seah` → `include_sensitive`), `report_export.py`, `pivot_table.py`, `archiving_policy.py`.
+**Notifications** `tasks/notifications.py` (`should_notify(workflow_slug=…)` still keyed by track slug).
 **Roles** `constants/grm_role_catalog.py`, `role_archetypes.py`, `models/user.py` (`SEAH_ROLES` legacy fast-path retires — cast membership replaces it).
-**UI** `lib/trackFilter.ts`, `lib/labels.ts`, workflow editor (the **Sensitive** checkbox), officers/admin screens.
-**Docs** 09, 11, 12, 13, ui/04, ui/06, docs/seah/.
+**Workflow editor** the **Sensitive** checkbox itself (mocked in `ui/06`, not built).
+**Backend** the real `POST /api/grievance/{id}/reveal` policy endpoint (§4).
+**Docs** docs/seah/ still describes the track model.

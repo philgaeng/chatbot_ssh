@@ -9,10 +9,10 @@ Personas (built on the seed role catalog + KL Road standard/SEAH workflows):
   unassigned officer, informed-tier viewer, out-of-scope officer.
 
 Key acceptance (spec §2):
-  * SEAH ticket × non-SEAH persona ⇒ denied on EVERY endpoint (incl. both file endpoints —
-    the regression this ticket fixes).
+  * SEAH ticket × non-cast persona ⇒ denied on EVERY endpoint (incl. both file endpoints —
+    the regression this ticket fixes) — and since 2026-08-02 that includes `super_admin`.
   * Standard ticket × out-of-scope officer ⇒ denied on detail / pii / files.
-  * In-scope assigned / viewer / super_admin ⇒ allowed.
+  * In-scope assigned / viewer / super_admin ⇒ allowed (standard tickets).
 """
 from __future__ import annotations
 
@@ -80,7 +80,11 @@ ENDPOINTS = [
 
 # Access decision per persona for a STANDARD ticket vs a SEAH ticket.
 STANDARD_ALLOW = {"super_admin", "in_scope_assigned", "in_scope_unassigned", "viewer_informed"}
-SEAH_ALLOW = {"super_admin", "seah_officer"}
+# DECISION-sensitive-workflows §3 (2026-08-02): `super_admin` was removed from this set. Access
+# to a sensitive case is cast membership on its workflow and nothing else — no admin tier, no
+# oversight role. A super_admin who needs one staffs themselves onto the workflow, which is an
+# audited assignment. See tests/ticketing/test_sensitive_workflow_access.py.
+SEAH_ALLOW = {"seah_officer"}
 
 
 def _new_id() -> str:

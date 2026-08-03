@@ -91,7 +91,7 @@ export function ProjectEditor({
   const [msg, setMsg]         = useState("");
   const [working, setWorking] = useState(false);
   const [locError, setLocError] = useState("");
-  const { canSeeSeah } = useAuth();
+  const { canConfigureSensitive } = useAuth();
   const [projectActorRoles, setProjectActorRolesState] = useState<OrgRole[]>(orgRoles);
   const [rolesSaving, setRolesSaving] = useState(false);
   const [workflows, setWorkflows] = useState<WorkflowDefinition[]>([]);
@@ -436,7 +436,7 @@ export function ProjectEditor({
           routingOptions={routingOptions}
           canEdit={canEditProjectWorkflows}
           canEditWorkflowTrack={canEditWorkflowTrack}
-          canSeeSeah={!!canSeeSeah}
+          canSeeSeah={!!canConfigureSensitive}
           lockTypeConfig={lockTypeConfig}
           flash={flash}
           onSaved={(slots) => {
