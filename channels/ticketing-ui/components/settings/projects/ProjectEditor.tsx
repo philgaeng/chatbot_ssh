@@ -1,16 +1,21 @@
 "use client";
 
 /**
- * <ProjectEditor> — the per-project frame: identity, participants (doc-13), locations,
- * packages, workflow bindings, staffing, messaging and go-live.
+ * <ProjectEditor> — the per-project console (doc 13 §5, wireframe ui/04).
  *
- * Imports <ProjectWorkflowsEditor> from the workflows cluster — the spec's
- * cross-cluster seam #2.
+ * Two panes: a sticky rail that fuses go-live status with section navigation, and ONE section
+ * at a time on the right. Replaces the single long scroll where every section was stacked and
+ * the go-live checklist sat at the top, disconnected from the thing it was talking about.
  *
- * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
+ * The go-live report is fetched HERE and passed to both the rail and the Overview pane — one
+ * fetch, two consumers, so the rail's dots and the checklist can never disagree.
+ *
+ * Imports <ProjectWorkflowsEditor> from the workflows cluster — the spec's cross-cluster seam #2.
  */
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
+  getProjectGoLive,
+  type GoLiveReport,
   updateProject,
   addProjectOrg,
   removeProjectOrg,
@@ -52,6 +57,13 @@ import { ProjectWorkflowsEditor } from "@/components/settings/workflows/ProjectW
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { PackageRow } from "@/components/settings/projects/PackageRow";
 import { PackageCreateModal } from "@/components/settings/projects/PackageCreateModal";
+import { ProjectConsoleRail } from "@/components/settings/projects/ProjectConsoleRail";
+import {
+  PROJECT_SECTIONS,
+  SECTION_ORDER,
+  blockerCount,
+  type SectionKey,
+} from "@/components/settings/projects/projectSections";
 
 export function ProjectEditor({
   project: initial,
@@ -83,8 +95,6 @@ export function ProjectEditor({
   onOrganizationCreated: (org: OrganizationItem) => void;
 }) {
   const [p, setP]             = useState<ProjectItem>(initial);
-  const [editingName, setEditingName] = useState(false);
-  const [editingShortCode, setEditingShortCode] = useState(false);
   const [nameVal, setNameVal] = useState(p.name);
   const [shortCodeVal, setShortCodeVal] = useState(p.short_code);
   const [descVal, setDescVal] = useState(p.description ?? "");
@@ -101,7 +111,40 @@ export function ProjectEditor({
   const [goLiveKey, setGoLiveKey] = useState(0);
   const [messaging, setMessaging] = useState<ProjectMessagingConfig | null>(null);
   const [messagingSaving, setMessagingSaving] = useState(false);
-  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // ── Console: which section is on screen, and the go-live report that drives the rail ──
+  const [activeSection, setActiveSection] = useState<SectionKey>("overview");
+  const [report, setReport] = useState<GoLiveReport | null>(null);
+  const [reportLoading, setReportLoading] = useState(true);
+  const [reportError, setReportError] = useState("");
+  const topRef = useRef<HTMLDivElement | null>(null);
+
+  const loadGoLive = useCallback(async () => {
+    setReportLoading(true);
+    setReportError("");
+    try {
+      setReport(await getProjectGoLive(p.project_id));
+    } catch (e: unknown) {
+      setReportError(e instanceof Error ? e.message : "Could not check go-live status");
+      setReport(null);
+    } finally {
+      setReportLoading(false);
+    }
+  }, [p.project_id]);
+
+  useEffect(() => { void loadGoLive(); }, [loadGoLive, goLiveKey]);
+
+  function goToSection(key: SectionKey) {
+    setActiveSection(key);
+    topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  const sectionIndex = SECTION_ORDER.indexOf(activeSection);
+  const prevSection = sectionIndex > 0 ? SECTION_ORDER[sectionIndex - 1] : null;
+  const nextSection =
+    sectionIndex >= 0 && sectionIndex < SECTION_ORDER.length - 1 ? SECTION_ORDER[sectionIndex + 1] : null;
+  const activeMeta = PROJECT_SECTIONS.find((s) => s.key === activeSection);
+  const blockers = blockerCount(report);
 
   const typedProject = Boolean(p.project_type_key);
   const lockTypeConfig = typedProject && !isSuperAdmin && !isCountryAdmin;
@@ -114,8 +157,9 @@ export function ProjectEditor({
     return adminWorkflowTracks.includes(track);
   }
 
+  /** A go-live check's "Fix →" — its `section` is a pane key, so this opens that pane. */
   function jumpToSection(section: string) {
-    sectionRefs.current[section]?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if ((SECTION_ORDER as string[]).includes(section)) goToSection(section as SectionKey);
   }
 
   async function toggleActive() {
@@ -161,17 +205,13 @@ export function ProjectEditor({
       const updated = await updateProject(p.project_id, { name: nameVal.trim(), description: descVal.trim() || null });
       setP(updated); onUpdated(updated); flash("Saved ✓");
     } catch { flash("Save failed"); }
-    setEditingName(false);
   }
 
   async function saveShortCode() {
     const codeErr = validateEntityCode(shortCodeVal, "Project code");
     if (codeErr) { flash(codeErr); return; }
     const normalized = normalizeEntityCodeInput(shortCodeVal);
-    if (normalized === p.short_code) {
-      setEditingShortCode(false);
-      return;
-    }
+    if (normalized === p.short_code) return;
     try {
       const updated = await updateProject(p.project_id, { short_code: normalized });
       setP(updated);
@@ -182,7 +222,6 @@ export function ProjectEditor({
       flash(friendlyError(e));
       setShortCodeVal(p.short_code);
     }
-    setEditingShortCode(false);
   }
 
   async function linkProjectActor(organizationId: string, orgRole: string) {
@@ -329,308 +368,478 @@ export function ProjectEditor({
   }
 
   const linkedOrgIds = new Set(p.organizations.map((o) => o.organization_id));
-
   return (
-    <div>
-      {/* Back + header */}
-      <div className="flex items-center gap-3 mb-6">
+    <div ref={topRef}>
+      {/* ── Top bar: what this project is, and whether it can go live ── */}
+      <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 mb-4">
         {showBack && (
-          <>
-            <button onClick={onBack} className="text-gray-400 hover:text-gray-600 text-sm flex items-center gap-1">
-              {canManageProjectCatalog ? "← Projects" : "← All projects"}
-            </button>
-            <span className="text-gray-300">/</span>
-          </>
-        )}
-        {canManageProjectCatalog && editingName ? (
-          <div className="flex items-center gap-2">
-            <input autoFocus value={nameVal} onChange={(e) => setNameVal(e.target.value)}
-              onBlur={saveMeta} onKeyDown={(e) => e.key === "Enter" && saveMeta()}
-              className="text-lg font-semibold text-gray-800 border-b-2 border-blue-400 bg-transparent focus:outline-none" />
-          </div>
-        ) : (
-          <h2
-            className={`text-lg font-semibold text-gray-800${canManageProjectCatalog ? " cursor-pointer hover:text-blue-600" : ""}`}
-            onClick={canManageProjectCatalog ? () => setEditingName(true) : undefined}
-            title={canManageProjectCatalog ? "Click to rename" : undefined}
-          >
-            {p.name}
-          </h2>
-        )}
-        {canManageProjectCatalog && editingShortCode ? (
-          <input
-            autoFocus
-            value={shortCodeVal}
-            onChange={(e) => setShortCodeVal(normalizeEntityCodeInput(e.target.value))}
-            onBlur={() => void saveShortCode()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void saveShortCode();
-              if (e.key === "Escape") {
-                setShortCodeVal(p.short_code);
-                setEditingShortCode(false);
-              }
-            }}
-            maxLength={ENTITY_CODE_MAX_LEN}
-            className="font-mono text-sm text-gray-600 border-b-2 border-blue-400 bg-transparent focus:outline-none w-24"
-          />
-        ) : (
-          <span
-            className={`font-mono text-sm text-gray-400${canManageProjectCatalog ? " cursor-pointer hover:text-blue-600" : ""}`}
-            onClick={canManageProjectCatalog ? () => setEditingShortCode(true) : undefined}
-            title={canManageProjectCatalog ? "Click to edit project code" : undefined}
-          >
-            {p.short_code}
-          </span>
-        )}
-        {p.project_type_key && (
-          <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">{p.project_type_key}</span>
-        )}
-        {!p.is_active && <span className="text-xs text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Inactive</span>}
-        {canManageProjectCatalog && (
           <button
-            type="button"
-            onClick={() => void toggleActive()}
-            className="text-xs text-blue-600 hover:underline ml-1"
+            onClick={onBack}
+            className="text-gray-400 hover:text-gray-600 text-xs flex items-center gap-1 mb-2"
           >
-            {p.is_active ? "Deactivate" : "Activate project"}
+            {canManageProjectCatalog ? "← Projects" : "← All projects"}
           </button>
         )}
-        {msg && <span className="text-xs text-green-600 font-medium ml-2">{msg}</span>}
-      </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">{p.name}</h2>
+          <span className="font-mono text-sm text-gray-400">{p.short_code}</span>
+          {p.project_type_key && (
+            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
+              {p.project_type_key}
+            </span>
+          )}
+          {!p.is_active && (
+            <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
+              Not active
+            </span>
+          )}
 
-      <ProjectGoLivePanel
-        key={goLiveKey}
-        projectId={p.project_id}
-        onJumpSection={jumpToSection}
-      />
-
-      {/* Description */}
-      <div className="mb-6">
-        <label className="text-xs font-medium text-gray-500 block mb-1">Description</label>
-        <textarea value={descVal} onChange={(e) => setDescVal(e.target.value)}
-          onBlur={saveMeta} rows={2}
-          placeholder="Project description…"
-          className="w-full max-w-lg text-sm border border-gray-200 rounded px-3 py-1.5 resize-none focus:outline-none focus:ring-1 focus:ring-blue-400" />
-      </div>
-
-      {/* Grievance workflows — super_admin + country_admin (per workflow_track) */}
-      {(canEditProjectWorkflows || (p.workflow_slots?.length ?? 0) > 0) && (
-      <div
-        ref={(el) => { sectionRefs.current.workflows = el; }}
-        className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">Grievance workflows</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            One default workflow is required. Add more workflows to send different grievances to
-            different officers.
-            {lockTypeConfig
-              ? " Defaults come from the project type; super admin may override."
-              : " Edit a workflow's levels under Settings → Workflows, roles & permissions."}
-          </p>
-        </div>
-        <ProjectWorkflowsEditor
-          project={p}
-          workflows={workflows}
-          wfTemplates={wfTemplates}
-          routingOptions={routingOptions}
-          canEdit={canEditProjectWorkflows}
-          canEditWorkflowTrack={canEditWorkflowTrack}
-          canSeeSeah={!!canConfigureSensitive}
-          lockTypeConfig={lockTypeConfig}
-          flash={flash}
-          onSaved={(slots) => {
-            const defaultRow = slots.find((s) => s.is_default);
-            const seahRow = slots.find((s) => s.workflow_track === "seah");
-            const updated: ProjectItem = {
-              ...p,
-              workflow_slots: slots,
-              standard_workflow_id: defaultRow?.workflow_id ?? null,
-              seah_workflow_id: seahRow?.workflow_id ?? null,
-            };
-            setP(updated);
-            onUpdated(updated);
-          }}
-        />
-      </div>
-      )}
-
-      {/* Messaging — officer SMS on assignment */}
-      <div
-        ref={(el) => { sectionRefs.current.messaging = el; }}
-        className="mb-6 border border-gray-200 rounded-lg p-4 bg-gray-50/60 max-w-2xl space-y-4"
-      >
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">Messaging</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            Officers receive a link-only SMS when assigned at checked levels. No complainant details are included.
-          </p>
-        </div>
-        {!messaging ? (
-          <p className="text-xs text-gray-400 italic">Loading messaging settings…</p>
-        ) : (
-          <>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={messaging.sms_enabled}
-                disabled={!canEditMessaging || messagingSaving}
-                onChange={(e) =>
-                  setMessaging({ ...messaging, sms_enabled: e.target.checked })
-                }
-              />
-              Officer SMS enabled
-            </label>
-            {messaging.max_levels > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-gray-500">SMS at workflow level</p>
-                <div className="flex flex-wrap gap-3">
-                  {Array.from({ length: messaging.max_levels }, (_, i) => i + 1).map((level) => (
-                    <label key={level} className="flex items-center gap-1.5 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={messaging.sms_levels.includes(level)}
-                        disabled={!canEditMessaging || !messaging.sms_enabled || messagingSaving}
-                        onChange={(e) => {
-                          const next = e.target.checked
-                            ? [...messaging.sms_levels, level].sort((a, b) => a - b)
-                            : messaging.sms_levels.filter((l) => l !== level);
-                          setMessaging({ ...messaging, sms_levels: next });
-                        }}
-                      />
-                      L{level}
-                    </label>
-                  ))}
-                </div>
-                <p className="text-xs font-medium text-gray-500 pt-1">WhatsApp (coming soon)</p>
-                <div className="flex flex-wrap gap-3 opacity-50 pointer-events-none">
-                  {Array.from({ length: messaging.max_levels }, (_, i) => i + 1).map((level) => (
-                    <label key={`wa-${level}`} className="flex items-center gap-1.5 text-sm text-gray-500">
-                      <input type="checkbox" disabled readOnly />
-                      L{level}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-amber-700">
-                Link a published workflow above to configure per-level SMS.
-              </p>
+          <div className="ml-auto flex items-center gap-3">
+            {!reportLoading && report && (
+              <span
+                className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full border ${
+                  blockers
+                    ? "text-red-700 bg-red-50 border-red-200"
+                    : "text-green-700 bg-green-50 border-green-200"
+                }`}
+              >
+                <span className={`h-2 w-2 rounded-full ${blockers ? "bg-red-500" : "bg-green-500"}`} />
+                {blockers
+                  ? `${blockers} ${blockers === 1 ? "blocker" : "blockers"} · can’t activate yet`
+                  : "Ready to activate"}
+              </span>
             )}
-            {canEditMessaging && (
+            {canManageProjectCatalog && (
               <button
                 type="button"
-                disabled={messagingSaving || messaging.max_levels === 0}
-                onClick={async () => {
-                  setMessagingSaving(true);
-                  try {
-                    const saved = await patchProjectMessaging(p.project_id, {
-                      sms_enabled: messaging.sms_enabled,
-                      sms_levels: messaging.sms_levels,
-                      whatsapp_levels: messaging.whatsapp_levels,
-                    });
-                    setMessaging(saved);
-                    setGoLiveKey((k) => k + 1);
-                    flash("Messaging saved ✓");
-                  } catch (e: unknown) {
-                    flash(friendlyError(e));
-                  } finally {
-                    setMessagingSaving(false);
-                  }
-                }}
-                className="text-xs px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+                onClick={() => void toggleActive()}
+                disabled={!p.is_active && !!blockers}
+                title={!p.is_active && blockers ? "Clear the blockers first" : undefined}
+                className={
+                  p.is_active
+                    ? "text-xs text-gray-500 hover:text-gray-700 px-2 py-1.5"
+                    : "text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 px-3 py-1.5 rounded"
+                }
               >
-                {messagingSaving ? "Saving…" : "Save messaging"}
+                {p.is_active ? "Deactivate" : "Activate project"}
               </button>
             )}
-          </>
-        )}
+          </div>
+          {msg && <span className="text-xs text-green-600 font-medium w-full">{msg}</span>}
+        </div>
       </div>
 
-      {/* Implementing agency + Donors are now roles in the Project actors table below (setting
-          the role syncs the dedicated implementing_agency_org_id / project_donors fields). */}
+      {/* ── Console: rail + one section ── */}
+      <div className="flex gap-4 items-start">
+        <ProjectConsoleRail
+          report={report}
+          loading={reportLoading}
+          active={activeSection}
+          onSelect={goToSection}
+        />
 
-      {/* Project actors (project-wide org + role) */}
-      <div ref={(el) => { sectionRefs.current.actors = el; }} className="mb-6">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-700">Project actors</h3>
-          <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
-            Add each partner organization and its role on this project. Use <span className="font-medium">+ New organization</span> if it is not in the list yet.
-          </p>
-        </div>
-        <p className="text-xs text-gray-500 mb-3 max-w-2xl">
-          Then use <span className="font-medium">Add officer</span> on a row to invite or scope someone for that organization.
-        </p>
+        <div className="flex-1 min-w-0">
+          <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="text-base font-semibold text-gray-900">{activeMeta?.label}</h3>
+            </div>
+            <div className="px-5 py-4">
 
-        {p.organizations.length === 0 ? (
-          <p className="text-xs text-gray-400 italic mb-3">No project actors yet</p>
-        ) : (
-          <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-w-xl">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-left border-b border-gray-200">
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500 w-1/2">Organization</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500">Role on project</th>
-                  <th className="px-3 py-2 text-xs font-medium text-gray-500 w-24">Officer</th>
-                  <th className="px-3 py-2 w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {p.organizations.map((po) => {
-                  const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
-                  const roleDef = projectActorRoles.find((r) => r.key === po.org_role);
-                  const roleColor = po.org_role ? orgRoleBadge(po.org_role) : "";
-                  return (
-                    <tr key={po.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2.5 font-medium text-gray-800">{orgName}</td>
-                      <td className="px-3 py-2.5">
-                        <select
-                          value={po.org_role ?? ""}
-                          onChange={(e) => handleRoleChange(po.organization_id, e.target.value || null)}
-                          disabled={working}
-                          className={`text-xs px-2 py-1 rounded border font-medium focus:outline-none focus:ring-1 focus:ring-blue-300 ${
-                            roleDef ? roleColor : "text-gray-400 border-gray-200 bg-white"
-                          }`}
-                        >
-                          <option value="">— no role —</option>
-                          {projectActorRoles.map((r) => (
-                            <option key={r.key} value={r.key}>{r.label}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-2.5">
+              {/* ── Overview & go-live ── */}
+              {activeSection === "overview" && (
+                <ProjectGoLivePanel
+                  report={report}
+                  loading={reportLoading}
+                  error={reportError}
+                  onRefresh={() => setGoLiveKey((k) => k + 1)}
+                  onJumpSection={jumpToSection}
+                />
+              )}
+
+              {/* ── Identity ── */}
+              {activeSection === "identity" && (
+                <div className="space-y-4 max-w-xl">
+                  <p className="text-sm text-gray-600">
+                    What this project is called, and how it is referenced on grievances and reports.
+                  </p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Project name</label>
+                      <input
+                        value={nameVal}
+                        disabled={!canManageProjectCatalog}
+                        onChange={(e) => setNameVal(e.target.value)}
+                        onBlur={saveMeta}
+                        onKeyDown={(e) => e.key === "Enter" && saveMeta()}
+                        className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 disabled:opacity-60"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 block mb-1">Short code</label>
+                      <input
+                        value={shortCodeVal}
+                        disabled={!canManageProjectCatalog}
+                        onChange={(e) => setShortCodeVal(normalizeEntityCodeInput(e.target.value))}
+                        onBlur={() => void saveShortCode()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") void saveShortCode();
+                          if (e.key === "Escape") setShortCodeVal(p.short_code);
+                        }}
+                        maxLength={ENTITY_CODE_MAX_LEN}
+                        className="w-full font-mono text-sm border border-gray-300 rounded px-2 py-1.5 disabled:opacity-60"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 block mb-1">Description</label>
+                    <textarea
+                      value={descVal}
+                      disabled={!canManageProjectCatalog}
+                      onChange={(e) => setDescVal(e.target.value)}
+                      onBlur={saveMeta}
+                      rows={2}
+                      placeholder="What this project covers…"
+                      className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 resize-none disabled:opacity-60"
+                    />
+                  </div>
+                  <p className="text-xs text-gray-400">Changes save when you leave the field.</p>
+                </div>
+              )}
+
+              {/* ── Grievance workflows ── */}
+              {activeSection === "workflows" && (
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600 max-w-2xl">
+                    One default workflow is required. Add more workflows to send different grievances to
+                    different officers.
+                    {lockTypeConfig
+                      ? " Defaults come from the project type; super admin may override."
+                      : " Edit a workflow’s levels under Settings → Workflows, roles & permissions."}
+                  </p>
+                  <ProjectWorkflowsEditor
+                    project={p}
+                    workflows={workflows}
+                    wfTemplates={wfTemplates}
+                    routingOptions={routingOptions}
+                    canEdit={canEditProjectWorkflows}
+                    canEditWorkflowTrack={canEditWorkflowTrack}
+                    canSeeSeah={!!canConfigureSensitive}
+                    lockTypeConfig={lockTypeConfig}
+                    flash={flash}
+                    onSaved={(slots) => {
+                      const defaultRow = slots.find((s) => s.is_default);
+                      const seahRow = slots.find((s) => s.workflow_track === "seah");
+                      const updated: ProjectItem = {
+                        ...p,
+                        workflow_slots: slots,
+                        standard_workflow_id: defaultRow?.workflow_id ?? null,
+                        seah_workflow_id: seahRow?.workflow_id ?? null,
+                      };
+                      setP(updated);
+                      onUpdated(updated);
+                      setGoLiveKey((k) => k + 1);
+                    }}
+                  />
+                </div>
+              )}
+
+              {/* ── Officer messaging ── */}
+              {activeSection === "messaging" && (
+                <div className="space-y-4 max-w-xl">
+                  <p className="text-sm text-gray-600">
+                    Optional. Officers get a link-only SMS when a grievance is assigned to them — no
+                    complainant details are included.
+                  </p>
+                  {!messaging ? (
+                    <p className="text-xs text-gray-400 italic">Loading…</p>
+                  ) : (
+                    <>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={messaging.sms_enabled}
+                          disabled={!canEditMessaging || messagingSaving}
+                          onChange={(e) => setMessaging({ ...messaging, sms_enabled: e.target.checked })}
+                        />
+                        Text officers when a grievance is assigned to them
+                      </label>
+                      {messaging.max_levels > 0 ? (
+                        <div className="space-y-2">
+                          <p className="text-xs font-medium text-gray-600">Which levels get the SMS</p>
+                          <div className="flex flex-wrap gap-2">
+                            {Array.from({ length: messaging.max_levels }, (_, i) => i + 1).map((level) => {
+                              const on = messaging.sms_levels.includes(level);
+                              const disabled = !canEditMessaging || !messaging.sms_enabled || messagingSaving;
+                              return (
+                                <button
+                                  key={level}
+                                  type="button"
+                                  disabled={disabled}
+                                  onClick={() => {
+                                    const next = on
+                                      ? messaging.sms_levels.filter((l) => l !== level)
+                                      : [...messaging.sms_levels, level].sort((a, b) => a - b);
+                                    setMessaging({ ...messaging, sms_levels: next });
+                                  }}
+                                  className={`text-xs rounded-full border px-3 py-1 disabled:opacity-40 ${
+                                    on
+                                      ? "bg-blue-50 border-blue-200 text-blue-700 font-semibold"
+                                      : "bg-white border-gray-300 text-gray-600"
+                                  }`}
+                                >
+                                  Level {level}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-xs text-gray-400">
+                            Officers need a phone number in their profile to receive it.
+                          </p>
+                        </div>
+                      ) : (
+                        <p className="text-xs text-amber-700">
+                          Choose a workflow first — the levels come from it.
+                        </p>
+                      )}
+                      {canEditMessaging && (
                         <button
                           type="button"
-                          onClick={() => setOfficerModalOrg({
-                            id: po.organization_id,
-                            name: orgName,
-                          })}
-                          className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                          disabled={messagingSaving || messaging.max_levels === 0}
+                          onClick={async () => {
+                            setMessagingSaving(true);
+                            try {
+                              const saved = await patchProjectMessaging(p.project_id, {
+                                sms_enabled: messaging.sms_enabled,
+                                sms_levels: messaging.sms_levels,
+                                whatsapp_levels: messaging.whatsapp_levels,
+                              });
+                              setMessaging(saved);
+                              setGoLiveKey((k) => k + 1);
+                              flash("Saved ✓");
+                            } catch (e: unknown) {
+                              flash(friendlyError(e));
+                            } finally {
+                              setMessagingSaving(false);
+                            }
+                          }}
+                          className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
                         >
-                          Add officer
+                          {messagingSaving ? "Saving…" : "Save"}
                         </button>
-                      </td>
-                      <td className="px-3 py-2.5 text-right">
-                        <button onClick={() => handleRemoveOrg(po.organization_id)} disabled={working}
-                          className="text-gray-300 hover:text-red-500 text-lg leading-none disabled:opacity-40">×</button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
 
-        <ProjectActorAddRow
-          actorRoles={projectActorRoles}
-          orgs={orgs}
-          defaultCountryCode={p.country_code || "NP"}
-          excludeOrganizationIds={linkedOrgIds}
-          working={working}
-          onOrganizationCreated={onOrganizationCreated}
-          onAdd={linkProjectActor}
-        />
+              {/* ── Partner organizations ── */}
+              {activeSection === "actors" && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3 max-w-2xl">
+                    Add each partner organization and its role on this project. Use{" "}
+                    <span className="font-medium">+ New organization</span> if it is not in the list yet, then{" "}
+                    <span className="font-medium">Add officer</span> to invite or scope someone for it.
+                  </p>
+
+                  {p.organizations.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic mb-3">No partner organizations yet</p>
+                  ) : (
+                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-w-xl">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-slate-50 text-left border-b border-gray-200">
+                            <th className="px-3 py-2 text-xs font-medium text-gray-500 w-1/2">Organization</th>
+                            <th className="px-3 py-2 text-xs font-medium text-gray-500">Role on project</th>
+                            <th className="px-3 py-2 text-xs font-medium text-gray-500 w-24">Officer</th>
+                            <th className="px-3 py-2 w-8" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {p.organizations.map((po) => {
+                            const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
+                            const roleDef = projectActorRoles.find((r) => r.key === po.org_role);
+                            const roleColor = po.org_role ? orgRoleBadge(po.org_role) : "";
+                            return (
+                              <tr key={po.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
+                                <td className="px-3 py-2.5 font-medium text-gray-800">{orgName}</td>
+                                <td className="px-3 py-2.5">
+                                  <select
+                                    value={po.org_role ?? ""}
+                                    onChange={(e) => handleRoleChange(po.organization_id, e.target.value || null)}
+                                    disabled={working}
+                                    className={`text-xs px-2 py-1 rounded border font-medium focus:outline-none focus:ring-1 focus:ring-blue-300 ${
+                                      roleDef ? roleColor : "text-gray-400 border-gray-200 bg-white"
+                                    }`}
+                                  >
+                                    <option value="">— no role —</option>
+                                    {projectActorRoles.map((r) => (
+                                      <option key={r.key} value={r.key}>{r.label}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setOfficerModalOrg({ id: po.organization_id, name: orgName })}
+                                    className="text-xs text-blue-600 hover:underline whitespace-nowrap"
+                                  >
+                                    Add officer
+                                  </button>
+                                </td>
+                                <td className="px-3 py-2.5 text-right">
+                                  <button onClick={() => handleRemoveOrg(po.organization_id)} disabled={working}
+                                    className="text-gray-300 hover:text-red-500 text-lg leading-none disabled:opacity-40">×</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  <ProjectActorAddRow
+                    actorRoles={projectActorRoles}
+                    orgs={orgs}
+                    defaultCountryCode={p.country_code || "NP"}
+                    excludeOrganizationIds={linkedOrgIds}
+                    working={working}
+                    onOrganizationCreated={onOrganizationCreated}
+                    onAdd={linkProjectActor}
+                  />
+                </div>
+              )}
+
+              {/* ── Project-wide staffing ── */}
+              {activeSection === "staffing" && (
+                <ProjectCastSection
+                  project={p}
+                  orgs={orgs}
+                  onChanged={() => { void loadCastCoverage(); setGoLiveKey((k) => k + 1); }}
+                />
+              )}
+
+              {/* ── Locations ── */}
+              {activeSection === "locations" && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Search for the provinces, districts or municipalities this project covers. Linking a
+                    district covers its municipalities.
+                  </p>
+                  {locError && <p className="text-xs text-red-600 mb-2">{locError}</p>}
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {p.location_codes.length === 0 && (
+                      <span className="text-xs text-gray-400 italic">No locations linked yet. Search to add one.</span>
+                    )}
+                    {p.location_codes.map((code) => (
+                      <span key={code} className="flex items-center gap-1.5 text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full">
+                        {code}
+                        <button onClick={() => handleRemoveLoc(code)} disabled={working}
+                          className="text-blue-400 hover:text-red-500 leading-none disabled:opacity-50">×</button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="max-w-sm">
+                    <LocationSearch
+                      country={p.country_code || "NP"}
+                      placeholder="Search province, district or municipality…"
+                      excludeCodes={p.location_codes}
+                      onSelect={(code) => handleAddLoc(code)}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* ── Packages (lots) ── */}
+              {activeSection === "packages" && (
+                <div>
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <p className="text-sm text-gray-600 max-w-2xl">
+                      Lots or contracts within this project. A lot can use different officers from the rest
+                      of the project — set that on the lot itself.
+                    </p>
+                    <button
+                      onClick={() => setShowCreatePkg(true)}
+                      className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition font-medium shrink-0"
+                    >
+                      + Add a lot
+                    </button>
+                  </div>
+
+                  {showCreatePkg && (
+                    <PackageCreateModal
+                      projectId={p.project_id}
+                      existingCodes={packages.map((pk) => pk.package_code)}
+                      onCreated={(pkg) => { setPackages((prev) => [...prev, pkg]); setShowCreatePkg(false); setExpandedPkg(pkg.package_id); }}
+                      onClose={() => setShowCreatePkg(false)}
+                    />
+                  )}
+
+                  {pkgLoading ? (
+                    <p className="text-sm text-gray-400 animate-pulse">Loading…</p>
+                  ) : packages.length === 0 ? (
+                    <p className="text-xs text-gray-400 italic">No lots yet.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {packages.map((pkg) => {
+                        const expanded = expandedPkg === pkg.package_id;
+                        return (
+                          <PackageRow
+                            key={pkg.package_id}
+                            project={p}
+                            projectId={p.project_id}
+                            pkg={pkg}
+                            orgs={orgs}
+                            actorRoles={projectActorRoles}
+                            expanded={expanded}
+                            needsActor={unstaffedActorPkgs.has(pkg.package_id)}
+                            onStaffingChanged={loadCastCoverage}
+                            onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
+                            onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
+                            onActorsChange={(organizations) =>
+                              setPackages((prev) =>
+                                prev.map((pk) => (pk.package_id === pkg.package_id ? { ...pk, organizations } : pk)),
+                              )
+                            }
+                            onAddLoc={(code) => handleAddPkgLoc(pkg.package_id, code)}
+                            onRemoveLoc={(code) => handleRemovePkgLoc(pkg.package_id, code)}
+                          />
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* ── Action bar: walk setup in order ── */}
+          <div className="sticky bottom-3 mt-3 rounded-lg border border-gray-200 bg-white px-4 py-2.5 flex flex-wrap items-center gap-3">
+            <p className="text-[11px] text-gray-400 flex-1 min-w-[220px]">
+              Each section saves on its own — use <span className="font-semibold text-gray-500">Next</span> to
+              walk setup in order, or pick any section on the left.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                disabled={!prevSection}
+                onClick={() => prevSection && goToSection(prevSection)}
+                className="text-sm px-3 py-1.5 rounded border border-gray-300 text-gray-600 hover:bg-gray-50 disabled:opacity-40"
+              >
+                ← Back
+              </button>
+              <button
+                type="button"
+                disabled={!nextSection}
+                onClick={() => nextSection && goToSection(nextSection)}
+                className="text-sm px-3 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       {officerModalOrg && (
@@ -643,107 +852,6 @@ export function ProjectEditor({
           onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); }}
         />
       )}
-
-      {/* Locations */}
-      <div ref={(el) => { sectionRefs.current.locations = el; }}>
-        <h3 className="text-sm font-semibold text-gray-700 mb-1">Linked locations</h3>
-        <p className="text-xs text-gray-400 mb-3">
-          Search for the provinces, districts or municipalities this project covers.
-        </p>
-        {locError && <p className="text-xs text-red-500 mb-2">{locError}</p>}
-        <div className="flex flex-wrap gap-2 mb-3">
-          {p.location_codes.length === 0 && <span className="text-xs text-gray-400 italic">No locations linked</span>}
-          {p.location_codes.map((code) => (
-            <span key={code} className="flex items-center gap-1.5 text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full">
-              {code}
-              <button onClick={() => handleRemoveLoc(code)} disabled={working}
-                className="text-blue-400 hover:text-red-500 leading-none disabled:opacity-50">×</button>
-            </span>
-          ))}
-        </div>
-        <div className="max-w-sm">
-          <LocationSearch
-            country={p.country_code || "NP"}
-            placeholder="Search province, district or municipality…"
-            excludeCodes={p.location_codes}
-            onSelect={(code) => handleAddLoc(code)}
-          />
-        </div>
-      </div>
-
-      {/* Packages (lot-level actors + locations) */}
-      <div ref={(el) => { sectionRefs.current.staffing = el; }} className="mt-8 pt-6 border-t border-gray-100">
-        <ProjectCastSection project={p} orgs={orgs} onChanged={loadCastCoverage} />
-      </div>
-
-      <div ref={(el) => { sectionRefs.current.packages = el; }} className="mt-8 pt-6 border-t border-gray-100">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <h3 className="text-sm font-semibold text-gray-700">Packages</h3>
-            <p className="text-xs text-gray-500 mt-0.5 max-w-2xl">
-              Lots, contracts, or work packages within this project. Assign organizations and roles per package
-              when they apply to one lot only (e.g. a CSC or engineering team on a single package).
-            </p>
-          </div>
-          <button
-            onClick={() => setShowCreatePkg(true)}
-            className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition font-medium shrink-0"
-          >
-            + New Package
-          </button>
-        </div>
-
-        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900 max-w-2xl" role="note">
-          <span className="font-medium">Package overrides project:</span>{" "}
-          An actor assigned on a package applies only to that lot and replaces the project-wide actor
-          with the <em>same role</em> on that package only. Example: CSC&nbsp;A project-wide and CSC&nbsp;B on
-          package&nbsp;3 → CSC&nbsp;A on every package except package&nbsp;3, where CSC&nbsp;B applies.
-        </div>
-
-        {showCreatePkg && (
-          <PackageCreateModal
-            projectId={p.project_id}
-            existingCodes={packages.map((pk) => pk.package_code)}
-            onCreated={(pkg) => { setPackages((prev) => [...prev, pkg]); setShowCreatePkg(false); setExpandedPkg(pkg.package_id); }}
-            onClose={() => setShowCreatePkg(false)}
-          />
-        )}
-
-        {pkgLoading ? (
-          <p className="text-sm text-gray-400 animate-pulse">Loading…</p>
-        ) : packages.length === 0 ? (
-          <p className="text-xs text-gray-400 italic">No packages defined yet.</p>
-        ) : (
-          <div className="space-y-2">
-            {packages.map((pkg) => {
-              const expanded = expandedPkg === pkg.package_id;
-              return (
-                <PackageRow
-                  key={pkg.package_id}
-                  project={p}
-                  projectId={p.project_id}
-                  pkg={pkg}
-                  orgs={orgs}
-                  actorRoles={projectActorRoles}
-                  expanded={expanded}
-                  needsActor={unstaffedActorPkgs.has(pkg.package_id)}
-                  onStaffingChanged={loadCastCoverage}
-                  onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
-                  onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
-                  onActorsChange={(organizations) =>
-                    setPackages((prev) =>
-                      prev.map((pk) => (pk.package_id === pkg.package_id ? { ...pk, organizations } : pk)),
-                    )
-                  }
-                  onAddLoc={(code) => handleAddPkgLoc(pkg.package_id, code)}
-                  onRemoveLoc={(code) => handleRemovePkgLoc(pkg.package_id, code)}
-                />
-              );
-            })}
-          </div>
-        )}
-      </div>
-
     </div>
   );
 }

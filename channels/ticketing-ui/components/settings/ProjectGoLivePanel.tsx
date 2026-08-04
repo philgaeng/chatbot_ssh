@@ -1,7 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getProjectGoLive, type GoLiveReport } from "@/lib/api";
+/**
+ * <ProjectGoLivePanel> — the console's "Overview & go-live" pane (ui/04).
+ *
+ * The report is owned by <ProjectEditor> because the rail needs it too — one fetch, two
+ * consumers, so the dots and the checklist can never disagree. Checks are grouped, and a
+ * blocked one carries the words "Blocks go-live" as well as the red mark (ui/05 §2 rule 6).
+ */
+import type { GoLiveReport } from "@/lib/api";
 
 const GROUP_LABELS: Record<string, string> = {
   routing: "Routing",
@@ -11,112 +17,101 @@ const GROUP_LABELS: Record<string, string> = {
   metadata: "Project details",
 };
 
-function statusDot(status: string) {
-  if (status === "pass") return "bg-green-500";
-  if (status === "fail") return "bg-red-500";
-  if (status === "warn") return "bg-amber-400";
-  return "bg-gray-300";
-}
-
 export function ProjectGoLivePanel({
-  projectId,
+  report,
+  loading,
+  error,
+  onRefresh,
   onJumpSection,
 }: {
-  projectId: string;
+  report: GoLiveReport | null;
+  loading: boolean;
+  error: string;
+  onRefresh: () => void;
   onJumpSection?: (section: string) => void;
 }) {
-  const [report, setReport] = useState<GoLiveReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const r = await getProjectGoLive(projectId);
-      setReport(r);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load go-live status");
-      setReport(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   if (loading) {
     return (
-      <div className="mb-6 rounded-lg border border-gray-200 bg-slate-50/80 px-4 py-3 text-sm text-gray-500 animate-pulse">
+      <div className="rounded-lg border border-gray-200 bg-slate-50/80 px-4 py-3 text-sm text-gray-500 animate-pulse">
         Checking go-live readiness…
       </div>
     );
   }
-
   if (error) {
     return (
-      <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
     );
   }
-
   if (!report) return null;
 
   const groups = [...new Set(report.checks.map((c) => c.group))];
+  const blockers = report.checks.filter((c) => c.severity === "block" && c.status === "fail");
 
   return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white overflow-hidden max-w-3xl">
-      <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-800">Go-live status</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {report.summary.pass} ready · {report.summary.warn} to review
-            {report.summary.fail > 0 ? ` · ${report.summary.fail} blocks go-live` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <span className={report.can_activate ? "text-green-700 font-medium" : "text-red-700 font-medium"}>
-            {report.can_activate ? "Can activate" : "Cannot activate yet"}
-          </span>
-          <span className={report.can_accept_tickets ? "text-green-700 font-medium" : "text-red-700 font-medium"}>
-            {report.can_accept_tickets ? "Accepting grievances" : "Not accepting grievances"}
-          </span>
-          <button type="button" onClick={() => void load()} className="text-blue-600 hover:underline">
-            Refresh
-          </button>
-        </div>
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <p className="text-sm text-gray-600 max-w-xl">
+          {blockers.length === 0
+            ? "Everything needed to accept grievances is in place."
+            : blockers.length === 1
+              ? "One check must pass before this project can accept grievances."
+              : `${blockers.length} checks must pass before this project can accept grievances.`}
+        </p>
+        <button type="button" onClick={onRefresh} className="text-xs text-blue-600 hover:underline shrink-0">
+          Check again
+        </button>
       </div>
 
-      <div className="divide-y divide-gray-100">
+      <div className="space-y-5">
         {groups.map((group) => (
-          <div key={group} className="px-4 py-2.5">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+          <div key={group}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
               {GROUP_LABELS[group] ?? group}
             </p>
             <ul className="space-y-1.5">
               {report.checks
                 .filter((c) => c.group === group)
-                .map((c) => (
-                  <li key={c.id} className="flex items-start gap-2 text-sm">
-                    <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${statusDot(c.status)}`} />
-                    <span className="flex-1 text-gray-700">
-                      <span className="font-medium">{c.label}</span>
-                      <span className="text-gray-500"> — {c.message}</span>
-                    </span>
-                    {c.section && onJumpSection && (
-                      <button
-                        type="button"
-                        onClick={() => onJumpSection(c.section!)}
-                        className="text-xs text-blue-600 hover:underline shrink-0"
+                .map((c) => {
+                  const blocked = c.severity === "block" && c.status === "fail";
+                  const ok = c.status === "pass";
+                  return (
+                    <li
+                      key={c.id}
+                      className={`flex items-start gap-3 rounded-md border px-3 py-2.5 ${
+                        blocked ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"
+                      }`}
+                    >
+                      <span
+                        className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[11px] font-bold text-white ${
+                          ok ? "bg-green-600" : blocked ? "bg-red-600" : "bg-amber-400"
+                        }`}
+                        aria-hidden
                       >
-                        Fix
-                      </button>
-                    )}
-                  </li>
-                ))}
+                        {ok ? "✓" : blocked ? "✕" : "!"}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-[13.5px] font-semibold text-gray-900">
+                          {c.label}
+                          {blocked && (
+                            <span className="ml-2 text-[11px] font-bold text-red-600 uppercase tracking-wide">
+                              Blocks go-live
+                            </span>
+                          )}
+                        </span>
+                        <span className="block text-xs text-gray-600">{c.message}</span>
+                      </span>
+                      {c.section && onJumpSection && !ok && (
+                        <button
+                          type="button"
+                          onClick={() => onJumpSection(c.section!)}
+                          className="text-xs font-semibold text-blue-600 hover:underline shrink-0 px-1"
+                        >
+                          Fix →
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
             </ul>
           </div>
         ))}
