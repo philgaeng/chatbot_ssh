@@ -247,9 +247,9 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 
 **Implemented:** `ticketing.services.project_routing.resolve_ticket_organization()`.
 
-`resolve_ticket_organization()` **prefers the project's `implementing_agency_org_id`** (the accountable ministry, [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)); for projects created **before** that field it falls back to the legacy `routing_org_role` + `project_organizations` / `package_organizations` lookup. The legacy path is **deprecated but still present** (back-compat).
+`resolve_ticket_organization()` resolves, in order: the **package's** organization for the routing role (a lot overrides the project) → the **project's** organization for the role the type's `routing_org_role` designates → `implementing_agency_org_id` as the legacy fallback.
 
-> **To invert (not done).** Under [DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) the ticket's organization comes from the **project type's `routing_org_role` slot** — the role the author designated — with `implementing_agency_org_id` kept only as the fallback for projects created before types. The order below is therefore **as-built, and back to front** relative to the decision. It is safe: `routing_org_role` already resolves through the same helper, and the legacy field is still populated. Change it in the slice that deletes go-live A3/A5.
+> **Inverted 2026-08-04 — the code now matches [DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The ticket's organization comes from the **project type's `routing_org_role` slot** — the role the author designated — with `implementing_agency_org_id` kept only as the fallback for projects with no type, or a typed project whose anchor slot is not filled. Pinned by `test_routing_prefers_the_author_designated_slot`.
 
 **Call sites:**
 

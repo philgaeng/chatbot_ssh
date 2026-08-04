@@ -86,7 +86,7 @@ Policy helpers (no DB): `ticketing/services/grievance_sync_policy.py`.
 
 1. **Prefer** the project's `implementing_agency_org_id` ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
 2. **Legacy fallback** (projects predating that field): `package_organizations` (if `package_id`) then `project_organizations` for the routing role (default `implementing_agency`) — deprecated.
-   > Reads back-to-front relative to [DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md), which makes the type's `routing_org_role` slot primary and this field the fallback. As-built order kept until that slice lands.
+   > **Inverted 2026-08-04:** the type's `routing_org_role` slot is now primary and this field is the fallback ([DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)).
 
 Used on **ticket create** and on **field-officer invite / add scope** (`validate_jurisdiction` overrides wrong org, e.g. contractor vs DOR). Country/global observer roles (`jurisdiction_mode=country`) keep the submitted org (e.g. ADB).
 

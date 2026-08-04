@@ -219,8 +219,13 @@ def resolve_ticket_organization(
     Commercial organization that owns ticket routing for intake / auto-assign.
 
     Priority:
-      1. Package actor for routing role (overrides project-wide for that role)
-      2. Project actor for routing role (from project type, default implementing_agency)
+      1. The package's organization for the routing role (a lot overrides the project)
+      2. The project's organization for the routing role — the slot the project type's
+         ``routing_org_role`` designates
+      3. ``projects.implementing_agency_org_id`` — legacy fallback for projects with no type
+
+    Inverted 2026-08-04: the author-designated slot now wins over the legacy field
+    (DECISION-author-defined-slots §3.1).
 
     location_code is accepted for future package-from-location resolution; unused today.
     """
@@ -255,15 +260,23 @@ def resolve_ticket_organization(
 
 
 def _project_routing_org(db: Session, project: Project) -> Optional[str]:
-    """Project-wide routing anchor: the implementing agency (doc 13 / DECISION §2).
+    """Project-wide routing anchor — the organization filling the slot the AUTHOR designated.
 
-    Prefers ``projects.implementing_agency_org_id``; falls back to the legacy
-    ``org_role``/``routing_org_role`` lookup for projects created before the field existed.
+    Order inverted 2026-08-04 (DECISION-author-defined-slots §3.1). The anchor is now the
+    project type's ``routing_org_role`` — a key the author picks from their own ``actor_roles``
+    catalog — so a client who calls it "Executing Agency" or "Ward Office" gets their word with
+    identical behaviour, and nothing in the product is hardcoded as "the implementing agency".
+
+    ``projects.implementing_agency_org_id`` stays as the **fallback**, for projects with no type
+    (the back-fill ``n0p2r4t6`` skips projects with no workflow links, so those still exist) and
+    for a typed project whose anchor slot is not filled yet. Same organization either way on
+    current data — this changes which path finds it, not what it finds.
     """
-    if project.implementing_agency_org_id:
-        return project.implementing_agency_org_id
     role = routing_org_role_for_project(db, project)
-    return _org_for_role_on_project(project, role)
+    from_slot = _org_for_role_on_project(project, role)
+    if from_slot:
+        return from_slot
+    return project.implementing_agency_org_id
 
 
 def routing_org_id_for_loaded_project(db: Session, project: Project) -> Optional[str]:

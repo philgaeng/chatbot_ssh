@@ -85,3 +85,48 @@ def test_rename_alongside_config_is_still_refused():
     """Renaming is free, but it cannot be used as a wrapper to smuggle a config change."""
     with pytest.raises(HTTPException):
         _require_editable(_FakeDB(2), "t", {"label", "routing_org_role"})
+
+
+# ── routing anchor order (DECISION-author-defined-slots §3.1) ─────────────────
+
+class _Org:
+    def __init__(self, organization_id: str, org_role: str):
+        self.organization_id = organization_id
+        self.org_role = org_role
+
+
+class _Project:
+    def __init__(self, orgs, legacy=None, type_key="t"):
+        self.organizations = orgs
+        self.implementing_agency_org_id = legacy
+        self.project_type_key = type_key
+
+
+def _resolve(monkeypatch, project, anchor_role="implementing_agency"):
+    import ticketing.services.project_routing as pr
+
+    monkeypatch.setattr(pr, "routing_org_role_for_project", lambda db, p: anchor_role)
+    return pr._project_routing_org(None, project)
+
+
+def test_anchor_comes_from_the_slot_the_author_designated(monkeypatch):
+    """The type names WHICH role anchors the ticket, so a client's own word works."""
+    p = _Project([_Org("ORG_WARD", "ward_office")], legacy="ORG_LEGACY")
+    assert _resolve(monkeypatch, p, anchor_role="ward_office") == "ORG_WARD"
+
+
+def test_slot_wins_over_the_legacy_field(monkeypatch):
+    """The inversion itself: same project, both present, the slot decides."""
+    p = _Project([_Org("ORG_SLOT", "implementing_agency")], legacy="ORG_LEGACY")
+    assert _resolve(monkeypatch, p) == "ORG_SLOT"
+
+
+def test_falls_back_to_the_legacy_field_when_the_slot_is_empty(monkeypatch):
+    """Projects with no type — the back-fill skips those with no workflow links — and typed
+    projects whose anchor slot is not filled yet must still route."""
+    p = _Project([], legacy="ORG_LEGACY", type_key=None)
+    assert _resolve(monkeypatch, p) == "ORG_LEGACY"
+
+
+def test_returns_none_when_neither_exists(monkeypatch):
+    assert _resolve(monkeypatch, _Project([], legacy=None)) is None

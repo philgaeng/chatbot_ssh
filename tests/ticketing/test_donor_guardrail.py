@@ -2,7 +2,8 @@
 
 Acceptance (DECISION §9):
 * implementing_agency rejects a non-gov/local-gov org.
-* Routing reads implementing_agency_org_id (prefers it over the legacy org_role link).
+* Routing reads the slot the project type designates (`routing_org_role` → `org_role` link),
+  with implementing_agency_org_id as the fallback — inverted 2026-08-04, see the test.
 * Go-live BLOCKS on donor-present-but-not-informed-at-last-step; passes once informed.
 * Donor auto-populates the last-step "Kept informed" cast; admin can trim to ≥1.
 * Go-live BLOCKS on any unstaffed standard workflow level (C5).
@@ -64,18 +65,24 @@ def test_validate_implementing_agency_rejects_unknown(db):
 
 # ── routing reads implementing_agency_org_id (DECISION §2, §9) ─────────────────
 
-def test_routing_prefers_implementing_agency_field(db, kl_road_project):
-    """routing_org_id_for_loaded_project returns the implementing_agency field, and it
-    wins over the legacy org_role='implementing_agency' link."""
-    assert kl_road_project.implementing_agency_org_id == ORG_DOR
+def test_routing_prefers_the_author_designated_slot(db, kl_road_project):
+    """The ticket's organization comes from the slot the project type designates
+    (`routing_org_role` → an `org_role` link), NOT from `implementing_agency_org_id`.
+
+    Inverted 2026-08-04 (DECISION-author-defined-slots §3.1). This test previously asserted
+    the opposite — "routing must follow the field, not org_role" — which was the July model,
+    where one hardcoded field was the anchor. The anchor is now a key the author picks from
+    their own catalog, so a client who calls it "Executing Agency" gets their word with
+    identical behaviour.
+    """
     assert routing_org_id_for_loaded_project(db, kl_road_project) == ORG_DOR
 
     original = kl_road_project.implementing_agency_org_id
     try:
-        # Point the field at a different org; routing must follow the field, not org_role.
+        # Point the legacy field elsewhere: routing must IGNORE it while the slot is filled.
         kl_road_project.implementing_agency_org_id = ORG_ADB
         db.flush()
-        assert routing_org_id_for_loaded_project(db, kl_road_project) == ORG_ADB
+        assert routing_org_id_for_loaded_project(db, kl_road_project) == ORG_DOR
     finally:
         kl_road_project.implementing_agency_org_id = original
         db.flush()
