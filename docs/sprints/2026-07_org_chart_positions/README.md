@@ -1,5 +1,7 @@
 # Sprint — July 2026: Org Chart & Positions
 
+> **▶ Current build entry point (2026-08-04):** [`HANDOVER-author-defined-slots-build.md`](HANDOVER-author-defined-slots-build.md) — what shipped, what's next, and the traps. Plan: [`DECISION-author-defined-slots.md`](DECISION-author-defined-slots.md).
+
 > **Status: PLANNED** · Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md) (Agreed design, not yet implemented)
 > Runs **in parallel with** [`2026-07_hardening`](../2026-07_hardening/) — see [§ Parallel-safety](#parallel-safety-with-the-hardening-sprint) for the two coordinated seams.
 > Goal: put the Nepal ministry org chart, position titles, and the position→role matrix into the system so setup admins stop minting one role per seat, and so officers appear as "SDE, Jhapa Division Office" instead of `site_safeguards_focal_person`.

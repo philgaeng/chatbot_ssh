@@ -6,6 +6,20 @@
 
 ---
 
+## 🔵 Author-defined slots — build in progress (2026-08-04)
+
+**Entry point: [`sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md`](sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md)** — what shipped, what's next, and the traps that cost time. Plan: `DECISION-author-defined-slots.md`.
+
+Shipped: the project console (ui/04 shell), author-named jobs per level
+(`tier_labels` + `required_tiers`, migration `j6l8n0p2`), binary go-live, project-type
+owner + freeze-when-bound (`l8n0p2r4`). Next: the type authoring UI, Partner organizations
+rendering the type's `actor_roles`, and the organization → type creation flow.
+
+**Do not delete go-live A3/A5 yet** — `project_types` is empty and every project is untyped,
+so B1 never runs and those two are the only organization gates that exist.
+
+---
+
 ## 🟠 Sensitive workflows — access slice SHIPPED 2026-08-02; rename outstanding (`DECISION-sensitive-workflows.md`)
 
 SEAH stops being a `workflow_type` track and becomes **an ordinary optional workflow with `is_sensitive`**. Specs updated (09/11/12/13, ui/04, ui/06).
