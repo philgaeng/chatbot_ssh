@@ -1,6 +1,6 @@
 # Handover — author-defined slots: what shipped, what's next
 
-**From:** session of 2026-08-04. **Branch:** `integration/stage`, 23 commits, nothing pushed.
+**From:** session of 2026-08-04. **Branch:** `integration/stage`, 26 commits, nothing pushed.
 **Suite:** 688 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
 
 ---
@@ -46,11 +46,13 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 | 4 Consumption — staffing | ✅ · **Partner organizations ⬜** |
 | 5 Creation flow (org → filtered types) | ⬜ |
 | 6 Go-live A3/A5 deletion | ⬜ unblocked — see §4.1 |
-| 7 Docs | partial (12 §2 and followup §6.1 closed) |
+| 7 Docs | ✅ specs reconciled — 12 §2, 13 §2/§3/§5B/§7, 14 §4, 11, 10, 04, 03 + followup §6.1 |
 
 ---
 
 ## 3. Next slice
+
+**Spec for all three: [14 §4](../../ticketing_system/14_platform_settings.md) (what a type is, the freeze table) and [13 §2/§3](../../ticketing_system/13_projects_and_packages.md) (where filled values live).**
 
 ### 3.1 Type authoring UI — `components/settings/ProjectTypesTab.tsx`
 Today it only *counts* entries ("3 actor roles"). It needs to edit:
