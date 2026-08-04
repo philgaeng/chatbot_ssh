@@ -1,7 +1,7 @@
 # Handover — author-defined slots: what shipped, what's next
 
-**From:** session of 2026-08-04. **Branch:** `integration/stage`, 19 commits, nothing pushed.
-**Suite:** 685 passed, 5 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
+**From:** session of 2026-08-04. **Branch:** `integration/stage`, 23 commits, nothing pushed.
+**Suite:** 688 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
 
 ---
 
@@ -59,7 +59,7 @@ Today it only *counts* entries ("3 actor roles"). It needs to edit:
 - **organization roles** — `actor_roles[]`: label · description · required · required_package. This is the catalog the whole decision turns on.
 - **`routing_org_role`** — a picker over the type's own `actor_roles` keys. It decides which organization a ticket is stamped with; it is **not** a hardcoded "implementing agency".
 - **owner** — `org_admin` authors within its subtree; `super_admin` anywhere.
-- **frozen state** — when `bound_project_count > 0`, show a read-only summary + **Use as template** (`POST /project-types/{key}/duplicate`), never a disabled form. The API already returns the count and enforces the 409.
+- **frozen state** — when `active_project_count > 0`, show a read-only summary + **Use as template** (`POST /project-types/{key}/duplicate`), never a disabled form. The API already returns the count and enforces the 409.
 
 ### 3.2 Partner organizations renders the catalog
 `ProjectPartnersSection.tsx` currently hardcodes agency + donors. Replace with one block per `actor_roles` entry, in `sort_order`: label as heading, description as help, `required` marked, filled from `project_organizations.org_role`. The `routing_org_role` slot is pre-filled by the creation flow. Officers are still not assigned here.
@@ -94,7 +94,10 @@ The Workflows tab's step accordion resisted every selector I tried; verifying th
 ### 4.4 Two staffing paths coexist and disagree
 `officer_scopes` rows carry **two** `role_key` shapes: the staffing screen mints `wf:{workflow}:{step}:{tier}`, while seeds and the older invite flow use the step's **named role** — which is what go-live C1/C5 read. Before I reconciled it, the screen said "Not staffed" on every level of a project the checklist called fully staffed. `CastStaffing` now counts both and marks role-path coverage `· by role`. Anything new that reads staffing must handle both.
 
-### 4.5 Ports, and don't sweep the working tree
+### 4.5 Reactivating a project is gated, so "deactivate to test" is one-way
+I deactivated KL Road to prove the freeze relaxation, then could not turn it back on: `PATCH is_active:true` is refused while go-live has blockers, which is the binary-go-live change working. Ten tests failed on `Project 'KL_ROAD' is not active` until I restored the flag with SQL. Test that path on a throwaway project, or restore with `UPDATE ticketing.projects SET is_active = true`.
+
+### 4.6 Ports, and don't sweep the working tree
 UI **:3001** (`grm_ui`), API **:5002** (`ticketing_api`, `/docs` for OpenAPI), backend :5001, nginx :8080 (`/grm/` proxies to 3001). In bypass mode `curl` against :5002 works unauthenticated — that is how §5 below verifies things.
 
 `docs/_starter_kit/` and `docs/engineering/` are the user's untracked work. **Never `git add -A docs/`** — I did, and had to reset. Stage paths explicitly.
