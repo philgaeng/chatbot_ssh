@@ -1,7 +1,10 @@
 "use client";
 
 /**
- * <ProjectCastSection> — the Project-wide (shared) cast block (DESIGN-cast-model §3.6).
+ * <ProjectCastSection> — the "Project-wide staffing" pane (DESIGN-cast-model §3.6).
+ *
+ * "Cast" is the internal word for the set of roles on a level; it never reaches the screen
+ * (ui/05 §4) — on screen this is "staffing" and "who works each level".
  *
  * Staff the shared cast ONCE here — the upper ladder (L2/L3/GRC/Legal) + observers that every
  * package inherits. Per-lot overrides live inside each package (see <CastStaffing> embedded in
@@ -43,10 +46,10 @@ export function ProjectCastSection({
   if (boundWorkflows.length === 0) {
     return (
       <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-5">
-        <h3 className="text-base font-semibold text-gray-800">Project-wide cast</h3>
+        <h3 className="text-base font-semibold text-gray-800">Staffing</h3>
         <p className="mt-2 text-sm text-gray-500">
-          Link a published workflow above (Grievance workflows) first — then staff the shared cast
-          here and override per lot inside each package.
+          Choose a workflow first, under Grievance workflows. Then put officers on its levels
+          here — every lot uses these officers unless you set different ones on the lot.
         </p>
       </div>
     );
@@ -56,10 +59,10 @@ export function ProjectCastSection({
     <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-gray-800">Project-wide cast — the shared staffing</h3>
+          <h3 className="text-base font-semibold text-gray-800">Who works each level</h3>
           <p className="mt-1 text-sm text-gray-500">
-            Staff the shared ladder (L2 / L3 / GRC / Legal) + observers once — every lot inherits
-            it. Override just the field tiers per lot inside each package below.
+            Set these officers once — every lot uses them unless you set a different officer on
+            that lot, under Packages.
           </p>
         </div>
         {boundWorkflows.length > 1 && (

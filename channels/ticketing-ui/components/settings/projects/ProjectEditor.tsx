@@ -17,9 +17,6 @@ import {
   getProjectGoLive,
   type GoLiveReport,
   updateProject,
-  addProjectOrg,
-  removeProjectOrg,
-  updateProjectOrgRole,
   addProjectLocation,
   removeProjectLocation,
   listPackages,
@@ -42,22 +39,20 @@ import {
   type WorkflowRoutingOptions,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { orgRoleBadge } from "@/lib/design-tokens";
 import {
   normalizeEntityCodeInput,
   validateEntityCode,
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
-import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 import { ProjectGoLivePanel } from "@/components/settings/ProjectGoLivePanel";
-import { ProjectActorAddRow } from "@/components/settings/ProjectActorAddRow";
 import { ProjectCastSection } from "@/components/settings/projects/ProjectCastSection";
 import { ProjectWorkflowsEditor } from "@/components/settings/workflows/ProjectWorkflowsEditor";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { PackageRow } from "@/components/settings/projects/PackageRow";
 import { PackageCreateModal } from "@/components/settings/projects/PackageCreateModal";
 import { ProjectConsoleRail } from "@/components/settings/projects/ProjectConsoleRail";
+import { ProjectPartnersSection } from "@/components/settings/projects/ProjectPartnersSection";
 import {
   PROJECT_SECTIONS,
   SECTION_ORDER,
@@ -224,38 +219,6 @@ export function ProjectEditor({
     }
   }
 
-  async function linkProjectActor(organizationId: string, orgRole: string) {
-    setWorking(true);
-    try {
-      const item = await addProjectOrg(p.project_id, organizationId, orgRole || null);
-      setP({ ...p, organizations: [...p.organizations, item] });
-      flash("Project actor added ✓");
-    } catch (e: unknown) {
-      flash(friendlyError(e));
-      throw e;
-    } finally {
-      setWorking(false);
-    }
-  }
-
-  async function handleRemoveOrg(orgId: string) {
-    setWorking(true);
-    try {
-      await removeProjectOrg(p.project_id, orgId);
-      setP({ ...p, organizations: p.organizations.filter((o) => o.organization_id !== orgId) });
-      flash("Removed ✓");
-    } catch { flash("Failed"); }
-    setWorking(false);
-  }
-
-  async function handleRoleChange(orgId: string, newRole: string | null) {
-    try {
-      const updated = await updateProjectOrgRole(p.project_id, orgId, newRole);
-      setP({ ...p, organizations: p.organizations.map((o) => o.organization_id === orgId ? updated : o) });
-      flash("Role updated ✓");
-    } catch { flash("Failed"); }
-  }
-
   async function handleAddLoc(code: string) {
     if (!code) return;
     setWorking(true); setLocError("");
@@ -284,7 +247,6 @@ export function ProjectEditor({
   const [pkgLoading, setPkgLoading]       = useState(true);
   const [showCreatePkg, setShowCreatePkg] = useState(false);
   const [expandedPkg, setExpandedPkg]     = useState<string | null>(null);
-  const [officerModalOrg, setOfficerModalOrg] = useState<{ id: string; name: string } | null>(null);
   // Lots with no L1 Actor coverage (neither package-specific nor project-wide) — drives the
   // "⚠ L1 actor unstaffed" header badge (go-live C1/C5).
   const [unstaffedActorPkgs, setUnstaffedActorPkgs] = useState<Set<string>>(new Set());
@@ -367,7 +329,6 @@ export function ProjectEditor({
     } catch { flash("Failed"); }
   }
 
-  const linkedOrgIds = new Set(p.organizations.map((o) => o.organization_id));
   return (
     <div ref={topRef}>
       {/* ── Top bar: what this project is, and whether it can go live ── */}
@@ -634,80 +595,13 @@ export function ProjectEditor({
 
               {/* ── Partner organizations ── */}
               {activeSection === "actors" && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-3 max-w-2xl">
-                    Add each partner organization and its role on this project. Use{" "}
-                    <span className="font-medium">+ New organization</span> if it is not in the list yet, then{" "}
-                    <span className="font-medium">Add officer</span> to invite or scope someone for it.
-                  </p>
-
-                  {p.organizations.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic mb-3">No partner organizations yet</p>
-                  ) : (
-                    <div className="border border-gray-200 rounded-lg overflow-hidden mb-3 max-w-xl">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 text-left border-b border-gray-200">
-                            <th className="px-3 py-2 text-xs font-medium text-gray-500 w-1/2">Organization</th>
-                            <th className="px-3 py-2 text-xs font-medium text-gray-500">Role on project</th>
-                            <th className="px-3 py-2 text-xs font-medium text-gray-500 w-24">Officer</th>
-                            <th className="px-3 py-2 w-8" />
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {p.organizations.map((po) => {
-                            const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
-                            const roleDef = projectActorRoles.find((r) => r.key === po.org_role);
-                            const roleColor = po.org_role ? orgRoleBadge(po.org_role) : "";
-                            return (
-                              <tr key={po.organization_id} className="border-t border-gray-100 hover:bg-gray-50">
-                                <td className="px-3 py-2.5 font-medium text-gray-800">{orgName}</td>
-                                <td className="px-3 py-2.5">
-                                  <select
-                                    value={po.org_role ?? ""}
-                                    onChange={(e) => handleRoleChange(po.organization_id, e.target.value || null)}
-                                    disabled={working}
-                                    className={`text-xs px-2 py-1 rounded border font-medium focus:outline-none focus:ring-1 focus:ring-blue-300 ${
-                                      roleDef ? roleColor : "text-gray-400 border-gray-200 bg-white"
-                                    }`}
-                                  >
-                                    <option value="">— no role —</option>
-                                    {projectActorRoles.map((r) => (
-                                      <option key={r.key} value={r.key}>{r.label}</option>
-                                    ))}
-                                  </select>
-                                </td>
-                                <td className="px-3 py-2.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => setOfficerModalOrg({ id: po.organization_id, name: orgName })}
-                                    className="text-xs text-blue-600 hover:underline whitespace-nowrap"
-                                  >
-                                    Add officer
-                                  </button>
-                                </td>
-                                <td className="px-3 py-2.5 text-right">
-                                  <button onClick={() => handleRemoveOrg(po.organization_id)} disabled={working}
-                                    className="text-gray-300 hover:text-red-500 text-lg leading-none disabled:opacity-40">×</button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-
-                  <ProjectActorAddRow
-                    actorRoles={projectActorRoles}
-                    orgs={orgs}
-                    defaultCountryCode={p.country_code || "NP"}
-                    excludeOrganizationIds={linkedOrgIds}
-                    working={working}
-                    onOrganizationCreated={onOrganizationCreated}
-                    onAdd={linkProjectActor}
-                  />
-                </div>
+                <ProjectPartnersSection
+                  project={p}
+                  orgs={orgs}
+                  canEdit={canManageProjectCatalog}
+                  flash={flash}
+                  onUpdated={(updated) => { setP(updated); onUpdated(updated); setGoLiveKey((k) => k + 1); }}
+                />
               )}
 
               {/* ── Project-wide staffing ── */}
@@ -842,16 +736,6 @@ export function ProjectEditor({
         </div>
       </div>
 
-      {officerModalOrg && (
-        <ProjectOfficerModal
-          project={p}
-          organizationId={officerModalOrg.id}
-          organizationName={officerModalOrg.name}
-          roleChoices={grmRoleChoices}
-          onClose={() => setOfficerModalOrg(null)}
-          onSuccess={() => { setOfficerModalOrg(null); flash("Officer saved ✓"); }}
-        />
-      )}
     </div>
   );
 }

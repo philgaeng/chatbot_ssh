@@ -37,10 +37,10 @@ function locationOverlaps(officerLocs: string[] | undefined, pkgLocs: string[]):
 }
 
 const TIERS: { key: string; label: string; hint: string; accent: string }[] = [
-  { key: "actor", label: "Actor", hint: "owns & works the case", accent: "text-blue-700" },
-  { key: "supervisor", label: "Supervisor", hint: "oversees; escalation / reassign", accent: "text-blue-700" },
-  { key: "participant", label: "Participants", hint: "informed + notes", accent: "text-violet-700" },
-  { key: "observer", label: "Observers", hint: "read-only", accent: "text-gray-600" },
+  { key: "actor", label: "Works it", hint: "receives the grievance and resolves it", accent: "text-blue-700" },
+  { key: "supervisor", label: "Oversees", hint: "alerted on escalation; can reassign", accent: "text-blue-700" },
+  { key: "participant", label: "Kept informed", hint: "sees updates and can add notes", accent: "text-violet-700" },
+  { key: "observer", label: "Can view", hint: "read-only", accent: "text-gray-600" },
 ];
 
 function stepTiers(step: WorkflowStep): string[] {
@@ -178,7 +178,7 @@ export function CastStaffing({
   async function assign(officer: OfficerRosterEntry) {
     if (!assigning || !resolvedWfId) return;
     if (!derivedOrg) {
-      setError("This project has no linked organization to staff under — set an implementing agency first.");
+      setError("Set the implementing agency first, under Partner organizations.");
       return;
     }
     setBusy(true);
@@ -304,7 +304,7 @@ export function CastStaffing({
                               onChange={(e) => setPickerOrg(e.target.value)}
                               className="rounded border border-gray-300 px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400"
                             >
-                              <option value="">Project actors</option>
+                              <option value="">Partner organizations</option>
                               {[...actorOrgIds].map((id) => (
                                 <option key={id} value={id}>
                                   {orgLabel(id)}
