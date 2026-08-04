@@ -30,7 +30,9 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 
 **Author-named jobs.** `workflow_steps.tier_labels` + `required_tiers` (migration `j6l8n0p2`) — documented since June, built nowhere. Step editor authors them; staffing shows the author's label; go-live's level gate reads `required_tiers` and names the gap with the author's word. `9cfdf2b8`, `f0e6f844`.
 
-**Project types.** `owner_organization_id` (migration `l8n0p2r4`); a type bound to any project refuses configuration writes with 409; `POST /project-types/{key}/duplicate` is the way out. `d6ddca35`.
+**Project types.** `owner_organization_id` (migration `l8n0p2r4`); a type with a **live** project refuses configuration writes with 409; `POST /project-types/{key}/duplicate` is the way out. `d6ddca35`.
+
+**Types back-filled** (migration `n0p2r4t6`) — one type per distinct workflow set, named "Type 1", "Type 2", projects bound to them. Two freeze rules relaxed in the same change: **name/description are always editable** (the migration's names must be fixable) and **only an active project freezes a type** (so deactivate → fix → reactivate is the repair path). `d3db9f27`.
 
 ---
 
@@ -38,12 +40,12 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 
 | §9 step | State |
 |---|---|
-| 1 Model | ✅ both migrations applied |
+| 1 Model | ✅ three migrations applied (`j6l8n0p2`, `l8n0p2r4`, `n0p2r4t6`) |
 | 2 Type authoring UI | ⬜ **next** |
 | 3 Step editor | ✅ |
 | 4 Consumption — staffing | ✅ · **Partner organizations ⬜** |
 | 5 Creation flow (org → filtered types) | ⬜ |
-| 6 Go-live A3/A5 deletion | ⬜ **blocked — see §4.1** |
+| 6 Go-live A3/A5 deletion | ⬜ unblocked — see §4.1 |
 | 7 Docs | partial (12 §2 and followup §6.1 closed) |
 
 ---
@@ -69,8 +71,8 @@ Today it only *counts* entries ("3 actor roles"). It needs to edit:
 
 ## 4. Traps — these cost me time, don't re-pay
 
-### 4.1 Do not delete go-live A3/A5 yet
-§7 says they dissolve into B1. **`ticketing.project_types` is empty and every project is untyped**, so B1 never runs and A3/A5 are the only organization gates that exist. Delete them in the same change that seeds a catalog carrying the equivalent required roles, and promote B1 back to a blocker. There is a comment at the check saying so.
+### 4.1 A3/A5 can go once the back-filled catalogs are trusted
+§7 says they dissolve into B1. Since `n0p2r4t6` every project has a type, so **B1 now runs** — but the back-filled catalogs mark **only the routing anchor required** (deliberately, so no project was blocked by its own migration). Before deleting A3/A5, confirm the catalogs express what you actually want required, and promote B1 back to a blocker in the same change. There is a comment at the check saying so.
 
 ### 4.2 Tests and the route snapshot live in the image
 `make test-ticketing` runs pytest *inside* `ticketing_api`, which **copies** `tests/` at build time. A new test file silently doesn't run until you `build ticketing_api`. If the count didn't move, that's why.
