@@ -312,26 +312,32 @@ export function CastStaffing({
                   ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === t.key)
                   : [];
                 const slotOpen = assigning?.stepId === step.step_id && assigning?.tier === t.key;
-                // Heading = the NAMED role bound to this job (doc 13 §5A.1); the generic word
-                // is only a fallback for a job with no role bound yet.
+                // doc 13 §5A.1 — never a generic word when a name exists. In order:
+                //   1. the workflow author's own label for this job (tier_labels)
+                //   2. the display name of the role bound to it
+                //   3. the generic word, only when neither exists yet
                 const roleKey = t.roleKeyOf(step);
-                const heading = roleKey ? roleLabel(roleKey) : t.fallbackLabel;
+                const authored = step.tier_labels?.[t.key];
+                const heading = authored?.label || (roleKey ? roleLabel(roleKey) : t.fallbackLabel);
+                const hint = authored?.description || t.hint;
+                // The actor is always required; the author marks the rest (doc 12 §6.2).
+                const required = t.required || (step.required_tiers ?? []).includes(t.key);
                 const byRole = current.length === 0 && inherited.length === 0 ? roleStaffed(roleKey) : [];
                 const empty = current.length === 0 && inherited.length === 0 && byRole.length === 0;
-                const blocking = empty && t.required && !isPkg;
+                const blocking = empty && required && !isPkg;
                 return (
                   <div key={t.key} className="px-3 py-2.5">
                     <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
                       <div className="w-56 shrink-0">
                         <div className="flex items-center gap-1.5">
                           <span className={`text-xs font-semibold ${t.accent}`}>{heading}</span>
-                          {t.required && (
+                          {required && (
                             <span className="rounded-full border border-gray-300 px-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
                               required
                             </span>
                           )}
                         </div>
-                        <div className="text-[11px] text-gray-400">{t.hint}</div>
+                        <div className="text-[11px] text-gray-400">{hint}</div>
                       </div>
 
                       <div className="flex-1 min-w-[220px] flex flex-wrap items-center gap-2">
@@ -412,7 +418,9 @@ export function CastStaffing({
 
                     {blocking && (
                       <p className="mt-1.5 text-[11px] text-red-700">
-                        Not staffed. Every level needs someone to work it.
+                        {t.key === "actor"
+                          ? "Not staffed. Every level needs someone to work it."
+                          : "Not staffed. This workflow marks it required."}
                       </p>
                     )}
 

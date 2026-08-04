@@ -174,6 +174,13 @@ export interface WorkflowStep {
   observer_roles: string[];
   informed_pii_access: boolean;
   actor_can_reassign?: boolean;
+  /** The author's name for each job at this level (doc 12 §6.2). Absent tier → fall back to
+   *  the bound role's display name, then the generic word. Never show a generic word when a
+   *  label exists (doc 13 §5A.1). */
+  tier_labels?: Record<string, { label: string; description?: string }>;
+  /** Non-actor tiers the author marked mandatory. The actor is always required and is never
+   *  listed here. Drives go-live's level-staffing gate. */
+  required_tiers?: string[];
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -716,6 +723,10 @@ export interface StepPayload {
   supervisor_enabled?: boolean;
   participants_enabled?: boolean;
   observers_enabled?: boolean;
+  /** The author's name for each job at this level (doc 12 §6.2). */
+  tier_labels?: Record<string, { label: string; description?: string }>;
+  /** Non-actor tiers the author marks mandatory; "actor" is rejected server-side. */
+  required_tiers?: string[];
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {

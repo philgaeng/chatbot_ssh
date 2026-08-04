@@ -35,6 +35,11 @@ export function StepForm({
   const [observersEnabled, setObserversEnabled] = useState<boolean>((step.observer_roles?.length ?? 0) > 0);
   const [informedPii, setInformedPii] = useState<boolean>(step.informed_pii_access ?? false);
   const [actorCanReassign, setActorCanReassign] = useState<boolean>(step.actor_can_reassign ?? false);
+  // The author's name for each job at this level + which non-actor jobs are mandatory.
+  const [tierLabels, setTierLabels] = useState<Record<string, { label: string; description?: string }>>(
+    () => step.tier_labels ?? {},
+  );
+  const [requiredTiers, setRequiredTiers] = useState<string[]>(() => step.required_tiers ?? []);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -57,6 +62,11 @@ export function StepForm({
         observers_enabled: observersEnabled,
         informed_pii_access: informedPii,
         actor_can_reassign: actorCanReassign,
+        // Drop empty names so a blank input doesn't overwrite the role-name fallback.
+        tier_labels: Object.fromEntries(
+          Object.entries(tierLabels).filter(([, v]) => v.label.trim()),
+        ),
+        required_tiers: requiredTiers,
       };
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
@@ -95,6 +105,17 @@ export function StepForm({
       </div>
 
       <StepCast
+        tierLabels={tierLabels}
+        onTierLabel={(tier, patch) =>
+          setTierLabels((prev) => ({
+            ...prev,
+            [tier]: { ...(prev[tier] ?? { label: "" }), ...patch },
+          }))
+        }
+        requiredTiers={requiredTiers}
+        onRequiredTier={(tier, v) =>
+          setRequiredTiers((prev) => (v ? [...new Set([...prev, tier])] : prev.filter((t) => t !== tier)))
+        }
         supervisorEnabled={supervisorEnabled}
         onSupervisorEnabled={setSupervisorEnabled}
         participantsEnabled={participantsEnabled}

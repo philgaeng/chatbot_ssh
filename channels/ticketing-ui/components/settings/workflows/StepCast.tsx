@@ -44,6 +44,57 @@ function TierToggle({
   );
 }
 
+/** The author's naming + required control for one job (doc 12 §6.2, wireframe ui/06). */
+function JobDetail({
+  tier,
+  placeholder,
+  labels,
+  onLabel,
+  required,
+  onRequired,
+  canRequire = true,
+}: {
+  tier: string;
+  placeholder: string;
+  labels: Record<string, { label: string; description?: string }>;
+  onLabel: (tier: string, patch: { label?: string; description?: string }) => void;
+  required: boolean;
+  onRequired: (tier: string, v: boolean) => void;
+  canRequire?: boolean;
+}) {
+  const v = labels[tier] ?? { label: "", description: "" };
+  return (
+    <div className="ml-12 mt-1.5 space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={v.label}
+          onChange={(e) => onLabel(tier, { label: e.target.value })}
+          placeholder={placeholder}
+          className="flex-1 min-w-[160px] max-w-xs rounded border border-gray-300 px-2 py-1 text-xs"
+          aria-label="Name shown to officers"
+        />
+        {canRequire ? (
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-600">
+            <input type="checkbox" checked={required} onChange={(e) => onRequired(tier, e.target.checked)} />
+            Required
+          </label>
+        ) : (
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">
+            Always required
+          </span>
+        )}
+      </div>
+      <input
+        value={v.description ?? ""}
+        onChange={(e) => onLabel(tier, { description: e.target.value })}
+        placeholder="Short description (optional)"
+        className="w-full max-w-md rounded border border-gray-200 px-2 py-1 text-[11px]"
+        aria-label="Short description"
+      />
+    </div>
+  );
+}
+
 export function StepCast({
   supervisorEnabled,
   onSupervisorEnabled,
@@ -56,6 +107,10 @@ export function StepCast({
   actorCanReassign,
   onActorCanReassign,
   hasNextStep,
+  tierLabels,
+  onTierLabel,
+  requiredTiers,
+  onRequiredTier,
 }: {
   supervisorEnabled: boolean;
   onSupervisorEnabled: (v: boolean) => void;
@@ -69,16 +124,21 @@ export function StepCast({
   onActorCanReassign: (v: boolean) => void;
   /** Whether a later step exists — drives the read-only escalation-target line. */
   hasNextStep?: boolean;
+  tierLabels: Record<string, { label: string; description?: string }>;
+  onTierLabel: (tier: string, patch: { label?: string; description?: string }) => void;
+  requiredTiers: string[];
+  onRequiredTier: (tier: string, v: boolean) => void;
 }) {
+  const isRequired = (t: string) => requiredTiers.includes(t);
   return (
     <div className="border-t border-blue-100 pt-3 mt-1 space-y-3">
       <div>
         <div className="text-[11px] font-semibold text-blue-600 uppercase tracking-wide">
-          Tiers at this step
+          The jobs at this level
         </div>
         <p className="text-[11px] text-gray-500 mt-0.5">
-          Choose which tiers this step uses. You&apos;ll assign the actual officers per package
-          when you set up each project.
+          Choose which jobs this level has and name them. Officers see the name you write here
+          on every screen. You assign the people per project.
         </p>
       </div>
 
@@ -88,28 +148,57 @@ export function StepCast({
           Always on
         </span>
         <div>
-          <div className="text-xs font-medium text-gray-700">Actor</div>
+          <div className="text-xs font-medium text-gray-700">Works it</div>
           <div className="text-[11px] text-gray-500">
-            Owns &amp; works the case — acknowledge, note, escalate, resolve, reply. Every step has one.
+            Receives the grievance and resolves it. Every level has one.
           </div>
         </div>
       </div>
+      <JobDetail
+        tier="actor"
+        placeholder="e.g. Safeguard Officer"
+        labels={tierLabels}
+        onLabel={onTierLabel}
+        required
+        onRequired={onRequiredTier}
+        canRequire={false}
+      />
 
       <TierToggle
         on={supervisorEnabled}
         onToggle={() => onSupervisorEnabled(!supervisorEnabled)}
-        title="Supervisor"
-        gloss="Oversees; the escalation / SLA-breach target and default reassignment authority."
+        title="Oversees"
+        gloss="Alerted on escalation and when an SLA is missed; can reassign."
       />
+      {supervisorEnabled && (
+        <JobDetail
+          tier="supervisor"
+          placeholder="e.g. Escalation Lead"
+          labels={tierLabels}
+          onLabel={onTierLabel}
+          required={isRequired("supervisor")}
+          onRequired={onRequiredTier}
+        />
+      )}
 
       <div className="space-y-2">
         <TierToggle
           on={participantsEnabled}
           onToggle={() => onParticipantsEnabled(!participantsEnabled)}
-          title="Participants (kept informed)"
-          gloss="View + add notes; auto-added on step entry. No workflow actions."
+          title="Kept informed"
+          gloss="Sees updates and can add notes. No workflow actions."
           accent="violet"
         />
+        {participantsEnabled && (
+          <JobDetail
+            tier="informed"
+            placeholder="e.g. Donor Focal"
+            labels={tierLabels}
+            onLabel={onTierLabel}
+            required={isRequired("informed")}
+            onRequired={onRequiredTier}
+          />
+        )}
         {participantsEnabled && (
           <div className="ml-12 flex items-center gap-3">
             <button
@@ -133,26 +222,36 @@ export function StepCast({
       <TierToggle
         on={observersEnabled}
         onToggle={() => onObserversEnabled(!observersEnabled)}
-        title="Observers (can view)"
+        title="Can view"
         gloss="Read-only; no notifications."
       />
+      {observersEnabled && (
+        <JobDetail
+          tier="observer"
+          placeholder="e.g. Legal Observer"
+          labels={tierLabels}
+          onLabel={onTierLabel}
+          required={isRequired("observer")}
+          onRequired={onRequiredTier}
+        />
+      )}
 
       {/* Advanced — Actor self-serve reassignment (§3.4 chain otherwise). */}
       <div className="border-t border-blue-100 pt-2">
         <TierToggle
           on={actorCanReassign}
           onToggle={() => onActorCanReassign(!actorCanReassign)}
-          title="Actor can self-reassign at this step"
-          gloss="Advanced — lets the assigned Actor route the ticket directly. Otherwise the chain is Dispatcher → Supervisor → project admin."
+          title="Let the officer working it reassign the grievance"
+          gloss="Advanced. Otherwise reassignment goes through whoever oversees the level, then a project administrator."
         />
       </div>
 
       {/* Escalation target — read-only, derived from step order. */}
       <div className="text-[11px] text-gray-500 bg-white/60 border border-blue-100 rounded px-2 py-1.5">
         {hasNextStep ? (
-          <>Escalates to the next step&apos;s Actor.</>
+          <>Escalates to the next level.</>
         ) : (
-          <>Last step — resolves here; no automatic escalation.</>
+          <>Last level — resolves here; no automatic escalation.</>
         )}
       </div>
     </div>
