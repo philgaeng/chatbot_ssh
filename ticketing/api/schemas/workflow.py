@@ -4,10 +4,35 @@ Pydantic schemas for workflow definitions, steps, and assignments.
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+#: Non-actor tiers an author may mark mandatory. The ACTOR is always required and is never
+#: listed — a level with nobody to work it is not a level (doc 13 §5A.5).
+REQUIRABLE_TIERS = ("supervisor", "informed", "observer")
+
+
+class TierLabel(BaseModel):
+    """The author's name for one job at a level (doc 12 §6.2)."""
+
+    label: str = Field(..., max_length=80)
+    description: str = Field("", max_length=160)
+
 
 
 # ── Steps ─────────────────────────────────────────────────────────────────────
+
+def _check_required_tiers(value: Optional[list[str]]) -> Optional[list[str]]:
+    if value is None:
+        return None
+    bad = [t for t in value if t not in REQUIRABLE_TIERS]
+    if bad:
+        raise ValueError(
+            "required_tiers may only contain "
+            + ", ".join(REQUIRABLE_TIERS)
+            + " — the actor is always required"
+        )
+    return list(dict.fromkeys(value))
+
 
 class WorkflowStepResponse(BaseModel):
     step_id: str
@@ -24,6 +49,8 @@ class WorkflowStepResponse(BaseModel):
     observer_roles: list[str] = []
     informed_pii_access: bool = False
     actor_can_reassign: bool = False
+    tier_labels: dict[str, TierLabel] = {}
+    required_tiers: list[str] = []
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -47,6 +74,8 @@ class WorkflowStepCreate(BaseModel):
     observer_roles: list[str] = []
     informed_pii_access: bool = False
     actor_can_reassign: bool = False
+    tier_labels: dict[str, TierLabel] = {}
+    required_tiers: list[str] = []
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (DESIGN-cast-model §3.5): when any of these is set, the step's tier
@@ -54,6 +83,8 @@ class WorkflowStepCreate(BaseModel):
     supervisor_enabled: Optional[bool] = None
     participants_enabled: Optional[bool] = None
     observers_enabled: Optional[bool] = None
+
+    _validate_required_tiers = field_validator("required_tiers")(_check_required_tiers)
 
 
 class WorkflowStepUpdate(BaseModel):
@@ -67,12 +98,16 @@ class WorkflowStepUpdate(BaseModel):
     observer_roles: Optional[list[str]] = None
     informed_pii_access: Optional[bool] = None
     actor_can_reassign: Optional[bool] = None
+    tier_labels: Optional[dict[str, TierLabel]] = None
+    required_tiers: Optional[list[str]] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (see WorkflowStepCreate).
     supervisor_enabled: Optional[bool] = None
     participants_enabled: Optional[bool] = None
     observers_enabled: Optional[bool] = None
+
+    _validate_required_tiers = field_validator("required_tiers")(_check_required_tiers)
 
 
 class StepReorderRequest(BaseModel):

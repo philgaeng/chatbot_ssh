@@ -282,6 +282,8 @@ def create_workflow(
                         "informed_roles": s.informed_roles,
                         "observer_roles": s.observer_roles,
                         "informed_pii_access": s.informed_pii_access,
+                        "tier_labels": dict(s.tier_labels or {}),
+                        "required_tiers": list(s.required_tiers or []),
                         "stakeholders": s.stakeholders,
                         "expected_actions": s.expected_actions,
                     }
@@ -304,6 +306,8 @@ def create_workflow(
             informed_roles=s.get("informed_roles") or [],
             observer_roles=s.get("observer_roles") or [],
             informed_pii_access=bool(s.get("informed_pii_access")),
+            tier_labels=s.get("tier_labels") or {},
+            required_tiers=s.get("required_tiers") or [],
             stakeholders=s.get("stakeholders"),
             expected_actions=s.get("expected_actions"),
         ))
@@ -420,6 +424,8 @@ def save_as_template(
                 informed_roles=s.informed_roles or [],
                 observer_roles=s.observer_roles or [],
                 informed_pii_access=s.informed_pii_access,
+                tier_labels=dict(s.tier_labels or {}),
+                required_tiers=list(s.required_tiers or []),
                 stakeholders=s.stakeholders, expected_actions=s.expected_actions,
             ))
     db.commit()
@@ -514,6 +520,8 @@ def add_step(
         observer_roles=payload.observer_roles or [],
         informed_pii_access=payload.informed_pii_access,
         actor_can_reassign=payload.actor_can_reassign,
+        tier_labels={k: v.model_dump() for k, v in (payload.tier_labels or {}).items()},
+        required_tiers=list(payload.required_tiers or []),
         stakeholders=payload.stakeholders,
         expected_actions=payload.expected_actions,
     )
@@ -593,6 +601,10 @@ def update_step(
         step.informed_pii_access = bool(payload.informed_pii_access)
     if "actor_can_reassign" in fields_set:
         step.actor_can_reassign = bool(payload.actor_can_reassign)
+    if "tier_labels" in fields_set:
+        step.tier_labels = {k: v.model_dump() for k, v in (payload.tier_labels or {}).items()}
+    if "required_tiers" in fields_set:
+        step.required_tiers = list(payload.required_tiers or [])
     if "stakeholders" in fields_set:
         step.stakeholders = payload.stakeholders
     if "expected_actions" in fields_set:

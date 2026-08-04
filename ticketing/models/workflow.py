@@ -89,6 +89,15 @@ class WorkflowStep(Base):
     observer_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # informed_pii_access: if True, Informed-tier users can see complainant PII
     informed_pii_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # tier_labels: {tier: {label, description}} — the AUTHOR'S name for each job at this level
+    # ("Escalation Lead"), shown read-only wherever the job appears (staffing, case view) instead
+    # of a generic tier word. Absent tier → fall back to the bound role's display name, then the
+    # generic word. doc 12 §6.2 / doc 13 §5A.1.
+    tier_labels: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # required_tiers: which NON-ACTOR tiers the author marks mandatory ⊆ {supervisor, informed,
+    # observer}. The actor is always required and is never listed. Drives the go-live staffing
+    # gate (doc 13 §5A.5 / §7 A4).
+    required_tiers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # actor_can_reassign: per-step self-serve toggle (DESIGN-cast-model §3.4) — when on, the
     # Actor is a reassignment authority for this step (chain: Dispatcher → Supervisor → Actor → PA)
     actor_can_reassign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

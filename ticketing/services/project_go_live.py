@@ -178,27 +178,48 @@ def _standard_level_gaps(
             .order_by(WorkflowStep.step_order)
         ).scalars().all()
     )
-    gaps: list[str] = []
-    for step in steps:
-        role = step.assigned_role_key
-        if not role:
-            continue
+    def _covered(role: str, *, is_actor_l1: bool) -> bool:
         if _has_officer_on_project_wide(db, project=project, grm_role_key=role):
-            continue
-        if step.step_order == 1 and _has_officer_on_project_wide(
+            return True
+        if is_actor_l1 and _has_officer_on_project_wide(
             db, project=project, grm_role_key=COUNTRY_L1_FALLBACK_ROLE
         ):
-            continue
+            return True
         pkg_gaps = _packages_missing_role(
-            db,
-            project=project,
-            packages=packages,
-            grm_role_key=role,
-            project_wide_covers=False,
+            db, project=project, packages=packages, grm_role_key=role, project_wide_covers=False,
         )
-        if packages and not pkg_gaps:
-            continue
-        gaps.append(f"L{step.step_order} ({role})")
+        return bool(packages) and not pkg_gaps
+
+    def _job_name(step, tier: str, role: str) -> str:
+        """The author's name for the job, so the gap reads like the staffing screen."""
+        label = ((step.tier_labels or {}).get(tier) or {}).get("label")
+        return label or role
+
+    gaps: list[str] = []
+    for step in steps:
+        # The actor is always required — a level with nobody to work it is not a level.
+        role = step.assigned_role_key
+        if role and not _covered(role, is_actor_l1=step.step_order == 1):
+            gaps.append(f"L{step.step_order} ({_job_name(step, 'actor', role)})")
+
+        # Plus whichever non-actor jobs the workflow author marked mandatory (doc 12 §6.2).
+        # `required_tiers` defaults to [] on every existing step, so this adds no gap until
+        # an author opts in.
+        for tier in step.required_tiers or []:
+            if tier == "supervisor":
+                tier_roles = [step.supervisor_role] if step.supervisor_role else []
+            elif tier == "informed":
+                tier_roles = list(step.informed_roles or [])
+            elif tier == "observer":
+                tier_roles = list(step.observer_roles or [])
+            else:
+                continue
+            if not tier_roles:
+                # Marked mandatory but no role bound — the workflow, not the project, is wrong.
+                gaps.append(f"L{step.step_order} ({tier}: no role on the workflow)")
+                continue
+            if not any(_covered(r, is_actor_l1=False) for r in tier_roles):
+                gaps.append(f"L{step.step_order} ({_job_name(step, tier, tier_roles[0])})")
     return gaps
 
 
