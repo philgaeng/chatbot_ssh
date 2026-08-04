@@ -40,6 +40,13 @@ class ProjectType(Base):
     actor_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # List[{display_label, workflow_id, is_default, classifications, intake_route, sort_order}]
     workflow_bindings: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # The top-level organization this template belongs to (DECISION-author-defined-slots §3.1).
+    # NULL = global: seeded by super_admin, offered to every organization.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)

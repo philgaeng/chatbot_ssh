@@ -128,6 +128,7 @@ POST /api/v1/organizations/import
 POST /api/v1/packages/{package_id}/qr-tokens
 POST /api/v1/position-types
 POST /api/v1/project-types
+POST /api/v1/project-types/{type_key}/duplicate
 POST /api/v1/projects
 POST /api/v1/projects/{project_id}/cast
 POST /api/v1/projects/{project_id}/donors/{organization_id}

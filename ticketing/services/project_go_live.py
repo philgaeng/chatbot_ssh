@@ -288,6 +288,12 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         project_donor_org_ids,
     )
 
+    # A3/A5 are slated for deletion — DECISION-author-defined-slots §7 replaces both with
+    # "the type's required organization slots are filled" (B1). NOT YET: `ticketing.project_types`
+    # is empty and every current project is untyped, so B1 never runs and these two are the only
+    # organization gates there are. Delete them in the same change that seeds a type catalog
+    # carrying the equivalent required roles, or a project activates with no accountable
+    # organization at all.
     has_ia = implementing_agency_org_id(db, project) is not None
     checks.append(
         GoLiveCheck(

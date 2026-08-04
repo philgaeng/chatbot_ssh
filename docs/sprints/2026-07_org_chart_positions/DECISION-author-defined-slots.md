@@ -106,7 +106,7 @@ That is the whole forward-compatibility cost today: **one accessor, no schema ch
 3. **Step editor** — name/description/required per job ([`ui/06`](../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks it).
 4. **Consumption** — staffing reads `tier_labels`/`required_tiers`; Partner organizations renders `actor_roles`; Grievance workflows goes read-only when typed.
 5. **Creation flow** — organization → filtered types → create; anchor slot pre-filled.
-6. **Go-live** — delete A3/A5; B1 reads the type's required set; A4 reads `required_tiers`.
+6. **Go-live** — A4 reads `required_tiers` *(done 2026-08-04)*. **Deleting A3/A5 depends on step 2 + a seeded catalog**: `ticketing.project_types` is empty today and every project is untyped, so B1 never runs and A3/A5 are the only organization gates that exist. Delete them in the same change that seeds types carrying the equivalent required roles, and promote B1 back to a blocker — not before, or a project can activate with no accountable organization.
 7. **Docs** — 02/03/04/12/13/14, amend the July DECISION, close followup §6.
 
 Steps 1+3 (the workflow half) are independent of 2+5 (the type half).
