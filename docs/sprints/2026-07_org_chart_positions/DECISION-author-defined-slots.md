@@ -64,7 +64,9 @@ Filled values live in **`project_organizations` (`organization_id`, `org_role`)*
 1. **Organization** — pick the top-level organization. It fills the type's `routing_org_role` slot automatically, so the creator never allocates it by hand.
 2. **Type** — pick from that organization's types. The project inherits its workflows, category routing, and organization slots.
 3. **Allocate the remaining organizations** — one picker per named slot; required ones block go-live.
-4. **Locations** and **staffing** — still per-project, and still go-live blockers. A template cannot know which district or which people. *This is the one thing "pick a type and done" does not cover.*
+4. **Locations** and **staffing** — still per-project, and still go-live blockers. A template cannot know which district or which people.
+
+Picking a type removes the **configuration** from project creation; it does not build the project. Locations and officers are the work that remains, and they are the work that actually needs local knowledge.
 
 ## 6. Categories and intake — today one chatbot, tomorrow several
 
@@ -91,12 +93,16 @@ That is the whole forward-compatibility cost today: **one accessor, no schema ch
 
 - **The Grievance workflows section becomes read-only on a typed project** (Q4), with one line saying where to change it and a link to the type. The card layout stays — it is now a summary, not an editor. Untyped/legacy projects keep editing inline.
 - **Partner organizations renders the type's `actor_roles`** — one block per named slot, required ones marked, the anchor slot pre-filled from step 1.
-- **Changing a type affects its projects.** Adding a required slot puts every project of that type into a blocked state until filled. That is intended — but the type editor must say so before saving, or it becomes a way to break twenty projects with one click.
+- **A type in use is frozen** (2026-08-04). The moment a type is bound to **any** project it becomes read-only — no edit, no delete. This is what stops one click from re-configuring twenty live projects, and it means the answer to "what does this project run?" never changes underneath anyone.
+  - **Editing a bound type is offered as "Use as template"** — clone it under a new name, in the same owning organization, and edit the copy freely. The original and its projects are untouched.
+  - **Frozen means the configuration**: workflows, organization roles, category routing, `routing_org_role`, labels. `is_active` and `sort_order` stay editable — retiring a type from the New-project list is not a configuration change.
+  - **Bound = any project row referencing the type**, active or not. A deactivated project still runs on its type.
+  - **Consequence to accept:** an existing project cannot be moved forward to the improved copy. Its config is frozen with its type — deliberately. The only way to move it would be an explicit *change this project's type* action, which re-applies the new template. **Not in this build** — it needs a diff-and-confirm flow of its own (what gets added, what gets orphaned), and it is the one thing that could silently restaff a live project.
 
 ## 9. Build order
 
 1. **Model** — migration: `project_types.owner_organization_id`, `workflow_steps.tier_labels`, `workflow_steps.required_tiers`. Schemas + TS types.
-2. **Type authoring UI** — workflows bound, organization roles (label · description · required), category routing, `routing_org_role` picker. `org_admin` scoped to subtree.
+2. **Type authoring UI** — workflows bound, organization roles (label · description · required), category routing, `routing_org_role` picker. `org_admin` scoped to subtree. **Frozen when bound** (§8): the editor becomes a read-only summary with **Use as template**, and the API refuses config writes to a bound type (409, not a client-side disable).
 3. **Step editor** — name/description/required per job ([`ui/06`](../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks it).
 4. **Consumption** — staffing reads `tier_labels`/`required_tiers`; Partner organizations renders `actor_roles`; Grievance workflows goes read-only when typed.
 5. **Creation flow** — organization → filtered types → create; anchor slot pre-filled.
