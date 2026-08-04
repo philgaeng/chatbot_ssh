@@ -9,9 +9,12 @@ This document covers **`ticketing.projects`** and related package/QR configurati
 
 > **⚠ Revised 2026-07-10 — project participants simplified. See [`DECISION-project-participants-and-supervision.md`](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md).** The per-project **actor-role catalog** (`project_actor_roles`, `project_organizations.org_role`, `project_types.actor_roles`, `routing_org_role`, the "+ Add role" action, `GET/PUT /projects/{id}/actor-roles`) is **removed**. A project now carries one defaulted **`implementing_agency_org_id`** (the signing ministry — routing/reporting anchor; `government`/`local_government` only) + optional **`project_donors`** (0..n). **Go-live gates on staffing** — every workflow level has an officer — plus the **donor last-step-informed guardrail** (SEAH-suppressed). Sections below that still describe the actor-role model are **superseded** by the DECISION; the build reconciles them (OC-03 / doc-13 work).
 >
-> **Build reality (verified 2026-07-30):** the actor-role tables/models were **kept, not dropped** — `project_actor_roles` / `project_organizations` / `package_organizations` are still defined and **still seeded on project create** (`locations.py`), and routing/go-live use `org_role` as a **back-compat fallback**. The new model (`implementing_agency_org_id` + `project_donors` + the staffing go-live gate) is **primary**; the legacy catalog is **deprecated**. Physically dropping it is outstanding cleanup (see followups) — the DECISION's "removed" is intent, not as-built.
+> **Build reality, superseded 2026-08-04.** The paragraph below described the actor-role tables as deprecated-but-present. [`DECISION-author-defined-slots`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) **reinstates the catalog on the project type**: `project_types.actor_roles` names the organizations, `project_organizations` / `package_organizations` store what fills them. Only **`project_actor_roles`** (the per-project copy) stays dead. Kept for history: the actor-role tables/models were **kept, not dropped** — `project_actor_roles` / `project_organizations` / `package_organizations` are still defined and **still seeded on project create** (`locations.py`), and routing/go-live use `org_role` as a **back-compat fallback**. The new model (`implementing_agency_org_id` + `project_donors` + the staffing go-live gate) is **primary**; the legacy catalog is **deprecated**. Physically dropping it is outstanding cleanup (see followups) — the DECISION's "removed" is intent, not as-built.
 
 ---
+
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
 
 ## 1. Purpose
 
@@ -66,17 +69,24 @@ N rows per project — each one a **named link**: `display_label` (the project's
 
 `(project_id, organization_id)` — **0..n** donor orgs (category `donor`). Drives the donor last-step-informed guardrail (§7 A5). [DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md).
 
-### `ticketing.project_organizations` · `ticketing.project_actor_roles` — deprecated (legacy, still present)
+### `ticketing.project_organizations` — primary again · `ticketing.project_actor_roles` — dead
 
-Superseded by **`implementing_agency_org_id`** (one) + **`project_donors`** (0..n) as the primary model; grievance ops run through **officer roles / the workflow cast**, staffed per project (§5A). The old actor-role tables/models **remain in code** (still seeded on project create; used as a routing **back-compat fallback**) — **not yet dropped** (DECISION 2026-07-10 intent; cleanup debt).
+**Amended 2026-08-04** ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). The two tables part company:
+
+- **`project_organizations` (`organization_id`, `org_role`) is the store for filled organization slots.** `org_role` holds a `key` from the project type's `actor_roles` catalog. Primary, not legacy.
+- **`project_actor_roles` stays dead.** The catalog lives on the **type** now — one per archetype — not copied per project. That is the half of the July decision that survives: no per-project role vocabulary, because that is how vocabularies drift.
+
+`implementing_agency_org_id` + `project_donors` become **legacy reads** for projects created before the change, and stop being written.
 
 ### `ticketing.packages` (`project_packages`)
 
 Physical lots within a project. Fields: `package_id`, `project_id`, `name`, `is_active`.
 
-### `ticketing.package_organizations` — deprecated (legacy, still present)
+### `ticketing.package_organizations` — the per-lot half of the catalog
 
-Package-level **actor** overrides are superseded: per-lot variation is now a **staffing override** — a package can override a workflow level's staffing (position-first, §5A); otherwise it inherits the project-wide staffing. The table/model remains in code but is **deprecated** (DECISION 2026-07-10; cleanup debt).
+Holds organization slots filled **for one lot** — the catalog entries the type marks `required_package` / `scope: package` (e.g. a different contractor on lot 3). Reinstated with the catalog 2026-08-04.
+
+Per-lot variation in **people** is a different thing and remains a **staffing override** (position-first, §5A): a package can override a workflow level's staffing, otherwise it inherits the project-wide staffing.
 
 ### `ticketing.package_locations`
 
@@ -95,8 +105,8 @@ Defined by `super_admin` under Settings → Project types. See [14_platform_sett
 First type: **`construction_road`**
 
 - Bundles Standard + SEAH workflow IDs from the type
-- Defaults the **implementing agency** to the owning ministry (primary, DECISION 2026-07-10); a legacy actor-role vocabulary (`project_types.actor_roles`) is still seeded but **deprecated**
-- On **New project**, the `org_admin` picks the type → system copies workflow links + sets the default implementing agency
+- Carries the **organization catalog** (`actor_roles`) the project must fill, and `routing_org_role` — which of those roles a ticket is stamped with. **Primary again 2026-08-04**
+- On **New project**: pick the **organization** → the types it owns (plus global) → the project inherits the type's workflow links and organization slots, with the chosen organization filling the `routing_org_role` slot
 - Project starts **`is_active = false`** until go-live passes
 
 ---
@@ -303,7 +313,7 @@ Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is fal
 | `GET/POST/DELETE` | `/projects/{id}/donors` | Optional donor participants (0..n); drives the last-step-informed guardrail |
 | `GET/POST` | `/projects/{id}/locations/{code}` | Location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages` | Package CRUD |
-| `/projects/{id}/packages/{pkg}/organizations` | POST/DELETE | **deprecated** — package actor overrides superseded by staffing override (§5A); legacy, still present |
+| `/projects/{id}/packages/{pkg}/organizations` | POST/DELETE | Per-lot organization slots — the catalog entries scoped to a package (§2). Reinstated 2026-08-04 |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/...` | Package locations |
 | `GET/POST/DELETE` | `/qr-tokens` (via scan router) | QR management |
 

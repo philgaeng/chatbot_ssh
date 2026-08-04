@@ -36,6 +36,9 @@ Migrations managed by Alembic: `ticketing/migrations/alembic.ini`.
 
 ---
 
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
+
 ## 1. Design rules
 
 1. No FK from `ticketing.*` into `public.*`. — **pinned by `tests/ticketing/test_boundary_policy.py`**
@@ -393,7 +396,7 @@ location_code   VARCHAR(64)   FK → ticketing.locations
 PRIMARY KEY (package_id, location_code)
 ```
 
-### `ticketing.package_organizations` — deprecated (legacy, still present)
+### `ticketing.package_organizations` — per-lot organization slots (reinstated 2026-08-04)
 
 Many-to-many: package → allowed organizations (the package-level **actor override**). **Deprecated** (DECISION 2026-07-10) — superseded by per-lot **staffing override** ([13 §5A](13_projects_and_packages.md)); table remains for back-compat, not yet dropped. (Same status: `project_organizations`, `project_actor_roles`.)
 

@@ -8,6 +8,9 @@ This document is the **entry point** for all GRM admin configuration. Detailed s
 
 ---
 
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
+
 ## 1. What Settings configures
 
 | Area | Question it answers |
@@ -70,7 +73,7 @@ Additional gates:
 |---------|------------------|-----------|--------------|
 | **Admin roles** | Settings → Settings → **Admin access** (`super_admin`) | `ticketing.roles` + scoped assignments | `super_admin`, `org_admin`, `project_admin` (+ `workflow_track` on scope) |
 | **Operational GRM roles** | Workflows → **Roles & permissions** | `ticketing.roles`, `workflow_steps`, `user_roles`, `officer_scopes` | `site_safeguards_focal_person`, `grc_chair` |
-| **Project participants** | Projects & packages → Partner organizations | `projects.implementing_agency_org_id` + `project_donors` *(actor-role catalog deprecated — legacy, still present; DECISION 2026-07-10)* | implementing agency (1) + donors (0..n) |
+| **Project participants** | Projects & packages → Partner organizations | The **project type's `actor_roles`** catalog, filled into `project_organizations` (reinstated 2026-08-04). `implementing_agency_org_id` + `project_donors` are legacy reads | implementing agency (1) + donors (0..n) |
 
 No confusion between operational roles and project participants: different tabs, different tables. Admin roles are not mixed into the operational Roles tab.
 

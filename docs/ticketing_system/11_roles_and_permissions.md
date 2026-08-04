@@ -3,9 +3,12 @@
 **Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation: as-built** — the 4-tier ladder + org-subtree scope + org-scoped catalog shipped in SH-7 (migration `q7s9u1w3`); `country_admin` removed from backend **and** frontend. See §8.  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [14_platform_settings.md](14_platform_settings.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [13_projects_and_packages.md](13_projects_and_packages.md)
 
-This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project participants** (the implementing agency + donors); those are project fields configured in [13_projects_and_packages.md](13_projects_and_packages.md) — the per-project actor-role catalog is **deprecated** (legacy, still present; DECISION 2026-07-10).
+This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project participants** — the organizations a project must name. Those come from the **project type's `actor_roles`** catalog and are filled per project ([13](13_projects_and_packages.md), [14 §4](14_platform_settings.md)). The **per-project** catalog `project_actor_roles` stays dead.
 
 ---
+
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
 
 ## 1. Two kinds of row in `ticketing.roles`
 
@@ -14,7 +17,7 @@ This document covers **`ticketing.roles`** — both the **admin ladder** (who co
 | **Admin roles** | `admin` | Who can configure the system and delegate to others? | Settings → **Admin access** — `super_admin` + `org_admin` |
 | **Operational roles** | `operational` | Who acts on grievance tickets in the workflow? | Settings → **Workflows, roles & permissions** → **Roles & permissions** — catalog authored by `super_admin` + `org_admin`; **used** (not authored) by `project_admin` / `officer_admin` when inviting |
 
-**Project participants** (implementing agency + donors) are **not** in `ticketing.roles`. They are project fields (`implementing_agency_org_id` + `project_donors`) — see [13_projects_and_packages.md](13_projects_and_packages.md) (actor-role catalog deprecated — legacy, still present; DECISION 2026-07-10).
+**Project participants** are **not** in `ticketing.roles`. They are **organization slots named by the project type** (`actor_roles`) and filled into `project_organizations` — see [13](13_projects_and_packages.md) §2 and [14 §4](14_platform_settings.md). Officer roles and organization roles are different vocabularies on purpose.
 
 **Delegation model (as-built, 2026-07):** **Four** admin **`role_key`s** — `super_admin`, **`org_admin`** (org-subtree-scoped, **any depth**), `project_admin`, `officer_admin`. **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** — not a separate role name.
 

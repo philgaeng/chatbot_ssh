@@ -12,6 +12,9 @@ Integration with the ticketing system is API-first. This document covers:
 
 ---
 
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
+
 ## 1. Chatbot → Ticketing (Inbound)
 
 ### 1.1 Create ticket from grievance submission (primary path)
@@ -273,7 +276,7 @@ Full contract in [12_workflows_configuration.md](12_workflows_configuration.md) 
 | `GET` | `/projects/{id}/go-live` | Go-live readiness check |
 | `GET/PATCH` | `/projects/{id}/messaging` | Project officer SMS/WhatsApp config |
 | `GET/PUT` | `/projects/{id}/workflows` | Workflow slot bindings |
-| ~~`/projects/{id}/organizations…`, `…/actor-roles`~~ | **deprecated** — legacy project actors / actor-role links (superseded by implementing agency + donors + staffing, [13](13_projects_and_packages.md)); still present |
+| `/projects/{id}/organizations` · ~~`…/actor-roles`~~ | **Reinstated 2026-08-04** — `…/organizations` stores filled organization slots (`org_role` = a key from the project type's `actor_roles`). `…/actor-roles` stays **dead**: the catalog lives on the type, not per project ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)) |
 | `GET/POST/DELETE` | `/projects/{id}/locations…` | Project location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages…` | Package CRUD |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/{code}`, `…/organizations/{org}` | Package location + org links |

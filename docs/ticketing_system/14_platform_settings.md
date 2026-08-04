@@ -8,6 +8,9 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ---
 
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
+
 ## 1. Sub-tabs and access
 
 | Sub-tab | `super_admin` | `org_admin` | `project_admin` |
@@ -74,20 +77,35 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 
 ## 4. Project types (archetypes)
 
-**Purpose:** `super_admin` defines reusable project templates (`construction_road`, …).
+**Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
 
-**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx`  
+**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` *(authoring UI not built — the tab currently only counts entries)*
 **API:** `ticketing/api/routers/project_types.py`
 
-| Field on type | Copied to new project |
+| Field on type | What it gives the project |
 |---------------|----------------------|
-| `type_key`, `label` | `project.project_type_key` |
-| `standard_workflow_id`, `seah_workflow_id` | Project workflow links |
-| **Implementing agency** (defaulted to owning ministry) | `project.implementing_agency_org_id` (primary, [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
-| ~~Required actor role keys~~ *(deprecated)* | Legacy `project_actor_roles` seed — superseded by the implementing agency + donors |
-| ~~`routing_org_role`~~ *(deprecated)* | Legacy — go-live now checks the implementing-agency field + staffing ([13 §7](13_projects_and_packages.md)) |
+| `type_key`, `label` | `project.project_type_key`. **`label` is always editable**, even with live projects — a name is not configuration |
+| `owner_organization_id` | The top-level organization this template belongs to (`l8n0p2r4`). **NULL = global.** New project offers the chosen organization's types + global ones |
+| `workflow_bindings` | The project's workflow links — name, workflow, default, `intake_route`, `classifications` |
+| `actor_roles` | **The organization catalog** (primary again): `{key, label, description, required, required_package, scope}`. The author's words — "Executing Agency", "Ward Office", "Concessionaire" |
+| `routing_org_role` | **Which** of those roles a ticket is stamped with. An author-chosen key, so nothing is hardcoded as "the implementing agency" |
+| `standard_workflow_id`, `seah_workflow_id` | Legacy mirrors of the bindings |
 
-`org_admin` and `project_admin` **cannot** edit type definitions on instantiated projects. *(The actor-role-key rows above are deprecated — DECISION 2026-07-10; still seeded, superseded by implementing agency + donors + staffing.)*
+### 4.1 A type with a live project is frozen
+
+Once **any active project** runs on a type, its **configuration** cannot change — `PATCH` returns **409** naming how many projects are at stake and both ways out. Enforced server-side, not by disabling the form.
+
+| | |
+|---|---|
+| **Frozen** | workflows, `actor_roles`, `routing_org_role`, `owner_organization_id`, category routing |
+| **Always editable** | `label`, `description` (a name is not configuration) · `is_active`, `sort_order` (availability — retiring a type from the New-project list changes nothing about projects using it) |
+| **Two ways out** | **Use as template** — `POST /project-types/{key}/duplicate` copies everything into a new key, `is_active=false` so an unfinished edit is never offered · or **deactivate the project**, fix the type, reactivate (which re-runs go-live) |
+
+`active_project_count` on the type response drives the UI's frozen state.
+
+**Back-filled 2026-08-04** (`n0p2r4t6`): every previously-untyped project got a type derived from the workflows it already ran, named "Type 1", "Type 2" — rename them. Only the routing anchor is marked required, so no project was blocked by its own migration.
+
+`org_admin` authors types **within its own org subtree**; `super_admin` anywhere. Neither `org_admin` nor `project_admin` can edit a type's definition through a project — a typed project cannot deviate from its type.
 
 See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
@@ -129,7 +147,7 @@ Three JSON editors:
 ]
 ```
 
-**Usage (deprecated):** Legacy template — still copied into `project_actor_roles` on project create, but that catalog is **deprecated** (DECISION 2026-07-10; superseded by the implementing agency + donors). Editing this key does **not** retroactively change existing projects.
+**Usage (still deprecated, for a new reason):** a **global** role vocabulary is the wrong shape — since 2026-08-04 each **project type** carries its own `actor_roles` so a client can use the words on their contract. This key is legacy; it is still copied into `project_actor_roles` on project create, and that per-project catalog is **dead** (DECISION 2026-07-10; superseded by the implementing agency + donors). Editing this key does **not** retroactively change existing projects.
 
 Default keys include: `donor`, `executing_agency`, `implementing_agency`, `main_contractor`, `subcontractor_t1`, `subcontractor_t2`, `supervision_consultant`, `specialized_consultant`.
 
