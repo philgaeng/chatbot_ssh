@@ -13,10 +13,12 @@ import {
   listProjects,
   deleteProject,
   listOrganizations,
+  listProjectTypes,
   getOrgRoles,
   type ProjectItem,
   type OrganizationItem,
   type OrgRole,
+  type ProjectTypeItem,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 import { ProjectCreateModal } from "@/components/settings/projects/ProjectCreateModal";
@@ -44,6 +46,7 @@ export function ProjectsSection({
   const [projects, setProjects] = useState<ProjectItem[]>([]);
   const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
   const [orgRoles, setOrgRoles] = useState<OrgRole[]>([]);
+  const [types, setTypes]       = useState<ProjectTypeItem[]>([]);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState("");
   const [editing, setEditing]   = useState<ProjectItem | null>(null);
@@ -55,6 +58,9 @@ export function ProjectsSection({
       // Include inactive/draft projects — typed projects are created is_active=false until go-live.
       const [p, o] = await Promise.all([listProjects(undefined, false), listOrganizations()]);
       const r = await getOrgRoles().catch(() => [] as OrgRole[]);
+      // Role labels come from the project's TYPE (doc 13 §2) — the global list is only a
+      // fallback for legacy untyped projects.
+      const t = await listProjectTypes(false).catch(() => [] as ProjectTypeItem[]);
       p.sort((a, b) => {
         if (a.is_active !== b.is_active) return a.is_active ? -1 : 1;
         return a.short_code.localeCompare(b.short_code);
@@ -62,6 +68,7 @@ export function ProjectsSection({
       setProjects(p);
       setOrgs(o);
       setOrgRoles(r);
+      setTypes(t);
     } catch (e: unknown) {
       setError(friendlyError(e));
     } finally {
@@ -159,10 +166,13 @@ export function ProjectsSection({
           {projects.length === 0 ? (
             <p className="text-sm text-gray-400 text-center py-10">No projects yet.</p>
           ) : projects.map((p) => {
+            const typeRoles = types.find((t) => t.type_key === p.project_type_key)?.actor_roles ?? [];
             const orgSummary = p.organizations.map((po) => {
               const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
-              const roleDef = orgRoles.find((r) => r.key === po.org_role);
-              return roleDef ? `${orgName} (${roleDef.label})` : orgName;
+              const label =
+                typeRoles.find((r) => r.key === po.org_role)?.label
+                ?? orgRoles.find((r) => r.key === po.org_role)?.label;
+              return label ? `${orgName} (${label})` : orgName;
             });
             return (
               <div key={p.project_id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-gray-50">
@@ -173,7 +183,7 @@ export function ProjectsSection({
                     {!p.is_active && <span className="text-xs text-gray-400">(inactive)</span>}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
-                    <span>Actors: {orgSummary.length > 0 ? orgSummary.join(", ") : <em>none</em>}</span>
+                    <span>Organizations: {orgSummary.length > 0 ? orgSummary.join(", ") : <em>none</em>}</span>
                     <span>·</span>
                     <span>Locations: {p.location_codes.length > 0 ? `${p.location_codes.length} linked` : <em>none</em>}</span>
                   </div>

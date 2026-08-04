@@ -1,19 +1,33 @@
 "use client";
 
 /**
- * <ProjectCreateModal> — creates a project (code + name + type), with entity-code
- * normalisation/validation shared via lib/entityCodes.
+ * <ProjectCreateModal> — new project: **organization → type → name it**.
  *
- * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
+ * The order is the decision (DECISION-author-defined-slots §5): the organization comes first
+ * because it decides which templates are on offer, and it fills the type's routing slot — the
+ * one organization a grievance is recorded against — so nobody has to allocate it by hand.
+ * Everything else (workflows, category routing, the other organizations a project must name)
+ * comes from the type. What is left afterwards is locations and officers, which is the work
+ * that actually needs local knowledge.
  */
 import React, { useState, useEffect } from "react";
-import { createProject, listProjects, listProjectTypes, type ProjectItem } from "@/lib/api";
+import {
+  createProject,
+  listOrganizations,
+  listProjects,
+  listProjectTypes,
+  type OrganizationItem,
+  type ProjectItem,
+  type ProjectTypeItem,
+} from "@/lib/api";
 import {
   normalizeEntityCodeInput,
   validateEntityCode,
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
+
+const GOVERNMENT_CATEGORIES = new Set(["government", "local_government"]);
 
 export function ProjectCreateModal({
   onCreated,
@@ -26,28 +40,55 @@ export function ProjectCreateModal({
   const [shortCode, setShortCode] = useState("");
   const [country, setCountry]   = useState("NP");
   const [desc, setDesc]         = useState("");
-  const [typeKey, setTypeKey]   = useState("construction_road");
-  const [types, setTypes]       = useState<{ type_key: string; label: string }[]>([]);
+  const [orgId, setOrgId]       = useState("");
+  const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
+  const [typeKey, setTypeKey]   = useState("");
+  const [types, setTypes]       = useState<ProjectTypeItem[]>([]);
+  const [typesLoading, setTypesLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [error, setError]       = useState("");
   const [resumeProject, setResumeProject] = useState<ProjectItem | null>(null);
 
+  // The bodies that run projects: a ministry or a local body, at the top of its tree.
+  // Contractors and consultants are named later, in the type's other slots.
   useEffect(() => {
-    listProjectTypes(true)
-      .then((rows) => {
-        setTypes(rows.map((t) => ({ type_key: t.type_key, label: t.label })));
-        if (rows.length && !rows.some((t) => t.type_key === "construction_road")) {
-          setTypeKey(rows[0].type_key);
-        }
-      })
+    listOrganizations()
+      .then((rows) =>
+        setOrgs(
+          rows.filter(
+            (o) =>
+              o.is_active
+              && !o.parent_organization_id
+              && GOVERNMENT_CATEGORIES.has((o.org_category ?? "").toLowerCase()),
+          ),
+        ),
+      )
       .catch(() => {});
   }, []);
 
+  // The organization decides what is on offer: its own templates plus the shared ones.
+  useEffect(() => {
+    if (!orgId) { setTypes([]); setTypeKey(""); return; }
+    setTypesLoading(true);
+    listProjectTypes(true, orgId)
+      .then((rows) => {
+        setTypes(rows);
+        setTypeKey((prev) => (rows.some((t) => t.type_key === prev) ? prev : rows[0]?.type_key ?? ""));
+      })
+      .catch(() => setTypes([]))
+      .finally(() => setTypesLoading(false));
+  }, [orgId]);
+
+  const selectedType = types.find((t) => t.type_key === typeKey) ?? null;
+  const anchorLabel =
+    selectedType?.actor_roles.find((r) => r.key === selectedType.routing_org_role)?.label ?? null;
+
   async function handleCreate() {
+    if (!orgId) { setError("Choose the organization in charge of this project."); return; }
+    if (!typeKey) { setError("Choose a project type."); return; }
     if (!name.trim()) { setError("Project name is required."); return; }
     const codeErr = validateEntityCode(shortCode, "Project code");
     if (codeErr) { setError(codeErr); return; }
-    if (!typeKey) { setError("Select a project type."); return; }
     setCreating(true);
     setError("");
     setResumeProject(null);
@@ -59,6 +100,7 @@ export function ProjectCreateModal({
         country_code: country,
         description: desc.trim() || null,
         project_type_key: typeKey,
+        organization_id: orgId,
         is_active: false,
       });
       onCreated(p);
@@ -114,28 +156,70 @@ export function ProjectCreateModal({
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-500 block mb-1">Project type *</label>
+              <label className="text-xs font-medium text-gray-500 block mb-1" htmlFor="new-project-org">
+                Organization in charge *
+              </label>
               <select
-                value={typeKey}
-                onChange={(e) => setTypeKey(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 mb-2 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                id="new-project-org"
+                value={orgId}
+                onChange={(e) => setOrgId(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
               >
-                {types.length === 0 ? (
-                  <option value="construction_road">Construction (road)</option>
+                <option value="">— choose an organization —</option>
+                {orgs.map((o) => (
+                  <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-400 mt-1">
+                It decides which project types you can use.
+              </p>
+            </div>
+
+            <div className="col-span-2">
+              <label className="text-xs font-medium text-gray-500 block mb-1" htmlFor="new-project-type">
+                Project type *
+              </label>
+              <select
+                id="new-project-type"
+                value={typeKey}
+                disabled={!orgId || typesLoading}
+                onChange={(e) => setTypeKey(e.target.value)}
+                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
+              >
+                {!orgId ? (
+                  <option value="">— choose an organization first —</option>
+                ) : typesLoading ? (
+                  <option value="">Loading…</option>
+                ) : types.length === 0 ? (
+                  <option value="">No project types for this organization</option>
                 ) : (
                   types.map((t) => (
                     <option key={t.type_key} value={t.type_key}>{t.label}</option>
                   ))
                 )}
               </select>
-              <p className="text-xs text-gray-400 mb-2">
-                Workflows and actor roles come from the type. Project starts inactive until go-live checks pass.
-                Clicking Create saves the project immediately — use Set up to finish configuration before activating.
+              {selectedType && (
+                <p className="text-xs text-gray-500 mt-1">
+                  {selectedType.description ? `${selectedType.description} ` : ""}
+                  {selectedType.workflow_bindings.length}{" "}
+                  {selectedType.workflow_bindings.length === 1 ? "workflow" : "workflows"}
+                  {anchorLabel ? ` · this organization becomes the ${anchorLabel}` : ""}
+                </p>
+              )}
+              {orgId && !typesLoading && types.length === 0 && (
+                <p className="text-xs text-amber-700 mt-1">
+                  Create one under Settings → Project types first.
+                </p>
+              )}
+              <p className="text-xs text-gray-400 mt-1">
+                Workflows and the organizations a project must name come from the type. The project
+                starts inactive until the go-live checks pass.
               </p>
             </div>
+
             <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1">Project name *</label>
-              <input autoFocus value={name} onChange={(e) => setName(e.target.value)}
+              <input value={name} onChange={(e) => setName(e.target.value)}
                 placeholder="e.g. Kakarbhitta-Laukahi Road"
                 className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
             </div>
@@ -167,7 +251,7 @@ export function ProjectCreateModal({
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
-          <button onClick={handleCreate} disabled={creating || !name.trim() || !shortCode.trim()}
+          <button onClick={handleCreate} disabled={creating || !orgId || !typeKey || !name.trim() || !shortCode.trim()}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
             {creating ? "Creating…" : "Create project"}
           </button>

@@ -1,4 +1,13 @@
-"""Project archetypes — super_admin CRUD; all admins can list for project create."""
+"""Project types — the template a project is built from (DECISION-author-defined-slots).
+
+A type binds the workflows a project runs, names the organizations it must have
+(``actor_roles``), and says which of those an incoming grievance is stamped with
+(``routing_org_role``). Spec: doc 14 §4, doc 13 §3.
+
+Authoring is an **org-scoped catalog**, like workflows and position types: ``super_admin``
+authors anywhere, an ``org_admin`` within its own subtree (§3.1). A type with a live project
+is **frozen** — see ``CONFIG_FIELDS`` and ``_require_editable``.
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -10,10 +19,19 @@ from sqlalchemy.orm import Session
 
 from sqlalchemy import func, select
 
-from ticketing.api.dependencies import CurrentUser, require_admin, require_super_admin
+from ticketing.api.dependencies import CurrentUser, require_admin
 from ticketing.models.base import get_db
+from ticketing.models.organization import Organization
 from ticketing.models.project_type import ProjectType
 from ticketing.services import project_types as types_svc
+from ticketing.services.admin_access import (
+    admin_org_scope_ids,
+    apply_catalog_scope,
+    catalog_owner_for,
+    is_org_admin,
+    is_super_admin,
+)
+from ticketing.services.project_actor_roles import ROLE_KEY_RE
 
 router = APIRouter()
 UTC = timezone.utc
@@ -32,6 +50,17 @@ class TypeActorRoleItem(BaseModel):
     scope: str = "project"
 
 
+class TypeWorkflowBindingItem(BaseModel):
+    """One workflow a project of this type runs — the same shape the project screen edits."""
+
+    display_label: str = Field(..., max_length=200)
+    workflow_id: str = Field(..., max_length=36)
+    is_default: bool = False
+    classifications: list[str] = []
+    intake_route: str | None = None
+    sort_order: int = 0
+
+
 class ProjectTypeResponse(BaseModel):
     type_key: str
     owner_organization_id: str | None = None
@@ -45,6 +74,7 @@ class ProjectTypeResponse(BaseModel):
     seah_workflow_id: str | None
     routing_org_role: str
     actor_roles: list[dict[str, Any]]
+    workflow_bindings: list[dict[str, Any]]
     is_active: bool
     sort_order: int
 
@@ -65,6 +95,8 @@ class ProjectTypeCreate(BaseModel):
     seah_workflow_id: str | None = None
     routing_org_role: str = "implementing_agency"
     actor_roles: list[TypeActorRoleItem] = []
+    workflow_bindings: list[TypeWorkflowBindingItem] = []
+    owner_organization_id: str | None = None
     is_active: bool = True
     sort_order: int = 0
 
@@ -76,6 +108,8 @@ class ProjectTypeUpdate(BaseModel):
     seah_workflow_id: str | None = None
     routing_org_role: str | None = None
     actor_roles: list[TypeActorRoleItem] | None = None
+    workflow_bindings: list[TypeWorkflowBindingItem] | None = None
+    owner_organization_id: str | None = None
     is_active: bool | None = None
     sort_order: int | None = None
 
@@ -91,6 +125,7 @@ def _to_response(row: ProjectType, *, bound: int = 0) -> ProjectTypeResponse:
         seah_workflow_id=row.seah_workflow_id,
         routing_org_role=row.routing_org_role,
         actor_roles=row.actor_roles or [],
+        workflow_bindings=row.workflow_bindings or [],
         is_active=row.is_active,
         sort_order=row.sort_order,
     )
@@ -166,13 +201,149 @@ def _require_editable(db: Session, type_key: str, fields: set[str]) -> None:
         )
 
 
+def _require_authority(db: Session, user: CurrentUser, owner_organization_id: str | None) -> None:
+    """Who may author a type owned by ``owner_organization_id`` (§3.1).
+
+    ``super_admin`` anywhere; an ``org_admin`` within its own subtree. A **global** type
+    (owner NULL) is the platform's, so a scoped org_admin cannot edit it — it would be
+    changing a template other organizations are offered.
+    """
+    if is_super_admin(user):
+        return
+    if not is_org_admin(user):
+        raise HTTPException(
+            status_code=403,
+            detail="You cannot change project types. Ask your organization's administrator.",
+        )
+    reach = admin_org_scope_ids(db, user)
+    if reach is None:  # country-wide org_admin — administers the whole tree
+        return
+    if owner_organization_id and owner_organization_id in reach:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail=(
+            "This project type belongs to another organization. Use it as a template to make "
+            "your own copy."
+            if owner_organization_id
+            else "This project type is shared with every organization, so only the platform "
+            "administrator can change it. Use it as a template to make your own copy."
+        ),
+    )
+
+
+def _validate_config(
+    db: Session,
+    *,
+    actor_roles: list[dict[str, Any]],
+    routing_org_role: str,
+    workflow_bindings: list[dict[str, Any]],
+) -> None:
+    """Check the *resulting* configuration, so a type can never name an anchor it doesn't have.
+
+    Raises 422 with a message an admin can act on (doc ui/05 §2.5 — no field names, no codes).
+    """
+    seen: set[str] = set()
+    for entry in actor_roles:
+        key = (entry.get("key") or "").strip()
+        label = (entry.get("label") or "").strip()
+        if not key or not label:
+            raise HTTPException(status_code=422, detail="Every organization role needs a name.")
+        if not ROLE_KEY_RE.match(key):
+            raise HTTPException(
+                status_code=422,
+                detail=f"'{key}' is not a valid role key — use lowercase letters, digits and underscores.",
+            )
+        if key in seen:
+            raise HTTPException(status_code=422, detail=f"'{label}' is listed twice.")
+        seen.add(key)
+
+    if actor_roles and routing_org_role not in seen:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Choose which organization a grievance is recorded against — it must be one of "
+                "this type's organization roles."
+            ),
+        )
+
+    if workflow_bindings:
+        from ticketing.services.project_workflows import validate_workflow_binding
+
+        defaults = [b for b in workflow_bindings if b.get("is_default")]
+        if len(defaults) != 1:
+            raise HTTPException(
+                status_code=422, detail="Mark exactly one workflow as the default."
+            )
+        claimed: dict[str, str] = {}
+        for b in workflow_bindings:
+            if not (b.get("display_label") or "").strip():
+                raise HTTPException(status_code=422, detail="Give every workflow a name.")
+            wf = validate_workflow_binding(db, str(b["workflow_id"]))
+            sensitive = (wf.workflow_type or "").lower() == "seah"
+            if b.get("is_default") and sensitive:
+                raise HTTPException(
+                    status_code=422,
+                    detail="A sensitive workflow cannot be the default — the default takes every "
+                    "grievance that matches nothing else.",
+                )
+            if not b.get("is_default") and not (b.get("intake_route") or "").strip():
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"Choose the chatbot menu that sends grievances to '{b['display_label']}'.",
+                )
+            for c in b.get("classifications") or []:
+                if c in claimed and claimed[c] != b["display_label"]:
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"Category '{c}' is already used by '{claimed[c]}'. A category "
+                        "can be used by one workflow only.",
+                    )
+                claimed[c] = b["display_label"]
+
+
+def _legacy_workflow_mirrors(
+    db: Session, bindings: list[dict[str, Any]]
+) -> tuple[str | None, str | None]:
+    """`standard_workflow_id` / `seah_workflow_id` derived from the bindings.
+
+    Both columns are legacy mirrors (doc 14 §4) — kept in sync here so the one authoring
+    surface writes them and nothing has to remember to.
+    """
+    from ticketing.models.workflow import WorkflowDefinition
+
+    standard = next((str(b["workflow_id"]) for b in bindings if b.get("is_default")), None)
+    seah = None
+    for b in bindings:
+        wf = db.get(WorkflowDefinition, str(b["workflow_id"]))
+        if wf and (wf.workflow_type or "").lower() == "seah":
+            seah = str(b["workflow_id"])
+            break
+    return standard, seah
+
+
+def _validate_owner(db: Session, owner_organization_id: str | None) -> None:
+    if owner_organization_id and not db.get(Organization, owner_organization_id):
+        raise HTTPException(
+            status_code=422, detail=f"Organization '{owner_organization_id}' not found"
+        )
+
+
 @router.get("/project-types", response_model=list[ProjectTypeResponse])
 def list_project_types(
     active_only: bool = True,
+    owner_organization_id: str | None = None,
     db: Session = Depends(get_db),
     _user: CurrentUser = Depends(require_admin),
 ):
-    rows = types_svc.list_project_types(db, active_only=active_only)
+    """List project types visible to the caller — global ones plus its own subtree's (§3.1).
+
+    ``owner_organization_id`` is the **New project** filter: the types offered for that
+    organization (its own, its parents', and the global ones).
+    """
+    rows = types_svc.list_project_types(
+        db, active_only=active_only, user=_user, owner_organization_id=owner_organization_id
+    )
     counts = _active_counts(db)
     return [_to_response(r, bound=counts.get(r.type_key, 0)) for r in rows]
 
@@ -193,19 +364,39 @@ def get_project_type(
 def create_project_type(
     body: ProjectTypeCreate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_super_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     if types_svc.get_project_type(db, body.type_key):
         raise HTTPException(status_code=409, detail=f"Project type '{body.type_key}' already exists")
+    # An org_admin's type is stamped with its own org node; super_admin may author a global
+    # type (owner NULL) or place one under any organization.
+    owner = body.owner_organization_id if is_super_admin(current_user) else catalog_owner_for(current_user)
+    _require_authority(db, current_user, owner)
+    _validate_owner(db, owner)
+    actor_roles = [r.model_dump() for r in body.actor_roles]
+    bindings = [b.model_dump() for b in body.workflow_bindings]
+    _validate_config(
+        db,
+        actor_roles=actor_roles,
+        routing_org_role=body.routing_org_role,
+        workflow_bindings=bindings,
+    )
+    standard_wf, seah_wf = (
+        _legacy_workflow_mirrors(db, bindings)
+        if bindings
+        else (body.standard_workflow_id, body.seah_workflow_id)
+    )
     now = _now()
     row = ProjectType(
         type_key=body.type_key,
         label=body.label,
         description=body.description,
-        standard_workflow_id=body.standard_workflow_id,
-        seah_workflow_id=body.seah_workflow_id,
+        standard_workflow_id=standard_wf,
+        seah_workflow_id=seah_wf,
         routing_org_role=body.routing_org_role,
-        actor_roles=[r.model_dump() for r in body.actor_roles],
+        actor_roles=actor_roles,
+        workflow_bindings=bindings,
+        owner_organization_id=owner,
         is_active=body.is_active,
         sort_order=body.sort_order,
         created_at=now,
@@ -222,24 +413,52 @@ def update_project_type(
     type_key: str,
     body: ProjectTypeUpdate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_super_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     row = types_svc.get_project_type(db, type_key)
     if not row:
         raise HTTPException(status_code=404, detail="Project type not found")
-    _require_editable(db, type_key, body.model_fields_set)
+    fields = body.model_fields_set
+    _require_authority(db, current_user, row.owner_organization_id)
+    _require_editable(db, type_key, fields)
+    if "owner_organization_id" in fields:
+        # Moving a type to another organization is itself an authoring act in both places.
+        _require_authority(db, current_user, body.owner_organization_id)
+        _validate_owner(db, body.owner_organization_id)
+
+    actor_roles = (
+        [r.model_dump() for r in body.actor_roles] if body.actor_roles is not None else list(row.actor_roles or [])
+    )
+    bindings = (
+        [b.model_dump() for b in body.workflow_bindings]
+        if body.workflow_bindings is not None
+        else list(row.workflow_bindings or [])
+    )
+    _validate_config(
+        db,
+        actor_roles=actor_roles,
+        routing_org_role=body.routing_org_role if body.routing_org_role is not None else row.routing_org_role,
+        workflow_bindings=bindings if body.workflow_bindings is not None else [],
+    )
+
     if body.label is not None:
         row.label = body.label
     if body.description is not None:
         row.description = body.description
-    if body.standard_workflow_id is not None:
-        row.standard_workflow_id = body.standard_workflow_id
-    if body.seah_workflow_id is not None:
-        row.seah_workflow_id = body.seah_workflow_id
     if body.routing_org_role is not None:
         row.routing_org_role = body.routing_org_role
     if body.actor_roles is not None:
-        row.actor_roles = [r.model_dump() for r in body.actor_roles]
+        row.actor_roles = actor_roles
+    if body.workflow_bindings is not None:
+        row.workflow_bindings = bindings
+        row.standard_workflow_id, row.seah_workflow_id = _legacy_workflow_mirrors(db, bindings)
+    else:
+        if body.standard_workflow_id is not None:
+            row.standard_workflow_id = body.standard_workflow_id
+        if body.seah_workflow_id is not None:
+            row.seah_workflow_id = body.seah_workflow_id
+    if "owner_organization_id" in fields:
+        row.owner_organization_id = body.owner_organization_id
     if body.is_active is not None:
         row.is_active = body.is_active
     if body.sort_order is not None:
@@ -260,13 +479,22 @@ def duplicate_project_type(
     type_key: str,
     body: ProjectTypeDuplicate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_super_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     src = types_svc.get_project_type(db, type_key)
     if not src:
         raise HTTPException(status_code=404, detail="Project type not found")
     if types_svc.get_project_type(db, body.type_key):
         raise HTTPException(status_code=409, detail=f"Project type '{body.type_key}' already exists")
+    # The copy lands in the author's own organization — copying a type you may read but not
+    # edit is exactly what "Use as template" is for, so authority is checked on the *copy*.
+    owner = (
+        (body.owner_organization_id or src.owner_organization_id)
+        if is_super_admin(current_user)
+        else (catalog_owner_for(current_user) or src.owner_organization_id)
+    )
+    _require_authority(db, current_user, owner)
+    _validate_owner(db, owner)
     now = _now()
     row = ProjectType(
         type_key=body.type_key,
@@ -277,7 +505,7 @@ def duplicate_project_type(
         routing_org_role=src.routing_org_role,
         actor_roles=list(src.actor_roles or []),
         workflow_bindings=list(src.workflow_bindings or []),
-        owner_organization_id=body.owner_organization_id or src.owner_organization_id,
+        owner_organization_id=owner,
         # A copy starts unavailable: it is not offered for new projects until its author
         # has finished editing and turns it on.
         is_active=False,

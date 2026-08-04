@@ -104,11 +104,11 @@ That is the whole forward-compatibility cost today: **one accessor, no schema ch
 ## 9. Build order
 
 1. **Model** — migration: `project_types.owner_organization_id`, `workflow_steps.tier_labels`, `workflow_steps.required_tiers`. Schemas + TS types. *(done)* **Plus `n0p2r4t6`: back-fills a type per distinct workflow set so the model has data — every project was untyped and the catalog empty.**
-2. **Type authoring UI** — workflows bound, organization roles (label · description · required), category routing, `routing_org_role` picker. `org_admin` scoped to subtree. **Frozen when bound** (§8): the editor becomes a read-only summary with **Use as template**, and the API refuses config writes to a bound type (409, not a client-side disable).
-3. **Step editor** — name/description/required per job ([`ui/06`](../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks it).
-4. **Consumption** — staffing reads `tier_labels`/`required_tiers`; Partner organizations renders `actor_roles`; Grievance workflows goes read-only when typed.
-5. **Creation flow** — organization → filtered types → create; anchor slot pre-filled.
-6. **Go-live** — A4 reads `required_tiers` *(done 2026-08-04)*. **Deleting A3/A5 depends on step 2 + a seeded catalog**: `ticketing.project_types` is empty today and every project is untyped, so B1 never runs and A3/A5 are the only organization gates that exist. Delete them in the same change that seeds types carrying the equivalent required roles, and promote B1 back to a blocker — not before, or a project can activate with no accountable organization.
-7. **Docs** — 02/03/04/12/13/14, amend the July DECISION, close followup §6.
+2. **Type authoring UI** — workflows bound, organization roles (label · description · required), category routing, `routing_org_role` picker. `org_admin` scoped to subtree. **Frozen when bound** (§8): the editor becomes a read-only summary with **Use as template**, and the API refuses config writes to a bound type (409, not a client-side disable). *(done 2026-08-04)*
+3. **Step editor** — name/description/required per job ([`ui/06`](../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks it). *(done)*
+4. **Consumption** — staffing reads `tier_labels`/`required_tiers`; Partner organizations renders `actor_roles`; Grievance workflows goes read-only when typed. *(done 2026-08-04 — the project reads its **type's** catalog through `effective_role_catalog`; `project_actor_roles` is no longer copied per project and is refused for a typed project)*
+5. **Creation flow** — organization → filtered types → create; anchor slot pre-filled. *(done 2026-08-04 — and `project_type_key` is now required at creation, which is what closes the untyped hole below)*
+6. **Go-live** — A4 reads `required_tiers` *(done 2026-08-04)*. ~~Deleting A3/A5 depends on step 2 + a seeded catalog~~ *(done 2026-08-04)*: `n0p2r4t6` gave every project a type, so B1 runs. **A3/A5 deleted, B1 promoted to blocker in the same change**, with two legacy reads so no existing project was blocked by it — `implementing_agency_org_id` fills the anchor slot and `project_donors` a `donor` slot. The one remaining way to have no catalog is a pre-types project, which now reports `info`; new projects cannot be untyped.
+7. **Docs** — 02/03/04/12/13/14, amend the July DECISION, close followup §6. *(done)*
 
 Steps 1+3 (the workflow half) are independent of 2+5 (the type half).

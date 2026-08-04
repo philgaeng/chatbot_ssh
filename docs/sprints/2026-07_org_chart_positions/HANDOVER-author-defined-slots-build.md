@@ -1,7 +1,12 @@
 # Handover — author-defined slots: what shipped, what's next
 
-**From:** session of 2026-08-04. **Branch:** `integration/stage`, 29 commits, nothing pushed.
-**Suite:** 692 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
+**From:** session of 2026-08-04. **Branch:** `integration/stage`, nothing pushed.
+**Suite:** 711 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
+
+> **The §9 build order is finished** (2026-08-04, second session). Steps 2, 4, 5 and 6 landed
+> together — type authoring UI, the project reading its type's catalog, the organization-first
+> creation flow, and A3/A5 → B1. §1–§2 below are the first session's record; **§7 is what the
+> last slice changed** and §8 is what is genuinely left.
 
 ---
 
@@ -43,17 +48,17 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 | §9 step | State |
 |---|---|
 | 1 Model | ✅ three migrations applied (`j6l8n0p2`, `l8n0p2r4`, `n0p2r4t6`) |
-| 2 Type authoring UI | ⬜ **next** |
+| 2 Type authoring UI | ✅ §7.1 |
 | 3 Step editor | ✅ |
-| 4 Consumption — staffing | ✅ · **Partner organizations ⬜** |
-| 5 Creation flow (org → filtered types) | ⬜ |
+| 4 Consumption — staffing | ✅ · Partner organizations ✅ §7.2 |
+| 5 Creation flow (org → filtered types) | ✅ §7.3 |
 | 5b Routing anchor | ✅ inverted (`c3d22de5`) |
-| 6 Go-live A3/A5 deletion | ⬜ unblocked — see §4.1 |
+| 6 Go-live A3/A5 deletion | ✅ §7.4 |
 | 7 Docs | ✅ specs reconciled — 12 §2, 13 §2/§3/§5B/§7, 14 §4, 11, 10, 04, 03 + followup §6.1 |
 
 ---
 
-## 3. Next slice
+## 3. Next slice *(done — kept as the brief §7 was built against)*
 
 **Spec for all three: [14 §4](../../ticketing_system/14_platform_settings.md) (what a type is, the freeze table) and [13 §2/§3](../../ticketing_system/13_projects_and_packages.md) (where filled values live).**
 
@@ -130,10 +135,42 @@ curl -s -X PATCH …/steps/… -d '{"tier_labels":{},"required_tiers":[]}'
 
 ---
 
-## 6. Open, not forgotten
+## 7. What the closing slice built (2026-08-04, second session)
+
+### 7.1 Type authoring (`ProjectTypesTab.tsx` + `project_types.py`)
+The tab edits everything a type is. The workflow cards are **the project screen's cards** — extracted to `<WorkflowBindingCards>` and used by both, so the two cannot drift. (Extracting also fixed a real bug: the card was defined *inside* the editor's render, so it remounted on every keystroke and the name field lost focus after each letter.)
+
+Organization **keys are never typed or shown** — derived from the label once, then immutable, because `project_organizations.org_role` points at them. Renaming a role is therefore always safe.
+
+The API grew what the screen needs: `workflow_bindings` on the response and both write schemas, `owner_organization_id`, and `_validate_config` — the anchor must be one of the type's *own* roles, one default, no sensitive default, one owner per category, a category in one workflow. `standard_workflow_id`/`seah_workflow_id` are derived from the bindings on save, so the legacy mirrors can't lie.
+
+Authoring moved from `require_super_admin` to `require_admin` + `_require_authority`: `super_admin` anywhere, `org_admin` inside its subtree, and a **global** type is the platform's (403 that names "use as template" as the way out). The Settings tab is visible to an `org_admin` with *only* the Project types entry.
+
+### 7.2 A project reads its type's catalog
+`effective_role_catalog()` is the one answer to "which organizations does this project name": the **type's** `actor_roles` when typed, the dead per-project table only when not. `GET /projects/{id}/actor-roles` returns it (now carrying `required`, `required_package`, `is_routing_anchor`), `validate_org_role_for_project` validates against it, `ProjectPartnersSection` renders one block per entry, and the project list labels each linked organization with the author's word. `instantiate_project_from_type` **stopped copying** the catalog into the project; `PUT …/actor-roles` on a typed project is 409.
+
+### 7.3 Creation is organization → type → name it
+`GET /project-types?owner_organization_id=…` offers that organization's types, its ancestors', and the global ones. `POST /projects` takes `organization_id`, writes it straight into the type's anchor slot, and **requires `project_type_key`** — without one there is no catalog for B1 and a project could activate with no accountable organization.
+
+### 7.4 A3/A5 → B1
+Both deleted; B1 is a **blocker** whose message names the gap in the author's words ("Name the organization for: Ward Office"). Two legacy reads keep old projects passing: `implementing_agency_org_id` fills the anchor slot, `project_donors` a `donor` slot. An untyped project reports `info` — it has no catalog to check, and no new project can be untyped. `donor_informed_ok()` survives as the pre-fill predicate; it no longer gates activation.
+
+**Verify:**
+```bash
+curl -s -X PATCH localhost:5002/api/v1/project-types/migrated_type_1 \
+  -H 'Content-Type: application/json' -d '{"routing_org_role":"donor"}'   # 409 — a live project runs on it
+curl -s -X POST localhost:5002/api/v1/projects -H 'Content-Type: application/json' \
+  -d '{"country_code":"NP","short_code":"X1","name":"x"}'                 # 422 — choose a project type
+```
+
+---
+
+## 8. Open, not forgotten
 
 - **The rename** ([sensitive-workflows §6](DECISION-sensitive-workflows.md)) — `workflow_type`→`is_sensitive`, `is_seah`→`is_sensitive`, `workflow_track`→a capability, `include_seah`→`include_sensitive`. Mechanical, wants its own pass.
 - **Position-first picker** (13 §5A.2, LOCKED) — still a flat officer search. Needs an endpoint listing positions in a location scope with their holders; the positions API is per-user only. [followup §6.2](followups/workflow-stream-vocabulary-and-intake-route-labels.md).
 - **`INTAKE_ROUTE_CATALOG` labels** — "File a grievance (safeguards GRM)" surfaces in the Chatbot menu picker and breaks ui/05.
 - **Per-organization chatbots** — one accessor keyed by owning organization, no schema change today ([decision §6](DECISION-author-defined-slots.md)).
 - **A project cannot move to an improved copy of its type.** Chosen, not deferred — read §8 of the decision before "fixing" it.
+- **The legacy organization store is dead but not dropped** — `project_actor_roles`, `implementing_agency_org_id`, `project_donors`. All three are read-only fallbacks for pre-types projects; the drop is one sweep once none exist. Logged with its touch list in [followups/actor-role-catalog-not-dropped.md](followups/actor-role-catalog-not-dropped.md).
+- **KL Road has no project-level locations in the dev DB**, so its go-live shows D1 failing (packages have locations; the project row does not). Pre-existing, not caused by this slice — but it means the demo project cannot be reactivated if anyone deactivates it (trap 4.5).

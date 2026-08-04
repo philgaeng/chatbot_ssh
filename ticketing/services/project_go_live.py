@@ -157,6 +157,25 @@ def _project_org_has_role(project: Project, role_key: str) -> bool:
     return any(po.org_role == role_key for po in project.organizations)
 
 
+def _slot_filled(db: Session, *, project: Project, type_row: ProjectType, role_key: str) -> bool:
+    """Is the type's organization slot ``role_key`` filled on this project?
+
+    Filled values live in ``project_organizations`` (doc 13 §2). The two **legacy reads**
+    (DECISION-author-defined-slots §4) cover projects set up before the catalog came back:
+    the anchor organization was kept on the project row, and donors in ``project_donors``.
+    Neither is written any more; both are still true statements about the project.
+    """
+    if _project_org_has_role(project, role_key):
+        return True
+    if role_key == type_row.routing_org_role and project.implementing_agency_org_id:
+        return True
+    if role_key == "donor":
+        from ticketing.services.donor_guardrail import project_donor_org_ids
+
+        return bool(project_donor_org_ids(db, project.project_id))
+    return False
+
+
 def _standard_level_gaps(
     db: Session,
     *,
@@ -278,83 +297,53 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     # the default's whole job (doc 13 §5B.2) — so an uncovered category was never a finding, only
     # noise on every project that doesn't enumerate the whole catalog.
 
-    # A3 Implementing agency (block for activation). doc 13 / DECISION §2: read the
-    # dedicated implementing_agency_org_id field (back-compat fallback to the legacy
-    # org_role='implementing_agency' link). Defaulted → effectively always satisfied.
-    from ticketing.services.donor_guardrail import (
-        donor_informed_ok,
-        implementing_agency_org_id,
-        last_standard_step,
-        project_donor_org_ids,
-    )
-
-    # A3/A5 are slated for deletion — DECISION-author-defined-slots §7 replaces both with
-    # "the type's required organization slots are filled" (B1). NOT YET: `ticketing.project_types`
-    # is empty and every current project is untyped, so B1 never runs and these two are the only
-    # organization gates there are. Delete them in the same change that seeds a type catalog
-    # carrying the equivalent required roles, or a project activates with no accountable
-    # organization at all.
-    has_ia = implementing_agency_org_id(db, project) is not None
-    checks.append(
-        GoLiveCheck(
-            id="A3",
-            label="Implementing agency",
-            group="routing",
-            severity="block",
-            status="pass" if has_ia else "fail",
-            message="Set the implementing agency (the accountable government agency)"
-            if not has_ia
-            else "Implementing agency assigned",
-            section="actors",
-        )
-    )
-
-    # A5 Donor last-step-informed guardrail (block; doc 13 §3 / OC-04 §5.6). When a project
-    # includes a donor, the final standard-track step's "Kept informed" cast must contain
-    # ≥1 donor role, so donor staff are notified on final escalation. SEAH-suppressed by
-    # design — this gate governs the standard track only.
-    donor_ids = project_donor_org_ids(db, project.project_id)
-    if donor_ids:
-        a5_ok = donor_informed_ok(db, project)
-        last_step = last_standard_step(db, project)
-        checks.append(
-            GoLiveCheck(
-                id="A5",
-                label="Donor kept informed",
-                group="routing",
-                severity="block",
-                status="pass" if a5_ok else "fail",
-                message=(
-                    "Kept informed at the last level"
-                    if a5_ok
-                    else (
-                        "Add the donor to the people kept informed at "
-                        + (
-                            f"the last level (Level {last_step.step_order})"
-                            if last_step
-                            else "the workflow's last level"
-                        )
-                    )
-                ),
-                section="actors",
-            )
-        )
-
-    # B1 Required project actor slots
+    # A3 (implementing agency set) and A5 (donor kept informed at the last level) were DELETED
+    # 2026-08-04 — DECISION-author-defined-slots §7. Both hardcoded two organizations the
+    # platform happened to know about; B1 below asks the same question in the author's own
+    # words, for whatever organizations *their* type names. The donor guardrail is expressible
+    # as the author marking that slot required and putting the role in the last level's
+    # kept-informed job, which C5 then enforces (§4).
+    #
+    # B1 is a **blocker** and its catalog is the type's, so deleting A3/A5 does not open a gap:
+    # a project cannot activate without the organizations its own type says it needs.
     if pt:
         required = required_project_role_keys(pt)
-        missing = [k for k in required if not _project_org_has_role(project, k)]
+        labels = {
+            str(e.get("key")): (e.get("label") or e.get("key"))
+            for e in (pt.actor_roles or [])
+            if e.get("key")
+        }
+        missing = [
+            str(labels.get(k, k))
+            for k in sorted(required)
+            if not _slot_filled(db, project=project, type_row=pt, role_key=k)
+        ]
         b1_ok = not missing
         checks.append(
             GoLiveCheck(
                 id="B1",
                 label="Partner organizations",
                 group="commercial",
-                severity="info",
-                status="pass" if b1_ok else "warn",
-                message="All required organizations assigned"
+                severity="block",
+                status="pass" if b1_ok else "fail",
+                message="Every organization this project needs is named"
                 if b1_ok
-                else f"Missing: {', '.join(missing)}",
+                else f"Name the organization for: {', '.join(missing)}",
+                section="actors",
+            )
+        )
+    else:
+        # A legacy project created before types existed. Nothing names the organizations it
+        # needs, so there is nothing to check — say so rather than pass silently. New projects
+        # always have a type (POST /projects requires one).
+        checks.append(
+            GoLiveCheck(
+                id="B1",
+                label="Partner organizations",
+                group="commercial",
+                severity="info",
+                status="info",
+                message="This project has no type, so no organizations are required.",
                 section="actors",
             )
         )
@@ -675,7 +664,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     # §7's table; everything else carries severity="info" and never stops activation.
     # A1/D1/E1/C4 were promoted 2026-08-04: they were documented Blockers shipping as warnings,
     # so a project with no default workflow and no locations could be activated.
-    _ACTIVATION_BLOCK_IDS = {"A1", "A3", "A5", "C1", "C4", "C5", "D1", "E1", "R1"}
+    # A3/A5 → B1 the same day: the organization gate is now the type's own catalog (§7).
+    _ACTIVATION_BLOCK_IDS = {"A1", "B1", "C1", "C4", "C5", "D1", "E1", "R1"}
     can_activate = not any(
         c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
     )
@@ -689,7 +679,7 @@ def activation_block_message(report: GoLiveReport) -> str | None:
         return None
     blocking = [
         c for c in report.checks
-        if c.id in {"A3", "A5", "C5"} and c.status == "fail"
+        if c.id in {"B1", "C5"} and c.status == "fail"
     ]
     if blocking:
         return "; ".join(c.message for c in blocking)

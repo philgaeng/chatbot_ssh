@@ -6,17 +6,24 @@
 
 ---
 
-## 🔵 Author-defined slots — build in progress (2026-08-04)
+## 🔵 Author-defined slots — BUILT 2026-08-04 (§9 build order complete)
 
-**Entry point: [`sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md`](sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md)** — what shipped, what's next, and the traps that cost time. Plan: `DECISION-author-defined-slots.md`.
+**Entry point: [`sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md`](sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md)** §7 — what the closing slice built, and the traps that cost time. Plan: `DECISION-author-defined-slots.md`.
 
-Shipped: the project console (ui/04 shell), author-named jobs per level
-(`tier_labels` + `required_tiers`, migration `j6l8n0p2`), binary go-live, project-type
-owner + freeze-when-bound (`l8n0p2r4`). Next: the type authoring UI, Partner organizations
-rendering the type's `actor_roles`, and the organization → type creation flow.
+The project type is the template: it names the workflows a project runs and the organizations
+it must have, in the author's own words. Creating a project is **organization → its types →
+name it**. Built across two sessions: the project console + author-named jobs
+(`tier_labels`/`required_tiers`, `j6l8n0p2`) + binary go-live + type owner and freeze-when-bound
+(`l8n0p2r4`) + back-filled types (`n0p2r4t6`), then the type authoring UI, the project reading
+its type's catalog, the creation flow, and **A3/A5 → B1** (a blocker that names the gap with the
+author's word).
 
-**Do not delete go-live A3/A5 yet** — `project_types` is empty and every project is untyped,
-so B1 never runs and those two are the only organization gates that exist.
+**Left, deliberately:** the legacy organization store is dead but not dropped —
+`project_actor_roles`, `implementing_agency_org_id`, `project_donors` are read-only fallbacks
+for projects created before types existed. One cleanup sweep once none exist; touch list in
+[`followups/actor-role-catalog-not-dropped.md`](sprints/2026-07_org_chart_positions/followups/actor-role-catalog-not-dropped.md).
+Also open: the position-first staffing picker (13 §5A.2), the `is_sensitive` rename below, and
+the ui/04 wireframe still mocking "Implementing agency + Donors".
 
 ---
 

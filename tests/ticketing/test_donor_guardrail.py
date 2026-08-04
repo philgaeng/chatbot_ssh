@@ -101,7 +101,7 @@ def test_implementing_agency_helper_falls_back_to_org_role(db, kl_road_project):
         db.flush()
 
 
-# ── donor guardrail predicate + go-live A5 (DECISION §3, §7, §9) ──────────────
+# ── donor guardrail predicate; go-live A5 is GONE (DECISION-author-defined-slots §4, §7) ──
 
 def test_kl_road_has_donor_and_is_informed(db, kl_road_project):
     assert ORG_ADB in project_donor_org_ids(db, kl_road_project.project_id)
@@ -109,9 +109,15 @@ def test_kl_road_has_donor_and_is_informed(db, kl_road_project):
     assert donor_informed_ok(db, kl_road_project) is True
 
 
-def test_go_live_blocks_when_donor_not_informed(db, kl_road_project):
-    """A5 fails + can_activate=False when a donor is present but no donor role is in the
-    final standard step's informed cast. Mutations are rolled back (no commit)."""
+def test_a5_is_gone_and_the_predicate_still_works(db, kl_road_project):
+    """The donor guardrail stopped being a hardcoded go-live check on 2026-08-04.
+
+    A5 asked one question the platform had wired in: *is a donor kept informed at the last
+    level?* The type model asks it in the author's own words instead — mark that organization
+    role **required** (B1) and put it in the last level's kept-informed job, which C5 enforces
+    like any other required job. So A5 must no longer be emitted, while the predicate it used
+    stays (it still pre-fills the cast when a donor is added).
+    """
     step = last_standard_step(db, kl_road_project)
     assert step is not None
     saved = list(step.informed_roles or [])
@@ -121,17 +127,85 @@ def test_go_live_blocks_when_donor_not_informed(db, kl_road_project):
         assert donor_informed_ok(db, kl_road_project) is False
 
         report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
-        a5 = next(c for c in report.checks if c.id == "A5")
-        assert a5.status == "fail" and a5.severity == "block"
-        assert report.can_activate is False
-        # Assert the intent — the block message names the donor and points at the last level —
-        # not the exact phrasing, which is user-facing copy governed by ui/05 and re-worded
-        # 2026-08-02 ("Add a donor role (donor_national / …)" → plain language).
-        block_msg = (go_live_svc.activation_block_message(report) or "").lower()
-        assert "donor" in block_msg and "last level" in block_msg
+        assert not any(c.id in {"A3", "A5"} for c in report.checks)
     finally:
         step.informed_roles = saved
         db.flush()
+
+
+def test_b1_blocks_when_a_required_organization_is_missing(db, kl_road_project):
+    """B1 replaces A3/A5 and is a **blocker** — a project cannot go live without the
+    organizations its own type says it needs, named in the author's words."""
+    from ticketing.services.project_types import get_project_type
+
+    pt = get_project_type(db, kl_road_project.project_type_key)
+    assert pt is not None, "KL Road must have a type — the back-fill gave every project one"
+    saved_roles = list(pt.actor_roles or [])
+    saved_ia = kl_road_project.implementing_agency_org_id
+    try:
+        # A required role nothing fills — and not the anchor, so the legacy field cannot
+        # satisfy it by accident.
+        pt.actor_roles = saved_roles + [
+            {
+                "key": "ward_office",
+                "label": "Ward Office",
+                "description": "",
+                "required": True,
+                "required_package": False,
+                "scope": "project",
+            }
+        ]
+        db.flush()
+
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        b1 = next(c for c in report.checks if c.id == "B1")
+        assert b1.status == "fail" and b1.severity == "block"
+        # The author's label, not the key — that is the whole point of the catalog.
+        assert "Ward Office" in b1.message
+        assert report.can_activate is False
+        assert "Ward Office" in (go_live_svc.activation_block_message(report) or "")
+    finally:
+        pt.actor_roles = saved_roles
+        kl_road_project.implementing_agency_org_id = saved_ia
+        db.flush()
+
+
+def test_b1_accepts_the_legacy_anchor_field(db, kl_road_project):
+    """A project set up before the catalog came back kept its anchor organization on the
+    project row. That is still a true statement about the project, so B1 reads it (§4) —
+    otherwise the change would have blocked every existing project on activation."""
+    from ticketing.models.project import ProjectOrganization
+    from ticketing.services.project_types import get_project_type
+
+    pt = get_project_type(db, kl_road_project.project_type_key)
+    anchor_links = [
+        po for po in kl_road_project.organizations if po.org_role == pt.routing_org_role
+    ]
+    saved = [(po.organization_id, po.org_role) for po in anchor_links]
+    saved_ia = kl_road_project.implementing_agency_org_id
+    try:
+        for po in anchor_links:
+            db.delete(po)
+        kl_road_project.implementing_agency_org_id = ORG_DOR
+        db.flush()
+        db.refresh(kl_road_project)
+
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        b1 = next(c for c in report.checks if c.id == "B1")
+        assert b1.status == "pass", b1.message
+    finally:
+        for org_id, role in saved:
+            if db.get(ProjectOrganization, (kl_road_project.project_id, org_id)) is None:
+                db.add(
+                    ProjectOrganization(
+                        project_id=kl_road_project.project_id,
+                        organization_id=org_id,
+                        org_role=role,
+                    )
+                )
+        kl_road_project.implementing_agency_org_id = saved_ia
+        db.flush()
+        db.refresh(kl_road_project)
 
 
 def test_apply_donor_informed_defaults_populates_and_is_idempotent(db, kl_road_project):
@@ -297,7 +371,8 @@ def test_add_and_remove_donor_endpoint(db, kl_road_project):
 
 def test_project_donor_org_ids_counts_legacy_org_role(db, kl_road_project):
     """M1a: a donor represented ONLY as a legacy org_role='donor' link (no project_donors
-    row) is still counted — otherwise A5 passes vacuously and go-live slips the guardrail."""
+    row) is still counted. The predicate feeds the informed-cast pre-fill, and go-live's B1
+    reads it for a 'donor' slot on a project that predates the catalog."""
     from ticketing.models.project import ProjectDonor, ProjectOrganization
 
     # Remove KL Road's dedicated ProjectDonor rows so ADB is present ONLY via the legacy
@@ -312,9 +387,9 @@ def test_project_donor_org_ids_counts_legacy_org_role(db, kl_road_project):
         db.flush()
         # ADB is still linked as org_role='donor' (ProjectOrganization) → must still count.
         assert ORG_ADB in project_donor_org_ids(db, kl_road_project.project_id)
-        # And the go-live A5 gate stays active (evaluated, not skipped).
+        # And the organization gate still runs (B1 — A5 was deleted 2026-08-04).
         report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
-        assert any(c.id == "A5" for c in report.checks)
+        assert any(c.id == "B1" for c in report.checks)
     finally:
         for pid, oid in saved_keys:
             if db.get(ProjectDonor, (pid, oid)) is None:

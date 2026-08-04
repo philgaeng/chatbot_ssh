@@ -3,13 +3,14 @@
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/TODO.md`**
-> Last updated: 2026-07-04 — moved from `docs/sprints/claude-tickets/` to `docs/`; stale Cognito-era rows cleaned (auth is Keycloak as-built, see `docs/deployment/16_auth_keycloak.md`). Last substantive entry: 2026-06-12 — project-level officer SMS on assignment (Messaging section + F1 go-live)
+> Last updated: 2026-08-04 — author-defined slots finished (project types are the template; go-live A3/A5 → B1). Earlier: 2026-07-04 moved from `docs/sprints/claude-tickets/` to `docs/`; stale Cognito-era rows cleaned (auth is Keycloak as-built, see `docs/deployment/16_auth_keycloak.md`)
 
 ---
 
 ## ⚡ QUICK STATE (60-second session recovery)
 
 ### What's done
+- ✅ **Author-defined slots — complete** (2026-08-04, suite 711 passed / 3 skipped). A **project type is the template**: it names the workflows a project runs and the organizations it must have, in the author's own words, and says which of them a grievance is recorded against. Creating a project is **organization → its types → name it**; the chosen organization is written straight into the type's routing slot. Go-live's hardcoded organization gates (**A3 implementing agency, A5 donor informed**) are **deleted** — **B1** is the blocker now, and it names the gap with the author's word ("Name the organization for: Ward Office"), reading `implementing_agency_org_id` / `project_donors` as legacy fallbacks so no existing project broke. `POST /projects` now **requires** `project_type_key`. Type authoring is org-scoped (`super_admin` anywhere, `org_admin` in its subtree) and **frozen while a live project runs on it** — read-only summary + *Use as template*. Migrations `j6l8n0p2` · `l8n0p2r4` · `n0p2r4t6`. Plan + record: [`sprints/2026-07_org_chart_positions/`](sprints/2026-07_org_chart_positions/HANDOVER-author-defined-slots-build.md) §7
 - ✅ **Week 1 backend complete** — schema, models, migrations, CRUD API, escalation engine, Celery tasks, seed
 - ✅ **Settings UI** — full admin panel: workflows, users (scopes), organisations, locations, projects, packages
 - ✅ **Project-level officer SMS** (2026-06-12) — `officer_messaging` on `ticketing.projects`; `GET/PATCH /projects/{id}/messaging`; Celery `notify_officer_assignment`; wired on create / escalate / reassign; Settings → Projects → Messaging UI; go-live check **F1**

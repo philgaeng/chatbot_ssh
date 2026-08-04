@@ -143,9 +143,15 @@ class ProjectCreate(BaseModel):
     is_active: bool | None = None
     project_type_key: str | None = Field(
         None,
-        description="Archetype to instantiate (e.g. construction_road). Defaults workflows and actor roles.",
+        description=(
+            "The template this project is built from — its workflows, category routing and the "
+            "organizations it must name. Required (DECISION-author-defined-slots §5)."
+        ),
     )
-    # doc 13 / DECISION 2026-07-10 §2: the accountable government agency (routing anchor).
+    # Step 1 of the creation flow: the organization that fills the type's `routing_org_role`
+    # slot — the one a grievance is recorded against (§5).
+    organization_id: str | None = Field(None, max_length=64)
+    # Legacy alias for the same thing, kept for callers written before the catalog came back.
     implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
@@ -1349,6 +1355,18 @@ def create_project(
     if not db.get(Country, body.country_code):
         raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
 
+    # A project is built from a type (DECISION-author-defined-slots §5) — that is where its
+    # workflows and its required organizations come from. Without one, go-live's B1 has no
+    # catalog to check and a project could activate with no accountable organization at all.
+    if not body.project_type_key:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Choose a project type. It sets the workflows this project runs and the "
+                "organizations it must name."
+            ),
+        )
+
     # Check short_code uniqueness
     existing = db.execute(
         select(Project).where(Project.short_code == body.short_code)
@@ -1381,13 +1399,27 @@ def create_project(
     db.add(project)
     db.flush()
 
-    if body.project_type_key:
-        try:
-            types_svc.instantiate_project_from_type(db, project, body.project_type_key)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-    else:
-        actor_roles_svc.seed_project_actor_roles(db, project.project_id)
+    try:
+        type_row = types_svc.instantiate_project_from_type(db, project, body.project_type_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # Step 1 of the creation flow fills the type's routing slot, so the creator never allocates
+    # by hand the one organization grievances are recorded against
+    # (DECISION-author-defined-slots §5).
+    anchor_org = body.organization_id or body.implementing_agency_org_id
+    if anchor_org:
+        if not db.get(Organization, anchor_org):
+            raise HTTPException(status_code=422, detail=f"Organization '{anchor_org}' not found")
+        db.add(
+            ProjectOrganization(
+                project_id=project.project_id,
+                organization_id=anchor_org,
+                org_role=type_row.routing_org_role,
+            )
+        )
+        _sync_participant_role(db, project, anchor_org, None, type_row.routing_org_role)
+        db.flush()
 
     if is_active:
         report = go_live_svc.evaluate_go_live(db, project.project_id)
@@ -1922,6 +1954,13 @@ class ActorRoleItem(BaseModel):
     label: str
     description: str = ""
     sort_order: int = 0
+    #: From the project type's catalog (doc 13 §2). `required` blocks go-live until the slot is
+    #: filled (B1); `required_package` does the same per lot (B3); `is_routing_anchor` marks the
+    #: one slot whose organization a grievance is recorded against. Ignored on PUT.
+    required: bool = False
+    required_package: bool = False
+    scope: str = "project"
+    is_routing_anchor: bool = False
 
 
 class ActorRolesReplace(BaseModel):
@@ -1930,14 +1969,18 @@ class ActorRolesReplace(BaseModel):
 
 @router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_actor_roles(project_id: str, db: Session = Depends(get_db)):
-    """Role vocabulary for this project (donor, CSC, contractor, etc.)."""
-    if not db.get(Project, project_id):
+    """The organizations this project must name — its **type's** catalog (doc 13 §2/§3).
+
+    A typed project reads the type; only a legacy untyped one falls back to the dead
+    per-project table.
+    """
+    project = db.get(Project, project_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    rows = actor_roles_svc.list_project_actor_roles(db, project_id)
-    if not rows:
-        rows = actor_roles_svc.seed_project_actor_roles(db, project_id)
-        db.commit()
-    return actor_roles_svc.actor_roles_to_api(rows)
+    catalog = actor_roles_svc.effective_role_catalog(db, project_id)
+    if not project.project_type_key:
+        db.commit()  # the untyped fallback seeds rows — keep them
+    return catalog
 
 
 @router.put("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
@@ -1947,16 +1990,22 @@ def replace_project_actor_roles(
     db: Session = Depends(get_db),
     admin: CurrentUser = Depends(require_admin),
 ):
-    """Replace the full role vocabulary for a project. Super admin only when project has a type."""
+    """Replace the role vocabulary of a **legacy untyped** project.
+
+    A typed project cannot deviate from its type (DECISION-author-defined-slots §1), and its
+    catalog is read from the type — so editing this table would change nothing on screen.
+    Refused rather than silently accepted.
+    """
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if project.project_type_key and not (
-        admin.is_super_admin or admin.is_org_admin()
-    ):
+    if project.project_type_key:
         raise HTTPException(
-            status_code=403,
-            detail="Actor role keys are defined by the project type; admin only",
+            status_code=409,
+            detail=(
+                "Organization roles come from this project's type. Change them under "
+                "Settings → Project types."
+            ),
         )
     try:
         rows = actor_roles_svc.replace_project_actor_roles(

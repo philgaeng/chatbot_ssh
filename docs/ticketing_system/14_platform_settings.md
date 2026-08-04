@@ -79,8 +79,12 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 
 **Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
 
-**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` *(authoring UI not built — the tab currently only counts entries)*
+**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog, the routing anchor and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
 **API:** `ticketing/api/routers/project_types.py`
+
+**Where it lives:** Settings → **Settings** tab → *Project types*. A `super_admin` sees the whole platform sub-tab set; an `org_admin` sees **only** this entry, which is how it authors types for its own organization.
+
+**Organization keys are never typed or shown.** The author writes the label ("Ward Office"); the key is derived from it once and then never changes, because filled organizations point at it. Renaming a role therefore never orphans anything.
 
 | Field on type | What it gives the project |
 |---------------|----------------------|
@@ -105,7 +109,15 @@ Once **any active project** runs on a type, its **configuration** cannot change 
 
 **Back-filled 2026-08-04** (`n0p2r4t6`): every previously-untyped project got a type derived from the workflows it already ran, named "Type 1", "Type 2" — rename them. Only the routing anchor is marked required, so no project was blocked by its own migration.
 
-`org_admin` authors types **within its own org subtree**; `super_admin` anywhere. Neither `org_admin` nor `project_admin` can edit a type's definition through a project — a typed project cannot deviate from its type.
+`org_admin` authors types **within its own org subtree**; `super_admin` anywhere. Neither `org_admin` nor `project_admin` can edit a type's definition through a project — a typed project cannot deviate from its type. A **global** type (owner NULL) is offered to everyone, so only `super_admin` may change it; an `org_admin` copies it instead (403 names that way out).
+
+**Checked on every write** (`_validate_config`, 422 in plain language):
+
+- `routing_org_role` must be one of the type's **own** organization roles — a type can never name an anchor it doesn't have
+- role names are unique and non-empty
+- the workflow set has **exactly one** default, the default is never a sensitive workflow, every non-default names a chatbot menu, and a category belongs to one workflow only
+
+`standard_workflow_id` / `seah_workflow_id` are derived from the bindings on save, so the legacy mirrors cannot drift from what the type actually runs.
 
 See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 

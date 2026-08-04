@@ -196,6 +196,15 @@ def test_standard_org_admin_can_create_project():
         c = TestClient(app)
 
         code = f"T{uuid.uuid4().hex[:6].upper()}"
+        # A project is built from a type since 2026-08-04 (DECISION-author-defined-slots §5):
+        # that is where its workflows and its required organizations come from.
+        from ticketing.models.project_type import ProjectType
+
+        type_key = db.execute(
+            select(ProjectType.type_key).where(ProjectType.is_active.is_(True)).limit(1)
+        ).scalar_one_or_none()
+        assert type_key, "no active project type — the back-fill migration should have made one"
+
         res = c.post(
             "/api/v1/projects",
             json={
@@ -203,6 +212,7 @@ def test_standard_org_admin_can_create_project():
                 "short_code": code,
                 "name": "Matrix Test Project",
                 "is_active": False,
+                "project_type_key": type_key,
             },
         )
         assert res.status_code == 201, res.text

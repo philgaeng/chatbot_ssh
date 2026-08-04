@@ -87,12 +87,68 @@ def seed_project_actor_roles(db: Session, project_id: str) -> list[ProjectActorR
     return created
 
 
-def project_role_keys(db: Session, project_id: str) -> set[str]:
+def effective_role_catalog(db: Session, project_id: str) -> list[dict[str, Any]]:
+    """The organization roles this project can fill — **the type's catalog** (doc 13 §2).
+
+    A typed project takes its vocabulary from ``project_types.actor_roles``: one catalog per
+    archetype, authored in the type's own words, never copied per project — that is how a
+    vocabulary drifts. ``project_actor_roles`` is read only for a legacy **untyped** project,
+    and seeded from the global list only if that project has nothing at all.
+
+    Each entry carries what the project screens need to render it: ``required`` /
+    ``required_package`` (go-live B1 / B3), ``scope``, and ``is_routing_anchor`` — the one slot
+    whose organization a grievance is recorded against.
+    """
+    from ticketing.models.project import Project
+
+    project = db.get(Project, project_id)
+    type_row = None
+    if project is not None and project.project_type_key:
+        from ticketing.services.project_types import get_project_type
+
+        type_row = get_project_type(db, project.project_type_key)
+
+    if type_row is not None:
+        anchor = type_row.routing_org_role
+        out: list[dict[str, Any]] = []
+        for i, entry in enumerate(type_row.actor_roles or []):
+            key = (entry.get("key") or "").strip()
+            if not key:
+                continue
+            out.append(
+                {
+                    "key": key,
+                    "label": entry.get("label") or key,
+                    "description": entry.get("description") or "",
+                    "required": bool(entry.get("required")),
+                    "required_package": bool(entry.get("required_package")),
+                    "scope": entry.get("scope") or "project",
+                    "is_routing_anchor": key == anchor,
+                    "sort_order": i,
+                }
+            )
+        return out
+
     rows = list_project_actor_roles(db, project_id)
     if not rows:
-        seed_project_actor_roles(db, project_id)
-        rows = list_project_actor_roles(db, project_id)
-    return {r.role_key for r in rows}
+        rows = seed_project_actor_roles(db, project_id)
+    return [
+        {
+            "key": r.role_key,
+            "label": r.label,
+            "description": r.description or "",
+            "required": False,
+            "required_package": False,
+            "scope": "project",
+            "is_routing_anchor": False,
+            "sort_order": r.sort_order,
+        }
+        for r in rows
+    ]
+
+
+def project_role_keys(db: Session, project_id: str) -> set[str]:
+    return {str(e["key"]) for e in effective_role_catalog(db, project_id)}
 
 
 def validate_org_role_for_project(db: Session, project_id: str, org_role: str | None) -> None:

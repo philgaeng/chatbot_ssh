@@ -1917,6 +1917,13 @@ export interface OrgRole {
   key: string;
   label: string;
   description: string;
+  /** From the project type's catalog (doc 13 §2) — absent on legacy untyped projects. */
+  required?: boolean;
+  required_package?: boolean;
+  scope?: string;
+  /** The one slot whose organization a grievance is recorded against. */
+  is_routing_anchor?: boolean;
+  sort_order?: number;
 }
 
 /** Organization linked to a project, with its role in that project. */
@@ -1972,8 +1979,11 @@ export interface ProjectCreate {
   name: string;
   description?: string | null;
   is_active?: boolean;
+  /** Required: the template this project is built from (doc 13 §3). */
   project_type_key?: string | null;
-  /** doc 13 §2: the accountable government agency (routing anchor). */
+  /** The organization that fills the type's routing slot — step 1 of the creation flow. */
+  organization_id?: string | null;
+  /** @deprecated legacy alias for `organization_id`. */
   implementing_agency_org_id?: string | null;
 }
 
@@ -1986,6 +1996,16 @@ export interface TypeActorRoleDef {
   scope?: string;
 }
 
+/** One workflow a project of this type runs — same shape the project screen edits. */
+export interface TypeWorkflowBinding {
+  display_label: string;
+  workflow_id: string;
+  is_default: boolean;
+  classifications: string[];
+  intake_route: string | null;
+  sort_order: number;
+}
+
 export interface ProjectTypeItem {
   type_key: string;
   label: string;
@@ -1994,6 +2014,11 @@ export interface ProjectTypeItem {
   seah_workflow_id: string | null;
   routing_org_role: string;
   actor_roles: TypeActorRoleDef[];
+  workflow_bindings: TypeWorkflowBinding[];
+  /** The organization this template belongs to. null = shared with everyone. */
+  owner_organization_id: string | null;
+  /** >0 → the setup is frozen: copy it, or deactivate the project first (doc 14 §4.1). */
+  active_project_count: number;
   is_active: boolean;
   sort_order: number;
 }
@@ -2265,16 +2290,46 @@ export function getProjectGoLive(projectId: string): Promise<GoLiveReport> {
   return apiFetch<GoLiveReport>(`/api/v1/projects/${projectId}/go-live`);
 }
 
-export function listProjectTypes(activeOnly = true): Promise<ProjectTypeItem[]> {
-  return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?active_only=${activeOnly}`);
+/** `ownerOrganizationId` = the New-project filter: that organization's types plus the shared ones. */
+export function listProjectTypes(
+  activeOnly = true,
+  ownerOrganizationId?: string | null,
+): Promise<ProjectTypeItem[]> {
+  const q = new URLSearchParams({ active_only: String(activeOnly) });
+  if (ownerOrganizationId) q.set("owner_organization_id", ownerOrganizationId);
+  return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?${q.toString()}`);
+}
+
+export type ProjectTypePayload = Partial<
+  Omit<ProjectTypeItem, "type_key" | "active_project_count">
+>;
+
+export function createProjectType(
+  payload: ProjectTypePayload & { type_key: string; label: string },
+): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>("/api/v1/project-types", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function updateProjectType(
   typeKey: string,
-  payload: Partial<Omit<ProjectTypeItem, "type_key" | "actor_roles">>,
+  payload: ProjectTypePayload,
 ): Promise<ProjectTypeItem> {
   return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** "Use as template" — the way to change a type that live projects run on (doc 14 §4.1). */
+export function duplicateProjectType(
+  typeKey: string,
+  payload: { type_key: string; label?: string; owner_organization_id?: string | null },
+): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}/duplicate`, {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
@@ -2427,6 +2482,11 @@ export function setGrievanceCategoriesCatalog(
 }
 
 /** Per-project actor role vocabulary (editable; seeded from global defaults). */
+/** Organizations linked to a project, each in one of the type's slots (`org_role`). */
+export function listProjectOrganizations(projectId: string): Promise<ProjectOrgItem[]> {
+  return apiFetch<ProjectOrgItem[]>(`/api/v1/projects/${projectId}/organizations`);
+}
+
 export function getProjectActorRoles(projectId: string): Promise<OrgRole[]> {
   return apiFetch<OrgRole[]>(`/api/v1/projects/${projectId}/actor-roles`);
 }

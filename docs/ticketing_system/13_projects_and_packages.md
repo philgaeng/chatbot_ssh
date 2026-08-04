@@ -100,13 +100,12 @@ Opaque token → `package_id`; public scan URL. See [10_settings_overview.md](10
 
 ## 3. Project types (archetypes)
 
-Defined by `super_admin` under Settings → Project types. See [14_platform_settings.md](14_platform_settings.md).
+Authored by `super_admin` (anywhere) or `org_admin` (its own subtree) under Settings → Project types. See [14_platform_settings.md](14_platform_settings.md) §4.
 
-First type: **`construction_road`**
-
-- Bundles Standard + SEAH workflow IDs from the type
+- Bundles the workflows a project runs (`workflow_bindings`) — name, workflow, default, chatbot menu, categories
 - Carries the **organization catalog** (`actor_roles`) the project must fill, and `routing_org_role` — which of those roles a ticket is stamped with. **Primary again 2026-08-04**
-- On **New project**: pick the **organization** → the types it owns (plus global) → the project inherits the type's workflow links and organization slots, with the chosen organization filling the `routing_org_role` slot
+- On **New project** (as built 2026-08-04, `ProjectCreateModal`): pick the **organization** → only its types (its own, its parents', plus the global ones — `GET /project-types?owner_organization_id=…`) → the project inherits the type's workflow links, and the chosen organization is written straight into the `routing_org_role` slot as a `project_organizations` row
+- **A type is required.** `POST /projects` without `project_type_key` returns 422: without one there is no catalog for go-live's B1 to check, and a project could activate with no accountable organization at all
 - Project starts **`is_active = false`** until go-live passes
 
 ---
@@ -275,17 +274,18 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 **Binary (2026-07-30, Q-GL-1/2):** every check is either a **Blocker** (must pass to Activate) or **Optional** (never blocks). No "warning" tier. A blocked check states the one thing to fix.
 
-> **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, A3, A5, C1, C4, C5, D1, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
+> **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, B1, C1, C4, C5, D1, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
+>
+> **A3 and A5 were deleted the same day** ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) §7). Both hardcoded the two organizations the platform happened to know about — an implementing agency and a donor. **B1 asks the same question in the author's own words**, against whatever organizations the project's *type* names, and is now a Blocker. The donor guardrail is expressible in that model: mark the donor slot required, put its role in the last level's kept-informed job, and C5 enforces it like any other required job. Legacy reads keep old projects passing — B1 accepts `implementing_agency_org_id` for the anchor slot and `project_donors` for a `donor` slot.
 
 ### Blockers (must pass to activate)
 
 | ID | Check | Notes |
 |----|-------|-------|
-| A3 | **Implementing agency set** | Defaults to the owning ministry ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) — so effectively always satisfied |
+| B1 | **Every required organization is named** | The **type's** catalog (`actor_roles[].required`); the message names the gap in the author's words ("Name the organization for: Ward Office"). Replaced A3 + A5 on 2026-08-04 |
 | A1 | **A default workflow is chosen** | Routing has nowhere to fall back without it (§5B.1) |
 | A4 | **Every step's required cast tiers staffed** | Actor always; plus supervisor / participant / observer the workflow marks mandatory (`required_tiers`, [12 §6.2](12_workflows_configuration.md)) |
 | C1 | **L1 actor staffed** | Also **gates ticket intake** — fail ⇒ create rejected |
-| A5 | **Donor guardrail** | Donor present ⇒ ≥1 donor role in the last **standard** step's Informed cast (SEAH-suppressed, [DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
 | D1 | **≥1 project location linked** | Routing needs it |
 | ~~A2~~ / C4 | **Sensitive workflow L1 staffed** | **A2 removed 2026-08-02** — a project needs no sensitive workflow ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §1.3). C4 still applies **if** one is linked: its levels are staffed like any other workflow's (A4) |
 | E1 | **Name + short code set** | — |
@@ -294,6 +294,8 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 | Check | Notes |
 |-------|-------|
+| ~~A3 Implementing agency~~ · ~~A5 Donor kept informed~~ | **Deleted 2026-08-04** — both are B1 now (see the note above). `donor_informed_ok()` survives as the predicate that pre-fills the last level's kept-informed cast when a donor is added; it no longer gates activation on its own. |
+| B1 on an **untyped** project | Reports `info`, not a blocker: a legacy project created before types existed has no catalog to check. New projects cannot be untyped — `POST /projects` requires `project_type_key` (422 otherwise) |
 | ~~Classification coverage~~ | **Deleted 2026-08-02** (with `workflow_routing.uncovered_classifications`). A category no card claims goes to the default — that is what the default is for (§5B.2) — so it was never a finding, only noise on any project that doesn't enumerate the whole catalog. It also shipped as id **`A4`**, colliding with this doc's `A4` (required cast tiers); that collision is gone. |
 | Package QR tokens | Generate anytime from the main QR menu |
 | Officer-SMS phone coverage | Only relevant if officer SMS is on ([06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5.8) |

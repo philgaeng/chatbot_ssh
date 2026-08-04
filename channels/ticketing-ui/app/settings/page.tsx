@@ -107,7 +107,10 @@ export default function SettingsPage() {
   const mainTabs = useMemo(() => {
     if (isSuperAdmin) return MAIN_TABS;
     if (isCountryAdmin) {
-      const tabs = MAIN_TABS.filter((t) => t.id !== "platform");
+      // Keeps the Settings tab — it now carries Project types, which an org admin authors for
+      // its own organization (DECISION-author-defined-slots §3.1). platformTabs narrows it to
+      // that single entry.
+      const tabs = MAIN_TABS;
       if (!adminWorkflowTracks.includes("standard")) {
         return tabs.filter((t) => t.id !== "projects" || adminWorkflowTracks.includes("seah"));
       }
@@ -168,14 +171,21 @@ export default function SettingsPage() {
         { id: "admin_access", label: "Admin access" },
       ];
     }
+    // An org admin authors project types within its own organization
+    // (DECISION-author-defined-slots §3.1) — the same gate as authoring a workflow, since a
+    // type is mostly a bundle of workflows. Nothing else on this tab opens up.
+    if (isCountryAdmin) return [{ id: "project_types", label: "Project types" }];
     return [];
-  }, [canAccessPlatformSettings]);
+  }, [canAccessPlatformSettings, isCountryAdmin]);
 
   useEffect(() => {
-    if (!canAccessPlatformSettings && platformSub !== "reports") {
+    if (canAccessPlatformSettings) return;
+    if (isCountryAdmin) {
+      if (platformSub !== "project_types") setPlatformSub("project_types");
+    } else if (platformSub !== "reports") {
       setPlatformSub("locations");
     }
-  }, [canAccessPlatformSettings, platformSub]);
+  }, [canAccessPlatformSettings, isCountryAdmin, platformSub]);
 
   if (!isAdmin) {
     return (
@@ -270,7 +280,7 @@ export default function SettingsPage() {
           <SettingsSubTabs tabs={platformTabs} active={platformSub} onChange={setPlatformSub} />
           {platformSub === "locations" && <LocationsSection />}
           {platformSub === "reports" && <QuarterlyReportSettings />}
-          {platformSub === "project_types" && isSuperAdmin && <ProjectTypesTab />}
+          {platformSub === "project_types" && (isSuperAdmin || isCountryAdmin) && <ProjectTypesTab />}
           {platformSub === "system_config" && isSuperAdmin && <SystemConfigTab />}
           {platformSub === "admin_access" && isSuperAdmin && <AdminAccessTab />}
         </>
