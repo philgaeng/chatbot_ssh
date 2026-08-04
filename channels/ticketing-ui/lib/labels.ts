@@ -34,9 +34,18 @@ export function trackLabel(track: string | null | undefined): string {
   return TRACK_LABELS[track.toLowerCase()] ?? humanizeSlug(track);
 }
 
-/** Step-cast tier labels (DESIGN §4.3 — the four slots, in plain language). */
+/**
+ * Fallback labels for a level's four jobs, in plain language (DESIGN §4.3).
+ *
+ * These are a LAST RESORT. Doc 13 §5A.1: the screen shows the **named role** the workflow
+ * declares for that job — never a generic word. So prefer, in order:
+ *   1. the workflow author's own label for the job (`tier_labels`, not built yet — doc 12 §6.2);
+ *   2. the display name of the role bound to it (`roleLabel(assigned_role_key, …)`);
+ *   3. these.
+ * "Handles it" is on the ui/05 §4 avoid list (informal, and generic where a name belongs).
+ */
 export const CAST_TIER_LABELS: Record<string, string> = {
-  assigned_role_key: "Handles it",
+  assigned_role_key: "Works it",
   supervisor_role: "Oversees",
   informed_roles: "Kept informed",
   observer_roles: "Can view",

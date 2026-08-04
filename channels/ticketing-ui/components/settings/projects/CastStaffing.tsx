@@ -25,6 +25,7 @@ import {
   type WorkflowStep,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
+import { roleLabel } from "@/lib/labels";
 
 /** A location code covers another when they share an ancestor path (e.g. P1 covers P1_JHA).
  *  An officer with no location is country-wide and covers everything. */
@@ -36,12 +37,36 @@ function locationOverlaps(officerLocs: string[] | undefined, pkgLocs: string[]):
   );
 }
 
-const TIERS: { key: string; label: string; hint: string; accent: string }[] = [
-  { key: "actor", label: "Works it", hint: "receives the grievance and resolves it", accent: "text-blue-700" },
-  { key: "supervisor", label: "Oversees", hint: "alerted on escalation; can reassign", accent: "text-blue-700" },
-  { key: "participant", label: "Kept informed", hint: "sees updates and can add notes", accent: "text-violet-700" },
-  { key: "observer", label: "Can view", hint: "read-only", accent: "text-gray-600" },
+/**
+ * The four jobs at a level. `hint` is what the job DOES; the row's heading is the **named role**
+ * the workflow binds to it (doc 13 §5A.1 — never a generic word), which is why `roleKeyOf` below
+ * pulls the role and the fallback label is only used when no role is bound yet.
+ *
+ * `required` is the actor only: doc 12 §6.2 has the author mark supervisor/participant/observer
+ * mandatory per step via `required_tiers`, which is NOT BUILT (no model column, no API field), so
+ * this is the one requirement the code can actually know. See the followup.
+ */
+const TIERS: {
+  key: string;
+  fallbackLabel: string;
+  hint: string;
+  accent: string;
+  required: boolean;
+  roleKeyOf: (s: WorkflowStep) => string | null;
+}[] = [
+  { key: "actor", fallbackLabel: "Works it", hint: "receives the grievance and resolves it",
+    accent: "text-blue-700", required: true, roleKeyOf: (s) => s.assigned_role_key || null },
+  { key: "supervisor", fallbackLabel: "Oversees", hint: "alerted on escalation; can reassign",
+    accent: "text-blue-700", required: false, roleKeyOf: (s) => s.supervisor_role || null },
+  { key: "participant", fallbackLabel: "Kept informed", hint: "sees updates and can add notes",
+    accent: "text-violet-700", required: false, roleKeyOf: (s) => s.informed_roles?.[0] ?? null },
+  { key: "observer", fallbackLabel: "Can view", hint: "read-only",
+    accent: "text-gray-600", required: false, roleKeyOf: (s) => s.observer_roles?.[0] ?? null },
 ];
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase() ?? "").join("");
+}
 
 function stepTiers(step: WorkflowStep): string[] {
   const t = ["actor"];
@@ -154,6 +179,38 @@ export function CastStaffing({
     [roster],
   );
 
+  /**
+   * Officers staffed through the level's NAMED role rather than a per-level assignment.
+   *
+   * Two staffing paths coexist (TODO "Phase 3e seed refresh"): this screen writes
+   * `officer_scopes` under a synthetic `wf:{workflow}:{step}:{tier}` key, while seeds — and the
+   * older invite flow — scope officers under the step's named role (`site_safeguards_focal_person`).
+   * Go-live's C1/C5 read the NAMED role, so without this the pane says "Not staffed" for a level
+   * go-live has just called staffed. Shown read-only: it is coverage, not an assignment this
+   * screen made, so there is nothing here to reassign.
+   */
+  const roleStaffed = useCallback(
+    (roleKey: string | null) => {
+      if (!roleKey) return [] as OfficerRosterEntry[];
+      const code = project.short_code;
+      return roster.filter(
+        (o) =>
+          o.is_active !== false &&
+          o.role_keys.includes(roleKey) &&
+          (!o.project_codes?.length || o.project_codes.includes(code)),
+      );
+    },
+    [roster, project.short_code],
+  );
+
+  /** The position the officer holds — the wireframe shows it under the name so an admin can
+   *  see WHICH SEAT is doing the work, not just who. Positions come from the roster today;
+   *  the position-first picker (doc 13 §5A.2) needs an endpoint that does not exist yet. */
+  const officerPosition = useCallback(
+    (uid: string) => roster.find((o) => o.user_id === uid)?.positions?.[0] ?? null,
+    [roster],
+  );
+
   const pickerResults = useMemo(() => {
     const q = pickerQ.trim().toLowerCase();
     return roster
@@ -241,137 +298,205 @@ export function CastStaffing({
       {steps.map((step) => {
         const tiers = stepTiers(step);
         return (
-          <div key={step.step_id} className="rounded-lg border border-gray-100 bg-white p-3">
-            <div className="mb-2 text-sm font-medium text-gray-700">
-              <span className="mr-2 inline-flex h-5 w-5 items-center justify-center rounded-full bg-gray-200 text-[11px] text-gray-600">
+          <div key={step.step_id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2">
+              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-[11px] font-bold text-gray-600">
                 {step.step_order}
               </span>
-              {step.display_name}
+              <span className="text-[13.5px] font-semibold text-gray-900">{step.display_name}</span>
             </div>
-            <div className="space-y-2">
+            <div className="divide-y divide-gray-100">
               {TIERS.filter((t) => tiers.includes(t.key)).map((t) => {
                 const current = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === t.key);
                 const inherited = isPkg
                   ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === t.key)
                   : [];
                 const slotOpen = assigning?.stepId === step.step_id && assigning?.tier === t.key;
+                // Heading = the NAMED role bound to this job (doc 13 §5A.1); the generic word
+                // is only a fallback for a job with no role bound yet.
+                const roleKey = t.roleKeyOf(step);
+                const heading = roleKey ? roleLabel(roleKey) : t.fallbackLabel;
+                const byRole = current.length === 0 && inherited.length === 0 ? roleStaffed(roleKey) : [];
+                const empty = current.length === 0 && inherited.length === 0 && byRole.length === 0;
+                const blocking = empty && t.required && !isPkg;
                 return (
-                  <div key={t.key} className="grid grid-cols-[7rem_1fr] items-start gap-2">
-                    <div className={`pt-1 text-xs font-medium ${t.accent}`}>
-                      {t.label}
-                      <div className="text-[10px] font-normal text-gray-400">{t.hint}</div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {inherited.map((c) => (
-                        <span
-                          key={`inh-${c.scope_id}`}
-                          className="inline-flex items-center gap-1 rounded border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-400"
-                          title="Inherited from project-wide"
-                        >
-                          {officerName(c.user_id)}
-                          <span className="text-[9px] uppercase">· project-wide</span>
-                        </span>
-                      ))}
-                      {current.map((c) => (
-                        <span
-                          key={c.scope_id}
-                          className="inline-flex items-center gap-1 rounded border border-blue-200 bg-blue-50 px-2 py-0.5 text-xs text-blue-700"
-                        >
-                          {officerName(c.user_id)}
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => void remove(c.scope_id)}
-                            className="leading-none text-blue-300 hover:text-red-500 disabled:opacity-40"
-                            aria-label="Remove"
+                  <div key={t.key} className="px-3 py-2.5">
+                    <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
+                      <div className="w-56 shrink-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-xs font-semibold ${t.accent}`}>{heading}</span>
+                          {t.required && (
+                            <span className="rounded-full border border-gray-300 px-1.5 text-[9px] font-bold uppercase tracking-wide text-gray-500">
+                              required
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-400">{t.hint}</div>
+                      </div>
+
+                      <div className="flex-1 min-w-[220px] flex flex-wrap items-center gap-2">
+                        {inherited.map((c) => (
+                          <span
+                            key={`inh-${c.scope_id}`}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-1"
+                            title="Same as project"
                           >
-                            ×
-                          </button>
-                        </span>
-                      ))}
-                      {slotOpen ? (
-                        <div className="w-full max-w-md rounded border border-blue-200 bg-white p-2 shadow-sm">
-                          <input
-                            autoFocus
-                            value={pickerQ}
-                            onChange={(e) => setPickerQ(e.target.value)}
-                            placeholder="Search officers by name / email / title…"
-                            className="w-full rounded border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                          />
-                          <div className="mt-1 flex flex-wrap items-center gap-2">
-                            <select
-                              value={pickerOrg}
-                              onChange={(e) => setPickerOrg(e.target.value)}
-                              className="rounded border border-gray-300 px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400"
-                            >
-                              <option value="">Partner organizations</option>
-                              {[...actorOrgIds].map((id) => (
-                                <option key={id} value={id}>
-                                  {orgLabel(id)}
-                                </option>
-                              ))}
-                              <option value="__all__">All officers</option>
-                            </select>
-                            {isPkg && pkgLocations.length > 0 && (
-                              <label className="flex items-center gap-1 text-[11px] text-gray-600">
-                                <input
-                                  type="checkbox"
-                                  checked={pickerLocMatch}
-                                  onChange={(e) => setPickerLocMatch(e.target.checked)}
-                                />
-                                in package locations
-                              </label>
-                            )}
-                          </div>
-                          <div className="mt-1 max-h-44 overflow-y-auto">
-                            {pickerResults.length === 0 && (
-                              <p className="px-1 py-1 text-[11px] text-gray-400">
-                                No matching officers — try &ldquo;All officers&rdquo;, or invite one under
-                                Organizations &amp; officers.
-                              </p>
-                            )}
-                            {pickerResults.map((o) => (
-                              <button
-                                key={o.user_id}
-                                type="button"
-                                disabled={busy}
-                                onClick={() => void assign(o)}
-                                className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-blue-50 disabled:opacity-40"
-                              >
-                                <span className="font-medium text-gray-700">{o.display_name}</span>
-                                {o.email && <span className="text-gray-400"> · {o.email}</span>}
-                                {o.positions && o.positions.length > 0 && (
-                                  <span className="text-gray-400"> · {o.positions[0]}</span>
-                                )}
-                              </button>
-                            ))}
-                          </div>
-                          <div className="mt-1 text-right">
+                            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[9px] font-bold text-gray-500">
+                              {initials(officerName(c.user_id))}
+                            </span>
+                            <span className="text-xs text-gray-500">{officerName(c.user_id)}</span>
+                            <span className="text-[10px] text-gray-400">· same as project</span>
+                          </span>
+                        ))}
+                        {current.map((c) => (
+                          <span
+                            key={c.scope_id}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-2 py-1"
+                          >
+                            <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-50 text-[9px] font-bold text-blue-700">
+                              {initials(officerName(c.user_id))}
+                            </span>
+                            <span className="leading-tight">
+                              <span className="block text-xs font-semibold text-gray-900">
+                                {officerName(c.user_id)}
+                              </span>
+                              {officerPosition(c.user_id) && (
+                                <span className="block text-[10px] text-gray-400">
+                                  {officerPosition(c.user_id)}
+                                </span>
+                              )}
+                            </span>
                             <button
                               type="button"
-                              onClick={() => {
-                                setAssigning(null);
-                                setPickerQ("");
-                              }}
-                              className="rounded px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-700"
+                              disabled={busy}
+                              onClick={() => void remove(c.scope_id)}
+                              className="text-[11px] font-semibold text-blue-600 hover:underline disabled:opacity-40"
                             >
-                              Cancel
+                              Reassign
                             </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAssigning({ stepId: step.step_id, tier: t.key });
-                            setPickerQ("");
-                          }}
-                          className="rounded border border-dashed border-gray-300 px-2 py-0.5 text-xs text-gray-500 hover:border-blue-300 hover:text-blue-600"
-                        >
-                          + assign
-                        </button>
-                      )}
+                          </span>
+                        ))}
+
+                        {byRole.map((o) => (
+                          <span
+                            key={`role-${o.user_id}`}
+                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-1"
+                            title="Covered through this role, not assigned on this level"
+                          >
+                            <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[9px] font-bold text-gray-500">
+                              {initials(o.display_name)}
+                            </span>
+                            <span className="text-xs text-gray-600">{o.display_name}</span>
+                            <span className="text-[10px] text-gray-400">· by role</span>
+                          </span>
+                        ))}
+
+                        {!slotOpen && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setAssigning({ stepId: step.step_id, tier: t.key });
+                              setPickerQ("");
+                            }}
+                            className={`rounded-full border border-dashed px-2.5 py-1 text-xs ${
+                              blocking
+                                ? "border-red-300 bg-red-50 text-red-700 font-semibold"
+                                : "border-blue-200 bg-blue-50 text-blue-600 font-medium"
+                            }`}
+                          >
+                            {empty ? "Assign an officer" : byRole.length ? "Assign for this level" : "+ Add another"}
+                          </button>
+                        )}
+                      </div>
                     </div>
+
+                    {blocking && (
+                      <p className="mt-1.5 text-[11px] text-red-700">
+                        Not staffed. Every level needs someone to work it.
+                      </p>
+                    )}
+
+                    {slotOpen && (
+                      <div className="mt-2 rounded-lg border border-blue-200 bg-white p-3">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1.5">
+                          Pick the officer
+                        </div>
+                        <input
+                          autoFocus
+                          value={pickerQ}
+                          onChange={(e) => setPickerQ(e.target.value)}
+                          placeholder="Search by name, email or position…"
+                          className="w-full rounded border border-gray-300 px-2 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                        />
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                            Search area
+                          </span>
+                          <select
+                            value={pickerOrg}
+                            onChange={(e) => setPickerOrg(e.target.value)}
+                            className="rounded border border-gray-300 px-1.5 py-1 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          >
+                            <option value="">Partner organizations</option>
+                            {[...actorOrgIds].map((id) => (
+                              <option key={id} value={id}>
+                                {orgLabel(id)}
+                              </option>
+                            ))}
+                            <option value="__all__">Everyone</option>
+                          </select>
+                          {isPkg && pkgLocations.length > 0 && (
+                            <label className="flex items-center gap-1 text-[11px] text-gray-600">
+                              <input
+                                type="checkbox"
+                                checked={pickerLocMatch}
+                                onChange={(e) => setPickerLocMatch(e.target.checked)}
+                              />
+                              in this lot&rsquo;s locations
+                            </label>
+                          )}
+                        </div>
+                        <div className="mt-2 max-h-48 overflow-y-auto">
+                          {pickerResults.length === 0 && (
+                            <p className="px-1 py-1 text-[11px] text-gray-400">
+                              No officers match. Try &ldquo;Everyone&rdquo;, or invite one under
+                              Organizations &amp; officers.
+                            </p>
+                          )}
+                          {pickerResults.map((o) => (
+                            <button
+                              key={o.user_id}
+                              type="button"
+                              disabled={busy}
+                              onClick={() => void assign(o)}
+                              className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left hover:bg-blue-50 disabled:opacity-40"
+                            >
+                              <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-gray-100 text-[9px] font-bold text-gray-600">
+                                {initials(o.display_name)}
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block text-xs font-semibold text-gray-800 truncate">
+                                  {o.display_name}
+                                </span>
+                                <span className="block text-[10px] text-gray-400 truncate">
+                                  {o.positions?.[0] ?? o.email ?? ""}
+                                </span>
+                              </span>
+                              <span className="text-[11px] font-semibold text-blue-600">Assign</span>
+                            </button>
+                          ))}
+                        </div>
+                        <div className="mt-1 text-right">
+                          <button
+                            type="button"
+                            onClick={() => { setAssigning(null); setPickerQ(""); }}
+                            className="rounded px-2 py-0.5 text-[11px] text-gray-500 hover:text-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

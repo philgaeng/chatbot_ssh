@@ -45,8 +45,8 @@ export function ProjectCastSection({
 
   if (boundWorkflows.length === 0) {
     return (
-      <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-5">
-        <h3 className="text-base font-semibold text-gray-800">Staffing</h3>
+      <div>
+        <h3 className="sr-only">Staffing</h3>
         <p className="mt-2 text-sm text-gray-500">
           Choose a workflow first, under Grievance workflows. Then put officers on its levels
           here — every lot uses these officers unless you set different ones on the lot.
@@ -56,11 +56,10 @@ export function ProjectCastSection({
   }
 
   return (
-    <div className="rounded-lg border border-blue-200 bg-blue-50/30 p-5">
+    <div>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <div>
-          <h3 className="text-base font-semibold text-gray-800">Who works each level</h3>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="text-sm text-gray-600 max-w-2xl">
             Set these officers once — every lot uses them unless you set a different officer on
             that lot, under Packages.
           </p>
