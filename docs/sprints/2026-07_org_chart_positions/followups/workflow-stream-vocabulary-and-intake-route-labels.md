@@ -85,3 +85,33 @@ The original question and analysis, kept for the record. The design intent: SEAH
 ## Touch list
 
 `ticketing/constants/workflow_routing.py` (labels) · `ticketing/services/project_go_live.py` (A4 delete, severities, `_ACTIVATION_BLOCK_IDS`) · `ticketing/services/workflow_routing.py` (`uncovered_classifications`) · `channels/ticketing-ui/components/settings/workflows/ProjectWorkflowsEditor.tsx` + `ProjectGoLivePanel.tsx` · docs 12 §7 / 13 §7.
+
+---
+
+## 6. The staffing screen's data model is specced but not built (logged 2026-08-04)
+
+Found porting **Project-wide staffing** to [`ui/04`](../../../ticketing_system/ui/04_projects_packages_redesign.html). The wireframe and [13 §5A](../../../ticketing_system/13_projects_and_packages.md) describe a screen the backend cannot yet feed.
+
+### 6.1 `tier_labels` / `required_tiers` do not exist
+[12 §2](../../../ticketing_system/12_workflows_configuration.md) documents both as columns on `workflow_steps`, and [13 §5A.1/§5A.5](../../../ticketing_system/13_projects_and_packages.md) builds the staffing screen and the go-live gate on them:
+
+> *"Each tier carries a name and a short description … editable by the workflow author in the Workflows tab"* · *"Go-live blocks on any required tier that is unstaffed"*
+
+**Neither exists anywhere in the code** — `grep -rn "tier_labels\|required_tiers" ticketing/` returns **0**. No migration, no model column, no API field, no editor control. Consequences as-built:
+
+- The staffing screen falls back to the **bound role's display name** (which is what the wireframe's names actually are — "GRC Chair", "Site Safeguards Focal Person"), so the screen reads correctly today, but the author cannot *name* a job independently of the role.
+- **Required** can only be the **actor** (always required by definition). A workflow author cannot mark supervisor / participant / observer mandatory, so go-live A4 ("every step's required cast tiers staffed") is gating on a set nothing can populate.
+
+**To build:** migration + model columns, expose on the step schema, add the controls to the step editor ([`ui/06`](../../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks them), then the staffing screen and go-live A4 consume them.
+
+### 6.2 No positions-in-scope endpoint, so the position-first picker cannot be built
+[13 §5A.2](../../../ticketing_system/13_projects_and_packages.md) is **LOCKED**: filling a slot is *"always position first, then person — never a free officer search"*, with two escape hatches (invite an officer into the position · create the position inline).
+
+As-built the positions API is **per-user only** — `GET /users/{user_id}/positions`. Nothing answers *"which positions cover this location scope, and who holds them"*, which is step 1 of the flow. The screen therefore still does a **flat officer search** with a Search-area filter — the very thing §5A.2 forbids.
+
+**To build:** an endpoint returning positions for a location scope (narrow-first, per §5A.3) with holder counts, then the two-step picker + the two escape hatches.
+
+### 6.3 Two staffing paths disagree, and the UI has to reconcile them
+`officer_scopes` rows are written under **two different `role_key` shapes**: the cast/staffing screen mints a synthetic `wf:{workflow_key}:{step_key}:{tier}` key, while seeds and the older invite flow use the step's **named role**. Go-live C1/C5 read the **named** role. So a fully-seeded project shows every level staffed on the checklist and nothing at all on the staffing screen.
+
+The UI now counts both and marks role-path coverage read-only (`· by role`), which stops the contradiction. The underlying split is known and accepted (TODO "Phase 3e seed refresh (§8) optional") — but note it is **not just a seed-fidelity issue**: any officer invited with a named role, by any flow, lands in the same blind spot.
