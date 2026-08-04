@@ -32,6 +32,7 @@ export function ProjectsSection({
   adminWorkflowTracks,
   canCreateProject,
   canManageStructure,
+  onOpenProjectTypes,
 }: {
   initialEditId?: string | null;
   grmRoleChoices: { key: string; label: string }[];
@@ -40,6 +41,8 @@ export function ProjectsSection({
   adminWorkflowTracks: ("standard" | "seah")[];
   canCreateProject: boolean;
   canManageStructure: boolean;
+  /** Jump to Settings → Project types — where a typed project's workflows are actually changed. */
+  onOpenProjectTypes?: () => void;
 }) {
   const canManageProjectCatalog = isSuperAdmin || isCountryAdmin;
   const isProjectScopedOnly = !canManageProjectCatalog;
@@ -119,6 +122,7 @@ export function ProjectsSection({
         onBack={() => { setEditing(null); load(); }}
         onUpdated={(p) => setEditing(p)}
         onOrganizationCreated={(org) => setOrgs((prev) => (prev.some((o) => o.organization_id === org.organization_id) ? prev : [...prev, org]))}
+        onOpenProjectTypes={canManageProjectCatalog ? onOpenProjectTypes : undefined}
       />
     );
   }

@@ -152,7 +152,20 @@ Authoring moved from `require_super_admin` to `require_admin` + `_require_author
 ### 7.3 Creation is organization → type → name it
 `GET /project-types?owner_organization_id=…` offers that organization's types, its ancestors', and the global ones. `POST /projects` takes `organization_id`, writes it straight into the type's anchor slot, and **requires `project_type_key`** — without one there is no catalog for B1 and a project could activate with no accountable organization.
 
-### 7.4 A3/A5 → B1
+### 7.4 A typed project cannot deviate from its type — including its workflows
+§8's last open consequence. The Grievance workflows section is now read-only on **any** typed
+project (it was still editable for super/org admins, which is exactly how two projects on one
+template quietly diverge). The cards stay as a summary; above them a line names the type and a
+button opens it. `PUT /projects/{id}/workflows` returns **409** for a typed project — a disabled
+form is a suggestion. Creating a project still writes those rows through
+`apply_workflow_bindings_from_type`, which is the type speaking.
+
+The header chip stopped printing the raw type key (`migrated_type_1` — a slug on screen, ui/05
+§2.5) and now shows the type's **name**, linking to Settings → Project types. Between the two,
+the project screen finally answers "where does this come from?" — which is how the tab gets
+found at all.
+
+### 7.5 A3/A5 → B1
 Both deleted; B1 is a **blocker** whose message names the gap in the author's words ("Name the organization for: Ward Office"). Two legacy reads keep old projects passing: `implementing_agency_org_id` fills the anchor slot, `project_donors` a `donor` slot. An untyped project reports `info` — it has no catalog to check, and no new project can be untyped. `donor_informed_ok()` survives as the pre-fill predicate; it no longer gates activation.
 
 **Verify:**

@@ -29,12 +29,14 @@ import {
   listWorkflowRoutingOptions,
   getProjectActorRoles,
   getProjectMessaging,
+  getProjectType,
   patchProjectMessaging,
   type ProjectItem,
   type OrganizationItem,
   type OrgRole,
   type PackageItem,
   type ProjectMessagingConfig,
+  type ProjectTypeItem,
   type WorkflowDefinition,
   type WorkflowRoutingOptions,
 } from "@/lib/api";
@@ -74,6 +76,7 @@ export function ProjectEditor({
   onBack,
   onUpdated,
   onOrganizationCreated,
+  onOpenProjectTypes,
 }: {
   project: ProjectItem;
   orgs: OrganizationItem[];
@@ -88,6 +91,8 @@ export function ProjectEditor({
   onBack: () => void;
   onUpdated: (p: ProjectItem) => void;
   onOrganizationCreated: (org: OrganizationItem) => void;
+  /** Jump to Settings → Project types. Absent for admins who cannot author types. */
+  onOpenProjectTypes?: () => void;
 }) {
   const [p, setP]             = useState<ProjectItem>(initial);
   const [nameVal, setNameVal] = useState(p.name);
@@ -106,6 +111,9 @@ export function ProjectEditor({
   const [goLiveKey, setGoLiveKey] = useState(0);
   const [messaging, setMessaging] = useState<ProjectMessagingConfig | null>(null);
   const [messagingSaving, setMessagingSaving] = useState(false);
+  // The type's NAME — the header used to show its key, which is a slug on screen (ui/05 §2.5)
+  // and told the reader nothing about what the project runs.
+  const [projectType, setProjectType] = useState<ProjectTypeItem | null>(null);
 
   // ── Console: which section is on screen, and the go-live report that drives the rail ──
   const [activeSection, setActiveSection] = useState<SectionKey>("overview");
@@ -141,8 +149,12 @@ export function ProjectEditor({
   const activeMeta = PROJECT_SECTIONS.find((s) => s.key === activeSection);
   const blockers = blockerCount(report);
 
+  // A typed project runs what its type says — for everyone, super_admin included
+  // (DECISION-author-defined-slots §1: "a typed project cannot deviate from its type"). The
+  // cards stay; they are a summary now, and the way to change them is the type. Only a legacy
+  // untyped project still edits inline. The API refuses the write either way (409).
   const typedProject = Boolean(p.project_type_key);
-  const lockTypeConfig = typedProject && !isSuperAdmin && !isCountryAdmin;
+  const lockTypeConfig = typedProject;
   const canEditProjectWorkflows = isSuperAdmin || isCountryAdmin;
   const canEditMessaging = isSuperAdmin || isCountryAdmin;
 
@@ -186,6 +198,11 @@ export function ProjectEditor({
       .then(setMessaging)
       .catch(() => setMessaging(null));
   }, [p.project_id]);
+
+  useEffect(() => {
+    if (!p.project_type_key) { setProjectType(null); return; }
+    getProjectType(p.project_type_key).then(setProjectType).catch(() => setProjectType(null));
+  }, [p.project_type_key]);
 
   useEffect(() => {
     setNameVal(p.name);
@@ -345,9 +362,20 @@ export function ProjectEditor({
           <h2 className="text-lg font-semibold text-gray-900">{p.name}</h2>
           <span className="font-mono text-sm text-gray-400">{p.short_code}</span>
           {p.project_type_key && (
-            <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono">
-              {p.project_type_key}
-            </span>
+            onOpenProjectTypes ? (
+              <button
+                type="button"
+                onClick={onOpenProjectTypes}
+                title="Open project types"
+                className="text-xs bg-slate-100 text-slate-700 hover:bg-slate-200 px-2 py-0.5 rounded"
+              >
+                Type: {projectType?.label ?? "…"}
+              </button>
+            ) : (
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                Type: {projectType?.label ?? "…"}
+              </span>
+            )
           )}
           {!p.is_active && (
             <span className="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">
@@ -470,13 +498,31 @@ export function ProjectEditor({
               {/* ── Grievance workflows ── */}
               {activeSection === "workflows" && (
                 <div className="space-y-4">
-                  <p className="text-sm text-gray-600 max-w-2xl">
-                    One default workflow is required. Add more workflows to send different grievances to
-                    different officers.
-                    {lockTypeConfig
-                      ? " Defaults come from the project type; super admin may override."
-                      : " Edit a workflow’s levels under Settings → Workflows, roles & permissions."}
-                  </p>
+                  {lockTypeConfig ? (
+                    <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2.5 max-w-2xl">
+                      <p>
+                        These workflows come from the project type{" "}
+                        <span className="font-medium">{projectType?.label ?? "this project uses"}</span>.
+                        Every project of that type runs the same ones, so they are changed on the type,
+                        not here.
+                      </p>
+                      {onOpenProjectTypes && (
+                        <button
+                          type="button"
+                          onClick={onOpenProjectTypes}
+                          className="mt-2 text-sm font-semibold text-blue-600 border border-blue-200 bg-blue-50 rounded px-3 py-1.5 hover:bg-blue-100"
+                        >
+                          Open project types
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-600 max-w-2xl">
+                      One default workflow is required. Add more workflows to send different grievances to
+                      different officers. Edit a workflow’s levels under Settings → Workflows, roles &amp;
+                      permissions.
+                    </p>
+                  )}
                   <ProjectWorkflowsEditor
                     project={p}
                     workflows={workflows}

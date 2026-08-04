@@ -100,7 +100,9 @@ Opaque token → `package_id`; public scan URL. See [10_settings_overview.md](10
 
 ## 3. Project types (archetypes)
 
-Authored by `super_admin` (anywhere) or `org_admin` (its own subtree) under Settings → Project types. See [14_platform_settings.md](14_platform_settings.md) §4.
+Authored by `super_admin` (anywhere) or `org_admin` (its own subtree) under **Settings → Settings tab → Project types** (`ProjectTypesTab`). See [14_platform_settings.md](14_platform_settings.md) §4.
+
+**A typed project's Grievance workflows section is read-only** (§8 of the decision, as built 2026-08-04) — for **everyone**, `super_admin` included. The cards stay as a summary; above them one line names the type and a button opens it. `PUT /projects/{id}/workflows` returns **409** on a typed project, so the rule is enforced server-side rather than by a disabled form. Only a legacy untyped project still edits its workflows inline. The project header shows the type's **name** (not its key) and links to it.
 
 - Bundles the workflows a project runs (`workflow_bindings`) — name, workflow, default, chatbot menu, categories
 - Carries the **organization catalog** (`actor_roles`) the project must fill, and `routing_org_role` — which of those roles a ticket is stamped with. **Primary again 2026-08-04**

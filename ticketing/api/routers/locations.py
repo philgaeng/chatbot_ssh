@@ -1529,10 +1529,25 @@ def replace_project_workflow_slots(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Replace all workflow bindings on a project."""
+    """Replace all workflow bindings on a **legacy untyped** project.
+
+    A typed project runs what its type says (DECISION-author-defined-slots §1/§8) — otherwise
+    two projects on the same template quietly diverge and "what does this project run?" has no
+    answer but the project itself. Refused here, not just disabled in the UI: a disabled form
+    is a suggestion. Creating a project still writes these rows, through
+    `apply_workflow_bindings_from_type`, which is the type speaking.
+    """
     p = _load_project(db, project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+    if p.project_type_key:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This project's workflows come from its project type. Change them under "
+                "Settings → Project types."
+            ),
+        )
 
     from ticketing.models.workflow import WorkflowDefinition
 

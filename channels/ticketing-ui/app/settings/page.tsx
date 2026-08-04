@@ -272,6 +272,7 @@ export default function SettingsPage() {
           adminWorkflowTracks={adminWorkflowTracks}
           canCreateProject={canCreateProject}
           canManageStructure={canManageStructure}
+          onOpenProjectTypes={() => { setActiveMain("platform"); setPlatformSub("project_types"); }}
         />
       )}
 

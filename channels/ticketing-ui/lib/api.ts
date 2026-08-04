@@ -2300,6 +2300,10 @@ export function listProjectTypes(
   return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?${q.toString()}`);
 }
 
+export function getProjectType(typeKey: string): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}`);
+}
+
 export type ProjectTypePayload = Partial<
   Omit<ProjectTypeItem, "type_key" | "active_project_count">
 >;
