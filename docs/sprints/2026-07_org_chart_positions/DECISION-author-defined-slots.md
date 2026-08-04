@@ -97,7 +97,7 @@ That is the whole forward-compatibility cost today: **one accessor, no schema ch
   - **Editing a bound type is offered as "Use as template"** — clone it under a new name, in the same owning organization, and edit the copy freely. The original and its projects are untouched.
   - **Frozen means the configuration**: workflows, organization roles, category routing, `routing_org_role`, labels. `is_active` and `sort_order` stay editable — retiring a type from the New-project list is not a configuration change.
   - **Bound = any project row referencing the type**, active or not. A deactivated project still runs on its type.
-  - **Consequence to accept:** an existing project cannot be moved forward to the improved copy. Its config is frozen with its type — deliberately. The only way to move it would be an explicit *change this project's type* action, which re-applies the new template. **Not in this build** — it needs a diff-and-confirm flow of its own (what gets added, what gets orphaned), and it is the one thing that could silently restaff a live project.
+  - **Consequence, weighed and accepted (2026-08-04):** an existing project cannot be moved forward to the improved copy — fixing a type helps future projects only. **This is the preferred trade, not a deferral.** The alternative is a *change this project's type* action that re-applies a new template over a running project: it would need a diff-and-confirm flow (what is added, what is orphaned), and it is the one operation that could silently restaff live work. A frozen project you must rebuild deliberately beats a live project that changes under its officers. Do not add it later without revisiting this paragraph.
 
 ## 9. Build order
 

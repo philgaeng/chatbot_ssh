@@ -2,6 +2,7 @@
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
+> **`docs/<domain>/` says _what_ we build. [`engineering/`](engineering/) says _how_.** Start there before writing code.
 > Reviews of spec completeness and codebase quality live in [`reviews/`](reviews/).
 
 ## Structure
@@ -11,6 +12,8 @@ docs/
 ├── PROGRESS.md          Operational build log (updated every commit)
 ├── TODO.md              Open gaps, next features, tech debt
 ├── ARCHIVING_AND_RETENTION.md   Cross-cutting retention + archive policy
+├── engineering/         HOW we build: DB, services, API, tests, frontend, doc lifecycle
+├── _starter_kit/        Portable skeleton of the above, for reuse on a new project
 ├── deployment/          Architecture, setup, operations, security, auth, DOCKER runbook
 ├── services/            Shared backend service contracts (chatbot + ticketing + ops)
 ├── ticketing_system/    GRM ticketing product and implementation specs (+ ui/)
@@ -29,6 +32,25 @@ docs/
 | [`PROGRESS.md`](PROGRESS.md) | Current build state, demo DB, deviations, commit log |
 | [`TODO.md`](TODO.md) | Open gaps, post-demo backlog, tech debt |
 | [`ARCHIVING_AND_RETENTION.md`](ARCHIVING_AND_RETENTION.md) | Resolved-case archiving schedule, `archiving_policy` settings, attachment tiering |
+
+---
+
+## Engineering standards (`docs/engineering`) — read before writing code
+
+Start at [`00_engineering_index.md`](engineering/00_engineering_index.md) — it carries the ten rules and the shared definition of done.
+
+| Document | Read before you touch |
+|---|---|
+| [`01_database.md`](engineering/01_database.md) | any model, migration, or SQL — Postgres, Alembic, three streams, naming, transactions, seeds |
+| [`02_python_services.md`](engineering/02_python_services.md) | any service/engine/task — thin entrypoint over a fat service layer, function contracts, errors |
+| [`03_api_layer.md`](engineering/03_api_layer.md) | any FastAPI router or schema — authz as a dependency, error mapping, pagination |
+| [`04_testing.md`](engineering/04_testing.md) | any test — the pyramid, the integration-marker contract, pinning tests, CI |
+| [`05_frontend.md`](engineering/05_frontend.md) | any `channels/ticketing-ui/` code — App Router, data access, errors, a11y, i18n |
+| [`06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) | any doc — the four tiers, **when a sprint spec is promoted to a live spec**, honesty markers |
+
+Visual and copy standards live with the UI specs: [`ui/02_design_system.md`](ticketing_system/ui/02_design_system.md) and [`ui/05_ui_copy_style.md`](ticketing_system/ui/05_ui_copy_style.md).
+
+**Reusing this on another project:** [`_starter_kit/`](_starter_kit/) is a portable, project-agnostic skeleton of the standards above — engineering set, design system, and copy/tone guide, stripped of anything specific to this codebase. Copy it into a new repo and fill the `‹…›` placeholders and **FILL:** decision callouts. Start at [`_starter_kit/README.md`](_starter_kit/README.md).
 
 ---
 
