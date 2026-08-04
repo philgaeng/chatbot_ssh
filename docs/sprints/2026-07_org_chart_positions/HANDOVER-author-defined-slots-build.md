@@ -1,7 +1,7 @@
 # Handover — author-defined slots: what shipped, what's next
 
-**From:** session of 2026-08-04. **Branch:** `integration/stage`, 26 commits, nothing pushed.
-**Suite:** 688 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
+**From:** session of 2026-08-04. **Branch:** `integration/stage`, 29 commits, nothing pushed.
+**Suite:** 692 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
 
 ---
 
@@ -32,6 +32,8 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 
 **Project types.** `owner_organization_id` (migration `l8n0p2r4`); a type with a **live** project refuses configuration writes with 409; `POST /project-types/{key}/duplicate` is the way out. `d6ddca35`.
 
+**Routing anchor inverted.** The ticket's organization now comes from the type's `routing_org_role` slot, with `implementing_agency_org_id` as the fallback — so nothing is hardcoded as "the implementing agency". `c3d22de5`.
+
 **Types back-filled** (migration `n0p2r4t6`) — one type per distinct workflow set, named "Type 1", "Type 2", projects bound to them. Two freeze rules relaxed in the same change: **name/description are always editable** (the migration's names must be fixable) and **only an active project freezes a type** (so deactivate → fix → reactivate is the repair path). `d3db9f27`.
 
 ---
@@ -45,6 +47,7 @@ Wireframes: [`ui/04`](../../ticketing_system/ui/04_projects_packages_redesign.ht
 | 3 Step editor | ✅ |
 | 4 Consumption — staffing | ✅ · **Partner organizations ⬜** |
 | 5 Creation flow (org → filtered types) | ⬜ |
+| 5b Routing anchor | ✅ inverted (`c3d22de5`) |
 | 6 Go-live A3/A5 deletion | ⬜ unblocked — see §4.1 |
 | 7 Docs | ✅ specs reconciled — 12 §2, 13 §2/§3/§5B/§7, 14 §4, 11, 10, 04, 03 + followup §6.1 |
 
