@@ -100,7 +100,7 @@ JSON keys managed via API `GET/PUT /api/v1/settings/{key}` and parts of the UI:
 |-----|------------|---------------|------|
 | `notification_rules` | Workflow editor panel | `org_admin`+ | [12_workflows_configuration.md](12_workflows_configuration.md) |
 | `complainant_notifications` | Seeded; no dedicated UI yet | Admin | [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) |
-| `org_roles` | Advanced (JSON) | `super_admin` only | **Deprecated** (DECISION 2026-07-10) — legacy party-role vocabulary; still seeds the deprecated actor-role catalog on project create |
+| `org_roles` | Advanced (JSON) | `super_admin` only | **Deprecated** — a *global* role vocabulary is the wrong shape now that each **project type** carries its own `actor_roles` ([14 §4](14_platform_settings.md)). Originally DECISION 2026-07-10 — legacy party-role vocabulary; still seeds the deprecated actor-role catalog on project create |
 | `report_limits` | Advanced (JSON) | `super_admin` only | [09_reports_and_report_builder.md](09_reports_and_report_builder.md) |
 | `archiving_policy` | Advanced (JSON) | `super_admin` only | [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md) |
 

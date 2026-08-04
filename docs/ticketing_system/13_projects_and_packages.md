@@ -249,6 +249,8 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 
 `resolve_ticket_organization()` **prefers the project's `implementing_agency_org_id`** (the accountable ministry, [DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)); for projects created **before** that field it falls back to the legacy `routing_org_role` + `project_organizations` / `package_organizations` lookup. The legacy path is **deprecated but still present** (back-compat).
 
+> **To invert (not done).** Under [DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) the ticket's organization comes from the **project type's `routing_org_role` slot** — the role the author designated — with `implementing_agency_org_id` kept only as the fallback for projects created before types. The order below is therefore **as-built, and back to front** relative to the decision. It is safe: `routing_org_role` already resolves through the same helper, and the legacy field is still populated. Change it in the slice that deletes go-live A3/A5.
+
 **Call sites:**
 
 - `create_ticket_from_intake()` — sets `ticket.organization_id` before workflow + `auto_assign_for_workflow_step()` (webhook and sync backfill).
