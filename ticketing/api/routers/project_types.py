@@ -35,9 +35,10 @@ class TypeActorRoleItem(BaseModel):
 class ProjectTypeResponse(BaseModel):
     type_key: str
     owner_organization_id: str | None = None
-    #: Projects running on this type. >0 means its setup is frozen (§8) — the UI shows
-    #: "Use as template" instead of an edit form.
-    bound_project_count: int = 0
+    #: Projects **accepting grievances** on this type. >0 means its setup is frozen (§8) — the
+    #: UI shows "Use as template" (or "deactivate first") instead of an edit form. Name and
+    #: description stay editable either way.
+    active_project_count: int = 0
     label: str
     description: str | None
     standard_workflow_id: str | None
@@ -83,7 +84,7 @@ def _to_response(row: ProjectType, *, bound: int = 0) -> ProjectTypeResponse:
     return ProjectTypeResponse(
         type_key=row.type_key,
         owner_organization_id=row.owner_organization_id,
-        bound_project_count=bound,
+        active_project_count=bound,
         label=row.label,
         description=row.description,
         standard_workflow_id=row.standard_workflow_id,
@@ -95,12 +96,16 @@ def _to_response(row: ProjectType, *, bound: int = 0) -> ProjectTypeResponse:
     )
 
 
-#: Fields that describe HOW a project is configured. Frozen once the type is bound
-#: (DECISION-author-defined-slots §8). `is_active` / `sort_order` are availability, not
-#: configuration — retiring a type from the New-project list is always allowed.
+#: Fields that describe HOW a project is configured. Frozen while the type has a LIVE project
+#: (DECISION-author-defined-slots §8, amended 2026-08-04).
+#:
+#: Deliberately NOT here:
+#:   • `label` / `description` — a name is not configuration. Renaming a type changes nothing
+#:     about what any project runs, and the migration that back-fills types names them "Type 1",
+#:     "Type 2", which somebody must be able to fix.
+#:   • `is_active` / `sort_order` — availability. Retiring a type from the New-project list
+#:     changes nothing about the projects already running on it.
 CONFIG_FIELDS = (
-    "label",
-    "description",
     "standard_workflow_id",
     "seah_workflow_id",
     "routing_org_role",
@@ -110,44 +115,53 @@ CONFIG_FIELDS = (
 )
 
 
-def _bound_project_count(db: Session, type_key: str) -> int:
-    """Projects running on this type — active or not. A deactivated project still runs on it."""
+def _active_project_count(db: Session, type_key: str) -> int:
+    """Projects **accepting grievances** on this type.
+
+    The freeze protects live work, so it counts active projects only (amended 2026-08-04). A
+    project that is not active has no officers depending on its setup, which makes
+    *deactivate → fix the type → reactivate* the supported repair path — and reactivating means
+    passing go-live again, so a broken setup cannot sneak back.
+    """
     from ticketing.models.project import Project
 
     return int(
         db.execute(
-            select(func.count()).select_from(Project).where(Project.project_type_key == type_key)
+            select(func.count())
+            .select_from(Project)
+            .where(Project.project_type_key == type_key, Project.is_active.is_(True))
         ).scalar_one()
     )
 
 
-def _bound_counts(db: Session) -> dict[str, int]:
-    """type_key → project count, in one query (the list endpoint needs every type's state)."""
+def _active_counts(db: Session) -> dict[str, int]:
+    """type_key → active-project count, in one query (the list endpoint needs every type)."""
     from ticketing.models.project import Project
 
     rows = db.execute(
         select(Project.project_type_key, func.count())
-        .where(Project.project_type_key.isnot(None))
+        .where(Project.project_type_key.isnot(None), Project.is_active.is_(True))
         .group_by(Project.project_type_key)
     ).all()
     return {k: int(n) for k, n in rows}
 
 
-def _require_unbound(db: Session, type_key: str, fields: set[str]) -> None:
-    """A type in use cannot be re-configured — clone it instead (§8).
+def _require_editable(db: Session, type_key: str, fields: set[str]) -> None:
+    """A type with a live project cannot be re-configured (§8).
 
     Enforced here rather than by disabling the form: a disabled form is a suggestion, and this
     is the rule that stops one edit from re-configuring every project of a kind at once.
     """
     if not (fields & set(CONFIG_FIELDS)):
         return
-    n = _bound_project_count(db, type_key)
+    n = _active_project_count(db, type_key)
     if n:
         raise HTTPException(
             status_code=409,
             detail=(
-                f"This project type is used by {n} project{'s' if n != 1 else ''}, so its setup "
-                "cannot change. Use it as a template to make an edited copy."
+                f"{n} active project{'s use' if n != 1 else ' uses'} this type, so its setup "
+                "cannot change. Deactivate the project first, or use this type as a template "
+                "to make an edited copy."
             ),
         )
 
@@ -159,7 +173,7 @@ def list_project_types(
     _user: CurrentUser = Depends(require_admin),
 ):
     rows = types_svc.list_project_types(db, active_only=active_only)
-    counts = _bound_counts(db)
+    counts = _active_counts(db)
     return [_to_response(r, bound=counts.get(r.type_key, 0)) for r in rows]
 
 
@@ -172,7 +186,7 @@ def get_project_type(
     row = types_svc.get_project_type(db, type_key)
     if not row:
         raise HTTPException(status_code=404, detail="Project type not found")
-    return _to_response(row, bound=_bound_project_count(db, type_key))
+    return _to_response(row, bound=_active_project_count(db, type_key))
 
 
 @router.post("/project-types", response_model=ProjectTypeResponse, status_code=201)
@@ -213,7 +227,7 @@ def update_project_type(
     row = types_svc.get_project_type(db, type_key)
     if not row:
         raise HTTPException(status_code=404, detail="Project type not found")
-    _require_unbound(db, type_key, body.model_fields_set)
+    _require_editable(db, type_key, body.model_fields_set)
     if body.label is not None:
         row.label = body.label
     if body.description is not None:
@@ -233,7 +247,7 @@ def update_project_type(
     row.updated_at = _now()
     db.commit()
     db.refresh(row)
-    return _to_response(row, bound=_bound_project_count(db, type_key))
+    return _to_response(row, bound=_active_project_count(db, type_key))
 
 
 @router.post(
