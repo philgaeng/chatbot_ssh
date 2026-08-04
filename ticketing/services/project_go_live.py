@@ -239,8 +239,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             id="A1",
             label="Default workflow",
             group="routing",
-            severity="warn",
-            status="pass" if a1_ok else "warn",
+            severity="block",
+            status="pass" if a1_ok else "fail",
             message="Chosen"
             if a1_ok
             else "None chosen yet. The default is used when nothing else matches.",
@@ -323,7 +323,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 id="B1",
                 label="Partner organizations",
                 group="commercial",
-                severity="warn",
+                severity="info",
                 status="pass" if b1_ok else "warn",
                 message="All required organizations assigned"
                 if b1_ok
@@ -360,7 +360,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 id="B2",
                 label="Package locations",
                 group="commercial",
-                severity="warn",
+                severity="info",
                 status="pass" if b2_ok else "warn",
                 message="Every active package has locations"
                 if b2_ok
@@ -387,7 +387,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                     id="B3",
                     label="Package actors",
                     group="commercial",
-                    severity="warn",
+                    severity="info",
                     status="pass" if b3_ok else "warn",
                     message="Package contractor roles covered"
                     if b3_ok
@@ -443,7 +443,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             id="C2",
             label="Level 2 officers",
             group="officers",
-            severity="warn",
+            severity="info",
             status="pass" if c2_ok else ("warn" if l2_role else "info"),
             message=(
                 "Every lot has a Level 2 officer"
@@ -519,8 +519,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 id="C4",
                 label="Sensitive workflow staffing",
                 group="officers",
-                severity="warn",
-                status="pass" if c4_ok else "warn",
+                severity="block",
+                status="pass" if c4_ok else "fail",
                 message="Level 1 officer assigned" if c4_ok else "Assign a Level 1 officer for this project",
                 section="staffing",
             )
@@ -555,8 +555,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             id="D1",
             label="Project locations",
             group="geography",
-            severity="warn",
-            status="pass" if d1_ok else "warn",
+            severity="block",
+            status="pass" if d1_ok else "fail",
             message="At least one location linked" if d1_ok else "Link the provinces, districts or municipalities this project covers",
             section="locations",
         )
@@ -618,7 +618,7 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 id="F1",
                 label="Officer SMS phones",
                 group="officers",
-                severity="warn",
+                severity="info",
                 status="pass" if not f1_gaps else "warn",
                 message=(
                     "Officers on SMS levels have a phone number"
@@ -636,16 +636,19 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             id="E1",
             label="Name and code",
             group="metadata",
-            severity="warn",
-            status="pass" if e1_ok else "warn",
+            severity="block",
+            status="pass" if e1_ok else "fail",
             message="Name and short code set" if e1_ok else "Set the project name and short code",
             section=None,
         )
     )
 
-    # Activation blocks on any block-severity check that failed (A3 implementing agency,
-    # A5 donor guardrail, C5 all-levels-staffed). Intake blocks on C1 (L1 staffed).
-    _ACTIVATION_BLOCK_IDS = {"A3", "A5", "C5", "R1"}
+    # Binary go-live (Q-GL-1/2, doc 13 §7): every check is a **Blocker** or **Optional** —
+    # there is no middle "warning" that a user learns to ignore. Blockers are exactly doc 13
+    # §7's table; everything else carries severity="info" and never stops activation.
+    # A1/D1/E1/C4 were promoted 2026-08-04: they were documented Blockers shipping as warnings,
+    # so a project with no default workflow and no locations could be activated.
+    _ACTIVATION_BLOCK_IDS = {"A1", "A3", "A5", "C1", "C4", "C5", "D1", "E1", "R1"}
     can_activate = not any(
         c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
     )

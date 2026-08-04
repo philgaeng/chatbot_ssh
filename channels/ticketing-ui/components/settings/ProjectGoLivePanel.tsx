@@ -82,12 +82,16 @@ export function ProjectGoLivePanel({
                       }`}
                     >
                       <span
-                        className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[11px] font-bold text-white ${
-                          ok ? "bg-green-600" : blocked ? "bg-red-600" : "bg-amber-400"
+                        className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                          ok
+                            ? "bg-green-600 text-white"
+                            : blocked
+                              ? "bg-red-600 text-white"
+                              : "border border-gray-300 bg-white text-gray-400"
                         }`}
                         aria-hidden
                       >
-                        {ok ? "✓" : blocked ? "✕" : "!"}
+                        {ok ? "✓" : blocked ? "✕" : "○"}
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="block text-[13.5px] font-semibold text-gray-900">
@@ -96,6 +100,9 @@ export function ProjectGoLivePanel({
                             <span className="ml-2 text-[11px] font-bold text-red-600 uppercase tracking-wide">
                               Blocks go-live
                             </span>
+                          )}
+                          {!blocked && !ok && (
+                            <span className="ml-2 text-[11px] font-normal text-gray-400">— optional</span>
                           )}
                         </span>
                         <span className="block text-xs text-gray-600">{c.message}</span>

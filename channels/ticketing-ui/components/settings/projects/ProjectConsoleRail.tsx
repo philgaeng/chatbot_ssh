@@ -6,7 +6,8 @@
  * Go-live status and section navigation are ONE control, not two: the dot beside each
  * section is that section's readiness, so "what's left to do" and "where do I go" are the
  * same glance. Severity is carried in words as well as colour (ui/05 §2 rule 6) — the FIX
- * flag and the hint line, not the red dot alone.
+ * flag and the hint line, not the red dot alone. There is no amber tier: a check either
+ * blocks go-live or it is optional (Q-GL-1/2).
  */
 import type { GoLiveReport } from "@/lib/api";
 import {
@@ -112,7 +113,7 @@ export function ProjectConsoleRail({
       <div className="border-t border-gray-100 px-4 py-2.5 text-[11px] text-gray-400 leading-snug">
         Each dot is a section&apos;s status: <span className="text-green-600 font-bold">●</span> ready ·{" "}
         <span className="text-red-500 font-bold">●</span> blocks go-live ·{" "}
-        <span className="text-amber-400 font-bold">●</span> to review.
+        <span className="text-gray-300 font-bold">●</span> optional.
       </div>
     </nav>
   );

@@ -59,10 +59,12 @@ export function sectionStatuses(report: GoLiveReport | null): Record<SectionKey,
   for (const c of report.checks) {
     const key = sectionOfCheck(c);
     if (!key) continue;
+    // Binary (Q-GL-1/2): a check either blocks go-live or it is optional. An optional check
+    // that hasn't passed is NOT a problem — it must not read as one, or people learn to
+    // ignore amber and miss the real blocker.
     const rank = (s: SectionStatus) => ({ none: 0, pass: 1, warn: 2, block: 3 }[s]);
     const asStatus: SectionStatus =
-      c.status === "fail" ? (c.severity === "block" ? "block" : "warn")
-      : c.status === "warn" ? "warn"
+      c.severity === "block" && c.status === "fail" ? "block"
       : c.status === "pass" ? "pass"
       : "none";
     if (rank(asStatus) > rank(out[key])) out[key] = asStatus;
@@ -77,7 +79,7 @@ export function sectionHints(report: GoLiveReport | null): Partial<Record<Sectio
   for (const c of report.checks) {
     const key = sectionOfCheck(c);
     if (!key || out[key]) continue;
-    if (c.status === "fail" || c.status === "warn") out[key] = c.message;
+    if (c.severity === "block" && c.status === "fail") out[key] = c.message;
   }
   return out;
 }

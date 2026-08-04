@@ -32,7 +32,9 @@ Deleted, along with `workflow_routing.uncovered_classifications()` (its only cal
 
 Fix: drop the check (and `uncovered_classifications()` if unused elsewhere), or keep it purely informational under a non-colliding ID.
 
-### 3. Go-live is not binary yet (doc 13 §7 is target, not as-built)
+### 3. ~~Go-live is not binary yet~~ ✅ **done 2026-08-04**
+A1/D1/E1/C4 promoted to blockers; the rest carry `severity="info"` and never block. `_ACTIVATION_BLOCK_IDS = {A1, A3, A5, C1, C4, C5, D1, E1, R1}`. The UI dropped its amber tier with it — an optional check that hasn't passed reads "optional", not as a problem. Original note below.
+
 Q-GL-1/2 locked "every check is a **Blocker** or **Optional**, no warning tier". As-built, `project_go_live.py` keeps `severity` ∈ `block` / `warn` / `info` and computes:
 
 ```python

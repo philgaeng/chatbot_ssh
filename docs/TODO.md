@@ -38,10 +38,10 @@ reveal-policy endpoint, and docs/seah/.
   `workflow_routing.uncovered_classifications()` removed; the `A4` ID collision with doc 13 §7 is
   gone. Go-live copy de-jargoned in the same pass (no "binding"/"catch-all"/"actors"/`L1`; the
   panel says "Accepting grievances", not "Tickets OK").
-- **[Go-live] Binary severity is spec-only.** `_ACTIVATION_BLOCK_IDS = {A3, A5, C5, R1}`, so **A1**
-  (default workflow), **D1** (locations), **E1** (name + code) and **A2/C4** (SEAH) are documented
-  Blockers that ship as warnings and don't stop Activate. Promote them and collapse `severity` to
-  blocker/optional. (`ticketing/services/project_go_live.py`)
+- ~~**[Go-live] Binary severity is spec-only.**~~ ✅ **done 2026-08-04** — A1 (default workflow), D1
+  (locations), E1 (name + code) and C4 (sensitive staffing) promoted to blockers; everything else is
+  `severity="info"` and never blocks. **Behaviour change:** a project with no default workflow or no
+  linked locations can no longer be activated. Projects already active stay active until deactivated.
 
 ---
 

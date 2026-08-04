@@ -263,7 +263,7 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 **Binary (2026-07-30, Q-GL-1/2):** every check is either a **Blocker** (must pass to Activate) or **Optional** (never blocks). No "warning" tier. A blocked check states the one thing to fix.
 
-> **⚠ Target, not as-built (verified 2026-08-02).** `project_go_live.py` still carries a three-way `severity` (`block` / `warn` / `info`) and blocks activation on **`{A3, A5, C5, R1}` only** — so **A1 (default workflow), D1 (locations), E1 (name + code) and A2/C4 (SEAH)** are listed as Blockers below but ship as **warnings**. The tables below are the target; the mockup ([`ui/04`](ui/04_projects_packages_redesign.html)) shows the target. Gap logged: [followup](../sprints/2026-07_org_chart_positions/followups/workflow-stream-vocabulary-and-intake-route-labels.md).
+> **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, A3, A5, C1, C4, C5, D1, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
 
 ### Blockers (must pass to activate)
 
