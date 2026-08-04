@@ -92,7 +92,9 @@ The original question and analysis, kept for the record. The design intent: SEAH
 
 Found porting **Project-wide staffing** to [`ui/04`](../../../ticketing_system/ui/04_projects_packages_redesign.html). The wireframe and [13 §5A](../../../ticketing_system/13_projects_and_packages.md) describe a screen the backend cannot yet feed.
 
-### 6.1 `tier_labels` / `required_tiers` do not exist
+### 6.1 ~~`tier_labels` / `required_tiers` do not exist~~ ✅ **built 2026-08-04** (migration `j6l8n0p2`)
+Both columns exist, the step editor authors them, staffing shows the author's label, and go-live's level gate reads `required_tiers` — reporting the gap with the author's name ("L2 (Escalation Lead)"). `required_tiers` rejects `"actor"` (422). Original note below.
+
 [12 §2](../../../ticketing_system/12_workflows_configuration.md) documents both as columns on `workflow_steps`, and [13 §5A.1/§5A.5](../../../ticketing_system/13_projects_and_packages.md) builds the staffing screen and the go-live gate on them:
 
 > *"Each tier carries a name and a short description … editable by the workflow author in the Workflows tab"* · *"Go-live blocks on any required tier that is unstaffed"*
