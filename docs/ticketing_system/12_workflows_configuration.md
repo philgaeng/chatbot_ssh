@@ -140,10 +140,30 @@ draft → publish → (in use on projects) → archive
 
 ## 6. Settings UI — Workflows tab
 
+**Two sub-tabs: Workflows · Project types.** They live together because a project type is
+mostly a bundle of workflows — see §6.00. (Project types sat under Settings → platform data
+until 2026-08-04, where nobody looking at a workflow would find them.)
+
 - List active workflows + templates; **Clone** creates a draft.
 - Step editor: role dropdown, SLAs, tier fields.
 - **Sensitive workflow** checkbox — see §6.0.
 - Footer: *Put a workflow on a project under Settings → Projects & packages → Grievance workflows.*
+
+### 6.00 Project types sub-tab — where a workflow becomes a project's workflow
+
+A workflow on its own runs nothing. A **project type** binds one or more of them (name, default,
+chatbot menu, categories), names the organizations a project of that kind must have, and says
+which of those a grievance is recorded against. Creating a project is: **organization → one of
+its types → name it.** A typed project cannot deviate from its type, so this sub-tab is where a
+project's workflow set is actually changed — the project screen shows it read-only and links
+here.
+
+- **Component:** `ProjectTypesTab.tsx`. Its workflow cards are the project screen's own
+  (`<WorkflowBindingCards>`, shared), so the two cannot drift.
+- **Who:** `super_admin` anywhere, `org_admin` within its own subtree — the same gate as
+  authoring a workflow. A `project_admin` does not see the sub-tab.
+- **Model, freeze rules and validation:** [14 §4](14_platform_settings.md) — one description,
+  referenced from everywhere.
 
 ### 6.0 The **Sensitive** checkbox — the one place the property is set
 

@@ -33,7 +33,11 @@ import { ProjectsSection } from "@/components/settings/projects/ProjectsSection"
 
 type MainTab = "setup" | "org_officers" | "workflows_roles" | "projects" | "platform";
 type OrgOfficersSub = "organizations" | "officers";
-type PlatformSub = "locations" | "reports" | "project_types" | "system_config" | "admin_access";
+/** A project type is mostly a bundle of workflows, so it is authored beside them, not under
+ *  platform data (moved 2026-08-04 — it sat under Settings → Project types, where nobody
+ *  looking at a workflow would find it). */
+type WorkflowsSub = "workflows" | "project_types";
+type PlatformSub = "locations" | "reports" | "system_config" | "admin_access";
 
 const MAIN_TABS: { id: MainTab; label: string }[] = [
   { id: "setup",             label: "Setup & go-live" },   // R8: Frame 01 landing
@@ -107,10 +111,7 @@ export default function SettingsPage() {
   const mainTabs = useMemo(() => {
     if (isSuperAdmin) return MAIN_TABS;
     if (isCountryAdmin) {
-      // Keeps the Settings tab — it now carries Project types, which an org admin authors for
-      // its own organization (DECISION-author-defined-slots §3.1). platformTabs narrows it to
-      // that single entry.
-      const tabs = MAIN_TABS;
+      const tabs = MAIN_TABS.filter((t) => t.id !== "platform");
       if (!adminWorkflowTracks.includes("standard")) {
         return tabs.filter((t) => t.id !== "projects" || adminWorkflowTracks.includes("seah"));
       }
@@ -124,6 +125,7 @@ export default function SettingsPage() {
   }, [isSuperAdmin, isCountryAdmin, isProjectAdmin, isAdmin, adminWorkflowTracks]);
   const [activeMain, setActiveMain] = useState<MainTab>("setup");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
+  const [workflowsSub, setWorkflowsSub] = useState<WorkflowsSub>("workflows");
   const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
   const [jumpProjectId, setJumpProjectId] = useState<string | null>(null);
   const [roleCatalog, setRoleCatalog]     = useState<RoleEntry[]>([]);
@@ -161,31 +163,42 @@ export default function SettingsPage() {
     setActiveMain("projects");
   }
 
+  // Authoring a type is the same gate as authoring a workflow (DECISION-author-defined-slots
+  // §3.1): super_admin anywhere, org_admin in its own subtree. A project_admin sees the
+  // Workflows tab but not this sub-tab.
+  const canAuthorProjectTypes = isSuperAdmin || isCountryAdmin;
+  const workflowsTabs: { id: WorkflowsSub; label: string }[] = useMemo(
+    () =>
+      canAuthorProjectTypes
+        ? [
+            { id: "workflows", label: "Workflows" },
+            { id: "project_types", label: "Project types" },
+          ]
+        : [],
+    [canAuthorProjectTypes],
+  );
+
+  useEffect(() => {
+    if (!canAuthorProjectTypes && workflowsSub !== "workflows") setWorkflowsSub("workflows");
+  }, [canAuthorProjectTypes, workflowsSub]);
+
   const platformTabs: { id: PlatformSub; label: string }[] = useMemo(() => {
     if (canAccessPlatformSettings) {
       return [
         { id: "locations", label: "Locations" },
         { id: "reports", label: "Quarterly reports" },
-        { id: "project_types", label: "Project types" },
         { id: "system_config", label: "Advanced (JSON)" },
         { id: "admin_access", label: "Admin access" },
       ];
     }
-    // An org admin authors project types within its own organization
-    // (DECISION-author-defined-slots §3.1) — the same gate as authoring a workflow, since a
-    // type is mostly a bundle of workflows. Nothing else on this tab opens up.
-    if (isCountryAdmin) return [{ id: "project_types", label: "Project types" }];
     return [];
-  }, [canAccessPlatformSettings, isCountryAdmin]);
+  }, [canAccessPlatformSettings]);
 
   useEffect(() => {
-    if (canAccessPlatformSettings) return;
-    if (isCountryAdmin) {
-      if (platformSub !== "project_types") setPlatformSub("project_types");
-    } else if (platformSub !== "reports") {
+    if (!canAccessPlatformSettings && platformSub !== "reports") {
       setPlatformSub("locations");
     }
-  }, [canAccessPlatformSettings, isCountryAdmin, platformSub]);
+  }, [canAccessPlatformSettings, platformSub]);
 
   if (!isAdmin) {
     return (
@@ -256,11 +269,21 @@ export default function SettingsPage() {
       {activeMain === "workflows_roles" && (
         // Operational Roles tab removed (DESIGN-cast-model §7 Phase 3): tiers live on the step
         // editor, who + jurisdiction on per-package staffing, Standard/SEAH on the workflow track.
-        <WorkflowsTab
-          roleCatalog={roleCatalog}
-          canCreateRole={canCreateOperationalRoles}
-          onRoleCatalogRefresh={loadRoleCatalog}
-        />
+        // Project types sit here, beside the workflows they bundle.
+        <>
+          {workflowsTabs.length > 1 && (
+            <SettingsSubTabs tabs={workflowsTabs} active={workflowsSub} onChange={setWorkflowsSub} />
+          )}
+          {workflowsSub === "project_types" && canAuthorProjectTypes ? (
+            <ProjectTypesTab />
+          ) : (
+            <WorkflowsTab
+              roleCatalog={roleCatalog}
+              canCreateRole={canCreateOperationalRoles}
+              onRoleCatalogRefresh={loadRoleCatalog}
+            />
+          )}
+        </>
       )}
 
       {activeMain === "projects" && (
@@ -272,7 +295,7 @@ export default function SettingsPage() {
           adminWorkflowTracks={adminWorkflowTracks}
           canCreateProject={canCreateProject}
           canManageStructure={canManageStructure}
-          onOpenProjectTypes={() => { setActiveMain("platform"); setPlatformSub("project_types"); }}
+          onOpenProjectTypes={() => { setActiveMain("workflows_roles"); setWorkflowsSub("project_types"); }}
         />
       )}
 
@@ -281,7 +304,6 @@ export default function SettingsPage() {
           <SettingsSubTabs tabs={platformTabs} active={platformSub} onChange={setPlatformSub} />
           {platformSub === "locations" && <LocationsSection />}
           {platformSub === "reports" && <QuarterlyReportSettings />}
-          {platformSub === "project_types" && (isSuperAdmin || isCountryAdmin) && <ProjectTypesTab />}
           {platformSub === "system_config" && isSuperAdmin && <SystemConfigTab />}
           {platformSub === "admin_access" && isSuperAdmin && <AdminAccessTab />}
         </>

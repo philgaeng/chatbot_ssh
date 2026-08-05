@@ -29,9 +29,9 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 | Main tab | Sub-tabs | Spec |
 |----------|----------|------|
 | **Organizations & officers** | Organizations · Officers | Orgs: this doc §3; Officers: [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) |
-| **Workflows, roles & permissions** | Workflows · Roles & permissions | [11_roles_and_permissions.md](11_roles_and_permissions.md) · [12_workflows_configuration.md](12_workflows_configuration.md) |
+| **Workflows** | Workflows · **Project types** | [12_workflows_configuration.md](12_workflows_configuration.md) §6/§6.00 · model in [14 §4](14_platform_settings.md) · [11_roles_and_permissions.md](11_roles_and_permissions.md) |
 | **Projects & packages** | List → project editor | [13_projects_and_packages.md](13_projects_and_packages.md) |
-| **Settings** (platform) | Locations · Quarterly reports · Project types · Advanced (JSON) | [14_platform_settings.md](14_platform_settings.md) |
+| **Settings** (platform) | Locations · Quarterly reports · Advanced (JSON) · Admin access | [14_platform_settings.md](14_platform_settings.md) |
 
 **Design rule:** Global directory, geographic reference data, and per-project routing stay in separate tabs. Tab 3 is the single place admins configure *how this project works*.
 
@@ -62,7 +62,7 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 Additional gates:
 
 - **SEAH workflows:** `canSeeSeah` — SEAH operational roles + `super_admin` + `adb_hq_exec`; country/project admin SEAH powers TBD.
-- **Platform sub-tab** (`super_admin` only): Locations import, Project types, Quarterly reports config, Advanced JSON, Admin access.
+- **Platform sub-tab** (`super_admin` only): Locations import, Quarterly reports config, Advanced JSON, Admin access. **Project types moved to the Workflows tab 2026-08-04** — a type is mostly a bundle of workflows ([12 §6.00](12_workflows_configuration.md)); `org_admin` authors them for its own subtree.
 - **Implementation note:** API/UI today still treat `local_admin` as `is_admin`; three-tier enforcement is not yet wired.
 
 ---

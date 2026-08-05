@@ -17,11 +17,10 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 |---------|---------------|-----------------|-----------------|
 | **Locations** | ✅ import + tree | ❌ (tab hidden) | ❌ |
 | **Quarterly reports** | ✅ | ❌ | ❌ |
-| **Project types** | ✅ | ❌ | ❌ |
 | **Advanced (JSON)** | ✅ | ❌ | ❌ |
 | **Admin access** *(planned)* | ✅ | ❌ | ❌ |
 
-**Note:** `org_admin` manages workflows, orgs, projects, and packages via the **other three** main Settings tabs (country scope). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
+**Note:** `org_admin` manages workflows, **project types**, orgs, projects, and packages via the **other three** main Settings tabs (country scope) — project types under Workflows ([12 §6.00](12_workflows_configuration.md)). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
 
 ---
 
@@ -75,14 +74,20 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 
 ---
 
-## 4. Project types (archetypes)
+## 4. Project types (archetypes) — *the model; the screen lives under Workflows*
+
+> **This is not a platform sub-tab.** Project types are authored under **Settings → Workflows →
+> Project types** ([12 §6.00](12_workflows_configuration.md)) — a type is mostly a bundle of
+> workflows, so it belongs beside them. **Moved 2026-08-04**; it shipped under platform data,
+> where nobody looking at a workflow would find it. The model, the freeze rules and the
+> validation stay documented here because every other doc already points at "14 §4".
 
 **Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
 
 **Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog, the routing anchor and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
 **API:** `ticketing/api/routers/project_types.py`
 
-**Where it lives:** Settings → **Settings** tab → *Project types*. A `super_admin` sees the whole platform sub-tab set; an `org_admin` sees **only** this entry, which is how it authors types for its own organization.
+**Who:** `super_admin` anywhere; `org_admin` within its own subtree — the same gate as authoring a workflow. A `project_admin` does not see the sub-tab.
 
 **Organization keys are never typed or shown.** The author writes the label ("Ward Office"); the key is derived from it once and then never changes, because filled organizations point at it. Renaming a role therefore never orphans anything.
 
