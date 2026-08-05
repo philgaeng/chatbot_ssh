@@ -1,8 +1,12 @@
 """Project types — the template a project is built from (DECISION-author-defined-slots).
 
-A type binds the workflows a project runs, names the organizations it must have
-(``actor_roles``), and says which of those an incoming grievance is stamped with
-(``routing_org_role``). Spec: doc 14 §4, doc 13 §3.
+A type binds the workflows a project runs and names the organizations it must have
+(``actor_roles``). Spec: doc 14 §4, doc 13 §3.
+
+It no longer designates *one* of those organizations as the grievance's owner: the
+``routing_org_role`` anchor was retired 2026-08-04 (DECISION-organization-membership) because
+reporting is **membership** — every organization named on a project sees its grievances. The
+column survives, unused, until a cleanup migration drops it.
 
 Authoring is an **org-scoped catalog**, like workflows and position types: ``super_admin``
 authors anywhere, an ``org_admin`` within its own subtree (§3.1). A type with a live project
@@ -72,7 +76,6 @@ class ProjectTypeResponse(BaseModel):
     description: str | None
     standard_workflow_id: str | None
     seah_workflow_id: str | None
-    routing_org_role: str
     actor_roles: list[dict[str, Any]]
     workflow_bindings: list[dict[str, Any]]
     is_active: bool
@@ -93,7 +96,6 @@ class ProjectTypeCreate(BaseModel):
     description: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
-    routing_org_role: str = "implementing_agency"
     actor_roles: list[TypeActorRoleItem] = []
     workflow_bindings: list[TypeWorkflowBindingItem] = []
     owner_organization_id: str | None = None
@@ -106,7 +108,6 @@ class ProjectTypeUpdate(BaseModel):
     description: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
-    routing_org_role: str | None = None
     actor_roles: list[TypeActorRoleItem] | None = None
     workflow_bindings: list[TypeWorkflowBindingItem] | None = None
     owner_organization_id: str | None = None
@@ -123,7 +124,6 @@ def _to_response(row: ProjectType, *, bound: int = 0) -> ProjectTypeResponse:
         description=row.description,
         standard_workflow_id=row.standard_workflow_id,
         seah_workflow_id=row.seah_workflow_id,
-        routing_org_role=row.routing_org_role,
         actor_roles=row.actor_roles or [],
         workflow_bindings=row.workflow_bindings or [],
         is_active=row.is_active,
@@ -143,7 +143,6 @@ def _to_response(row: ProjectType, *, bound: int = 0) -> ProjectTypeResponse:
 CONFIG_FIELDS = (
     "standard_workflow_id",
     "seah_workflow_id",
-    "routing_org_role",
     "actor_roles",
     "workflow_bindings",
     "owner_organization_id",
@@ -236,10 +235,9 @@ def _validate_config(
     db: Session,
     *,
     actor_roles: list[dict[str, Any]],
-    routing_org_role: str,
     workflow_bindings: list[dict[str, Any]],
 ) -> None:
-    """Check the *resulting* configuration, so a type can never name an anchor it doesn't have.
+    """Check the *resulting* configuration before it is stored.
 
     Raises 422 with a message an admin can act on (doc ui/05 §2.5 — no field names, no codes).
     """
@@ -257,15 +255,6 @@ def _validate_config(
         if key in seen:
             raise HTTPException(status_code=422, detail=f"'{label}' is listed twice.")
         seen.add(key)
-
-    if actor_roles and routing_org_role not in seen:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Choose which organization a grievance is recorded against — it must be one of "
-                "this type's organization roles."
-            ),
-        )
 
     if workflow_bindings:
         from ticketing.services.project_workflows import validate_workflow_binding
@@ -375,12 +364,7 @@ def create_project_type(
     _validate_owner(db, owner)
     actor_roles = [r.model_dump() for r in body.actor_roles]
     bindings = [b.model_dump() for b in body.workflow_bindings]
-    _validate_config(
-        db,
-        actor_roles=actor_roles,
-        routing_org_role=body.routing_org_role,
-        workflow_bindings=bindings,
-    )
+    _validate_config(db, actor_roles=actor_roles, workflow_bindings=bindings)
     standard_wf, seah_wf = (
         _legacy_workflow_mirrors(db, bindings)
         if bindings
@@ -393,7 +377,6 @@ def create_project_type(
         description=body.description,
         standard_workflow_id=standard_wf,
         seah_workflow_id=seah_wf,
-        routing_org_role=body.routing_org_role,
         actor_roles=actor_roles,
         workflow_bindings=bindings,
         owner_organization_id=owner,
@@ -437,7 +420,6 @@ def update_project_type(
     _validate_config(
         db,
         actor_roles=actor_roles,
-        routing_org_role=body.routing_org_role if body.routing_org_role is not None else row.routing_org_role,
         workflow_bindings=bindings if body.workflow_bindings is not None else [],
     )
 
@@ -445,8 +427,6 @@ def update_project_type(
         row.label = body.label
     if body.description is not None:
         row.description = body.description
-    if body.routing_org_role is not None:
-        row.routing_org_role = body.routing_org_role
     if body.actor_roles is not None:
         row.actor_roles = actor_roles
     if body.workflow_bindings is not None:
@@ -502,6 +482,7 @@ def duplicate_project_type(
         description=src.description,
         standard_workflow_id=src.standard_workflow_id,
         seah_workflow_id=src.seah_workflow_id,
+        # Carried, not authored — the column is retired and awaiting a cleanup migration.
         routing_org_role=src.routing_org_role,
         actor_roles=list(src.actor_roles or []),
         workflow_bindings=list(src.workflow_bindings or []),

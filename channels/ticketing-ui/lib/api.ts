@@ -1921,8 +1921,6 @@ export interface OrgRole {
   required?: boolean;
   required_package?: boolean;
   scope?: string;
-  /** The one slot whose organization a grievance is recorded against. */
-  is_routing_anchor?: boolean;
   sort_order?: number;
 }
 
@@ -2012,7 +2010,6 @@ export interface ProjectTypeItem {
   description: string | null;
   standard_workflow_id: string | null;
   seah_workflow_id: string | null;
-  routing_org_role: string;
   actor_roles: TypeActorRoleDef[];
   workflow_bindings: TypeWorkflowBinding[];
   /** The organization this template belongs to. null = shared with everyone. */

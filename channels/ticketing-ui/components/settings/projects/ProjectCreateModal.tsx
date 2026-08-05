@@ -4,11 +4,11 @@
  * <ProjectCreateModal> — new project: **organization → type → name it**.
  *
  * The order is the decision (DECISION-author-defined-slots §5): the organization comes first
- * because it decides which templates are on offer, and it fills the type's routing slot — the
- * one organization a grievance is recorded against — so nobody has to allocate it by hand.
- * Everything else (workflows, category routing, the other organizations a project must name)
- * comes from the type. What is left afterwards is locations and officers, which is the work
- * that actually needs local knowledge.
+ * because it decides which templates are on offer, and it fills the type's first required
+ * organization role, so nobody has to name it again on the project screen. Everything else
+ * (workflows, category routing, the other organizations a project must name) comes from the
+ * type. What is left afterwards is locations and officers, which is the work that actually
+ * needs local knowledge.
  */
 import React, { useState, useEffect } from "react";
 import {
@@ -80,8 +80,10 @@ export function ProjectCreateModal({
   }, [orgId]);
 
   const selectedType = types.find((t) => t.type_key === typeKey) ?? null;
-  const anchorLabel =
-    selectedType?.actor_roles.find((r) => r.key === selectedType.routing_org_role)?.label ?? null;
+  /** The organization in charge fills the type's first required role, so the creator does not
+   *  re-enter it on the project screen. (It filled the `routing_org_role` anchor until
+   *  2026-08-04 — that concept is retired; see DECISION-organization-membership.) */
+  const leadRoleLabel = selectedType?.actor_roles.find((r) => r.required)?.label ?? null;
 
   async function handleCreate() {
     if (!orgId) { setError("Choose the organization in charge of this project."); return; }
@@ -203,7 +205,7 @@ export function ProjectCreateModal({
                   {selectedType.description ? `${selectedType.description} ` : ""}
                   {selectedType.workflow_bindings.length}{" "}
                   {selectedType.workflow_bindings.length === 1 ? "workflow" : "workflows"}
-                  {anchorLabel ? ` · this organization becomes the ${anchorLabel}` : ""}
+                  {leadRoleLabel ? ` · this organization becomes the ${leadRoleLabel}` : ""}
                 </p>
               )}
               {orgId && !typesLoading && types.length === 0 && (

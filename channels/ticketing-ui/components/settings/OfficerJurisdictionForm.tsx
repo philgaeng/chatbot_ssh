@@ -12,7 +12,6 @@ import {
   type PackageItem,
 } from "@/lib/api";
 import {
-  DEFAULT_ROUTING_ORG_ROLE,
   collectOrganizationScopeAssignments,
   isDonorAllProjectsOrg,
   organizationsForScopeFilter,
@@ -21,7 +20,7 @@ import {
   orgRoleKeysForOrganization,
   packagesForOrganizationOnProject,
   projectsForOrganization,
-  routingOrganizationId,
+  leadOrganizationId,
   scopeOptionsFromAssignments,
   type OrgScopeAssignment,
 } from "@/lib/officerJurisdiction";
@@ -126,7 +125,7 @@ export function useOfficerJurisdictionState(
           setOrgId("");
         } else {
           const project = projects.find((p) => p.project_id === selProject);
-          const routed = routingOrganizationId(project);
+          const routed = leadOrganizationId(project);
           if (!routed) {
             setOrgId("");
           } else if (scopeFilter) {
@@ -320,7 +319,7 @@ export function useOfficerJurisdictionState(
     projectFirst,
     orgsOnProject,
     orgsOnProjectFiltered,
-    routingOrgId: routingOrganizationId(selectedProject),
+    routingOrgId: leadOrganizationId(selectedProject),
     allProjects: projects,
     reset,
     hasJurisdiction,
@@ -574,9 +573,8 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         )}
         {selProject && routingOrgId && orgId === routingOrgId && (
           <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-            Organization defaults to the project&apos;s{" "}
-            <span className="font-mono">{DEFAULT_ROUTING_ORG_ROLE.replace(/_/g, " ")}</span>{" "}
-            (same org used for ticket routing). Change only if this officer works for another project actor.
+            Organization defaults to the first one named on this project. Change it if this
+            officer works for a different one.
           </p>
         )}
         {locationAndPackage}

@@ -152,9 +152,8 @@ until 2026-08-04, where nobody looking at a workflow would find them.)
 ### 6.00 Project types sub-tab — where a workflow becomes a project's workflow
 
 A workflow on its own runs nothing. A **project type** binds one or more of them (name, default,
-chatbot menu, categories), names the organizations a project of that kind must have, and says
-which of those a grievance is recorded against. Creating a project is: **organization → one of
-its types → name it.** A typed project cannot deviate from its type, so this sub-tab is where a
+chatbot menu, categories) and names the organizations a project of that kind must have. Creating
+a project is: **organization → one of its types → name it.** A typed project cannot deviate from its type, so this sub-tab is where a
 project's workflow set is actually changed — the project screen shows it read-only and links
 here.
 

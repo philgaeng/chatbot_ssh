@@ -96,8 +96,9 @@ def effective_role_catalog(db: Session, project_id: str) -> list[dict[str, Any]]
     and seeded from the global list only if that project has nothing at all.
 
     Each entry carries what the project screens need to render it: ``required`` /
-    ``required_package`` (go-live B1 / B3), ``scope``, and ``is_routing_anchor`` — the one slot
-    whose organization a grievance is recorded against.
+    ``required_package`` (go-live B1 / B3) and ``scope``. No entry is special: since
+    2026-08-04 there is no "anchor" slot — every organization named on a project sees its
+    grievances (DECISION-organization-membership, `services/org_reach.py`).
     """
     from ticketing.models.project import Project
 
@@ -109,7 +110,6 @@ def effective_role_catalog(db: Session, project_id: str) -> list[dict[str, Any]]
         type_row = get_project_type(db, project.project_type_key)
 
     if type_row is not None:
-        anchor = type_row.routing_org_role
         out: list[dict[str, Any]] = []
         for i, entry in enumerate(type_row.actor_roles or []):
             key = (entry.get("key") or "").strip()
@@ -123,7 +123,6 @@ def effective_role_catalog(db: Session, project_id: str) -> list[dict[str, Any]]
                     "required": bool(entry.get("required")),
                     "required_package": bool(entry.get("required_package")),
                     "scope": entry.get("scope") or "project",
-                    "is_routing_anchor": key == anchor,
                     "sort_order": i,
                 }
             )
@@ -140,7 +139,6 @@ def effective_role_catalog(db: Session, project_id: str) -> list[dict[str, Any]]
             "required": False,
             "required_package": False,
             "scope": "project",
-            "is_routing_anchor": False,
             "sort_order": r.sort_order,
         }
         for r in rows

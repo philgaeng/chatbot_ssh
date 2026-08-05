@@ -13,7 +13,7 @@ This document covers **`ticketing.projects`** and related package/QR configurati
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 
 ## 1. Purpose
@@ -54,7 +54,7 @@ See [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.
 | `description` | Optional |
 | `project_type_key` | FK → `ticketing.project_types` (archetype) |
 | `is_active` | Gated by go-live checks |
-| `implementing_agency_org_id` | The one accountable org — signing ministry; routing + reporting anchor; `government`/`local_government` only ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) |
+| `implementing_agency_org_id` | **Legacy read.** Was the one accountable org (signing ministry; `government`/`local_government` only). Reporting is membership now — [DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md) — and this is kept only so pre-types projects still pass go-live B1 and still stamp a ticket |
 | `officer_messaging` | JSON: `sms_enabled`, `sms_levels[]`, `whatsapp_levels[]` — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §6 |
 | `standard_workflow_id` | Legacy mirror of `safeguards` slot |
 | `seah_workflow_id` | Legacy mirror of `seah` slot |
@@ -105,8 +105,8 @@ Authored by `super_admin` (anywhere) or `org_admin` (its own subtree) under **Se
 **A typed project's Grievance workflows section is read-only** (§8 of the decision, as built 2026-08-04) — for **everyone**, `super_admin` included. The cards stay as a summary; above them one line names the type and a button opens it. `PUT /projects/{id}/workflows` returns **409** on a typed project, so the rule is enforced server-side rather than by a disabled form. Only a legacy untyped project still edits its workflows inline. The project header shows the type's **name** (not its key) and links to it.
 
 - Bundles the workflows a project runs (`workflow_bindings`) — name, workflow, default, chatbot menu, categories
-- Carries the **organization catalog** (`actor_roles`) the project must fill, and `routing_org_role` — which of those roles a ticket is stamped with. **Primary again 2026-08-04**
-- On **New project** (as built 2026-08-04, `ProjectCreateModal`): pick the **organization** → only its types (its own, its parents', plus the global ones — `GET /project-types?owner_organization_id=…`) → the project inherits the type's workflow links, and the chosen organization is written straight into the `routing_org_role` slot as a `project_organizations` row
+- Carries the **organization catalog** (`actor_roles`) the project must fill. **Primary again 2026-08-04.** No entry is privileged: every organization named on a project sees its grievances ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md))
+- On **New project** (as built 2026-08-04, `ProjectCreateModal`): pick the **organization** → only its types (its own, its parents', plus the global ones — `GET /project-types?owner_organization_id=…`) → the project inherits the type's workflow links, and the chosen organization is written straight into the type's **first required** organization role as a `project_organizations` row
 - **A type is required.** `POST /projects` without `project_type_key` returns 422: without one there is no catalog for go-live's B1 to check, and a project could activate with no accountable organization at all
 - Project starts **`is_active = false`** until go-live passes
 
@@ -248,9 +248,22 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 
 **Implemented:** `ticketing.services.project_routing.resolve_ticket_organization()`.
 
-`resolve_ticket_organization()` resolves, in order: the **package's** organization for the routing role (a lot overrides the project) → the **project's** organization for the role the type's `routing_org_role` designates → `implementing_agency_org_id` as the legacy fallback.
+`resolve_ticket_organization()` sets `tickets.organization_id`, a **descriptive stamp** since 2026-08-04. Order: the **lot's** first organization (a lot is more specific) → the organization filling the project type's **first required** role → `implementing_agency_org_id` → any organization named on the project.
 
-> **Inverted 2026-08-04 — the code now matches [DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The ticket's organization comes from the **project type's `routing_org_role` slot** — the role the author designated — with `implementing_agency_org_id` kept only as the fallback for projects with no type, or a typed project whose anchor slot is not filled. Pinned by `test_routing_prefers_the_author_designated_slot`.
+> **Superseded 2026-08-04 — [DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md).** The stamp no longer decides who sees a grievance, so nothing about it is authored any more. **Which organizations see a project's grievances** is answered by membership — `services/org_reach.py`, §6.1 below. The stamp survives because `tickets.organization_id` is NOT NULL and rides along in a few payloads. Pinned by `test_project_type_freeze.py::test_stamp_follows_the_first_required_role`.
+
+### 6.1 Which grievances belong to an organization
+
+**`ticketing/services/org_reach.py`** — the one answer, used by `GET /tickets?organization_id=`,
+the report query and the XLSX export:
+
+> Every organization named on a project sees that project's grievances. An organization named on
+> **one lot** sees that lot only. A **parent** organization sees everything its children see.
+
+Same shape as the location filter (`_location_codes_with_descendants`), applied to the org tree
+via `descendant_org_ids`. An organization named nowhere matches **nothing** — not everything.
+The export's column is **"Organizations"** (plural) and lists them all: a grievance belongs to
+several, so one id was one true name and several missing ones.
 
 **Call sites:**
 
@@ -278,7 +291,7 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 > **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, B1, C1, C4, C5, D1, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
 >
-> **A3 and A5 were deleted the same day** ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) §7). Both hardcoded the two organizations the platform happened to know about — an implementing agency and a donor. **B1 asks the same question in the author's own words**, against whatever organizations the project's *type* names, and is now a Blocker. The donor guardrail is expressible in that model: mark the donor slot required, put its role in the last level's kept-informed job, and C5 enforces it like any other required job. Legacy reads keep old projects passing — B1 accepts `implementing_agency_org_id` for the anchor slot and `project_donors` for a `donor` slot.
+> **A3 and A5 were deleted the same day** ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) §7). Both hardcoded the two organizations the platform happened to know about — an implementing agency and a donor. **B1 asks the same question in the author's own words**, against whatever organizations the project's *type* names, and is now a Blocker. The donor guardrail is expressible in that model: mark the donor slot required, put its role in the last level's kept-informed job, and C5 enforces it like any other required job. Legacy reads keep old projects passing — B1 accepts `implementing_agency_org_id` for an `implementing_agency` slot and `project_donors` for a `donor` slot.
 
 ### Blockers (must pass to activate)
 

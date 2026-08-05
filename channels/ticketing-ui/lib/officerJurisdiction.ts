@@ -1,7 +1,7 @@
 import type { OrganizationItem, OrgRole, PackageItem, ProjectItem } from "@/lib/api";
 
-/** Matches backend `project_types.routing_org_role` default and go-live routing. */
-export const DEFAULT_ROUTING_ORG_ROLE = "implementing_agency";
+/** Legacy organization role, still the sensible first guess on pre-types projects. */
+const LEGACY_LEAD_ORG_ROLE = "implementing_agency";
 
 export type OrgScopeAssignment = {
   organization_id: string;
@@ -99,16 +99,21 @@ export function orgRoleKeysForOrganization(
 }
 
 /**
- * Organization that owns ticket routing for a project (e.g. DOR on KL Road).
- * Used to default officer invite org so scopes match auto-assign.
+ * The organization to pre-select when inviting an officer onto a project — its **lead**
+ * organization: the legacy `implementing_agency` if the project has one, else the first
+ * organization named on it.
+ *
+ * A convenience default only. It used to be "the organization that owns ticket routing", back
+ * when one organization owned a grievance; that anchor is retired
+ * (DECISION-organization-membership, 2026-08-04) — every organization named on a project sees
+ * its grievances. Assignment has never keyed off it: officers are matched by workflow role and
+ * jurisdiction.
  */
-export function routingOrganizationId(
-  project: ProjectItem | undefined,
-  routingOrgRole: string = DEFAULT_ROUTING_ORG_ROLE,
-): string | null {
+export function leadOrganizationId(project: ProjectItem | undefined): string | null {
   if (!project) return null;
-  const match = project.organizations.find((o) => o.org_role === routingOrgRole);
-  return match?.organization_id ?? null;
+  const legacy = project.organizations.find((o) => o.org_role === LEGACY_LEAD_ORG_ROLE);
+  if (legacy) return legacy.organization_id;
+  return project.organizations[0]?.organization_id ?? null;
 }
 
 /** Donor org (e.g. ADB) may scope officers to any project on the system. */

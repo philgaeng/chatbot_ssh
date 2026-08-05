@@ -1,8 +1,12 @@
 # Handover — author-defined slots: what shipped, what's next
 
 **From:** session of 2026-08-04. **Branch:** `integration/stage`, nothing pushed.
-**Suite:** 711 passed, 3 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
+**Suite:** 715 passed, 4 skipped. **Stack:** dev compose, `AUTH_MODE=bypass`.
 
+> **Read [`DECISION-organization-membership`](DECISION-organization-membership.md) first if you
+> touch anything about organizations and reporting** — it retires the `routing_org_role` anchor
+> that §7.3/§7.5 below describe, and §7.6 records what replaced it.
+>
 > **The §9 build order is finished** (2026-08-04, second session). Steps 2, 4, 5 and 6 landed
 > together — type authoring UI, the project reading its type's catalog, the organization-first
 > creation flow, and A3/A5 → B1. §1–§2 below are the first session's record; **§7 is what the
@@ -178,6 +182,29 @@ curl -s -X POST localhost:5002/api/v1/projects -H 'Content-Type: application/jso
 
 ---
 
+### 7.6 The anchor is gone — an organization's grievances are its projects'
+Same day, one step further ([`DECISION-organization-membership`](DECISION-organization-membership.md)).
+`routing_org_role` was still the old idea in new clothes: it stamped **one** organization onto
+each grievance, so one owned it and every other organization on the project owned nothing — ADB,
+the donor funding KL Road, matched **zero** grievances.
+
+Now: **every organization named on a project sees its grievances**; a lot-level naming reaches
+that lot only; a parent sees what its children see. `services/org_reach.py` is the rule, used by
+`GET /tickets?organization_id=`, the report query and the export. The export column is
+**"Organizations"** (plural). GRC convening resolves members from the project's staffing.
+`tickets.organization_id` survives as a descriptive stamp — the project's **first required**
+organization role, because the back-fill wrote catalog keys alphabetically and "first listed"
+means nothing on a migrated type.
+
+**Verify:**
+```bash
+curl -s "localhost:5002/api/v1/tickets?organization_id=DOR" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['items']))"
+curl -s "localhost:5002/api/v1/tickets?organization_id=ADB" | python3 -c "import sys,json;print(len(json.load(sys.stdin)['items']))"
+# same number — before this change ADB returned 0
+```
+
+---
+
 ## 8. Open, not forgotten
 
 - **The rename** ([sensitive-workflows §6](DECISION-sensitive-workflows.md)) — `workflow_type`→`is_sensitive`, `is_seah`→`is_sensitive`, `workflow_track`→a capability, `include_seah`→`include_sensitive`. Mechanical, wants its own pass.
@@ -185,5 +212,5 @@ curl -s -X POST localhost:5002/api/v1/projects -H 'Content-Type: application/jso
 - **`INTAKE_ROUTE_CATALOG` labels** — "File a grievance (safeguards GRM)" surfaces in the Chatbot menu picker and breaks ui/05.
 - **Per-organization chatbots** — one accessor keyed by owning organization, no schema change today ([decision §6](DECISION-author-defined-slots.md)).
 - **A project cannot move to an improved copy of its type.** Chosen, not deferred — read §8 of the decision before "fixing" it.
-- **The legacy organization store is dead but not dropped** — `project_actor_roles`, `implementing_agency_org_id`, `project_donors`. All three are read-only fallbacks for pre-types projects; the drop is one sweep once none exist. Logged with its touch list in [followups/actor-role-catalog-not-dropped.md](followups/actor-role-catalog-not-dropped.md).
+- **The legacy organization store is dead but not dropped** — `project_actor_roles`, `implementing_agency_org_id`, `project_donors`, and now `project_types.routing_org_role`. All three are read-only fallbacks for pre-types projects; the drop is one sweep once none exist. Logged with its touch list in [followups/actor-role-catalog-not-dropped.md](followups/actor-role-catalog-not-dropped.md).
 - **KL Road has no project-level locations in the dev DB**, so its go-live shows D1 failing (packages have locations; the project row does not). Pre-existing, not caused by this slice — but it means the demo project cannot be reactivated if anyone deactivates it (trap 4.5).

@@ -84,10 +84,17 @@ def test_mixed_payload_is_refused():
 def test_rename_alongside_config_is_still_refused():
     """Renaming is free, but it cannot be used as a wrapper to smuggle a config change."""
     with pytest.raises(HTTPException):
-        _require_editable(_FakeDB(2), "t", {"label", "routing_org_role"})
+        _require_editable(_FakeDB(2), "t", {"label", "actor_roles"})
 
 
-# ── routing anchor order (DECISION-author-defined-slots §3.1) ─────────────────
+# ── the ticket's organization stamp (DECISION-organization-membership, 2026-08-04) ───────
+#
+# `routing_org_role` is retired. It used to designate WHICH named organization a grievance was
+# reported under, which meant one organization owned the grievance and every other organization
+# on the project owned nothing. Reporting is membership now (`services/org_reach.py`), and this
+# stamp is descriptive only: `tickets.organization_id` is NOT NULL and rides along in a few
+# payloads, so it still needs a stable, predictable value.
+
 
 class _Org:
     def __init__(self, organization_id: str, org_role: str):
@@ -102,28 +109,30 @@ class _Project:
         self.project_type_key = type_key
 
 
-def _resolve(monkeypatch, project, anchor_role="implementing_agency"):
+def _resolve(monkeypatch, project, required=()):
+    """Resolve with a stubbed catalog — the roles the author marked REQUIRED, in order."""
     import ticketing.services.project_routing as pr
 
-    monkeypatch.setattr(pr, "routing_org_role_for_project", lambda db, p: anchor_role)
-    return pr._project_routing_org(None, project)
+    monkeypatch.setattr(pr, "_required_role_order", lambda db, p: list(required))
+    return pr._primary_org_for_project(None, project)
 
 
-def test_anchor_comes_from_the_slot_the_author_designated(monkeypatch):
-    """The type names WHICH role anchors the ticket, so a client's own word works."""
-    p = _Project([_Org("ORG_WARD", "ward_office")], legacy="ORG_LEGACY")
-    assert _resolve(monkeypatch, p, anchor_role="ward_office") == "ORG_WARD"
+def test_stamp_follows_the_first_required_role(monkeypatch):
+    """Required, not merely listed. The back-fill migration writes catalog keys alphabetically,
+    so "first listed" on a migrated type is `donor` — an accident of sorting. `required` is the
+    author saying every project of this kind must have this one."""
+    p = _Project([_Org("ORG_CONTRACTOR", "contractor"), _Org("ORG_WARD", "ward_office")])
+    assert _resolve(monkeypatch, p, required=["ward_office"]) == "ORG_WARD"
 
 
-def test_slot_wins_over_the_legacy_field(monkeypatch):
-    """The inversion itself: same project, both present, the slot decides."""
-    p = _Project([_Org("ORG_SLOT", "implementing_agency")], legacy="ORG_LEGACY")
-    assert _resolve(monkeypatch, p) == "ORG_SLOT"
+def test_stamp_falls_back_to_any_named_organization(monkeypatch):
+    """A project whose type requires roles nobody filled still has organizations on it."""
+    p = _Project([_Org("ORG_ANY", "some_other_role")])
+    assert _resolve(monkeypatch, p, required=["ward_office"]) == "ORG_ANY"
 
 
-def test_falls_back_to_the_legacy_field_when_the_slot_is_empty(monkeypatch):
-    """Projects with no type — the back-fill skips those with no workflow links — and typed
-    projects whose anchor slot is not filled yet must still route."""
+def test_stamp_falls_back_to_the_legacy_field(monkeypatch):
+    """Pre-types projects kept their accountable organization on the project row."""
     p = _Project([], legacy="ORG_LEGACY", type_key=None)
     assert _resolve(monkeypatch, p) == "ORG_LEGACY"
 

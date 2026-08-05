@@ -12,7 +12,7 @@ Integration with the ticketing system is API-first. This document covers:
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 
 ## 1. Chatbot → Ticketing (Inbound)
@@ -86,7 +86,7 @@ Policy helpers (no DB): `ticketing/services/grievance_sync_policy.py`.
 
 1. **Prefer** the project's `implementing_agency_org_id` ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
 2. **Legacy fallback** (projects predating that field): `package_organizations` (if `package_id`) then `project_organizations` for the routing role (default `implementing_agency`) — deprecated.
-   > **Inverted 2026-08-04:** the type's `routing_org_role` slot is now primary and this field is the fallback ([DECISION-author-defined-slots §3.1](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)).
+   > **Superseded 2026-08-04:** `tickets.organization_id` is a **descriptive stamp** — reporting is membership ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)). It takes the project type's **first required** organization role, with this field as the fallback.
 
 Used on **ticket create** and on **field-officer invite / add scope** (`validate_jurisdiction` overrides wrong org, e.g. contractor vs DOR). Country/global observer roles (`jurisdiction_mode=country`) keep the submitted org (e.g. ADB).
 

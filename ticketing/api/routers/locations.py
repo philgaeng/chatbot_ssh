@@ -1404,21 +1404,24 @@ def create_project(
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # Step 1 of the creation flow fills the type's routing slot, so the creator never allocates
-    # by hand the one organization grievances are recorded against
-    # (DECISION-author-defined-slots §5).
-    anchor_org = body.organization_id or body.implementing_agency_org_id
-    if anchor_org:
-        if not db.get(Organization, anchor_org):
-            raise HTTPException(status_code=422, detail=f"Organization '{anchor_org}' not found")
+    # Step 1 of the creation flow names the organization in charge, so the creator does not
+    # have to fill the first slot by hand (DECISION-author-defined-slots §5). It fills the
+    # type's **first required** organization role — the first thing the author said every
+    # project of this kind must have. (Until 2026-08-04 it filled the `routing_org_role`
+    # anchor; that concept is retired — DECISION-organization-membership.)
+    lead_org = body.organization_id or body.implementing_agency_org_id
+    lead_role = types_svc.first_required_role_key(type_row)
+    if lead_org and lead_role:
+        if not db.get(Organization, lead_org):
+            raise HTTPException(status_code=422, detail=f"Organization '{lead_org}' not found")
         db.add(
             ProjectOrganization(
                 project_id=project.project_id,
-                organization_id=anchor_org,
-                org_role=type_row.routing_org_role,
+                organization_id=lead_org,
+                org_role=lead_role,
             )
         )
-        _sync_participant_role(db, project, anchor_org, None, type_row.routing_org_role)
+        _sync_participant_role(db, project, lead_org, None, lead_role)
         db.flush()
 
     if is_active:
@@ -1970,12 +1973,10 @@ class ActorRoleItem(BaseModel):
     description: str = ""
     sort_order: int = 0
     #: From the project type's catalog (doc 13 §2). `required` blocks go-live until the slot is
-    #: filled (B1); `required_package` does the same per lot (B3); `is_routing_anchor` marks the
-    #: one slot whose organization a grievance is recorded against. Ignored on PUT.
+    #: filled (B1); `required_package` does the same per lot (B3). Ignored on PUT.
     required: bool = False
     required_package: bool = False
     scope: str = "project"
-    is_routing_anchor: bool = False
 
 
 class ActorRolesReplace(BaseModel):

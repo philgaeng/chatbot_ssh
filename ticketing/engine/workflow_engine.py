@@ -214,23 +214,53 @@ def resolve_workflow(
 
 # ── GRC helpers ───────────────────────────────────────────────────────────────
 
+GRC_ROLE_KEYS = ("grc_chair", "grc_member")
+
+
+def get_grc_members_for_ticket(db: Session, ticket) -> list[str]:
+    """The GRC members to notify when a hearing is convened on ``ticket``.
+
+    **Changed 2026-08-04** (DECISION-organization-membership). This used to select officers by
+    ``UserRole.organization_id == ticket.organization_id`` — the single organization stamped on
+    the grievance. That stamp is gone as a concept: a grievance belongs to every organization
+    named on its project, so "the committee of *the* organization" no longer identifies anyone.
+
+    A GRC is convened **for a project**, so its members are resolved the way every other
+    assignment on this system is: the GRC roles, scoped to the ticket's project / location /
+    lot. Same predicate as `auto_assign_officer`, so a committee that can be assigned work can
+    also be summoned to hear it — no second, divergent notion of "who is on the GRC".
+
+    SEAH suppression is the caller's job (an ordinary GRC member must not learn a sensitive
+    case exists) — see `escalation.convene_grc`.
+    """
+    seen: list[str] = []
+    for role_key in GRC_ROLE_KEYS:
+        for uid in _scope_candidates(
+            role_key,
+            ticket.organization_id,  # ignored by the predicate; kept for call compatibility
+            ticket.location_code,
+            ticket.project_code,
+            db,
+            ticket.package_id,
+        ):
+            if uid not in seen:
+                seen.append(uid)
+    return seen
+
+
 def get_grc_member_user_ids(
     organization_id: str,
     location_code: Optional[str],
     db: Session,
 ) -> list[str]:
-    """
-    Return user_ids of all officers with grc_member or grc_chair role
-    for the given org + location. Used to notify all GRC members on convening.
-    """
+    """Legacy org+location GRC lookup. Superseded by :func:`get_grc_members_for_ticket`;
+    kept only for callers that have no ticket in hand."""
     from sqlalchemy import select
     from ticketing.models.user import Role, UserRole
 
-    grc_keys = {"grc_chair", "grc_member"}
-
     # Get role IDs for GRC keys
     roles = db.execute(
-        select(Role).where(Role.role_key.in_(grc_keys))
+        select(Role).where(Role.role_key.in_(set(GRC_ROLE_KEYS)))
     ).scalars().all()
     role_ids = [r.role_id for r in roles]
     if not role_ids:

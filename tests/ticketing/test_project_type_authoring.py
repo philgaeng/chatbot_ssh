@@ -1,11 +1,12 @@
 """Authoring a project type — the checks that stop a template from being incoherent.
 
 DECISION-author-defined-slots §3.1 / doc 14 §4. A type names the organizations a project must
-have and says **which** of them a grievance is recorded against. Two things must hold or the
-projects built from it are broken in ways nobody sees until go-live:
+have and the workflows it runs. What must hold or the projects built from it break in ways
+nobody sees until go-live:
 
-  • the anchor is one of the type's own organization roles — not a key from somewhere else;
-  • the workflow set has exactly one default, and the default is never a sensitive workflow.
+  • organization roles are named and unique;
+  • the workflow set has exactly one default, the default is never a sensitive workflow, every
+    other one names a chatbot menu, and a category belongs to one workflow.
 
 Plus the authoring gate itself: `super_admin` anywhere, `org_admin` inside its own subtree,
 and nobody edits the shared (global) templates but the platform administrator.
@@ -61,27 +62,16 @@ def _binding(label, wid, *, default=False, route="new_grievance", categories=Non
     }
 
 
-# ── the anchor must exist in the type's own catalog ───────────────────────────
-
-def test_anchor_must_be_one_of_the_types_own_roles():
-    with pytest.raises(HTTPException) as exc:
-        _validate_config(
-            None, actor_roles=[ROLE_IA], routing_org_role="ward_office", workflow_bindings=[]
-        )
-    assert exc.value.status_code == 422
-    # plain language, no field names (ui/05 §2.5)
-    assert "recorded against" in exc.value.detail
+# ── the organization catalog ──────────────────────────────────────────────────
+#
+# No entry is special. The `routing_org_role` anchor — "which of these is the grievance recorded
+# against?" — was retired 2026-08-04 (DECISION-organization-membership): every organization
+# named on a project sees its grievances, so there is nothing to designate.
 
 
-def test_anchor_is_accepted_when_it_names_a_real_role():
-    _validate_config(
-        None, actor_roles=[ROLE_IA, ROLE_WARD], routing_org_role="ward_office", workflow_bindings=[]
-    )
-
-
-def test_empty_catalog_does_not_force_an_anchor():
-    """A type starts empty — the author names organizations before choosing the anchor."""
-    _validate_config(None, actor_roles=[], routing_org_role="implementing_agency", workflow_bindings=[])
+def test_a_type_can_start_empty():
+    """A new type has no organizations yet; the author adds them before offering it."""
+    _validate_config(None, actor_roles=[], workflow_bindings=[])
 
 
 def test_duplicate_roles_are_refused():
@@ -89,7 +79,6 @@ def test_duplicate_roles_are_refused():
         _validate_config(
             None,
             actor_roles=[ROLE_WARD, dict(ROLE_WARD)],
-            routing_org_role="ward_office",
             workflow_bindings=[],
         )
     assert exc.value.status_code == 422
@@ -101,7 +90,6 @@ def test_a_role_needs_a_name():
         _validate_config(
             None,
             actor_roles=[{"key": "x", "label": "  "}],
-            routing_org_role="x",
             workflow_bindings=[],
         )
 
@@ -114,7 +102,6 @@ def test_exactly_one_default(monkeypatch):
         _validate_config(
             None,
             actor_roles=[],
-            routing_org_role="x",
             workflow_bindings=[_binding("A", "w1", default=True), _binding("B", "w2", default=True)],
         )
     assert "exactly one" in exc.value.detail.lower()
@@ -128,7 +115,6 @@ def test_the_default_cannot_be_sensitive(monkeypatch):
         _validate_config(
             None,
             actor_roles=[],
-            routing_org_role="x",
             workflow_bindings=[_binding("Sensitive", "seah", default=True)],
         )
     assert "sensitive" in exc.value.detail.lower()
@@ -140,7 +126,6 @@ def test_a_non_default_workflow_needs_a_chatbot_menu(monkeypatch):
         _validate_config(
             None,
             actor_roles=[],
-            routing_org_role="x",
             workflow_bindings=[
                 _binding("Default", "w1", default=True),
                 {**_binding("Hazards", "w2"), "intake_route": None},
@@ -155,7 +140,6 @@ def test_a_category_belongs_to_one_workflow(monkeypatch):
         _validate_config(
             None,
             actor_roles=[],
-            routing_org_role="x",
             workflow_bindings=[
                 _binding("Default", "w1", default=True),
                 _binding("Hazards", "w2", categories=["Environmental"]),
@@ -170,7 +154,6 @@ def test_a_valid_set_passes(monkeypatch):
     _validate_config(
         None,
         actor_roles=[ROLE_IA],
-        routing_org_role="implementing_agency",
         workflow_bindings=[
             _binding("General grievances", "w1", default=True),
             _binding("Sensitive", "w2", route="seah_intake", categories=["Gender"]),
@@ -251,5 +234,5 @@ def test_project_reads_its_types_catalog(db, kl_road_project):
     catalog = effective_role_catalog(db, kl_road_project.project_id)
 
     assert {e["key"] for e in catalog} == {r["key"] for r in pt.actor_roles}
-    anchor = [e for e in catalog if e["is_routing_anchor"]]
-    assert len(anchor) == 1 and anchor[0]["key"] == pt.routing_org_role
+    # No entry is privileged — the anchor concept is gone.
+    assert all("is_routing_anchor" not in e for e in catalog)

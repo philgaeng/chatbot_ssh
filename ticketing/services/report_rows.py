@@ -89,7 +89,7 @@ FIELD_LABELS: dict[str, str] = {
     "project_name": "Project",
     "package_label": "Package",
     "location_display": "Location",
-    "organization_id": "Organization",
+    "organization_id": "Organizations",
     "is_seah": "Instance",
     "sla_breached": "SLA breached (Y/N)",
     "assigned_officer": "Assigned officer",
@@ -216,6 +216,7 @@ def build_ticket_query(
     project_ids: list[str] | None = None,
     package_ids: list[str] | None = None,
     location_codes: list[str] | None = None,
+    organization_id: str | None = None,
     include_seah: bool = False,
 ) -> sa.sql.Select:
     q = select(Ticket).where(Ticket.is_deleted.is_(False), _period_filter(date_from, date_to))
@@ -241,6 +242,13 @@ def build_ticket_query(
         expanded = _location_codes_with_descendants(db, location_codes)
         if expanded:
             q = q.where(Ticket.location_code.in_(expanded))
+    if organization_id:
+        # Same shape as the location filter above, applied to the org tree: an organization
+        # gets the grievances of the projects it is named on, the lots it is named on, and
+        # everything its children are named on (DECISION-organization-membership, 2026-08-04).
+        from ticketing.services.org_reach import ticket_filter_for_org
+
+        q = q.where(ticket_filter_for_org(db, organization_id))
 
     return q.order_by(Ticket.created_at.desc())
 
@@ -378,6 +386,11 @@ def build_report_row(
     date_from: date,
     date_to: date,
     now: datetime | None = None,
+    #: project_id → the organizations named on that project, already rendered. A grievance
+    #: belongs to every one of them (DECISION-organization-membership, 2026-08-04), so the old
+    #: single `ticket.organization_id` was one true name and several missing ones. Falls back to
+    #: the stamp for a grievance with no project.
+    project_org_names: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     now = now or _now_utc()
     step = step_map.get(ticket.current_step_id) if ticket.current_step_id else None
@@ -433,7 +446,11 @@ def build_report_row(
         "project_name": proj_name,
         "package_label": pkg_label,
         "location_display": ticket.grievance_location or ticket.location_code or "",
-        "organization_id": ticket.organization_id,
+        "organization_id": (
+            (project_org_names or {}).get(ticket.project_id or "")
+            or ticket.organization_id
+            or ""
+        ),
         "is_seah": "SEAH" if ticket.is_seah else "Standard",
         "sla_breached": "Y" if ticket.sla_breached else "N",
         "assigned_officer": ticket.assigned_to_user_id or "",
@@ -442,6 +459,30 @@ def build_report_row(
         "_sections": sections,
     }
     return row
+
+
+def _project_organization_names(db: Session, project_ids: set[str]) -> dict[str, str]:
+    """project_id → "DOR, ADB" — every organization named on the project, in order.
+
+    One query per report run, not per row.
+    """
+    if not project_ids:
+        return {}
+    from ticketing.models.organization import Organization
+    from ticketing.services.org_reach import organization_ids_for_project
+
+    out: dict[str, str] = {}
+    name_cache: dict[str, str] = {}
+    for pid in project_ids:
+        ids = organization_ids_for_project(db, pid)
+        labels: list[str] = []
+        for oid in ids:
+            if oid not in name_cache:
+                org = db.get(Organization, oid)
+                name_cache[oid] = org.name if org else oid
+            labels.append(name_cache[oid])
+        out[pid] = ", ".join(labels)
+    return out
 
 
 def load_report_rows(
@@ -453,6 +494,7 @@ def load_report_rows(
     project_ids: list[str] | None = None,
     package_ids: list[str] | None = None,
     location_codes: list[str] | None = None,
+    organization_id: str | None = None,
     include_seah: bool = False,
 ) -> list[dict[str, Any]]:
     q = build_ticket_query(
@@ -463,12 +505,14 @@ def load_report_rows(
         project_ids=project_ids,
         package_ids=package_ids,
         location_codes=location_codes,
+        organization_id=organization_id,
         include_seah=include_seah,
     )
     tickets = db.execute(q).scalars().all()
     if not tickets:
         return []
     aux = _fetch_auxiliary_maps(db, tickets)
+    org_names = _project_organization_names(db, {t.project_id for t in tickets if t.project_id})
     now = _now_utc()
     return [
         build_report_row(
@@ -482,6 +526,7 @@ def load_report_rows(
             date_from=date_from,
             date_to=date_to,
             now=now,
+            project_org_names=org_names,
         )
         for t in tickets
     ]

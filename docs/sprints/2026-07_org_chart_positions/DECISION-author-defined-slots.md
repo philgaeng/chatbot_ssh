@@ -1,6 +1,7 @@
 # DECISION — the project type is the template: it names the slots, the project fills them
 
-**Status:** decided 2026-08-04 (Philippe). Ready to build.
+**Status:** decided 2026-08-04 (Philippe). Built.
+**Partly superseded the same day** by [`DECISION-organization-membership`](DECISION-organization-membership.md): the **`routing_org_role` anchor is retired**. Every organization named on a project sees its grievances — a lot-level naming reaches that lot only, and a parent sees what its children see. Everything else here stands; read §2/§3.1/§5 with that substitution.
 **Supersedes:** [`DECISION-project-participants-and-supervision.md`](DECISION-project-participants-and-supervision.md) (2026-07-10) on how a project's organizations are modelled — §4.
 **Related:** [12 §6.2](../../ticketing_system/12_workflows_configuration.md) · [13 §3/§5A/§5B/§7](../../ticketing_system/13_projects_and_packages.md) · [14 platform settings](../../ticketing_system/14_platform_settings.md) · [followup §6](followups/workflow-stream-vocabulary-and-intake-route-labels.md)
 
@@ -27,7 +28,7 @@ routing_org_role    # WHICH named role anchors the ticket — an author-chosen k
 
 `required_project_role_keys()` / `package_required_role_keys()` already drive go-live **B1** / **B3**. What is missing: the **authoring UI** (`ProjectTypesTab` only counts entries), **org ownership**, the **project screens consuming it**, and un-deprecating the catalog.
 
-`routing_org_role` matters: the anchor is **a key the author picks from their own catalog**, so nothing is hardcoded as "the implementing agency" and no boolean flag is needed.
+~~`routing_org_role` matters: the anchor is **a key the author picks from their own catalog**.~~ **Retired 2026-08-04** — it was still the old idea in new clothes: one organization owned the grievance and every other one on the project owned nothing. Reporting is membership; see [`DECISION-organization-membership`](DECISION-organization-membership.md).
 
 ## 3. Model changes
 

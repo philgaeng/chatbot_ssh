@@ -18,9 +18,11 @@ name it**. Built across two sessions: the project console + author-named jobs
 its type's catalog, the creation flow, and **A3/A5 → B1** (a blocker that names the gap with the
 author's word).
 
+**Amended the same day — [`DECISION-organization-membership`](sprints/2026-07_org_chart_positions/DECISION-organization-membership.md).** The `routing_org_role` anchor is **retired**: an organization's grievances are the ones on **its projects** (and its lots), widened down the org tree — so a donor and a ministry on the same project both see the same grievances, where the old single stamp gave them to exactly one. `services/org_reach.py` is the rule; the export column is now **"Organizations"**; GRC convening resolves members from the project's staffing.
+
 **Left, deliberately:** the legacy organization store is dead but not dropped —
 `project_actor_roles`, `implementing_agency_org_id`, `project_donors` are read-only fallbacks
-for projects created before types existed. One cleanup sweep once none exist; touch list in
+for projects created before types existed — plus `project_types.routing_org_role`, now unused. One cleanup sweep once none exist; touch list in
 [`followups/actor-role-catalog-not-dropped.md`](sprints/2026-07_org_chart_positions/followups/actor-role-catalog-not-dropped.md).
 Also open: the position-first staffing picker (13 §5A.2), the `is_sensitive` rename below, and
 the ui/04 wireframe still mocking "Implementing agency + Donors".

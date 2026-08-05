@@ -3,10 +3,13 @@
 /**
  * <ProjectTypesTab> — authoring project types (doc 14 §4, DECISION-author-defined-slots §3.1).
  *
- * A project type is the template a project is built from: the workflows it runs, the
- * organizations it must name, and which of those a grievance is recorded against. Creating a
- * project is pick the organization → pick one of its types → name the rest. Everything here is
- * what "the rest" is measured against.
+ * A project type is the template a project is built from: the workflows it runs and the
+ * organizations it must name. Creating a project is pick the organization → pick one of its
+ * types → name the rest. Everything here is what "the rest" is measured against.
+ *
+ * No organization is special. Each one named on a project sees that project's grievances in its
+ * reports (DECISION-organization-membership, 2026-08-04) — which is why the old "a grievance is
+ * recorded against" picker is gone.
  *
  * Two rules shape this screen:
  *   • **A type with a live project is frozen** (§8). Not a disabled form — a read-only summary
@@ -321,7 +324,6 @@ function ProjectTypeEditor({
   const [label, setLabel] = useState(initial.label);
   const [description, setDescription] = useState(initial.description ?? "");
   const [roles, setRoles] = useState<TypeActorRoleDef[]>(() => initial.actor_roles.map((r) => ({ ...r })));
-  const [anchor, setAnchor] = useState(initial.routing_org_role);
   const [rows, setRows] = useState<WorkflowBindingDraft[]>(() => bindingsToDrafts(initial.workflow_bindings));
   const [owner, setOwner] = useState<string | null>(initial.owner_organization_id);
   const [offered, setOffered] = useState(initial.is_active);
@@ -333,7 +335,6 @@ function ProjectTypeEditor({
     setLabel(initial.label);
     setDescription(initial.description ?? "");
     setRoles(initial.actor_roles.map((r) => ({ ...r })));
-    setAnchor(initial.routing_org_role);
     setRows(bindingsToDrafts(initial.workflow_bindings));
     setOwner(initial.owner_organization_id);
     setOffered(initial.is_active);
@@ -359,8 +360,9 @@ function ProjectTypeEditor({
     [orgs],
   );
 
-  /** Keys for rows that don't have one yet, derived from the name and stable from the moment it
-   *  is typed — so the anchor picker can offer a role that has not been saved yet. */
+  /** Keys for rows that don't have one yet, derived from the name once and then fixed —
+   *  `project_organizations.org_role` points at them, so renaming a row never orphans a
+   *  filled organization. */
   const rolesWithKeys = useMemo(() => {
     const taken = new Set(roles.map((r) => r.key).filter(Boolean));
     return roles.map((r) => {
@@ -383,9 +385,6 @@ function ProjectTypeEditor({
   }
 
   function removeRole(i: number) {
-    if (rolesWithKeys[i]?.key === anchor) {
-      setAnchor(rolesWithKeys.find((_, idx) => idx !== i)?.key ?? "");
-    }
     setRoles((prev) => prev.filter((_, idx) => idx !== i));
   }
 
@@ -400,10 +399,6 @@ function ProjectTypeEditor({
         required_package: !!r.required_package,
         scope: r.scope || "project",
       }));
-    if (cleaned.length && !cleaned.some((r) => r.key === anchor)) {
-      onError("Choose which organization a grievance is recorded against.");
-      return;
-    }
     const bindings = rows
       .filter((r) => r.display_label.trim() && r.workflow_id)
       .map((r, i) => ({
@@ -424,7 +419,6 @@ function ProjectTypeEditor({
         label: label.trim() || initial.label,
         description: description.trim() || null,
         actor_roles: cleaned,
-        routing_org_role: anchor || initial.routing_org_role,
         workflow_bindings: bindings,
         owner_organization_id: isSuperAdmin ? owner : undefined,
         is_active: offered,
@@ -593,9 +587,6 @@ function ProjectTypeEditor({
                   <span className="font-medium">{r.label}</span>
                   {r.required && <span className="text-xs text-red-700"> · required</span>}
                   {r.required_package && <span className="text-xs text-gray-500"> · for each lot</span>}
-                  {r.key === initial.routing_org_role && (
-                    <span className="text-xs text-gray-500"> · grievances are recorded against this one</span>
-                  )}
                   {r.description && <span className="block text-xs text-gray-500">{r.description}</span>}
                 </li>
               ))}
@@ -626,58 +617,74 @@ function ProjectTypeEditor({
         <p className="text-xs text-gray-500 mb-2">
           Use the words on your contract — the project screen shows exactly these.
         </p>
-        <div className="space-y-2">
-          {roles.length === 0 && (
-            <p className="text-xs text-gray-400 italic">
-              None yet. Add the organizations every project of this kind has.
-            </p>
-          )}
-          {roles.map((r, i) => (
-            <div key={r.key || `new-${i}`} className="rounded-lg border border-gray-200 px-3 py-2.5 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  value={r.label}
-                  onChange={(e) => patchRole(i, { label: e.target.value })}
-                  placeholder="e.g. Executing Agency"
-                  aria-label="Organization name"
-                  className="flex-1 min-w-[160px] max-w-xs text-sm font-medium border border-gray-300 rounded px-2 py-1.5"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeRole(i)}
-                  className="ml-auto text-xs font-semibold text-red-600 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-              <input
-                value={r.description ?? ""}
-                onChange={(e) => patchRole(i, { description: e.target.value })}
-                placeholder="What this organization does on the project (optional)"
-                aria-label="What this organization does"
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5"
-              />
-              <div className="flex flex-wrap gap-4">
-                <label className="flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={!!r.required}
-                    onChange={(e) => patchRole(i, { required: e.target.checked })}
-                  />
-                  Must be named before the project goes live
-                </label>
-                <label className="flex items-center gap-2 text-xs text-gray-700">
-                  <input
-                    type="checkbox"
-                    checked={!!r.required_package}
-                    onChange={(e) => patchRole(i, { required_package: e.target.checked })}
-                  />
-                  Named for each lot
-                </label>
-              </div>
-            </div>
-          ))}
-        </div>
+        {roles.length === 0 ? (
+          <p className="text-xs text-gray-400 italic">
+            None yet. Add the organizations every project of this kind has.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-[10px] font-bold uppercase tracking-wider text-gray-400 text-left">
+                  <th className="pb-1 pr-3 font-bold">Name</th>
+                  <th className="pb-1 pr-3 font-bold">What it does on the project</th>
+                  <th className="pb-1 px-2 font-bold text-center whitespace-nowrap">Must be named</th>
+                  <th className="pb-1 px-2 font-bold text-center whitespace-nowrap">For each lot</th>
+                  <th className="pb-1" />
+                </tr>
+              </thead>
+              <tbody>
+                {roles.map((r, i) => (
+                  <tr key={r.key || `new-${i}`} className="align-middle">
+                    <td className="py-1 pr-3">
+                      <input
+                        value={r.label}
+                        onChange={(e) => patchRole(i, { label: e.target.value })}
+                        placeholder="e.g. Executing Agency"
+                        aria-label="Organization name"
+                        className="w-full min-w-[150px] text-sm font-medium border border-gray-300 rounded px-2 py-1.5"
+                      />
+                    </td>
+                    <td className="py-1 pr-3">
+                      <input
+                        value={r.description ?? ""}
+                        onChange={(e) => patchRole(i, { description: e.target.value })}
+                        placeholder="Optional"
+                        aria-label="What this organization does on the project"
+                        className="w-full min-w-[180px] text-sm border border-gray-300 rounded px-2 py-1.5"
+                      />
+                    </td>
+                    <td className="py-1 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!r.required}
+                        onChange={(e) => patchRole(i, { required: e.target.checked })}
+                        aria-label={`${r.label || "This organization"} must be named before go-live`}
+                      />
+                    </td>
+                    <td className="py-1 px-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={!!r.required_package}
+                        onChange={(e) => patchRole(i, { required_package: e.target.checked })}
+                        aria-label={`${r.label || "This organization"} is named for each lot`}
+                      />
+                    </td>
+                    <td className="py-1 pl-2 text-right">
+                      <button
+                        type="button"
+                        onClick={() => removeRole(i)}
+                        className="text-xs font-semibold text-red-600 hover:underline"
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <button
           type="button"
           onClick={addRole}
@@ -685,29 +692,12 @@ function ProjectTypeEditor({
         >
           + Add an organization
         </button>
-      </div>
-
-      <div>
-        <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400 block mb-1" htmlFor={`anchor-${initial.type_key}`}>
-          A grievance is recorded against
-        </label>
-        <select
-          id={`anchor-${initial.type_key}`}
-          value={anchor}
-          onChange={(e) => setAnchor(e.target.value)}
-          className="w-full max-w-sm text-sm border border-gray-300 rounded px-2 py-1.5"
-        >
-          {!rolesWithKeys.some((r) => r.key === anchor) && <option value={anchor}>— choose —</option>}
-          {rolesWithKeys
-            .filter((r) => r.label.trim())
-            .map((r) => (
-              <option key={r.key} value={r.key}>
-                {r.label}
-              </option>
-            ))}
-        </select>
-        <p className="text-xs text-gray-500 mt-1">
-          This organization is shown on the grievance and counted in reports.
+        <p className="text-xs text-gray-500 mt-2">
+          Every organization named on a project sees that project&apos;s grievances in its
+          reports. One named for a single lot sees that lot only.{" "}
+          <span className="text-gray-400">
+            &ldquo;Must be named&rdquo; blocks go-live until the project names it.
+          </span>
         </p>
       </div>
 

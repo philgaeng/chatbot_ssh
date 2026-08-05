@@ -161,13 +161,15 @@ def _slot_filled(db: Session, *, project: Project, type_row: ProjectType, role_k
     """Is the type's organization slot ``role_key`` filled on this project?
 
     Filled values live in ``project_organizations`` (doc 13 §2). The two **legacy reads**
-    (DECISION-author-defined-slots §4) cover projects set up before the catalog came back:
-    the anchor organization was kept on the project row, and donors in ``project_donors``.
-    Neither is written any more; both are still true statements about the project.
+    cover projects set up before the catalog came back: the accountable organization was kept
+    on the project row as ``implementing_agency_org_id``, and donors in ``project_donors``.
+    Neither is written any more; both are still true statements about the project, and without
+    them this check would have blocked every pre-existing project on activation.
     """
+    _ = type_row  # the catalog is the caller's; nothing here is slot-specific any more
     if _project_org_has_role(project, role_key):
         return True
-    if role_key == type_row.routing_org_role and project.implementing_agency_org_id:
+    if role_key == "implementing_agency" and project.implementing_agency_org_id:
         return True
     if role_key == "donor":
         from ticketing.services.donor_guardrail import project_donor_org_ids

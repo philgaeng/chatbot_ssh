@@ -22,6 +22,7 @@ from ticketing.engine.workflow_engine import (
     auto_assign_for_workflow_step,
     get_current_step,
     get_grc_member_user_ids,
+    get_grc_members_for_ticket,
     get_next_step,
     is_sla_breached,
     _scope_candidates,
@@ -415,9 +416,16 @@ def convene_grc(
     # Notify all GRC members (creates unseen events → badge++)
     from ticketing.services.chart_behaviors import user_can_see_seah
 
-    member_ids = get_grc_member_user_ids(
-        ticket.organization_id, ticket.location_code, db
-    )
+    # Members of the committee for THIS project (DECISION-organization-membership, 2026-08-04):
+    # resolved from staffing, like every other assignment — not from a single organization id
+    # stamped on the grievance.
+    member_ids = get_grc_members_for_ticket(db, ticket)
+    if not member_ids:
+        # Nothing staffed on the project: fall back to the old org+location lookup so a
+        # convening on a pre-cast project still notifies somebody.
+        member_ids = get_grc_member_user_ids(
+            ticket.organization_id, ticket.location_code, db
+        )
     notified = 0
     for member_id in member_ids:
         if member_id == convened_by_user_id:

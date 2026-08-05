@@ -8,7 +8,7 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and `routing_org_role` names which of them a ticket is stamped with — so nothing is hardcoded as "the implementing agency". Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 
 ## 1. Sub-tabs and access
@@ -84,7 +84,7 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 
 **Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
 
-**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog, the routing anchor and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
+**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
 **API:** `ticketing/api/routers/project_types.py`
 
 **Who:** `super_admin` anywhere; `org_admin` within its own subtree — the same gate as authoring a workflow. A `project_admin` does not see the sub-tab.
@@ -97,7 +97,7 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 | `owner_organization_id` | The top-level organization this template belongs to (`l8n0p2r4`). **NULL = global.** New project offers the chosen organization's types + global ones |
 | `workflow_bindings` | The project's workflow links — name, workflow, default, `intake_route`, `classifications` |
 | `actor_roles` | **The organization catalog** (primary again): `{key, label, description, required, required_package, scope}`. The author's words — "Executing Agency", "Ward Office", "Concessionaire" |
-| `routing_org_role` | **Which** of those roles a ticket is stamped with. An author-chosen key, so nothing is hardcoded as "the implementing agency" |
+| ~~`routing_org_role`~~ | **Retired 2026-08-04** ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)). No organization is *the* one: every organization named on a project sees its grievances. The column survives, unused, until a cleanup migration |
 | `standard_workflow_id`, `seah_workflow_id` | Legacy mirrors of the bindings |
 
 ### 4.1 A type with a live project is frozen
@@ -106,19 +106,18 @@ Once **any active project** runs on a type, its **configuration** cannot change 
 
 | | |
 |---|---|
-| **Frozen** | workflows, `actor_roles`, `routing_org_role`, `owner_organization_id`, category routing |
+| **Frozen** | workflows, `actor_roles`, `owner_organization_id`, category routing |
 | **Always editable** | `label`, `description` (a name is not configuration) · `is_active`, `sort_order` (availability — retiring a type from the New-project list changes nothing about projects using it) |
 | **Two ways out** | **Use as template** — `POST /project-types/{key}/duplicate` copies everything into a new key, `is_active=false` so an unfinished edit is never offered · or **deactivate the project**, fix the type, reactivate (which re-runs go-live) |
 
 `active_project_count` on the type response drives the UI's frozen state.
 
-**Back-filled 2026-08-04** (`n0p2r4t6`): every previously-untyped project got a type derived from the workflows it already ran, named "Type 1", "Type 2" — rename them. Only the routing anchor is marked required, so no project was blocked by its own migration.
+**Back-filled 2026-08-04** (`n0p2r4t6`): every previously-untyped project got a type derived from the workflows it already ran, named "Type 1", "Type 2" — rename them. Only `implementing_agency` is marked required, so no project was blocked by its own migration. Note the migration writes catalog keys **alphabetically**, so "first listed" carries no authorial intent — anything that needs a project's lead organization reads the first **required** role instead.
 
 `org_admin` authors types **within its own org subtree**; `super_admin` anywhere. Neither `org_admin` nor `project_admin` can edit a type's definition through a project — a typed project cannot deviate from its type. A **global** type (owner NULL) is offered to everyone, so only `super_admin` may change it; an `org_admin` copies it instead (403 names that way out).
 
 **Checked on every write** (`_validate_config`, 422 in plain language):
 
-- `routing_org_role` must be one of the type's **own** organization roles — a type can never name an anchor it doesn't have
 - role names are unique and non-empty
 - the workflow set has **exactly one** default, the default is never a sensitive workflow, every non-default names a chatbot menu, and a category belongs to one workflow only
 

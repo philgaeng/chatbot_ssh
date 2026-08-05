@@ -162,15 +162,8 @@ export function ProjectPartnersSection({
                       <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-blue-50 text-[11px] font-bold text-blue-700">
                         {initials(org?.name ?? f.organization_id)}
                       </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-medium text-gray-900 truncate">
-                          {org?.name ?? f.organization_id}
-                        </span>
-                        {role.is_routing_anchor && (
-                          <span className="block text-xs text-gray-500">
-                            Grievances on this project are recorded against this organization
-                          </span>
-                        )}
+                      <span className="flex-1 min-w-0 text-sm font-medium text-gray-900 truncate">
+                        {org?.name ?? f.organization_id}
                       </span>
                       {canEdit && (
                         <button
@@ -225,8 +218,9 @@ export function ProjectPartnersSection({
       })}
 
       <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
-        These organizations come from the project type. Officers are not added here — put people
-        on levels under <span className="font-medium text-gray-500">Project-wide staffing</span>.
+        These organizations come from the project type. Each one sees this project&apos;s
+        grievances in its reports. Officers are not added here — put people on levels under{" "}
+        <span className="font-medium text-gray-500">Project-wide staffing</span>.
       </p>
     </div>
   );
