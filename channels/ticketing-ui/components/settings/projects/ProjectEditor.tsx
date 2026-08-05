@@ -55,6 +55,7 @@ import { PackageRow } from "@/components/settings/projects/PackageRow";
 import { PackageCreateModal } from "@/components/settings/projects/PackageCreateModal";
 import { ProjectConsoleRail } from "@/components/settings/projects/ProjectConsoleRail";
 import { ProjectPartnersSection } from "@/components/settings/projects/ProjectPartnersSection";
+import { ProjectWorkflowsSummary } from "@/components/settings/projects/ProjectWorkflowsSummary";
 import {
   PROJECT_SECTIONS,
   SECTION_ORDER,
@@ -497,57 +498,57 @@ export function ProjectEditor({
 
               {/* ── Grievance workflows ── */}
               {activeSection === "workflows" && (
-                <div className="space-y-4">
-                  {lockTypeConfig ? (
-                    <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded px-3 py-2.5 max-w-2xl">
-                      <p>
-                        These workflows come from the project type{" "}
-                        <span className="font-medium">{projectType?.label ?? "this project uses"}</span>.
-                        Every project of that type runs the same ones, so they are changed on the type,
-                        not here.
-                      </p>
-                      {onOpenProjectTypes && (
-                        <button
-                          type="button"
-                          onClick={onOpenProjectTypes}
-                          className="mt-2 text-sm font-semibold text-blue-600 border border-blue-200 bg-blue-50 rounded px-3 py-1.5 hover:bg-blue-100"
-                        >
-                          Open project types
-                        </button>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-600 max-w-2xl">
-                      One default workflow is required. Add more workflows to send different grievances to
-                      different officers. Edit a workflow’s levels under Settings → Workflows, roles &amp;
-                      permissions.
-                    </p>
-                  )}
-                  <ProjectWorkflowsEditor
+                typedProject ? (
+                  <ProjectWorkflowsSummary
                     project={p}
                     workflows={workflows}
-                    wfTemplates={wfTemplates}
                     routingOptions={routingOptions}
-                    canEdit={canEditProjectWorkflows}
-                    canEditWorkflowTrack={canEditWorkflowTrack}
-                    canSeeSeah={!!canConfigureSensitive}
-                    lockTypeConfig={lockTypeConfig}
-                    flash={flash}
-                    onSaved={(slots) => {
-                      const defaultRow = slots.find((s) => s.is_default);
-                      const seahRow = slots.find((s) => s.workflow_track === "seah");
-                      const updated: ProjectItem = {
-                        ...p,
-                        workflow_slots: slots,
-                        standard_workflow_id: defaultRow?.workflow_id ?? null,
-                        seah_workflow_id: seahRow?.workflow_id ?? null,
-                      };
-                      setP(updated);
-                      onUpdated(updated);
-                      setGoLiveKey((k) => k + 1);
+                    canEdit={canManageProjectCatalog}
+                    onOpenProjectTypes={onOpenProjectTypes}
+                    onChangeType={async (typeKey) => {
+                      try {
+                        const updated = await updateProject(p.project_id, { project_type_key: typeKey });
+                        setP(updated);
+                        onUpdated(updated);
+                        setGoLiveKey((k) => k + 1);
+                        flash("Project type changed \u2713 — check Partner organizations");
+                      } catch (e: unknown) {
+                        flash(friendlyError(e));
+                      }
                     }}
                   />
-                </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-sm text-gray-600 max-w-2xl">
+                      One default workflow is required. Add more workflows to send different grievances to
+                      different officers. Edit a workflow&rsquo;s levels under Settings &rarr; Workflows.
+                    </p>
+                    <ProjectWorkflowsEditor
+                      project={p}
+                      workflows={workflows}
+                      wfTemplates={wfTemplates}
+                      routingOptions={routingOptions}
+                      canEdit={canEditProjectWorkflows}
+                      canEditWorkflowTrack={canEditWorkflowTrack}
+                      canSeeSeah={!!canConfigureSensitive}
+                      lockTypeConfig={false}
+                      flash={flash}
+                      onSaved={(slots) => {
+                        const defaultRow = slots.find((s) => s.is_default);
+                        const seahRow = slots.find((s) => s.workflow_track === "seah");
+                        const updated: ProjectItem = {
+                          ...p,
+                          workflow_slots: slots,
+                          standard_workflow_id: defaultRow?.workflow_id ?? null,
+                          seah_workflow_id: seahRow?.workflow_id ?? null,
+                        };
+                        setP(updated);
+                        onUpdated(updated);
+                        setGoLiveKey((k) => k + 1);
+                      }}
+                    />
+                  </div>
+                )
               )}
 
               {/* ── Officer messaging ── */}

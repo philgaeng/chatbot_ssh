@@ -2342,9 +2342,11 @@ export function updateProject(
     short_code?: string;
     description?: string | null;
     is_active?: boolean;
+    /** Rebuild the project from a different template. Refused (409) while it accepts grievances. */
+    project_type_key?: string | null;
     standard_workflow_id?: string | null;
     seah_workflow_id?: string | null;
-    /** doc 13 §2: the accountable government agency (routing anchor). */
+    /** @deprecated legacy accountable-organization field; reporting is membership now. */
     implementing_agency_org_id?: string | null;
   },
 ): Promise<ProjectItem> {

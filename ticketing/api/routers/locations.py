@@ -167,6 +167,9 @@ class ProjectUpdate(BaseModel):
     name: str | None = None
     short_code: str | None = Field(None, max_length=8)
     description: str | None = None
+    #: Rebuild the project from a different template. Refused (409) while the project is
+    #: accepting grievances — see `_switch_project_type`.
+    project_type_key: str | None = None
     is_active: bool | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
@@ -1574,6 +1577,42 @@ def replace_project_workflow_slots(
     return [ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(r, db)) for r in rows]
 
 
+def _switch_project_type(db: Session, project: Project, type_key: str) -> None:
+    """Rebuild a project from a different type — **only while it is not accepting grievances**.
+
+    Re-applying a template over a project replaces its workflow links and can leave
+    organizations named against roles the new type does not have. On a **live** project that is
+    the one operation that could silently restaff work in flight, which
+    [DECISION-author-defined-slots §8](../../../docs/sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)
+    refuses. On an **inactive** project nobody is working its grievances, and the same
+    deactivate → fix → reactivate path already blessed for types applies: reactivating re-runs
+    go-live, so a broken setup cannot sneak back.
+
+    Organizations whose role the new type does not name are **removed**, not left dangling —
+    the project screen renders the type's catalog, so a stale row would simply vanish from view
+    while still sitting in the table.
+    """
+    if project.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This project is accepting grievances, so its type cannot change — officers are "
+                "working to the current setup. Deactivate it first, change the type, then "
+                "activate it again."
+            ),
+        )
+    try:
+        type_row = types_svc.instantiate_project_from_type(db, project, type_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    keys = {str(e["key"]) for e in (type_row.actor_roles or []) if e.get("key")}
+    for po in list(project.organizations):
+        if po.org_role and po.org_role not in keys:
+            db.delete(po)
+    db.flush()
+
+
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(
     project_id: str,
@@ -1606,6 +1645,8 @@ def update_project(
             raise HTTPException(status_code=422, detail=msg) from exc
     if body.description is not None:
         p.description = body.description
+    if body.project_type_key is not None and body.project_type_key != p.project_type_key:
+        _switch_project_type(db, p, body.project_type_key)
     if "implementing_agency_org_id" in body.model_fields_set:
         if body.implementing_agency_org_id:
             try:

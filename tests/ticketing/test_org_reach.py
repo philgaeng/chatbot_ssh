@@ -189,3 +189,20 @@ def test_reach_survives_an_organization_linked_twice(db, kl_road_project):
     finally:
         db.delete(extra)
         db.flush()
+
+
+# ── changing a project's type (2026-08-04) ────────────────────────────────────
+
+def test_a_live_project_cannot_change_its_type(db, kl_road_project):
+    """The one operation that could silently restaff work in flight
+    (DECISION-author-defined-slots §8). Refused while the project accepts grievances —
+    deactivate first, which is the same repair path a frozen type already uses."""
+    from fastapi import HTTPException
+
+    from ticketing.api.routers.locations import _switch_project_type
+
+    assert kl_road_project.is_active, "KL Road is the live demo project"
+    with pytest.raises(HTTPException) as exc:
+        _switch_project_type(db, kl_road_project, "some_other_type")
+    assert exc.value.status_code == 409
+    assert "Deactivate" in exc.value.detail
