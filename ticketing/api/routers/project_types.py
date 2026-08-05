@@ -311,10 +311,39 @@ def _legacy_workflow_mirrors(
     return standard, seah
 
 
+#: A template belongs to a body that **runs or funds** projects, at the top two levels of the
+#: org tree — a ministry, one of its departments, a donor. Not a contractor: a contractor is
+#: named *by* a project, it does not hand out templates. (2026-08-04, Philippe.)
+OWNER_CATEGORIES = {"government", "local_government", "donor"}
+OWNER_MAX_DEPTH = 2
+
+
 def _validate_owner(db: Session, owner_organization_id: str | None) -> None:
-    if owner_organization_id and not db.get(Organization, owner_organization_id):
+    """`None` = shared with every organization. Otherwise it must be a plausible owner."""
+    if not owner_organization_id:
+        return
+    org = db.get(Organization, owner_organization_id)
+    if not org:
         raise HTTPException(
             status_code=422, detail=f"Organization '{owner_organization_id}' not found"
+        )
+    if (org.org_category or "").lower() not in OWNER_CATEGORIES:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"'{org.name}' cannot own a project type. A type belongs to an organization "
+                "that runs or funds projects."
+            ),
+        )
+    from ticketing.services.org_tree import ancestor_org_ids
+
+    if len(ancestor_org_ids(db, owner_organization_id, include_self=True)) > OWNER_MAX_DEPTH:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"'{org.name}' sits too deep in the organization chart to own a project type. "
+                "Choose the ministry or the department it belongs to."
+            ),
         )
 
 

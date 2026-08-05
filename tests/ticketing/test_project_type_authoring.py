@@ -16,7 +16,11 @@ from __future__ import annotations
 import pytest
 from fastapi import HTTPException
 
-from ticketing.api.routers.project_types import _require_authority, _validate_config
+from ticketing.api.routers.project_types import (
+    _require_authority,
+    _validate_config,
+    _validate_owner,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -236,3 +240,62 @@ def test_project_reads_its_types_catalog(db, kl_road_project):
     assert {e["key"] for e in catalog} == {r["key"] for r in pt.actor_roles}
     # No entry is privileged — the anchor concept is gone.
     assert all("is_routing_anchor" not in e for e in catalog)
+
+
+# ── who may own a template (2026-08-04) ───────────────────────────────────────
+#
+# A template belongs to a body that runs or funds projects, at the top two levels of the org
+# tree — a ministry, one of its departments, a donor. Not a contractor: there are dozens of
+# them, they are named *by* a project, and an owner picker listing 50 of them is unusable.
+
+
+class _OrgRow:
+    def __init__(self, name, category):
+        self.name = name
+        self.org_category = category
+
+
+def _owner_env(monkeypatch, *, org, depth):
+    """A session that returns `org`, and a tree that reports it at `depth`."""
+    import ticketing.services.org_tree as tree
+
+    monkeypatch.setattr(
+        tree, "ancestor_org_ids", lambda db, oid, include_self=True: set(range(depth))
+    )
+
+    class _DB:
+        def get(self, _model, _oid):
+            return org
+
+    return _DB()
+
+
+def test_a_department_may_own_a_template(monkeypatch):
+    db = _owner_env(monkeypatch, org=_OrgRow("Department of Roads", "government"), depth=2)
+    _validate_owner(db, "DOR")
+
+
+def test_a_donor_may_own_a_template(monkeypatch):
+    db = _owner_env(monkeypatch, org=_OrgRow("Asian Development Bank", "donor"), depth=1)
+    _validate_owner(db, "ADB")
+
+
+def test_a_contractor_may_not(monkeypatch):
+    db = _owner_env(monkeypatch, org=_OrgRow("Gamma Ltd", "third_party"), depth=1)
+    with pytest.raises(HTTPException) as exc:
+        _validate_owner(db, "CONS_1")
+    assert exc.value.status_code == 422
+    assert "runs or funds projects" in exc.value.detail
+
+
+def test_a_deep_office_may_not(monkeypatch):
+    """A division office is where officers sit, not where templates are authored."""
+    db = _owner_env(monkeypatch, org=_OrgRow("Jhapa Division Office", "government"), depth=3)
+    with pytest.raises(HTTPException) as exc:
+        _validate_owner(db, "DOR_JHAPA")
+    assert exc.value.status_code == 422
+    assert "too deep" in exc.value.detail
+
+
+def test_shared_with_everyone_is_always_allowed(monkeypatch):
+    _validate_owner(None, None)

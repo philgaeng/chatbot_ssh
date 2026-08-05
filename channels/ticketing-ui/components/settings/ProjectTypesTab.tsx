@@ -47,6 +47,25 @@ import {
 
 const OWNER_CATEGORIES = new Set(["government", "local_government", "donor"]);
 
+/** Organizations that may own a template: the top two levels of the tree — a ministry and its
+ *  departments (Department of Roads, Department of Irrigation …), or a donor. A contractor is
+ *  named *by* a project; it does not hand out templates, and there are dozens of them.
+ *  Mirrors `project_types.OWNER_CATEGORIES` / `OWNER_MAX_DEPTH` on the server. */
+function templateOwnerChoices(orgs: OrganizationItem[]): OrganizationItem[] {
+  const byId = new Map(orgs.map((o) => [o.organization_id, o]));
+  const depth = (o: OrganizationItem): number => {
+    if (!o.parent_organization_id) return 1;
+    const parent = byId.get(o.parent_organization_id);
+    return parent ? depth(parent) + 1 : 2; // parent outside the list ⇒ treat as a child of a root
+  };
+  return orgs.filter(
+    (o) =>
+      o.is_active
+      && OWNER_CATEGORIES.has((o.org_category ?? "").toLowerCase())
+      && depth(o) <= 2,
+  );
+}
+
 /** A key is never typed or shown — it is derived once from the name and then never changes,
  *  because filled organizations point at it. */
 function keyFromLabel(label: string, taken: Set<string>): string {
@@ -138,12 +157,17 @@ export function ProjectTypesTab() {
   async function handleCreate() {
     const label = newName.trim();
     if (!label) return;
+    // With one organization that can own templates, there is no choice to make — pre-fill it.
+    // Only on CREATE: silently re-homing a type someone already shared would be a config change
+    // nobody asked for.
+    const owners = templateOwnerChoices(orgs);
     try {
       const created = await createProjectType({
         type_key: keyFromLabel(label, new Set(types.map((t) => t.type_key))),
         label,
         actor_roles: [],
         workflow_bindings: [],
+        owner_organization_id: owners.length === 1 ? owners[0].organization_id : null,
         is_active: false,
       });
       replaceType(created);
@@ -346,19 +370,7 @@ function ProjectTypeEditor({
   );
   const orgName = (id: string | null) => orgs.find((o) => o.organization_id === id)?.name ?? id ?? "";
 
-  /** A template belongs to a body that runs or funds projects — a ministry, a local body, a
-   *  donor — and to the top of its tree, not a unit inside it. Contractors are never owners:
-   *  they are named *by* a project, not the ones handing out templates. */
-  const ownerChoices = useMemo(
-    () =>
-      orgs.filter(
-        (o) =>
-          o.is_active
-          && !o.parent_organization_id
-          && OWNER_CATEGORIES.has((o.org_category ?? "").toLowerCase()),
-      ),
-    [orgs],
-  );
+  const ownerChoices = useMemo(() => templateOwnerChoices(orgs), [orgs]);
 
   /** Keys for rows that don't have one yet, derived from the name once and then fixed —
    *  `project_organizations.org_role` points at them, so renaming a row never orphans a
@@ -732,13 +744,23 @@ function ProjectTypeEditor({
               <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
             ))}
           </select>
+          <p className="text-xs text-gray-500 mt-1">
+            The organization it is offered to, and the offices under it. Leave it shared with
+            every organization if it is not specific to one.
+          </p>
         </div>
       )}
 
-      <label className="flex items-center gap-2 text-sm text-gray-700">
-        <input type="checkbox" checked={offered} onChange={(e) => setOffered(e.target.checked)} />
-        Offer this type when someone creates a project
-      </label>
+      <div>
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input type="checkbox" checked={offered} onChange={(e) => setOffered(e.target.checked)} />
+          Can be chosen when creating a project
+        </label>
+        <p className="text-xs text-gray-500 mt-1 ml-6">
+          Turn this off and no new project can use this type. Projects already using it keep
+          working.
+        </p>
+      </div>
 
       <div className="flex items-center gap-3">
         <button

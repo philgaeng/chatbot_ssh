@@ -94,7 +94,8 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 | Field on type | What it gives the project |
 |---------------|----------------------|
 | `type_key`, `label` | `project.project_type_key`. **`label` is always editable**, even with live projects — a name is not configuration |
-| `owner_organization_id` | The top-level organization this template belongs to (`l8n0p2r4`). **NULL = global.** New project offers the chosen organization's types + global ones |
+| `owner_organization_id` | The organization this template belongs to (`l8n0p2r4`). **NULL = shared with everyone.** New project offers the chosen organization's types, its ancestors' and the shared ones. **Owners are limited to the top two levels of the org tree** — a ministry, one of its departments, or a donor — and never a `third_party` contractor: a contractor is named *by* a project, and there are dozens of them. Enforced in `_validate_owner` (422), not just filtered in the picker |
+| `is_active` | **"Can be chosen when creating a project."** Off → the type is not offered in New project *and* `POST /projects` refuses it — but **projects already using it keep working**. This is how a template is retired; it is also why a **Use as template** copy starts off |
 | `workflow_bindings` | The project's workflow links — name, workflow, default, `intake_route`, `classifications` |
 | `actor_roles` | **The organization catalog** (primary again): `{key, label, description, required, required_package, scope}`. The author's words — "Executing Agency", "Ward Office", "Concessionaire" |
 | ~~`routing_org_role`~~ | **Retired 2026-08-04** ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)). No organization is *the* one: every organization named on a project sees its grievances. The column survives, unused, until a cleanup migration |
