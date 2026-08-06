@@ -6,12 +6,13 @@
  * One block per entry in the **project type's** organization catalog (`actor_roles`), in the
  * author's own words — "Executing Agency", "Ward Office", "Concessionaire" — not words we
  * picked. Filled values live in `project_organizations.org_role`
- * (DECISION-author-defined-slots §3.3); the type says which ones are required (go-live B1) and
- * which one a grievance is recorded against.
+ * (DECISION-author-defined-slots §3.3); the type says which ones are required (go-live B1).
+ * No organization is special — every one named on a project sees its grievances
+ * (DECISION-organization-membership).
  *
  * Replaces the hardcoded implementing agency + donors pair, which could only express the two
  * organizations the platform happened to know about. Officers are still staffed under
- * Project-wide staffing, never here.
+ * Staffing, never here.
  */
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -220,7 +221,7 @@ export function ProjectPartnersSection({
       <p className="text-xs text-gray-400 border-t border-gray-100 pt-3">
         These organizations come from the project type. Each one sees this project&apos;s
         grievances in its reports. Officers are not added here — put people on levels under{" "}
-        <span className="font-medium text-gray-500">Project-wide staffing</span>.
+        <span className="font-medium text-gray-500">Staffing</span>.
       </p>
     </div>
   );

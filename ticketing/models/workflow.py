@@ -98,6 +98,13 @@ class WorkflowStep(Base):
     # observer}. The actor is always required and is never listed. Drives the go-live staffing
     # gate (doc 13 §5A.5 / §7 A4).
     required_tiers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # staff_per_package: is this level staffed lot by lot, or once for the whole project?
+    # Decided by the WORKFLOW AUTHOR (so, from a project's side, by its type — a typed project
+    # cannot deviate). Typically the lower levels are per lot and the upper ladder is
+    # project-wide. False = staffed once for the project, which is what every step did before
+    # this column existed (migration `p2r4t6v8`). Drives the staffing screen's shape and the
+    # go-live staffing gate, which no longer has to guess which was meant.
+    staff_per_package: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # actor_can_reassign: per-step self-serve toggle (DESIGN-cast-model §3.4) — when on, the
     # Actor is a reassignment authority for this step (chain: Dispatcher → Supervisor → Actor → PA)
     actor_can_reassign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)

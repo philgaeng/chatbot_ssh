@@ -92,6 +92,19 @@ def _second_standard_step_role(db: Session, project: Project) -> str | None:
     return _step_role_at_order(db, project.standard_workflow_id, 2)
 
 
+def _first_standard_step_per_package(db: Session, project: Project) -> bool:
+    """Is Level 1 staffed lot by lot? The level's own answer (`staff_per_package`)."""
+    if not project.standard_workflow_id:
+        return False
+    step = db.execute(
+        select(WorkflowStep)
+        .where(WorkflowStep.workflow_id == project.standard_workflow_id)
+        .order_by(WorkflowStep.step_order)
+        .limit(1)
+    ).scalar_one_or_none()
+    return bool(step and step.staff_per_package)
+
+
 def _any_active_officer(db: Session, user_ids) -> bool:
     """R3 (BUILD-REVIEW M2): a level is only "covered" by an officer who can still log in —
     a soft-deactivated officer does not count toward go-live staffing (C1/C5)."""
@@ -186,9 +199,18 @@ def _standard_level_gaps(
 ) -> list[str]:
     """Standard-workflow levels with no scoped officer (DECISION §7 staffing gate).
 
-    A level is covered when its handler role has a project-wide scope, OR every active
-    package has it, OR (step 1 only) the country L1 fallback is scoped. Mirrors the C1/C2
-    coverage predicates so the demo's project-wide staffing keeps it green.
+    **Reads the level's own answer since 2026-08-04** (`workflow_steps.staff_per_package`,
+    migration `p2r4t6v8`). Before that this had to guess: it accepted a project-wide officer OR
+    full per-lot coverage for every level, because nothing said which the author intended. So a
+    level meant to be staffed lot by lot passed with one project-wide officer, and a project-wide
+    level was never asked for lots at all — the check was green either way and told you nothing.
+
+    Now:
+      • **per-lot level** — every active lot needs its own officer. A project-wide officer does
+        not satisfy it (that is the point of marking the level per lot).
+      • **project-wide level** — one project-wide officer. Lots are not asked about.
+
+    Step 1 keeps the country L1 fallback either way — it exists so intake never dead-ends.
     """
     if not project.standard_workflow_id:
         return []
@@ -199,17 +221,27 @@ def _standard_level_gaps(
             .order_by(WorkflowStep.step_order)
         ).scalars().all()
     )
-    def _covered(role: str, *, is_actor_l1: bool) -> bool:
-        if _has_officer_on_project_wide(db, project=project, grm_role_key=role):
-            return True
-        if is_actor_l1 and _has_officer_on_project_wide(
+    def _covered(role: str, *, is_actor_l1: bool, per_package: bool) -> bool:
+        # The country L1 fallback is an emergency net for *assignment* so intake never
+        # dead-ends. It is not a staffing plan, so it does not answer a level the author said
+        # is staffed lot by lot — that would put us straight back to guessing.
+        if is_actor_l1 and not per_package and _has_officer_on_project_wide(
             db, project=project, grm_role_key=COUNTRY_L1_FALLBACK_ROLE
         ):
             return True
-        pkg_gaps = _packages_missing_role(
-            db, project=project, packages=packages, grm_role_key=role, project_wide_covers=False,
-        )
-        return bool(packages) and not pkg_gaps
+        if per_package:
+            # The author said this level is staffed lot by lot, so every lot must have someone.
+            # A project with no lots yet cannot satisfy it — that is a real gap, not a pass.
+            if not packages:
+                return False
+            return not _packages_missing_role(
+                db,
+                project=project,
+                packages=packages,
+                grm_role_key=role,
+                project_wide_covers=False,
+            )
+        return _has_officer_on_project_wide(db, project=project, grm_role_key=role)
 
     def _job_name(step, tier: str, role: str) -> str:
         """The author's name for the job, so the gap reads like the staffing screen."""
@@ -220,7 +252,8 @@ def _standard_level_gaps(
     for step in steps:
         # The actor is always required — a level with nobody to work it is not a level.
         role = step.assigned_role_key
-        if role and not _covered(role, is_actor_l1=step.step_order == 1):
+        per_package = bool(getattr(step, "staff_per_package", False))
+        if role and not _covered(role, is_actor_l1=step.step_order == 1, per_package=per_package):
             gaps.append(f"L{step.step_order} ({_job_name(step, 'actor', role)})")
 
         # Plus whichever non-actor jobs the workflow author marked mandatory (doc 12 §6.2).
@@ -239,7 +272,7 @@ def _standard_level_gaps(
                 # Marked mandatory but no role bound — the workflow, not the project, is wrong.
                 gaps.append(f"L{step.step_order} ({tier}: no role on the workflow)")
                 continue
-            if not any(_covered(r, is_actor_l1=False) for r in tier_roles):
+            if not any(_covered(r, is_actor_l1=False, per_package=per_package) for r in tier_roles):
                 gaps.append(f"L{step.step_order} ({_job_name(step, tier, tier_roles[0])})")
     return gaps
 
@@ -414,17 +447,26 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 )
             )
 
-    # C1 L1 officer per package (or project-wide / country fallback)
+    # C1 Level 1 staffed — and it also gates ticket intake, so it must agree with C5 exactly.
+    # Which shape it asks for comes from the level itself (`staff_per_package`, 2026-08-04): per
+    # lot ⇒ every active lot needs an officer; project-wide ⇒ one project-wide officer. The
+    # country L1 fallback satisfies either, because it exists so intake never dead-ends.
     l1_role = _first_standard_step_role(db, project)
-    l1_project_fallback = bool(l1_role and _has_project_l1_fallback(db, project, l1_role))
-    l1_gaps = _packages_missing_role(
-        db,
-        project=project,
-        packages=packages,
-        grm_role_key=l1_role or "",
-        project_wide_covers=l1_project_fallback,
-    )
-    c1_ok = bool(l1_role) and not l1_gaps
+    l1_per_package = _first_standard_step_per_package(db, project)
+    if l1_per_package:
+        # Every active lot needs its own Level 1 officer, and a project with no lots at all
+        # cannot satisfy a per-lot level.
+        l1_gaps = _packages_missing_role(
+            db,
+            project=project,
+            packages=packages,
+            grm_role_key=l1_role or "",
+            project_wide_covers=False,
+        )
+        c1_ok = bool(l1_role) and bool(packages) and not l1_gaps
+    else:
+        l1_gaps = []
+        c1_ok = bool(l1_role) and _has_project_l1_fallback(db, project, l1_role)
     checks.append(
         GoLiveCheck(
             id="C1",
@@ -433,11 +475,15 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             severity="block",
             status="pass" if c1_ok else ("fail" if l1_role else "warn"),
             message=(
-                "Every lot has a Level 1 officer"
+                ("Every lot has a Level 1 officer" if l1_per_package else "Level 1 officer assigned")
                 if c1_ok
                 else (
                     f"Add a Level 1 officer ({l1_role}) for these lots: {', '.join(l1_gaps[:5])}"
                     if l1_gaps
+                    else "This level is staffed for each lot — add a lot first"
+                    if l1_role and l1_per_package and not packages
+                    else f"Add a Level 1 officer ({l1_role})"
+                    if l1_role
                     else "Add a workflow with a Level 1 to this project"
                 )
             ),

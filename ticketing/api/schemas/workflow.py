@@ -51,6 +51,7 @@ class WorkflowStepResponse(BaseModel):
     actor_can_reassign: bool = False
     tier_labels: dict[str, TierLabel] = {}
     required_tiers: list[str] = []
+    staff_per_package: bool = False
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -76,6 +77,7 @@ class WorkflowStepCreate(BaseModel):
     actor_can_reassign: bool = False
     tier_labels: dict[str, TierLabel] = {}
     required_tiers: list[str] = []
+    staff_per_package: bool = False
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (DESIGN-cast-model §3.5): when any of these is set, the step's tier
@@ -100,6 +102,7 @@ class WorkflowStepUpdate(BaseModel):
     actor_can_reassign: Optional[bool] = None
     tier_labels: Optional[dict[str, TierLabel]] = None
     required_tiers: Optional[list[str]] = None
+    staff_per_package: Optional[bool] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
     # Tier-toggle editor (see WorkflowStepCreate).

@@ -20,6 +20,13 @@ author's word).
 
 **Amended the same day — [`DECISION-organization-membership`](sprints/2026-07_org_chart_positions/DECISION-organization-membership.md).** The `routing_org_role` anchor is **retired**: an organization's grievances are the ones on **its projects** (and its lots), widened down the org tree — so a donor and a ministry on the same project both see the same grievances, where the old single stamp gave them to exactly one. `services/org_reach.py` is the rule; the export column is now **"Organizations"**; GRC convening resolves members from the project's staffing.
 
+**Staffing (2026-08-04):** a level now declares whether it is staffed per lot or once for the
+project (`workflow_steps.staff_per_package`, `p2r4t6v8`); the staffing screen is one place, levels
+last→first, per-lot levels asking lot by lot; the go-live gate reads the flag instead of guessing.
+*Known cost:* the screen mounts one `CastStaffing` per level (and per lot for per-lot levels), each
+fetching the workflow + casts — fine at 4 levels × 3 lots, worth lifting the fetch if a workflow
+grows.
+
 **Left, deliberately:** the legacy organization store is dead but not dropped —
 `project_actor_roles`, `implementing_agency_org_id`, `project_donors` are read-only fallbacks
 for projects created before types existed — plus `project_types.routing_org_role`, now unused. One cleanup sweep once none exist; touch list in

@@ -181,6 +181,9 @@ export interface WorkflowStep {
   /** Non-actor tiers the author marked mandatory. The actor is always required and is never
    *  listed here. Drives go-live's level-staffing gate. */
   required_tiers?: string[];
+  /** Is this level staffed lot by lot (true) or once for the project (false)? Set by the
+   *  workflow author, so a typed project inherits it and cannot deviate. */
+  staff_per_package?: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -727,6 +730,9 @@ export interface StepPayload {
   tier_labels?: Record<string, { label: string; description?: string }>;
   /** Non-actor tiers the author marks mandatory; "actor" is rejected server-side. */
   required_tiers?: string[];
+  /** Is this level staffed lot by lot (true) or once for the project (false)? Set by the
+   *  workflow author, so a typed project inherits it and cannot deviate. */
+  staff_per_package?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {

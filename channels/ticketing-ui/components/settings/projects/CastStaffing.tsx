@@ -81,6 +81,8 @@ export function CastStaffing({
   orgs,
   package: pkg = null,
   workflowId = null,
+  stepIds = null,
+  showStepHeader = true,
   onChanged,
 }: {
   project: ProjectItem;
@@ -89,6 +91,12 @@ export function CastStaffing({
   package?: PackageItem | null;
   /** Explicit workflow to staff; defaults to the project's standard/default workflow. */
   workflowId?: string | null;
+  /** Render only these levels (in the order given). null = every level of the workflow.
+   *  The staffing screen drives this: a level staffed per lot is rendered once per lot. */
+  stepIds?: string[] | null;
+  /** False when the parent already names the level (the per-lot blocks on the staffing
+   *  screen) — otherwise the level's name appears twice, once per lot. */
+  showStepHeader?: boolean;
   /** Called after an assign/remove — lets the parent refresh coverage indicators. */
   onChanged?: () => void;
 }) {
@@ -113,6 +121,16 @@ export function CastStaffing({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  /** The levels this instance renders, in the order asked for. Must sit with the other hooks:
+   *  below the early returns it changed the hook count between renders (React error #310). */
+  const visibleSteps = useMemo(() => {
+    if (!stepIds?.length) return steps;
+    const order = new Map(stepIds.map((id, i) => [id, i]));
+    return steps
+      .filter((s) => order.has(s.step_id))
+      .sort((a, b) => (order.get(a.step_id) ?? 0) - (order.get(b.step_id) ?? 0));
+  }, [steps, stepIds]);
 
   const orgLabel = useCallback(
     (id: string) => orgs.find((o) => o.organization_id === id)?.name ?? id,
@@ -289,22 +307,27 @@ export function CastStaffing({
       {error && (
         <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
       )}
-      {isPkg && (
+      {/* Only true where a lot CAN inherit — a level the workflow marks "staffed for each lot"
+          has no project-wide counterpart to inherit from, and the staffing screen renders those
+          without a header. */}
+      {isPkg && showStepHeader && (
         <p className="text-[11px] text-gray-400">
           Inherits Project-wide unless overridden. Greyed rows come from Project-wide; use
           &ldquo;+ assign&rdquo; to add an officer for this lot only.
         </p>
       )}
-      {steps.map((step) => {
+      {visibleSteps.map((step) => {
         const tiers = stepTiers(step);
         return (
           <div key={step.step_id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
-            <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-[11px] font-bold text-gray-600">
-                {step.step_order}
-              </span>
-              <span className="text-[13.5px] font-semibold text-gray-900">{step.display_name}</span>
-            </div>
+            {showStepHeader && (
+              <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-[11px] font-bold text-gray-600">
+                  {step.step_order}
+                </span>
+                <span className="text-[13.5px] font-semibold text-gray-900">{step.display_name}</span>
+              </div>
+            )}
             <div className="divide-y divide-gray-100">
               {TIERS.filter((t) => tiers.includes(t.key)).map((t) => {
                 const current = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === t.key);

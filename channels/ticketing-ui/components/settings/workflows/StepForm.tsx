@@ -40,6 +40,9 @@ export function StepForm({
     () => step.tier_labels ?? {},
   );
   const [requiredTiers, setRequiredTiers] = useState<string[]>(() => step.required_tiers ?? []);
+  // Is this level staffed lot by lot, or once for the whole project? The WORKFLOW author
+  // decides, so a project built from a type inherits it and cannot deviate (2026-08-04).
+  const [staffPerPackage, setStaffPerPackage] = useState<boolean>(step.staff_per_package ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -67,6 +70,7 @@ export function StepForm({
           Object.entries(tierLabels).filter(([, v]) => v.label.trim()),
         ),
         required_tiers: requiredTiers,
+        staff_per_package: staffPerPackage,
       };
       const updated = await updateStep(workflowId, step.step_id, payload);
       onSaved(updated);
@@ -80,6 +84,21 @@ export function StepForm({
   return (
     <div className="border border-blue-200 bg-blue-50 rounded-lg p-4 mt-2 space-y-3">
       {error && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-2 py-1">{error}</p>}
+
+      <div className="rounded border border-gray-200 bg-white px-3 py-2.5">
+        <label className="flex items-center gap-2 text-sm text-gray-700">
+          <input
+            type="checkbox"
+            checked={staffPerPackage}
+            onChange={(e) => setStaffPerPackage(e.target.checked)}
+          />
+          Staffed for each lot
+        </label>
+        <p className="text-xs text-gray-500 mt-1 ml-6">
+          On: every project names an officer for this level on each of its lots. Off: one officer
+          for the whole project. Lower levels are usually per lot, upper levels project-wide.
+        </p>
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div>

@@ -60,6 +60,7 @@ Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_t
 | `supervisor_role`, `informed_roles`, `observer_roles` | Tier model (spec 12) — the step **cast** (actor = `assigned_role_key`) |
 | `tier_labels` | **Built 2026-08-04** (`j6l8n0p2`). Per-step, per-tier **display name + description** — each **defaults from the tier type** (e.g. supervisor → "oversees; can reassign") and is **editable by the author in the Workflows step editor**. Shown **read-only** on staffing / case UI instead of generic tier words. See §6.2 |
 | `required_tiers` | **Built 2026-08-04** (`j6l8n0p2`). JSON list ⊆ {`supervisor`, `informed`, `observer`} — the non-actor tiers the author marks **mandatory** on this step. The **actor tier is always required**, so the API **rejects `actor`** (422) rather than accepting a silent no-op. Drives the project staffing go-live gate ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). See §6.2 |
+| `staff_per_package` | **Built 2026-08-04** (`p2r4t6v8`). Is this level staffed **lot by lot** (`true`) or **once for the project** (`false`, the default and what every step did before)? Typically the lower levels are per lot and the upper ladder project-wide. The **workflow author** sets it, so a project built from a type inherits it and has no switch of its own. Drives the Staffing screen's shape and the go-live staffing gate ([13 §5A/§7](13_projects_and_packages.md)) |
 | `is_deleted` | Soft delete; blocked if active tickets on step |
 
 ### `ticketing.project_workflows` (project ↔ named link ↔ workflow)

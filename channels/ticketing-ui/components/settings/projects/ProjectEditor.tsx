@@ -651,10 +651,11 @@ export function ProjectEditor({
                 />
               )}
 
-              {/* ── Project-wide staffing ── */}
+              {/* ── Staffing ── */}
               {activeSection === "staffing" && (
                 <ProjectCastSection
                   project={p}
+                  packages={packages}
                   orgs={orgs}
                   onChanged={() => { void loadCastCoverage(); setGoLiveKey((k) => k + 1); }}
                 />

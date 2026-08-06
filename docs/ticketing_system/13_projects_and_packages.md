@@ -282,6 +282,28 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 ---
 
+### 5A.6 Staffing, as built 2026-08-04
+
+**One screen, `ProjectCastSection`.** Per-lot staffing left the Packages section: a lot is where
+you say *where* the work is and *which organizations* do it; *who works each level* is one place,
+so you can see at a glance where a lot differs instead of opening each lot in turn.
+
+- **One tab per workflow.** Each has its own levels, and staffing them is a separate job. (A
+  dropdown hid the fact that a second workflow existed.)
+- **Levels run last → first** (L4 → L1), the reverse of how a grievance travels. The upper ladder
+  is the stable part you settle once; the lower levels are the ones that vary by lot, so the
+  screen gets more specific as you work down.
+- **A level staffed per lot asks for an officer on each lot, inline** — read from
+  `workflow_steps.staff_per_package` ([12 §2](12_workflows_configuration.md)). The project has no
+  say: the workflow author decided, and a typed project cannot deviate from its type.
+
+The **go-live gate follows the same flag** and stops guessing (§7 C1/C5): a per-lot level needs an
+officer on **every active lot** — a project-wide officer does not answer it, and neither does the
+country L1 fallback, which is an assignment safety net rather than a staffing plan. A project-wide
+level needs one project-wide officer and is never asked about lots.
+
+---
+
 ## 7. Go-live checklist
 
 **API:** `GET /api/v1/projects/{id}/go-live`  

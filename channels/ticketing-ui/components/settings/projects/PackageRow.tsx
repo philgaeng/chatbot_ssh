@@ -21,7 +21,6 @@ import {
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
-import { CastStaffing } from "@/components/settings/projects/CastStaffing";
 
 export function PackageRow({
   project,
@@ -287,13 +286,9 @@ export function PackageRow({
             />
           </div>
 
-          {/* Staffing for this lot (DESIGN-cast-model §3.6) — inherits Project-wide, override here. */}
-          <div className="border-t border-gray-200 pt-4">
-            <h4 className="text-xs font-semibold uppercase tracking-wide text-blue-600 mb-2">
-              Staffing — {pkg.name}
-            </h4>
-            <CastStaffing project={project} orgs={orgs} package={pkg} onChanged={onStaffingChanged} />
-          </div>
+          {/* Staffing moved out 2026-08-04: a lot is where you say WHERE the work is and WHICH
+              organizations do it. Who works each level — including the levels staffed lot by lot
+              — is one screen, under Staffing, so you can see at a glance where a lot differs. */}
 
           {dirty && (
             <div className="flex justify-end pt-1">

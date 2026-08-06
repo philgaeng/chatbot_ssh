@@ -1,27 +1,42 @@
 "use client";
 
 /**
- * <ProjectCastSection> — the "Project-wide staffing" pane (DESIGN-cast-model §3.6).
+ * <ProjectCastSection> — the "Staffing" pane: who works each level of each workflow.
  *
  * "Cast" is the internal word for the set of roles on a level; it never reaches the screen
  * (ui/05 §4) — on screen this is "staffing" and "who works each level".
  *
- * Staff the shared cast ONCE here — the upper ladder (L2/L3/GRC/Legal) + observers that every
- * package inherits. Per-lot overrides live inside each package (see <CastStaffing> embedded in
- * <PackageRow>). A workflow selector handles the Standard vs SEAH track.
+ * Two rules shape it (Philippe, 2026-08-04):
+ *
+ *   • **Last level first.** L4 → L1, the reverse of how a grievance travels. The upper ladder is
+ *     the stable part you settle once; the lower levels are the ones that vary by lot. Working
+ *     down means the screen gets more specific as you go, not less.
+ *   • **A level says whether it is staffed once or lot by lot** (`workflow_steps.staff_per_package`).
+ *     The workflow author decides, so a project built from a type inherits it and has no switch
+ *     of its own. A per-lot level asks for an officer on each lot **here** — you no longer go
+ *     hunting through Packages to find where lot 3 differs.
+ *
+ * One tab per workflow: each has its own levels, and staffing them is a separate job.
  */
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { type OrganizationItem, type PackageItem, type ProjectItem } from "@/lib/api";
+import {
+  getWorkflow,
+  type OrganizationItem,
+  type PackageItem,
+  type ProjectItem,
+  type WorkflowStep,
+} from "@/lib/api";
 import { CastStaffing } from "@/components/settings/projects/CastStaffing";
 
 export function ProjectCastSection({
   project,
+  packages = [],
   orgs,
   onChanged,
 }: {
   project: ProjectItem;
-  /** Kept for API compatibility with the mount; per-package staffing lives in PackageRow. */
+  /** Active lots — a level staffed per lot asks for an officer on each of these. */
   packages?: PackageItem[];
   orgs: OrganizationItem[];
   onChanged?: () => void;
@@ -42,6 +57,31 @@ export function ProjectCastSection({
   }, [project.workflow_slots, project.standard_workflow_id, project.seah_workflow_id]);
 
   const [selectedWfId, setSelectedWfId] = useState<string | null>(boundWorkflows[0]?.id ?? null);
+  const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const activeLots = useMemo(() => packages.filter((p) => p.is_active), [packages]);
+
+  const loadSteps = useCallback(async () => {
+    if (!selectedWfId) { setSteps([]); return; }
+    setLoading(true);
+    try {
+      const wf = await getWorkflow(selectedWfId);
+      setSteps(
+        (wf.steps ?? [])
+          .filter((s) => !s.is_deleted)
+          .slice()
+          // Last level first — the settled, project-wide end of the ladder.
+          .sort((a, b) => b.step_order - a.step_order),
+      );
+    } catch {
+      setSteps([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedWfId]);
+
+  useEffect(() => { void loadSteps(); }, [loadSteps]);
 
   if (boundWorkflows.length === 0) {
     return (
@@ -49,7 +89,7 @@ export function ProjectCastSection({
         <h3 className="sr-only">Staffing</h3>
         <p className="mt-2 text-sm text-gray-500">
           Choose a workflow first, under Grievance workflows. Then put officers on its levels
-          here — every lot uses these officers unless you set different ones on the lot.
+          here.
         </p>
       </div>
     );
@@ -58,8 +98,8 @@ export function ProjectCastSection({
   return (
     <div>
       <p className="text-sm text-gray-600 max-w-2xl">
-        Set these officers once — every lot uses them unless you set a different officer on
-        that lot, under Packages.
+        Who works each level. Levels run from the last one down to the first — the upper levels
+        are set once for the project, the lower ones are usually set for each lot.
       </p>
 
       {/* One tab per workflow: each has its own levels, and staffing them is a separate job.
@@ -90,14 +130,62 @@ export function ProjectCastSection({
           })}
         </div>
       )}
-      <div className="mt-4">
-        <CastStaffing
-          project={project}
-          orgs={orgs}
-          package={null}
-          workflowId={selectedWfId}
-          onChanged={onChanged}
-        />
+
+      <div className="mt-4 space-y-5">
+        {loading && <p className="text-sm text-gray-400 animate-pulse">Loading levels…</p>}
+        {!loading && steps.length === 0 && (
+          <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+            This workflow has no levels yet. Add them under Workflows.
+          </p>
+        )}
+        {steps.map((step) =>
+          step.staff_per_package ? (
+            <div key={step.step_id}>
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-[11px] font-bold text-gray-600">
+                  {step.step_order}
+                </span>
+                <span className="text-[13.5px] font-semibold text-gray-900">{step.display_name}</span>
+                <span className="text-xs text-gray-500">— set for each lot</span>
+              </div>
+              {activeLots.length === 0 ? (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                  This level is staffed for each lot, and this project has no lots yet. Add one
+                  under Packages.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {activeLots.map((lot) => (
+                    <div key={lot.package_id}>
+                      <div className="text-[11px] font-medium text-gray-500 mb-1">
+                        {lot.package_code ? `${lot.package_code} — ` : ""}{lot.name}
+                      </div>
+                      <CastStaffing
+                        project={project}
+                        orgs={orgs}
+                        package={lot}
+                        workflowId={selectedWfId}
+                        stepIds={[step.step_id]}
+                        showStepHeader={false}
+                        onChanged={onChanged}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <CastStaffing
+              key={step.step_id}
+              project={project}
+              orgs={orgs}
+              package={null}
+              workflowId={selectedWfId}
+              stepIds={[step.step_id]}
+              onChanged={onChanged}
+            />
+          ),
+        )}
       </div>
     </div>
   );

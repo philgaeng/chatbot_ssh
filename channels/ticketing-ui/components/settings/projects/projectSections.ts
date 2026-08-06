@@ -40,7 +40,7 @@ export const PROJECT_SECTIONS: {
   { key: "locations", label: "Locations" },
   { key: "packages",  label: "Packages (lots)" },
   { key: "actors",    label: "Partner organizations" },
-  { key: "staffing",  label: "Project-wide staffing" },
+  { key: "staffing",  label: "Staffing" },
 ];
 
 export const SECTION_ORDER: SectionKey[] = PROJECT_SECTIONS.map((s) => s.key);
