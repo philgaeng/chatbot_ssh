@@ -18,28 +18,32 @@ export type SectionKey =
   | "locations"
   | "packages";
 
-export type SectionGroup = "Setup" | "Routing" | "People" | "Geography";
-
+/**
+ * Setup order (Philippe, 2026-08-04) — the order the work is actually done in:
+ * decide what the project is, where it works, which lots it has, **then** who is involved.
+ * You cannot name the contractor of a lot before the lot exists, and organizations are set up
+ * once while officers change often, so they are the last two and they are separate.
+ *
+ * Group headings were dropped in the same pass: with eight sections in the right order the
+ * headings only added noise, and "Geography" was a poor fit for a contract lot anyway.
+ */
 export const PROJECT_SECTIONS: {
   key: SectionKey;
   label: string;
-  group: SectionGroup;
   /** Shown in the rail under the label when the section has nothing to fix. */
   restingHint?: string;
 }[] = [
-  { key: "overview",  label: "Overview & go-live",  group: "Setup" },
-  { key: "identity",  label: "Identity",            group: "Setup",     restingHint: "Name & code set" },
-  { key: "workflows", label: "Grievance workflows", group: "Routing" },
-  { key: "messaging", label: "Officer messaging",   group: "Routing",   restingHint: "Optional" },
-  { key: "actors",    label: "Partner organizations", group: "People" },
-  { key: "staffing",  label: "Project-wide staffing", group: "People" },
-  { key: "locations", label: "Locations",           group: "Geography" },
-  { key: "packages",  label: "Packages (lots)",     group: "Geography" },
+  { key: "overview",  label: "Overview & go-live" },
+  { key: "identity",  label: "Identity",              restingHint: "Name & code set" },
+  { key: "workflows", label: "Grievance workflows" },
+  { key: "messaging", label: "Officer messaging",     restingHint: "Optional" },
+  { key: "locations", label: "Locations" },
+  { key: "packages",  label: "Packages (lots)" },
+  { key: "actors",    label: "Partner organizations" },
+  { key: "staffing",  label: "Project-wide staffing" },
 ];
 
 export const SECTION_ORDER: SectionKey[] = PROJECT_SECTIONS.map((s) => s.key);
-
-export const SECTION_GROUPS: SectionGroup[] = ["Setup", "Routing", "People", "Geography"];
 
 /** Checks E1 (name + short code) carry no section — they belong to Identity. */
 const CHECK_ID_SECTION: Record<string, SectionKey> = { E1: "identity" };

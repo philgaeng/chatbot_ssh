@@ -12,7 +12,6 @@
 import type { GoLiveReport } from "@/lib/api";
 import {
   PROJECT_SECTIONS,
-  SECTION_GROUPS,
   blockerCount,
   passingCount,
   sectionHints,
@@ -73,42 +72,39 @@ export function ProjectConsoleRail({
         )}
       </div>
 
-      {SECTION_GROUPS.map((group) => (
-        <div key={group} className="px-2 py-2">
-          <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-400">{group}</div>
-          {PROJECT_SECTIONS.filter((s) => s.group === group).map((s) => {
-            const st = statuses[s.key];
-            const isActive = active === s.key;
-            const hint = hints[s.key] ?? s.restingHint ?? "";
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => onSelect(s.key)}
-                aria-current={isActive ? "page" : undefined}
-                className={`w-full flex items-center gap-2.5 px-2 py-2 rounded text-left transition ${
-                  isActive ? "bg-blue-50" : "hover:bg-gray-50"
-                }`}
-              >
-                <span className={`h-2 w-2 rounded-full shrink-0 ${DOT[st]}`} />
-                <span className="flex-1 min-w-0">
-                  <span className={`block text-[13px] leading-tight ${isActive ? "text-blue-700 font-semibold" : "text-gray-700"}`}>
-                    {s.label}
-                  </span>
-                  {hint && (
-                    <span className="block text-[11px] text-gray-400 truncate leading-tight" title={hint}>
-                      {hint}
-                    </span>
-                  )}
+      <div className="px-2 py-2">
+        {PROJECT_SECTIONS.map((s) => {
+          const st = statuses[s.key];
+          const isActive = active === s.key;
+          const hint = hints[s.key] ?? s.restingHint ?? "";
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => onSelect(s.key)}
+              aria-current={isActive ? "page" : undefined}
+              className={`w-full flex items-center gap-2.5 px-2 py-2 rounded text-left transition ${
+                isActive ? "bg-blue-50" : "hover:bg-gray-50"
+              }`}
+            >
+              <span className={`h-2 w-2 rounded-full shrink-0 ${DOT[st]}`} />
+              <span className="flex-1 min-w-0">
+                <span className={`block text-[13px] leading-tight ${isActive ? "text-blue-700 font-semibold" : "text-gray-700"}`}>
+                  {s.label}
                 </span>
-                {st === "block" && (
-                  <span className="text-[10px] font-bold text-red-600 shrink-0">FIX</span>
+                {hint && (
+                  <span className="block text-[11px] text-gray-400 truncate leading-tight" title={hint}>
+                    {hint}
+                  </span>
                 )}
-              </button>
-            );
-          })}
-        </div>
-      ))}
+              </span>
+              {st === "block" && (
+                <span className="text-[10px] font-bold text-red-600 shrink-0">FIX</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       <div className="border-t border-gray-100 px-4 py-2.5 text-[11px] text-gray-400 leading-snug">
         Each dot is a section&apos;s status: <span className="text-green-600 font-bold">●</span> ready ·{" "}

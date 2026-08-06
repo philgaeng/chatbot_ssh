@@ -57,28 +57,39 @@ export function ProjectCastSection({
 
   return (
     <div>
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <p className="text-sm text-gray-600 max-w-2xl">
-            Set these officers once — every lot uses them unless you set a different officer on
-            that lot, under Packages.
-          </p>
-        </div>
-        {boundWorkflows.length > 1 && (
-          <select
-            value={selectedWfId ?? ""}
-            onChange={(e) => setSelectedWfId(e.target.value)}
-            className="rounded border border-gray-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-          >
-            {boundWorkflows.map((w) => (
-              <option key={w.id} value={w.id}>
+      <p className="text-sm text-gray-600 max-w-2xl">
+        Set these officers once — every lot uses them unless you set a different officer on
+        that lot, under Packages.
+      </p>
+
+      {/* One tab per workflow: each has its own levels, and staffing them is a separate job.
+          A dropdown hid the fact that a second workflow existed at all. */}
+      {boundWorkflows.length > 1 && (
+        <div className="mt-3 flex gap-0 border-b border-gray-200" role="tablist">
+          {boundWorkflows.map((w) => {
+            const on = w.id === selectedWfId;
+            return (
+              <button
+                key={w.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setSelectedWfId(w.id)}
+                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
+                  on
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
+                }`}
+              >
                 {w.label}
-                {w.track === "seah" ? " (SEAH)" : ""}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+                {w.track === "seah" && (
+                  <span className="ml-1.5 text-xs font-semibold text-red-700">Sensitive</span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="mt-4">
         <CastStaffing
           project={project}
