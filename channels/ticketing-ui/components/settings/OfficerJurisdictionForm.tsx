@@ -437,7 +437,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
       {countryRole && orgId && (
         <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
           <span className="font-medium">Country-wide scope:</span> this officer sees all projects where{" "}
-          <span className="font-mono">{orgId}</span> is a project actor. Optionally pick one project below to narrow.
+          <span className="font-mono">{orgId}</span> is named on a project. Optionally pick one project below to narrow.
         </p>
       )}
       {isDonorOrg && orgId && !countryRole && (
@@ -533,7 +533,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             onChange={setScopeFilter}
             options={scopeOptions}
             disabled={catalogLoading}
-            hint="Organizations appear under each scope they hold on this project (project actor or package role)."
+            hint="Organizations appear under each scope they hold on this project — named on the project, or on one lot."
           />
         )}
         <div className="flex items-center gap-2">
@@ -555,7 +555,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
                   : orgPickerList.length === 0
                     ? scopeFilter
                       ? "No organizations with this scope on project"
-                      : "No orgs on project — add under Project actors or packages"
+                      : "No organizations on this project — add them under Partner organizations"
                     : "Organization *"}
               </option>
               {orgPickerList.map((o) => (
@@ -568,7 +568,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         </div>
         {selProject && orgPickerList.length === 0 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Link organizations to this project first (Projects & packages → Project actors or package contractors), then invite officers.
+            Link organizations to this project first (Projects & packages → Partner organizations), then invite officers.
           </p>
         )}
         {selProject && routingOrgId && orgId === routingOrgId && (

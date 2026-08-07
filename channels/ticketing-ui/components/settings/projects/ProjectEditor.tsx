@@ -24,7 +24,6 @@ import {
   addPackageLocation,
   removePackageLocation,
   listWorkflows,
-  readCast,
   listTemplates,
   listWorkflowRoutingOptions,
   getProjectActorRoles,
@@ -265,45 +264,8 @@ export function ProjectEditor({
   const [pkgLoading, setPkgLoading]       = useState(true);
   const [showCreatePkg, setShowCreatePkg] = useState(false);
   const [expandedPkg, setExpandedPkg]     = useState<string | null>(null);
-  // Lots with no L1 Actor coverage (neither package-specific nor project-wide) — drives the
-  // "⚠ L1 actor unstaffed" header badge (go-live C1/C5).
-  const [unstaffedActorPkgs, setUnstaffedActorPkgs] = useState<Set<string>>(new Set());
 
-  const loadCastCoverage = useCallback(async () => {
-    const slots = p.workflow_slots ?? [];
-    const wfId =
-      (slots.find((s) => s.is_default) ?? slots.find((s) => s.workflow_track === "standard"))
-        ?.workflow_id ?? p.standard_workflow_id ?? null;
-    const activePkgs = packages.filter((pk) => pk.is_active);
-    const wf = workflows.find((w) => w.workflow_id === wfId);
-    const firstStep = (wf?.steps ?? [])
-      .filter((s) => !s.is_deleted)
-      .slice()
-      .sort((a, b) => a.step_order - b.step_order)[0];
-    if (!wfId || !firstStep || activePkgs.length === 0) {
-      setUnstaffedActorPkgs(new Set());
-      return;
-    }
-    try {
-      const pw = await readCast(p.project_id, { workflow_id: wfId });
-      const pwHasActor = pw.some((c) => c.step_id === firstStep.step_id && c.tier === "actor");
-      const unstaffed = new Set<string>();
-      await Promise.all(
-        activePkgs.map(async (pk) => {
-          const pc = await readCast(p.project_id, { workflow_id: wfId, package_id: pk.package_id });
-          const hasActor = pwHasActor || pc.some((c) => c.step_id === firstStep.step_id && c.tier === "actor");
-          if (!hasActor) unstaffed.add(pk.package_id);
-        }),
-      );
-      setUnstaffedActorPkgs(unstaffed);
-    } catch {
-      /* leave indicators as-is on transient error */
-    }
-  }, [p.project_id, p.workflow_slots, p.standard_workflow_id, packages, workflows]);
 
-  useEffect(() => {
-    void loadCastCoverage();
-  }, [loadCastCoverage]);
 
   useEffect(() => {
     listPackages(p.project_id)
@@ -657,7 +619,7 @@ export function ProjectEditor({
                   project={p}
                   packages={packages}
                   orgs={orgs}
-                  onChanged={() => { void loadCastCoverage(); setGoLiveKey((k) => k + 1); }}
+                  onChanged={() => setGoLiveKey((k) => k + 1)}
                 />
               )}
 
@@ -697,8 +659,8 @@ export function ProjectEditor({
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <p className="text-sm text-gray-600 max-w-2xl">
-                      Lots or contracts within this project. A lot can use different officers from the rest
-                      of the project — set that on the lot itself.
+                      Lots or contracts within this project — where each one works, and which
+                      organizations work on it. Officers are set under Staffing.
                     </p>
                     <button
                       onClick={() => setShowCreatePkg(true)}
@@ -734,8 +696,6 @@ export function ProjectEditor({
                             orgs={orgs}
                             actorRoles={projectActorRoles}
                             expanded={expanded}
-                            needsActor={unstaffedActorPkgs.has(pkg.package_id)}
-                            onStaffingChanged={loadCastCoverage}
                             onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
                             onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
                             onActorsChange={(organizations) =>

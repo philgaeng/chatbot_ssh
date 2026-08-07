@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * <PackageRow> — one package row inside <ProjectEditor>: contractor/consultant org
+ * <PackageRow> — one package row inside <ProjectEditor>: contractor/consultant organization
  * bindings and package locations.
  *
  * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
@@ -29,35 +29,31 @@ export function PackageRow({
   orgs,
   actorRoles,
   expanded,
-  needsActor,
   onToggle,
   onUpdate,
   onActorsChange,
   onAddLoc,
   onRemoveLoc,
-  onStaffingChanged,
 }: {
   project:      ProjectItem;
   projectId:    string;
   pkg:          PackageItem;
   orgs:         OrganizationItem[];
+  /** The project type's organization roles — the words this lot's slots are named with. */
   actorRoles:   OrgRole[];
   expanded:     boolean;
-  /** True when no L1 Actor covers this lot (neither package-specific nor project-wide). */
-  needsActor?:  boolean;
   onToggle:     () => void;
   onUpdate:     (payload: Partial<PackageItem>) => Promise<void>;
   onActorsChange: (organizations: PackageItem["organizations"]) => void;
   onAddLoc:     (code: string) => Promise<void>;
   onRemoveLoc:  (code: string) => Promise<void>;
-  onStaffingChanged?: () => void;
 }) {
   const [codeVal, setCodeVal]       = useState(pkg.package_code);
   const [nameVal, setNameVal]       = useState(pkg.name);
   const [descVal, setDescVal]       = useState(pkg.description ?? "");
   const [addingOrg, setAddingOrg]   = useState("");
   const [addingRole, setAddingRole] = useState(actorRoles[0]?.key ?? "");
-  const [actorWorking, setActorWorking] = useState(false);
+  const [orgWorking, setOrgWorking] = useState(false);
   const [saving, setSaving]         = useState(false);
   const [dirty, setDirty]           = useState(false);
 
@@ -91,28 +87,28 @@ export function PackageRow({
 
   async function handleAddActor() {
     if (!addingOrg || !addingRole) return;
-    setActorWorking(true);
+    setOrgWorking(true);
     try {
       const item = await addPackageOrg(projectId, pkg.package_id, addingOrg, addingRole);
       onActorsChange([...organizations, item]);
       setAddingOrg("");
     } catch { /* */ }
-    setActorWorking(false);
+    setOrgWorking(false);
   }
 
   async function handleRemoveActor(organizationId: string, orgRole: string) {
-    setActorWorking(true);
+    setOrgWorking(true);
     try {
       await removePackageOrg(projectId, pkg.package_id, organizationId, orgRole);
       onActorsChange(organizations.filter(
         (o) => !(o.organization_id === organizationId && o.org_role === orgRole),
       ));
     } catch { /* */ }
-    setActorWorking(false);
+    setOrgWorking(false);
   }
 
-  const actorSummary = organizations.length === 0
-    ? <em className="text-gray-500">No actors</em>
+  const orgSummary = organizations.length === 0
+    ? <em className="text-gray-500">No organizations</em>
     : organizations.map((po) => {
         const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
         const roleLabel = actorRoles.find((r) => r.key === po.org_role)?.label ?? po.org_role;
@@ -140,17 +136,9 @@ export function PackageRow({
         <span className={`font-medium text-sm flex-1 min-w-0 truncate ${expanded ? "text-blue-700" : "text-gray-800"}`}>
           {pkg.name}
         </span>
-        <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={typeof actorSummary === "string" ? actorSummary : undefined}>
-          {actorSummary}
+        <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={typeof orgSummary === "string" ? orgSummary : undefined}>
+          {orgSummary}
         </span>
-        {needsActor && (
-          <span
-            className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
-            title="No L1 Actor covers this lot yet — staff one (or set a project-wide L1) before go-live"
-          >
-            ⚠ L1 actor unstaffed
-          </span>
-        )}
         {pkg.location_codes.length > 0 && (
           <div className="flex gap-1 shrink-0">
             {pkg.location_codes.map((c) => (
@@ -200,10 +188,10 @@ export function PackageRow({
               />
             </div>
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-500 block mb-2">Package actors</label>
-              <p className="text-xs text-gray-400 mb-2">Overrides project-wide actor with the same role on this lot only.</p>
+              <label className="text-xs font-medium text-gray-500 block mb-2">Organizations on this lot</label>
+              <p className="text-xs text-gray-400 mb-2">Used instead of the project-wide organization in the same role, on this lot only.</p>
               {organizations.length === 0 ? (
-                <p className="text-xs text-gray-400 italic mb-2">No package actors yet</p>
+                <p className="text-xs text-gray-400 italic mb-2">No organizations named for this lot yet</p>
               ) : (
                 <div className="border border-gray-200 rounded-lg overflow-hidden mb-2 max-w-xl bg-white">
                   <table className="w-full text-sm">
@@ -223,7 +211,7 @@ export function PackageRow({
                             <td className="px-3 py-2 font-medium text-gray-800">{orgName}</td>
                             <td className="px-3 py-2 text-xs text-gray-600">{roleLabel}</td>
                             <td className="px-3 py-2 text-right">
-                              <button type="button" disabled={actorWorking}
+                              <button type="button" disabled={orgWorking}
                                 onClick={() => void handleRemoveActor(po.organization_id, po.org_role)}
                                 className="text-gray-300 hover:text-red-500 text-lg leading-none disabled:opacity-40">×</button>
                             </td>
@@ -245,7 +233,7 @@ export function PackageRow({
                   {actorRoles.map((r) => <option key={r.key} value={r.key}>{r.label}</option>)}
                 </select>
                 <button type="button" onClick={() => void handleAddActor()}
-                  disabled={!addingOrg || !addingRole || actorWorking}
+                  disabled={!addingOrg || !addingRole || orgWorking}
                   className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50">
                   Add
                 </button>
