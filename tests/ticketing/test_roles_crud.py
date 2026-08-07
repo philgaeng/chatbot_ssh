@@ -217,6 +217,13 @@ def test_standard_org_admin_can_create_project():
         )
         assert res.status_code == 201, res.text
 
+        # Creation fills NO organization slot (2026-08-04). It used to write the chosen
+        # organization into the type's first required role, which assumed list order said
+        # something about which role it plays — and put a government department into a "Donor"
+        # slot the moment a type listed Donor first, failing the whole creation. The project
+        # screen names every organization by role; go-live B1 blocks until the required ones are.
+        assert res.json()["organizations"] == []
+
         from ticketing.models.project import Project
 
         proj = db.execute(select(Project).where(Project.short_code == code)).scalar_one()

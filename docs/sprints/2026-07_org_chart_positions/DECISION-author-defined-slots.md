@@ -62,7 +62,7 @@ Filled values live in **`project_organizations` (`organization_id`, `org_role`)*
 
 ## 5. Creating a project (the flow this buys)
 
-1. **Organization** — pick the top-level organization. It fills the type's `routing_org_role` slot automatically, so the creator never allocates it by hand.
+1. **Organization** — pick the top-level organization. It decides **which types are offered**, and nothing more. *(Amended twice on 2026-08-04: the `routing_org_role` anchor it was meant to fill is retired — [`DECISION-organization-membership`](DECISION-organization-membership.md) — and the replacement, "fill the first required role", was removed too. List order says nothing about which role an organization plays: on a type listing "Donor" first it wrote a government department into the donor slot and the creation failed. The project screen asks for each organization by role instead, and go-live B1 blocks until the required ones are named.)*
 2. **Type** — pick from that organization's types. The project inherits its workflows, category routing, and organization slots.
 3. **Allocate the remaining organizations** — one picker per named slot; required ones block go-live.
 4. **Locations** and **staffing** — still per-project, and still go-live blockers. A template cannot know which district or which people.

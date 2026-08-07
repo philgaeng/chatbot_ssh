@@ -1985,9 +1985,7 @@ export interface ProjectCreate {
   is_active?: boolean;
   /** Required: the template this project is built from (doc 13 §3). */
   project_type_key?: string | null;
-  /** The organization that fills the type's routing slot — step 1 of the creation flow. */
-  organization_id?: string | null;
-  /** @deprecated legacy alias for `organization_id`. */
+  /** @deprecated legacy `projects.implementing_agency_org_id`; fills no organization slot. */
   implementing_agency_org_id?: string | null;
 }
 

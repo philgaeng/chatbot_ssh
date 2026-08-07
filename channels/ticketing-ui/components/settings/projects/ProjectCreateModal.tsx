@@ -3,12 +3,13 @@
 /**
  * <ProjectCreateModal> — new project: **organization → type → name it**.
  *
- * The order is the decision (DECISION-author-defined-slots §5): the organization comes first
- * because it decides which templates are on offer, and it fills the type's first required
- * organization role, so nobody has to name it again on the project screen. Everything else
- * (workflows, category routing, the other organizations a project must name) comes from the
- * type. What is left afterwards is locations and officers, which is the work that actually
- * needs local knowledge.
+ * The organization comes first because it decides which templates are on offer. It fills
+ * **no slot**: creation used to write it into the type's first required organization role,
+ * which assumed list order said something about which role it plays — and put a government
+ * department into a "Donor" slot the moment a type happened to list Donor first. The project
+ * screen names every organization by role, and go-live blocks until the required ones are
+ * named. Everything else (workflows, category routing) comes from the type; what is left after
+ * that is locations and officers, the work that needs local knowledge.
  */
 import React, { useState, useEffect } from "react";
 import {
@@ -80,10 +81,7 @@ export function ProjectCreateModal({
   }, [orgId]);
 
   const selectedType = types.find((t) => t.type_key === typeKey) ?? null;
-  /** The organization in charge fills the type's first required role, so the creator does not
-   *  re-enter it on the project screen. (It filled the `routing_org_role` anchor until
-   *  2026-08-04 — that concept is retired; see DECISION-organization-membership.) */
-  const leadRoleLabel = selectedType?.actor_roles.find((r) => r.required)?.label ?? null;
+  const requiredRoles = selectedType?.actor_roles.filter((r) => r.required) ?? [];
 
   async function handleCreate() {
     if (!orgId) { setError("Choose the organization in charge of this project."); return; }
@@ -102,7 +100,6 @@ export function ProjectCreateModal({
         country_code: country,
         description: desc.trim() || null,
         project_type_key: typeKey,
-        organization_id: orgId,
         is_active: false,
       });
       onCreated(p);
@@ -205,7 +202,9 @@ export function ProjectCreateModal({
                   {selectedType.description ? `${selectedType.description} ` : ""}
                   {selectedType.workflow_bindings.length}{" "}
                   {selectedType.workflow_bindings.length === 1 ? "workflow" : "workflows"}
-                  {leadRoleLabel ? ` · this organization becomes the ${leadRoleLabel}` : ""}
+                  {requiredRoles.length
+                    ? ` · you will name: ${requiredRoles.map((r) => r.label).join(", ")}`
+                    : ""}
                 </p>
               )}
               {orgId && !typesLoading && types.length === 0 && (
@@ -214,8 +213,8 @@ export function ProjectCreateModal({
                 </p>
               )}
               <p className="text-xs text-gray-400 mt-1">
-                Workflows and the organizations a project must name come from the type. The project
-                starts inactive until the go-live checks pass.
+                Workflows come from the type. You name its organizations on the project screen —
+                it stays inactive until the go-live checks pass.
               </p>
             </div>
 

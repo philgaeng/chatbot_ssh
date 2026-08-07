@@ -148,10 +148,8 @@ class ProjectCreate(BaseModel):
             "organizations it must name. Required (DECISION-author-defined-slots §5)."
         ),
     )
-    # Step 1 of the creation flow: the organization that fills the type's `routing_org_role`
-    # slot — the one a grievance is recorded against (§5).
-    organization_id: str | None = Field(None, max_length=64)
-    # Legacy alias for the same thing, kept for callers written before the catalog came back.
+    # Legacy: sets `projects.implementing_agency_org_id`, a read-only fallback for pre-types
+    # projects. It does NOT fill an organization slot — the project screen does that.
     implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
@@ -1403,29 +1401,17 @@ def create_project(
     db.flush()
 
     try:
-        type_row = types_svc.instantiate_project_from_type(db, project, body.project_type_key)
+        types_svc.instantiate_project_from_type(db, project, body.project_type_key)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
-    # Step 1 of the creation flow names the organization in charge, so the creator does not
-    # have to fill the first slot by hand (DECISION-author-defined-slots §5). It fills the
-    # type's **first required** organization role — the first thing the author said every
-    # project of this kind must have. (Until 2026-08-04 it filled the `routing_org_role`
-    # anchor; that concept is retired — DECISION-organization-membership.)
-    lead_org = body.organization_id or body.implementing_agency_org_id
-    lead_role = types_svc.first_required_role_key(type_row)
-    if lead_org and lead_role:
-        if not db.get(Organization, lead_org):
-            raise HTTPException(status_code=422, detail=f"Organization '{lead_org}' not found")
-        db.add(
-            ProjectOrganization(
-                project_id=project.project_id,
-                organization_id=lead_org,
-                org_role=lead_role,
-            )
-        )
-        _sync_participant_role(db, project, lead_org, None, lead_role)
-        db.flush()
+    # **No organization slot is filled here** (2026-08-04, Philippe). Creation used to write the
+    # chosen organization into the type's first required role, which assumed list order said
+    # something about which role that organization plays. It does not: the back-fill sorts keys
+    # alphabetically, so a type whose roles begin with "Donor" had a government department
+    # written into the donor slot — and the legacy donor guard rejected the whole creation.
+    # A guess that is right most of the time is worse here than not guessing: the project screen
+    # asks for every slot by name, and go-live B1 blocks until the required ones are named.
 
     if is_active:
         report = go_live_svc.evaluate_go_live(db, project.project_id)

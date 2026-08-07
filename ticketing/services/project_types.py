@@ -98,20 +98,6 @@ def instantiate_project_from_type(db: Session, project: Project, type_key: str) 
     return pt
 
 
-def first_required_role_key(type_row: ProjectType) -> str | None:
-    """The first organization role the author marked required, in catalog order.
-
-    This is the slot the **organization in charge** fills at project creation. It replaced the
-    `routing_org_role` anchor on 2026-08-04: with reporting derived from membership
-    (DECISION-organization-membership) there is no anchor to designate, but the creation flow
-    still knows one organization and should not make the creator re-enter it.
-    """
-    for entry in type_row.actor_roles or []:
-        if entry.get("required") and entry.get("key"):
-            return str(entry["key"])
-    return None
-
-
 def required_project_role_keys(type_row: ProjectType) -> set[str]:
     keys: set[str] = set()
     for entry in type_row.actor_roles or []:
