@@ -157,6 +157,9 @@ def seed_standard_workflow(db: Session) -> None:
             step_key="LEVEL_1_SITE",
             display_name="Level 1 – Site Safeguards",
             assigned_role_key="site_safeguards_focal_person",
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'Safeguard Officer', 'description': 'receives the grievance at site and resolves it'}, 'supervisor': {'label': 'PIU Safeguards Focal'}},
             supervisor_role="pd_piu_safeguards_focal",
             informed_roles=[],
             observer_roles=[],
@@ -178,6 +181,9 @@ def seed_standard_workflow(db: Session) -> None:
             step_key="LEVEL_2_PIU",
             display_name="Level 2 – PD/PIU Safeguards",
             assigned_role_key="pd_piu_safeguards_focal",
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'PIU Safeguards Focal'}, 'supervisor': {'label': 'National Project Director'}},
             supervisor_role="adb_national_project_director",
             informed_roles=[],
             observer_roles=[],
@@ -199,6 +205,9 @@ def seed_standard_workflow(db: Session) -> None:
             step_key="LEVEL_3_GRC",
             display_name="Level 3 – Grievance Redress Committee (GRC)",
             assigned_role_key="grc_chair",
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'GRC Chairperson', 'description': 'chairs the hearing and records the decision'}, 'supervisor': {'label': 'ADB Safeguards'}, 'participant': {'label': 'GRC Member'}},
             supervisor_role="adb_hq_safeguards",
             informed_roles=["grc_member"],   # GRC members are standing Informed at L3
             observer_roles=[],
@@ -226,6 +235,12 @@ def seed_standard_workflow(db: Session) -> None:
             step_key="LEVEL_4_LEGAL",
             display_name="Level 4 – Legal Institutions",
             assigned_role_key="adb_hq_safeguards",
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={
+                "actor": {"label": "ADB Safeguards"},
+                "participant": {"label": "Donor Consultant"},
+            },
             supervisor_role=None,            # no supervisor at L4
             # Donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6): ADB is a donor
             # on KL Road, so the final standard step keeps a donor tier in the informed

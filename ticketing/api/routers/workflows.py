@@ -25,7 +25,11 @@ from ticketing.services.admin_access import (
     require_settings_write,
     workflow_track_from_type,
 )
-from ticketing.services.role_scope import validate_step_roles
+from ticketing.services.role_scope import (
+    require_named_jobs,
+    unnamed_jobs,
+    validate_step_roles,
+)
 from ticketing.api.schemas.workflow import (
     SaveAsTemplateBody,
     StepReorderRequest,
@@ -361,6 +365,21 @@ def publish_workflow(
             status_code=422,
             detail=f"Cannot publish: steps missing assigned role: {', '.join(missing)}",
         )
+    # Every job at every level must be named before the workflow can be used by a project —
+    # the names are what officers read, and a project cannot supply them (doc 12 §6.2).
+    unnamed = [
+        f"{s.display_name}: {', '.join(unnamed_jobs(s))}"
+        for s in active_steps
+        if unnamed_jobs(s)
+    ]
+    if unnamed:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot publish: name every job at each level first — "
+                + "; ".join(unnamed[:5])
+            ),
+        )
     # SH-2: every step's role references must exist and match the workflow track —
     # publish is the full-workflow gate that also catches legacy/wrong-track bindings.
     for s in active_steps:
@@ -550,6 +569,9 @@ def add_step(
         informed_roles=step.informed_roles,
         observer_roles=step.observer_roles,
     )
+    # Every enabled job carries the author's name (doc 12 §6.2). Checked on the FINAL state,
+    # after the toggles above decided which jobs this level has.
+    require_named_jobs(step)
 
     db.add(step)
     db.commit()
@@ -634,6 +656,11 @@ def update_step(
             else bool(step.observer_roles)
         )
         set_step_tier_keys(db, wf, step, supervisor=supervisor, participants=participants, observers=observers)
+
+    # Every enabled job carries the author's name (doc 12 §6.2) — checked on the final state,
+    # so enabling a job and forgetting to name it is refused rather than silently falling back
+    # to the bound role's name.
+    require_named_jobs(step)
 
     db.commit()
     db.refresh(step)

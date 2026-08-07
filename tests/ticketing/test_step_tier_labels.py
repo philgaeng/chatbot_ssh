@@ -93,8 +93,11 @@ def _gaps(monkeypatch, steps, staffed: set[str]):
 
 
 def test_unstaffed_actor_is_a_gap(monkeypatch):
+    """An unnamed job can no longer reach a screen as its role key — that is a slug
+    (ui/05 §2.5), and names are required on save since 2026-08-04. If a name is somehow
+    missing, the message uses the editor's own word for the job."""
     steps = [_Step(1, "site_focal")]
-    assert _gaps(monkeypatch, steps, staffed=set()) == ["L1 (site_focal)"]
+    assert _gaps(monkeypatch, steps, staffed=set()) == ["L1 (Works it)"]
     assert _gaps(monkeypatch, steps, staffed={"site_focal"}) == []
 
 
@@ -105,7 +108,7 @@ def test_supervisor_only_gates_when_the_author_marked_it_required(monkeypatch):
     assert _gaps(monkeypatch, optional, staffed={"site_focal"}) == []
 
     required = [_Step(1, "site_focal", supervisor="piu_focal", required=["supervisor"])]
-    assert _gaps(monkeypatch, required, staffed={"site_focal"}) == ["L1 (piu_focal)"]
+    assert _gaps(monkeypatch, required, staffed={"site_focal"}) == ["L1 (Oversees)"]
     assert _gaps(monkeypatch, required, staffed={"site_focal", "piu_focal"}) == []
 
 

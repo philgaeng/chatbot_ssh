@@ -25,7 +25,6 @@ import {
   type WorkflowStep,
 } from "@/lib/api";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
-import { roleLabel } from "@/lib/labels";
 
 /** A location code covers another when they share an ancestor path (e.g. P1 covers P1_JHA).
  *  An officer with no location is country-wide and covers everything. */
@@ -335,13 +334,15 @@ export function CastStaffing({
                   ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === t.key)
                   : [];
                 const slotOpen = assigning?.stepId === step.step_id && assigning?.tier === t.key;
-                // doc 13 §5A.1 — never a generic word when a name exists. In order:
-                //   1. the workflow author's own label for this job (tier_labels)
-                //   2. the display name of the role bound to it
-                //   3. the generic word, only when neither exists yet
+                // The job's name comes from the WORKFLOW and nowhere else (doc 12 §6.2): the
+                // author writes it on the step editor, every screen reads it. The old second
+                // choice — the bound role's display name — is gone: it made this screen look
+                // like it ignored the workflow, and it is why a deployment could never use the
+                // words on its own contract. Names are back-filled (`r4t6v8x0`) and required on
+                // save, so `fallbackLabel` should be unreachable.
                 const roleKey = t.roleKeyOf(step);
                 const authored = step.tier_labels?.[t.key];
-                const heading = authored?.label || (roleKey ? roleLabel(roleKey) : t.fallbackLabel);
+                const heading = authored?.label || t.fallbackLabel;
                 const hint = authored?.description || t.hint;
                 // The actor is always required; the author marks the rest (doc 12 §6.2).
                 const required = t.required || (step.required_tiers ?? []).includes(t.key);

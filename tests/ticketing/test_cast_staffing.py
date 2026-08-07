@@ -58,6 +58,13 @@ def test_step_toggles_mint_synthetic_keys():
             "supervisor_enabled": True,
             "participants_enabled": True,
             "observers_enabled": False,
+            # Every job the level uses must be named (doc 12 §6.2) — enabling a job and
+            # leaving it nameless is refused since 2026-08-04.
+            "tier_labels": {
+                "actor": {"label": "Safeguard Officer"},
+                "supervisor": {"label": "Escalation Lead"},
+                "participant": {"label": "Contractor"},
+            },
         })
         assert step.status_code == 201, step.text
         body = step.json()

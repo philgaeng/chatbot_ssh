@@ -81,3 +81,63 @@ def validate_step_roles(
                     f"but this workflow is {track} track"
                 ),
             )
+
+
+# ── Every job at a level must be named (doc 12 §6.2) ──────────────────────────
+
+#: The four jobs, in the order they appear on the step editor, with the word the editor uses
+#: for each. The name an author writes replaces this everywhere an officer reads it; these
+#: strings exist only to say *which* job is unnamed.
+TIER_JOBS: tuple[tuple[str, str], ...] = (
+    ("actor", "Works it"),
+    ("supervisor", "Oversees"),
+    ("participant", "Kept informed"),
+    ("observer", "Can view"),
+)
+
+
+def enabled_tiers(step) -> list[str]:
+    """The jobs this level actually uses — a job is enabled by having a role bound to it."""
+    out = []
+    if step.assigned_role_key:
+        out.append("actor")
+    if step.supervisor_role:
+        out.append("supervisor")
+    if step.informed_roles:
+        out.append("participant")
+    if step.observer_roles:
+        out.append("observer")
+    return out
+
+
+def unnamed_jobs(step) -> list[str]:
+    """Enabled jobs with no author-given name, as the editor's words for them.
+
+    The name is the whole point of the job: officers read it on the staffing screen, in the
+    case view and in go-live's messages, and it is the one thing that lets a deployment use
+    the words on its own contract ("Safeguard Officer", "Grievance Officer"). An unnamed job
+    used to fall back to the bound role's display name, which is why the workflow screen
+    looked like it was being ignored — see `r4t6v8x0`.
+    """
+    labels = step.tier_labels or {}
+    enabled = set(enabled_tiers(step))
+    return [
+        word
+        for tier, word in TIER_JOBS
+        if tier in enabled and not ((labels.get(tier) or {}).get("label") or "").strip()
+    ]
+
+
+def require_named_jobs(step) -> None:
+    """Raise 422 naming the jobs still waiting for a name."""
+    missing = unnamed_jobs(step)
+    if not missing:
+        return
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            "Name every job at this level before saving — still unnamed: "
+            + ", ".join(f"“{m}”" for m in missing)
+            + ". The name is what officers see on every screen."
+        ),
+    )

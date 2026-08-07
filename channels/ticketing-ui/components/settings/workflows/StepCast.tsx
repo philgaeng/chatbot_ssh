@@ -63,6 +63,10 @@ function JobDetail({
   canRequire?: boolean;
 }) {
   const v = labels[tier] ?? { label: "", description: "" };
+  // A job with no name cannot be saved (doc 12 §6.2): officers read this word on the staffing
+  // screen, the case view and the go-live checklist, and a project cannot supply it. Flagged
+  // here so the requirement is visible while typing, not only when the save is refused.
+  const unnamed = !(v.label ?? "").trim();
   return (
     <div className="ml-12 mt-1.5 space-y-1.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -70,7 +74,10 @@ function JobDetail({
           value={v.label}
           onChange={(e) => onLabel(tier, { label: e.target.value })}
           placeholder={placeholder}
-          className="flex-1 min-w-[160px] max-w-xs rounded border border-gray-300 px-2 py-1 text-xs"
+          aria-invalid={unnamed || undefined}
+          className={`flex-1 min-w-[160px] max-w-xs rounded border px-2 py-1 text-xs ${
+            unnamed ? "border-red-300 bg-red-50" : "border-gray-300"
+          }`}
           aria-label="Name shown to officers"
         />
         {canRequire ? (
@@ -91,6 +98,11 @@ function JobDetail({
         className="w-full max-w-md rounded border border-gray-200 px-2 py-1 text-[11px]"
         aria-label="Short description"
       />
+      {unnamed && (
+        <p className="text-[11px] text-red-700">
+          Give this job a name — officers see it on every screen.
+        </p>
+      )}
     </div>
   );
 }

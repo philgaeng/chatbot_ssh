@@ -206,6 +206,18 @@ A step is a **cast**, not one role ([13 §5A.1](13_projects_and_packages.md)): *
 
 **UI (wireframe):** the step-cast editor — bind a role, name each tier + add a description, mark required — is mocked at [`ui/06_workflows_step_cast_editor.html`](ui/06_workflows_step_cast_editor.html). The author-set names + required flags then drive the **read-only** Staffing screen ([13 §5A](13_projects_and_packages.md); mockup [`ui/04`](ui/04_projects_packages_redesign.html)).
 
+#### As built, and closed 2026-08-04
+
+The model and the editor shipped in `f0e6f844` (migration `j6l8n0p2`), but **nothing was ever authored** — every seeded step had `tier_labels = {}` — so every screen fell through to a second choice: the **display name of the role** bound to the job. The words were right by accident and the workflow screen looked ignored, which is exactly what this section says must not happen ("never generic words", "edited only here"). Three changes close it:
+
+1. **`r4t6v8x0` back-fills** each job's name with what its screen was already showing, so nothing is blank. Nothing changed visually; the words are now *owned* by the workflow instead of borrowed from the role catalog.
+2. **A name is required to save.** A level with an enabled job and no name is refused (422, naming the jobs in the editor's own words), and **publish refuses** a workflow with any unnamed job — a project cannot supply the name, so it has to exist before the workflow is usable. `services/role_scope.py`: `unnamed_jobs` / `require_named_jobs`.
+3. **The role-name fallback is deleted**, in the staffing screen and in go-live's gap message. With no blanks and no fallback, the workflow is the only place a job's name can come from — the claim is structural, not conventional. (A last-resort generic word remains for a level that somehow has none; the role **key** can no longer reach a screen — it is a slug, ui/05 §2.5.)
+
+**Descriptions stay optional** and fall back to the job's default text ("alerted on escalation; can reassign"), which is what makes a short authored description worth writing rather than mandatory.
+
+The **seeds author names too** (`kl_road_standard.py`, `kl_road_seah.py`) — a fresh deployment must be able to publish the workflow it ships with.
+
 ---
 
 ## 7. Settings UI — Project grievance workflows

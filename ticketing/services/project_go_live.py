@@ -243,10 +243,23 @@ def _standard_level_gaps(
             )
         return _has_officer_on_project_wide(db, project=project, grm_role_key=role)
 
+    #: What the editor calls each job, used only if a level somehow has no name — the role key
+    #: must never reach a screen (ui/05 §2.5: no slugs).
+    _TIER_WORDS = {
+        "actor": "Works it",
+        "supervisor": "Oversees",
+        "informed": "Kept informed",
+        "observer": "Can view",
+    }
+
     def _job_name(step, tier: str, role: str) -> str:
-        """The author's name for the job, so the gap reads like the staffing screen."""
+        """The author's name for the job, so the gap reads like the staffing screen.
+
+        Names are back-filled (`r4t6v8x0`) and required on save, so the fallback is unreachable
+        in practice; when it is hit, the editor's own word beats the role key.
+        """
         label = ((step.tier_labels or {}).get(tier) or {}).get("label")
-        return label or role
+        return label or _TIER_WORDS.get(tier, tier)
 
     gaps: list[str] = []
     for step in steps:
