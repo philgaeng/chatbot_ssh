@@ -9,7 +9,7 @@
  * Each assignment writes an `officer_scope` via the sanctioned backend writer, so auto-assign,
  * SEAH isolation and the reassignment chain all key off the same rows.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   getWorkflow,
@@ -206,6 +206,22 @@ export function CastStaffing({
    * go-live has just called staffed. Shown read-only: it is coverage, not an assignment this
    * screen made, so there is nothing here to reassign.
    */
+  /** Officers covering a job only because they hold its role — never an assignment made here.
+   *  Shared by the row (which shows them) and the level (which explains them once). */
+  const roleStaffedRef = useRef<(k: string | null) => OfficerRosterEntry[]>(() => []);
+
+  const byRoleFor = useCallback(
+    (step: WorkflowStep, tier: { key: string; roleKeyOf: (s: WorkflowStep) => string | null }) => {
+      const cur = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key);
+      const inh = isPkg
+        ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key)
+        : [];
+      if (cur.length || inh.length) return [] as OfficerRosterEntry[];
+      return roleStaffedRef.current(tier.roleKeyOf(step));
+    },
+    [scopeCast, projectWideCast, isPkg],
+  );
+
   const roleStaffed = useCallback(
     (roleKey: string | null) => {
       if (!roleKey) return [] as OfficerRosterEntry[];
@@ -219,6 +235,8 @@ export function CastStaffing({
     },
     [roster, project.short_code],
   );
+
+  roleStaffedRef.current = roleStaffed;
 
   /** The position the officer holds — the wireframe shows it under the name so an admin can
    *  see WHICH SEAT is doing the work, not just who. Positions come from the roster today;
@@ -346,7 +364,7 @@ export function CastStaffing({
                 const hint = authored?.description || t.hint;
                 // The actor is always required; the author marks the rest (doc 12 §6.2).
                 const required = t.required || (step.required_tiers ?? []).includes(t.key);
-                const byRole = current.length === 0 && inherited.length === 0 ? roleStaffed(roleKey) : [];
+                const byRole = byRoleFor(step, t);
                 const empty = current.length === 0 && inherited.length === 0 && byRole.length === 0;
                 const blocking = empty && required && !isPkg;
                 return (
@@ -381,13 +399,14 @@ export function CastStaffing({
                         {current.map((c) => (
                           <span
                             key={c.scope_id}
-                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white px-2 py-1"
+                            className="inline-flex items-center gap-2 rounded-full border border-blue-300 bg-blue-50/60 px-2 py-1"
+                            title="Assigned to this level"
                           >
-                            <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-50 text-[9px] font-bold text-blue-700">
+                            <span className="grid h-5 w-5 place-items-center rounded-full bg-blue-600 text-[9px] font-bold text-white">
                               {initials(officerName(c.user_id))}
                             </span>
                             <span className="leading-tight">
-                              <span className="block text-xs font-semibold text-gray-900">
+                              <span className="block text-xs font-medium text-gray-900">
                                 {officerName(c.user_id)}
                               </span>
                               {officerPosition(c.user_id) && (
@@ -410,14 +429,12 @@ export function CastStaffing({
                         {byRole.map((o) => (
                           <span
                             key={`role-${o.user_id}`}
-                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50 px-2 py-1"
-                            title="Covered through this role, not assigned on this level"
+                            className="inline-flex items-center gap-2 rounded-full border border-dashed border-gray-300 bg-gray-50 px-2 py-1"
                           >
                             <span className="grid h-5 w-5 place-items-center rounded-full bg-white text-[9px] font-bold text-gray-500">
                               {initials(o.display_name)}
                             </span>
-                            <span className="text-xs text-gray-600">{o.display_name}</span>
-                            <span className="text-[10px] text-gray-400">· by role</span>
+                            <span className="text-xs font-medium text-gray-700">{o.display_name}</span>
                           </span>
                         ))}
 
@@ -447,6 +464,7 @@ export function CastStaffing({
                           : "Not staffed. This workflow marks it required."}
                       </p>
                     )}
+
 
                     {slotOpen && (
                       <div className="mt-2 rounded-lg border border-blue-200 bg-white p-3">
@@ -533,6 +551,15 @@ export function CastStaffing({
                 );
               })}
             </div>
+            {TIERS.filter((t) => tiers.includes(t.key)).some((t) => byRoleFor(step, t).length) && (
+              // Said once per level, not on every job: three grey words per chip ("· by role")
+              // were undecodable, and repeating the sentence per row taxes a second-language
+              // reader for no extra meaning (ui/05 §2 rules 4 + 10).
+              <p className="border-t border-gray-100 bg-gray-50/60 px-3 py-2 text-[11px] text-gray-500">
+                Dashed names are not assigned here — those officers cover the job because they
+                hold its role. Assign someone to name a specific officer.
+              </p>
+            )}
           </div>
         );
       })}
