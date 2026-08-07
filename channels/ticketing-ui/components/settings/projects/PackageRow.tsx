@@ -119,10 +119,19 @@ export function PackageRow({
 
   /** Roles the project type says every lot must name (`required_package` → go-live B3).
    *  Only these make an empty lot a problem: warning about a lot that needs nothing is how a
-   *  reader learns to ignore amber (ui/05 §2 rule 6, and the binary go-live rule). */
+   *  reader learns to ignore amber (ui/05 §2 rule 6, and the binary go-live rule).
+   *
+   *  A **project-level** naming covers every lot — a lot's organization is an *override* of the
+   *  project's in the same role — so this must check both, exactly as B3 does. Checking the lot
+   *  alone would warn on a project that named its contractor once, while go-live called it
+   *  covered: a screen and the checklist disagreeing about one fact. */
   const missingPerLot = actorRoles
     .filter((r) => r.required_package)
-    .filter((r) => !organizations.some((po) => po.org_role === r.key))
+    .filter(
+      (r) =>
+        !organizations.some((po) => po.org_role === r.key)
+        && !project.organizations.some((po) => po.org_role === r.key),
+    )
     .map((r) => r.label);
 
   return (

@@ -322,6 +322,7 @@ level needs one project-wide officer and is never asked about lots.
 | ID | Check | Notes |
 |----|-------|-------|
 | B1 | **Every required organization is named** | The **type's** catalog (`actor_roles[].required`); the message names the gap in the author's words ("Name the organization for: Ward Office"). Replaced A3 + A5 on 2026-08-04 |
+| B3 | **Every lot names the organizations it needs** | The per-lot twin of B1 (`actor_roles[].required_package`). **Promoted from optional 2026-08-04**: ticking "must be named" and ticking "named for each lot" are the same authorial statement at two scopes, so one cannot block while the other advises — and the lot row's warning would otherwise contradict "Ready to activate". A **project-level** naming covers every lot: a lot's organization is an *override* of the project's in the same role |
 | A1 | **A default workflow is chosen** | Routing has nowhere to fall back without it (§5B.1) |
 | A4 | **Every step's required cast tiers staffed** | Actor always; plus supervisor / participant / observer the workflow marks mandatory (`required_tiers`, [12 §6.2](12_workflows_configuration.md)) |
 | C1 | **L1 actor staffed** | Also **gates ticket intake** — fail ⇒ create rejected |
@@ -333,6 +334,7 @@ level needs one project-wide officer and is never asked about lots.
 
 | Check | Notes |
 |-------|-------|
+| ~~B3 Package actors~~ | **Promoted to a Blocker 2026-08-04** — see the table above |
 | ~~A3 Implementing agency~~ · ~~A5 Donor kept informed~~ | **Deleted 2026-08-04** — both are B1 now (see the note above). `donor_informed_ok()` survives as the predicate that pre-fills the last level's kept-informed cast when a donor is added; it no longer gates activation on its own. |
 | B1 on an **untyped** project | Reports `info`, not a blocker: a legacy project created before types existed has no catalog to check. New projects cannot be untyped — `POST /projects` requires `project_type_key` (422 otherwise) |
 | ~~Classification coverage~~ | **Deleted 2026-08-02** (with `workflow_routing.uncovered_classifications`). A category no card claims goes to the default — that is what the default is for (§5B.2) — so it was never a finding, only noise on any project that doesn't enumerate the whole catalog. It also shipped as id **`A4`**, colliding with this doc's `A4` (required cast tiers); that collision is gone. |

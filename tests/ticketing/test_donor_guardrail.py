@@ -519,3 +519,69 @@ def test_participant_role_sync(db):
         if obj:
             db.delete(obj)
         db.commit()
+
+
+# ── B3: the per-lot twin of B1 (blocker since 2026-08-04) ─────────────────────
+
+def test_b3_blocks_when_a_lot_is_missing_a_per_lot_organization(db, kl_road_project):
+    """Ticking "must be named" and ticking "named for each lot" are the same authorial
+    statement at two scopes. B1 blocks, so B3 blocks — otherwise the lot row warns "Needs
+    Donor" while the header says "Ready to activate", and one of them is lying."""
+    from ticketing.models.project import ProjectOrganization
+    from ticketing.services.project_types import get_project_type
+
+    pt = get_project_type(db, kl_road_project.project_type_key)
+    saved_roles = list(pt.actor_roles or [])
+    # Drop the project-level naming too: a project-level organization covers every lot, so
+    # leaving it would (correctly) satisfy the check and prove nothing.
+    ia_links = [po for po in kl_road_project.organizations if po.org_role == "ward_office"]
+    saved_ia = kl_road_project.implementing_agency_org_id
+    try:
+        pt.actor_roles = saved_roles + [
+            {
+                "key": "ward_office",
+                "label": "Ward Office",
+                "description": "",
+                "required": False,
+                "required_package": True,
+                "scope": "package",
+            }
+        ]
+        db.flush()
+
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        b3 = next(c for c in report.checks if c.id == "B3")
+        assert b3.status == "fail" and b3.severity == "block"
+        # the author's word and the lot's own code — never a role key (ui/05 §2.5)
+        assert "Ward Office" in b3.message
+        assert "ward_office" not in b3.message
+        assert report.can_activate is False
+    finally:
+        pt.actor_roles = saved_roles
+        kl_road_project.implementing_agency_org_id = saved_ia
+        _ = ia_links
+        db.flush()
+
+
+def test_a_project_level_organization_covers_every_lot(db, kl_road_project):
+    """A lot's organization is an *override* of the project's in the same role, so naming the
+    contractor once for the project is a complete answer — the check must not demand it be
+    repeated on all five lots."""
+    from ticketing.services.project_types import get_project_type
+
+    pt = get_project_type(db, kl_road_project.project_type_key)
+    saved_roles = list(pt.actor_roles or [])
+    try:
+        # `donor` is required per lot, and ADB is already named at PROJECT level on KL Road.
+        pt.actor_roles = [
+            {**r, "required_package": True} if r.get("key") == "donor" else r
+            for r in saved_roles
+        ]
+        db.flush()
+
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        b3 = next(c for c in report.checks if c.id == "B3")
+        assert b3.status == "pass", b3.message
+    finally:
+        pt.actor_roles = saved_roles
+        db.flush()

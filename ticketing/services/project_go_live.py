@@ -433,29 +433,44 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             )
         )
 
-    # B3 Package required actors
+    # B3 Every lot names the organizations the type requires per lot.
+    #
+    # **Blocker since 2026-08-04**, so it matches B1: ticking "must be named" and ticking
+    # "named for each lot" are the same authorial statement at two scopes, and it made no sense
+    # for one to stop activation while the other was advisory. It also removes a contradiction
+    # on screen — the lot row warns "Needs Donor" while the header said "Ready to activate".
+    #
+    # A **project-level** naming still covers every lot: a lot's organization is an *override*
+    # of the project's in the same role (doc 13 §2), so naming the contractor once for the
+    # project is a complete answer unless a lot needs a different one.
     if pt and packages:
         pkg_roles = package_required_role_keys(pt)
         if pkg_roles:
+            labels = {
+                str(e.get("key")): (e.get("label") or e.get("key"))
+                for e in (pt.actor_roles or [])
+                if e.get("key")
+            }
             gaps = []
             for pkg in packages:
-                for rk in pkg_roles:
+                for rk in sorted(pkg_roles):
                     if _package_has_role(db, pkg.package_id, rk):
                         continue
                     if _project_org_has_role(project, rk):
                         continue
-                    gaps.append(f"{pkg.package_code or 'pkg'}:{rk}")
+                    # The author's word and the lot's own code — never a role key (ui/05 §2.5).
+                    gaps.append(f"{pkg.package_code or pkg.name}: {labels.get(rk, rk)}")
             b3_ok = not gaps
             checks.append(
                 GoLiveCheck(
                     id="B3",
-                    label="Package actors",
+                    label="Lot organizations",
                     group="commercial",
-                    severity="info",
-                    status="pass" if b3_ok else "warn",
-                    message="Package contractor roles covered"
+                    severity="block",
+                    status="pass" if b3_ok else "fail",
+                    message="Every lot names the organizations it needs"
                     if b3_ok
-                    else f"Missing: {', '.join(gaps[:5])}",
+                    else f"Name the organization for: {'; '.join(gaps[:5])}",
                     section="packages",
                 )
             )
@@ -726,7 +741,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     # A1/D1/E1/C4 were promoted 2026-08-04: they were documented Blockers shipping as warnings,
     # so a project with no default workflow and no locations could be activated.
     # A3/A5 → B1 the same day: the organization gate is now the type's own catalog (§7).
-    _ACTIVATION_BLOCK_IDS = {"A1", "B1", "C1", "C4", "C5", "D1", "E1", "R1"}
+    # B3 joined them 2026-08-04 — the per-lot twin of B1, and the same authorial statement.
+    _ACTIVATION_BLOCK_IDS = {"A1", "B1", "B3", "C1", "C4", "C5", "D1", "E1", "R1"}
     can_activate = not any(
         c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
     )
@@ -740,7 +756,7 @@ def activation_block_message(report: GoLiveReport) -> str | None:
         return None
     blocking = [
         c for c in report.checks
-        if c.id in {"B1", "C5"} and c.status == "fail"
+        if c.id in {"B1", "B3", "C5"} and c.status == "fail"
     ]
     if blocking:
         return "; ".join(c.message for c in blocking)
