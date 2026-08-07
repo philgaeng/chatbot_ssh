@@ -98,9 +98,21 @@ export function ProjectCastSection({
   return (
     <div>
       <p className="text-sm text-gray-600 max-w-2xl">
-        Who works each level. Levels run from the last one down to the first — the upper levels
-        are set once for the project, the lower ones are usually set for each lot.
+        Who works each level, from the last level down to the first. Each level is staffed once
+        for the whole project, or lot by lot — the workflow decides which.
       </p>
+
+      {/* A project with lots whose workflow marks no level per-lot shows no lots here at all.
+          That is correct, and silently confusing: someone who has just created lots expects to
+          staff them. Say where the setting lives instead of leaving a hole. */}
+      {activeLots.length > 0 && steps.length > 0 && !steps.some((s) => s.staff_per_package) && (
+        <p className="mt-2 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+          This project has {activeLots.length} {activeLots.length === 1 ? "lot" : "lots"}, and
+          every level below is staffed once for the whole project — so no lot is asked about
+          here. To staff a level lot by lot, tick <strong>Staffed for each lot</strong> on that
+          level, under Workflows.
+        </p>
+      )}
 
       {/* One tab per workflow: each has its own levels, and staffing them is a separate job.
           A dropdown hid the fact that a second workflow existed at all. */}
