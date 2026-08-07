@@ -21,6 +21,8 @@ import {
   ENTITY_CODE_MAX_LEN,
 } from "@/lib/entityCodes";
 import { LocationSearch } from "@/components/LocationSearch";
+import { IconWarning } from "@/lib/icons";
+import { warning } from "@/lib/design-tokens";
 
 export function PackageRow({
   project,
@@ -108,12 +110,20 @@ export function PackageRow({
   }
 
   const orgSummary = organizations.length === 0
-    ? <em className="text-gray-500">No organizations</em>
+    ? "No organizations"
     : organizations.map((po) => {
         const orgName = orgs.find((o) => o.organization_id === po.organization_id)?.name ?? po.organization_id;
         const roleLabel = actorRoles.find((r) => r.key === po.org_role)?.label ?? po.org_role;
         return `${orgName} (${roleLabel})`;
       }).join(", ");
+
+  /** Roles the project type says every lot must name (`required_package` → go-live B3).
+   *  Only these make an empty lot a problem: warning about a lot that needs nothing is how a
+   *  reader learns to ignore amber (ui/05 §2 rule 6, and the binary go-live rule). */
+  const missingPerLot = actorRoles
+    .filter((r) => r.required_package)
+    .filter((r) => !organizations.some((po) => po.org_role === r.key))
+    .map((r) => r.label);
 
   return (
     <div className="border border-gray-200 rounded-lg">
@@ -136,9 +146,21 @@ export function PackageRow({
         <span className={`font-medium text-sm flex-1 min-w-0 truncate ${expanded ? "text-blue-700" : "text-gray-800"}`}>
           {pkg.name}
         </span>
-        <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={typeof orgSummary === "string" ? orgSummary : undefined}>
-          {orgSummary}
-        </span>
+        {missingPerLot.length > 0 ? (
+          // The project's standard warning element (02_design_system §2/§4 amber tokens,
+          // §8 Lucide not emoji), and it says the severity in words — never colour alone.
+          <span
+            className={`inline-flex items-center gap-1 shrink-0 max-w-[45%] rounded-full border px-2 py-0.5 text-xs font-medium ${warning.borderLight} ${warning.bgLight} ${warning.textStrong}`}
+            title={`This lot still needs: ${missingPerLot.join(", ")}`}
+          >
+            <IconWarning size={12} className="shrink-0" />
+            <span className="truncate">Needs {missingPerLot.join(", ")}</span>
+          </span>
+        ) : (
+          <span className="text-xs text-gray-600 shrink-0 max-w-[40%] truncate" title={orgSummary}>
+            {orgSummary}
+          </span>
+        )}
         {pkg.location_codes.length > 0 && (
           <div className="flex gap-1 shrink-0">
             {pkg.location_codes.map((c) => (
