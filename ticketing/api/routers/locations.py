@@ -242,7 +242,6 @@ class ProjectResponse(BaseModel):
 class GoLiveCheckResponse(BaseModel):
     id: str
     label: str
-    group: str
     severity: str
     status: str
     message: str
@@ -1440,7 +1439,6 @@ def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
             GoLiveCheckResponse(
                 id=c.id,
                 label=c.label,
-                group=c.group,
                 severity=c.severity,
                 status=c.status,
                 message=c.message,

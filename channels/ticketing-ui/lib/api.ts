@@ -2027,7 +2027,6 @@ export interface ProjectTypeItem {
 export interface GoLiveCheck {
   id: string;
   label: string;
-  group: string;
   severity: string;
   status: string;
   message: string;

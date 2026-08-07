@@ -23,7 +23,6 @@ import { ProjectTypesTab } from "@/components/settings/ProjectTypesTab";
 // decomposed org-chart surfaces (tree + CSV + position types) and the doc-13 participant model.
 import { OrganisationTab } from "@/components/settings/org/OrganisationTab";
 import { OfficersTabV2 } from "@/components/settings/officers-v2/OfficersTabV2";
-import { SetupOverview } from "@/components/settings/overview/SetupOverview";
 import { AdminAccessTab } from "@/components/settings/platform/AdminAccessTab";
 import { LocationsSection } from "@/components/settings/platform/LocationsSection";
 import { SystemConfigTab } from "@/components/settings/platform/SystemConfigTab";
@@ -31,7 +30,7 @@ import { type RoleEntry, mapGrmRoleToEntry } from "@/components/settings/roles/r
 import { WorkflowsTab } from "@/components/settings/workflows/WorkflowsTab";
 import { ProjectsSection } from "@/components/settings/projects/ProjectsSection";
 
-type MainTab = "setup" | "org_officers" | "workflows_roles" | "projects" | "platform";
+type MainTab = "org_officers" | "workflows_roles" | "projects" | "platform";
 type OrgOfficersSub = "organizations" | "officers";
 /** A project type is mostly a bundle of workflows, so it is authored beside them, not under
  *  platform data (moved 2026-08-04 — it sat under Settings → Project types, where nobody
@@ -39,8 +38,14 @@ type OrgOfficersSub = "organizations" | "officers";
 type WorkflowsSub = "workflows" | "project_types";
 type PlatformSub = "locations" | "reports" | "system_config" | "admin_access";
 
+/**
+ * "Setup & go-live" was removed as a top-level tab (2026-08-07, Philippe). It listed every
+ * project's go-live checks a second time, in a second layout, one click from the project
+ * console that owns them — so it could only ever agree with the console by accident, and it
+ * asked you to pick a project before it could say anything the console does not say better.
+ * Go-live lives on the project, next to the panes that fix it.
+ */
 const MAIN_TABS: { id: MainTab; label: string }[] = [
-  { id: "setup",             label: "Setup & go-live" },   // R8: Frame 01 landing
   { id: "org_officers",      label: "Organizations & officers" },
   { id: "workflows_roles",   label: "Workflows" },
   { id: "projects",          label: "Projects & packages" },
@@ -118,12 +123,13 @@ export default function SettingsPage() {
       return tabs;
     }
     if (isProjectAdmin) {
-      return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "org_officers" || t.id === "workflows_roles" || t.id === "projects");
+      return MAIN_TABS.filter((t) => t.id === "org_officers" || t.id === "workflows_roles" || t.id === "projects");
     }
-    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "projects");
-    return MAIN_TABS.filter((t) => t.id === "setup" || t.id === "projects");
+    if (isAdmin) return MAIN_TABS.filter((t) => t.id === "projects");
+    return MAIN_TABS.filter((t) => t.id === "projects");
   }, [isSuperAdmin, isCountryAdmin, isProjectAdmin, isAdmin, adminWorkflowTracks]);
-  const [activeMain, setActiveMain] = useState<MainTab>("setup");
+  // Projects is the landing: it is where setup actually happens now that the go-live tab is gone.
+  const [activeMain, setActiveMain] = useState<MainTab>("projects");
   const [orgSub, setOrgSub] = useState<OrgOfficersSub>("organizations");
   const [workflowsSub, setWorkflowsSub] = useState<WorkflowsSub>("workflows");
   const [platformSub, setPlatformSub] = useState<PlatformSub>("locations");
@@ -238,8 +244,6 @@ export default function SettingsPage() {
         ))}
       </div>
       )}
-
-      {activeMain === "setup" && <SetupOverview onOpenProject={navigateToProject} />}
 
       {activeMain === "org_officers" && (
         <>

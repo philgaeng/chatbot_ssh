@@ -25,7 +25,6 @@ from ticketing.services.project_types import (
 
 CheckSeverity = Literal["block", "warn", "info"]
 CheckStatus = Literal["pass", "warn", "fail", "info"]
-CheckGroup = Literal["routing", "commercial", "officers", "geography", "metadata"]
 
 
 def _officer_scope_for_project(project: Project) -> ColumnElement:
@@ -42,7 +41,6 @@ def _officer_scope_for_project(project: Project) -> ColumnElement:
 class GoLiveCheck:
     id: str
     label: str
-    group: CheckGroup
     severity: CheckSeverity
     status: CheckStatus
     message: str
@@ -326,7 +324,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="A1",
             label="Default workflow",
-            group="routing",
             severity="block",
             status="pass" if a1_ok else "fail",
             message="Chosen"
@@ -371,7 +368,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="B1",
                 label="Partner organizations",
-                group="commercial",
                 severity="block",
                 status="pass" if b1_ok else "fail",
                 message="Every organization this project needs is named"
@@ -388,7 +384,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="B1",
                 label="Partner organizations",
-                group="commercial",
                 severity="info",
                 status="info",
                 message="This project has no type, so no organizations are required.",
@@ -423,7 +418,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="B2",
                 label="Package locations",
-                group="commercial",
                 severity="info",
                 status="pass" if b2_ok else "warn",
                 message="Every active package has locations"
@@ -465,7 +459,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 GoLiveCheck(
                     id="B3",
                     label="Lot organizations",
-                    group="commercial",
                     severity="block",
                     status="pass" if b3_ok else "fail",
                     message="Every lot names the organizations it needs"
@@ -499,7 +492,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="C1",
             label="Level 1 officers",
-            group="officers",
             severity="block",
             status="pass" if c1_ok else ("fail" if l1_role else "warn"),
             message=(
@@ -534,7 +526,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="C2",
             label="Level 2 officers",
-            group="officers",
             severity="info",
             status="pass" if c2_ok else ("warn" if l2_role else "info"),
             message=(
@@ -574,7 +565,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="R1",
             label="Someone to reassign to",
-            group="officers",
             severity="block",
             status="pass" if r1_ok else "fail",
             message=(
@@ -610,7 +600,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="C4",
                 label="Sensitive workflow staffing",
-                group="officers",
                 severity="block",
                 status="pass" if c4_ok else "fail",
                 message="Level 1 officer assigned" if c4_ok else "Assign a Level 1 officer for this project",
@@ -628,7 +617,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="C5",
                 label="All levels staffed",
-                group="officers",
                 severity="block",
                 status="pass" if c5_ok else "fail",
                 message=(
@@ -646,7 +634,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="D1",
             label="Project locations",
-            group="geography",
             severity="block",
             status="pass" if d1_ok else "fail",
             message="At least one location linked" if d1_ok else "Link the provinces, districts or municipalities this project covers",
@@ -668,7 +655,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="D2",
                 label="Package QR tokens",
-                group="geography",
                 severity="info",
                 status="pass" if not missing_qr else "info",
                 message="All packages have QR tokens"
@@ -709,7 +695,6 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             GoLiveCheck(
                 id="F1",
                 label="Officer SMS phones",
-                group="officers",
                 severity="info",
                 status="pass" if not f1_gaps else "warn",
                 message=(
@@ -727,11 +712,10 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         GoLiveCheck(
             id="E1",
             label="Name and code",
-            group="metadata",
             severity="block",
             status="pass" if e1_ok else "fail",
             message="Name and short code set" if e1_ok else "Set the project name and short code",
-            section=None,
+            section="identity",
         )
     )
 

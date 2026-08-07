@@ -33,7 +33,6 @@ export const EN_MESSAGES = {
 
   // Settings information architecture — 4 domain tabs + Setup landing (DESIGN §2.1 / D1)
   "settings.title": "Settings",
-  "settings.setupAndGoLive": "Setup & go-live",
   "settings.organisation": "Organisation",
   "settings.workflowsAndRoles": "Workflows & roles",
   "settings.projects": "Projects",

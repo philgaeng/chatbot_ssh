@@ -42,6 +42,15 @@ the ui/04 wireframe still mocking "Implementing agency + Donors".
 
 ---
 
+## 🟡 Tests coupled to live demo config (2026-08-07, `followups/tests-coupled-to-live-demo-config.md`)
+
+- [ ] **10 ticket tests fail whenever an admin closes KL Road's intake.** `test_ticket_uniqueness.py`
+      and `test_grievance_sync.py` create tickets on the shared `KL_ROAD` project, so they inherit
+      its go-live gate — ticking "Staffed for each lot" on Level 1 with unstaffed lots reds them
+      all. Give them a disposable project fixture; leave the intake gate alone, it is correct.
+- [x] The three staffing/go-live tests that asserted the same mutable config as a standing fact
+      now set their own precondition (2026-08-07).
+
 ## 🟠 Sensitive workflows — access slice SHIPPED 2026-08-02; rename outstanding (`DECISION-sensitive-workflows.md`)
 
 SEAH stops being a `workflow_type` track and becomes **an ordinary optional workflow with `is_sensitive`**. Specs updated (09/11/12/13, ui/04, ui/06).

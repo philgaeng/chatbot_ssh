@@ -228,10 +228,31 @@ def test_apply_donor_informed_defaults_populates_and_is_idempotent(db, kl_road_p
 # ── C5 all-levels-staffed go-live block (DECISION §7, §9) ─────────────────────
 
 def test_go_live_c5_passes_for_staffed_demo(db, kl_road_project):
-    """Regression: the demo staffs every standard level → C5 passes (project activatable)."""
-    report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
-    c5 = next(c for c in report.checks if c.id == "C5")
-    assert c5.status == "pass"
+    """Regression: the demo staffs every standard level → C5 passes (project activatable).
+
+    "Staffed" is only a complete answer for a level declared project-wide, so the test declares
+    them rather than trusting the demo's current setup — an admin ticking **Staffed for each
+    lot** in the UI is a legitimate configuration change, not a regression in this code.
+    """
+    from sqlalchemy import select
+
+    from ticketing.models.workflow import WorkflowStep
+
+    steps = list(db.execute(
+        select(WorkflowStep).where(WorkflowStep.workflow_id == kl_road_project.standard_workflow_id)
+    ).scalars().all())
+    saved = {s.step_id: s.staff_per_package for s in steps}
+    try:
+        for s in steps:
+            s.staff_per_package = False
+        db.flush()
+        report = go_live_svc.evaluate_go_live(db, kl_road_project.project_id)
+        c5 = next(c for c in report.checks if c.id == "C5")
+        assert c5.status == "pass"
+    finally:
+        for s in steps:
+            s.staff_per_package = saved[s.step_id]
+        db.flush()
 
 
 def test_go_live_c5_blocks_on_unstaffed_level(db, kl_road_project):

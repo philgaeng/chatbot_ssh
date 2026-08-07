@@ -45,11 +45,13 @@ export const PROJECT_SECTIONS: {
 
 export const SECTION_ORDER: SectionKey[] = PROJECT_SECTIONS.map((s) => s.key);
 
-/** Checks E1 (name + short code) carry no section — they belong to Identity. */
-const CHECK_ID_SECTION: Record<string, SectionKey> = { E1: "identity" };
-
+/**
+ * The pane that fixes a check. Every check the service reports names its own section — E1
+ * (name + short code) was the last one patched here on the client, and is stamped `identity`
+ * server-side since 2026-08-07. One taxonomy, one place: the rail, the go-live list and the
+ * "Fix →" jumps all read this, so they cannot drift apart.
+ */
 export function sectionOfCheck(check: GoLiveCheck): SectionKey | null {
-  if (CHECK_ID_SECTION[check.id]) return CHECK_ID_SECTION[check.id];
   const s = check.section as SectionKey | null;
   return s && SECTION_ORDER.includes(s) ? s : null;
 }

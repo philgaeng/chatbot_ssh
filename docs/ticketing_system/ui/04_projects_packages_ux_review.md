@@ -25,8 +25,8 @@
 
 | Region on screen | Component | Notes |
 | --- | --- | --- |
-| Tab shell (`Setup & go-live / Organizations & officers / Workflows / Projects & packages / Settings`) | [`app/settings/page.tsx`](../../../channels/ticketing-ui/app/settings/page.tsx) | Projects lives under the `projects` main tab |
-| Go-live status panel ("9 passed · 4 warnings", Can activate) | [`ProjectGoLivePanel.tsx`](../../../channels/ticketing-ui/components/settings/ProjectGoLivePanel.tsx) | Grouped: Routing / Commercial / Officers / Geography / Metadata |
+| Tab shell (`Organizations & officers / Workflows / Projects & packages / Settings`) | [`app/settings/page.tsx`](../../../channels/ticketing-ui/app/settings/page.tsx) | Projects lives under the `projects` main tab, and is the landing. **`Setup & go-live` was removed 2026-08-07** — it re-listed every project's go-live checks in a second layout one click from the console that owns them, so it could only agree with the console by accident. |
+| Go-live status panel ("6 blockers · can't activate yet") | [`ProjectGoLivePanel.tsx`](../../../channels/ticketing-ui/components/settings/ProjectGoLivePanel.tsx) | **Listed in rail order, ungrouped** (2026-08-07). A check's `section` is the pane that fixes it, so reading down the list is reading down the rail. The old `group` taxonomy (Routing / Commercial / Officers / Geography / Metadata) answered a different question than the nav, put "Package locations" three headings from Packages, and is deleted from the API response. |
 | Per-project frame (identity, workflows, messaging, actors, locations, packages) | [`ProjectEditor.tsx`](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx) | `Grievance workflows` :423 · `Messaging` :464 · `Project actors` :556 · `Linked locations` :649 · `Packages` :682 · override callout :697 |
 | Project-wide cast (L1–L4 Actor/Supervisor/Participants) | [`ProjectCastSection.tsx`](../../../channels/ticketing-ui/components/settings/projects/ProjectCastSection.tsx), [`CastStaffing.tsx`](../../../channels/ticketing-ui/components/settings/projects/CastStaffing.tsx) | "shared ladder", "every lot inherits it" |
 | Package/lot rows | [`PackageRow.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageRow.tsx), [`PackageCreateModal.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageCreateModal.tsx) | Lot code / name / km range / package actors |
@@ -218,6 +218,10 @@ Response: we need to review our warnings with simple pass or go, no warnings any
 **Shortcomings (ranked):**
 1. **Colour-carrying-meaning** — green-vs-yellow dot distinction is subtle on low-quality monitors; text labels partially rescue it but the at-a-glance signal is colour.
 2. **Heavy page + fragmented saves** amplify pain on slow connections (D4) — a dropped save mid-scroll loses work.
+
+
+
+
 
 > **✅ Q-A11Y-1 — Do we set an accessibility/device floor** (min contrast, non-colour status cues, works on ~1366px + slow 3G) as an explicit acceptance criterion for the redesign, or defer? Response: connection speed is more slow 4G than slow 3G so I dont think is a major issue. People use basic sub 1000 USD laptops, with 14 inch screens, so that should be our benchmark
 >
