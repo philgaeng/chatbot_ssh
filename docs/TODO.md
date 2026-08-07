@@ -27,6 +27,12 @@ last→first, per-lot levels asking lot by lot; the go-live gate reads the flag 
 fetching the workflow + casts — fine at 4 levels × 3 lots, worth lifting the fetch if a workflow
 grows.
 
+**Test hygiene (2026-08-04):** `test_admin_scope_org_staffing` cleaned up by the id it *asked*
+for, but `create_organization` upper-cases ids (`ascii_alnum(raw.upper())`), so the lookup found
+nothing and every suite run left two contractor organizations behind — 69 of them by the time the
+picker on a lot row made it visible. Cleanup now uses the **returned** id. Worth copying that
+habit: after any create-through-the-API test, delete what the API says it made, not what you sent.
+
 **Left, deliberately:** the legacy organization store is dead but not dropped —
 `project_actor_roles`, `implementing_agency_org_id`, `project_donors` are read-only fallbacks
 for projects created before types existed — plus `project_types.routing_org_role`, now unused. One cleanup sweep once none exist; touch list in

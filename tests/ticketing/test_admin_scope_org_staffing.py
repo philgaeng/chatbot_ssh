@@ -157,39 +157,47 @@ def test_unowned_root_contractor_reachable_only_by_super(db, make_org):
     assert can_admin_org_or_owned(db, _super(), orphan, "standard") is True
 
 
+def _drop_org(db, created) -> None:
+    """Delete an organization the test created, by its stored id."""
+    if created is None:
+        return
+    obj = db.get(Organization, created.organization_id)
+    if obj is not None:
+        db.delete(obj)
+        db.commit()
+
+
 def test_create_third_party_stamps_creator_org_node(db):
     sfx = uuid.uuid4().hex[:6]
-    org_id = f"CONX_{sfx}"
+    out = None
     try:
         out = create_organization(
-            OrganizationCreate(organization_id=org_id, name="Beta Builders", org_category="third_party"),
+            OrganizationCreate(organization_id=f"CONX_{sfx}", name="Beta Builders", org_category="third_party"),
             db=db,
             current_user=_org_admin(ORG_DOR),
         )
         assert out.org_category == "third_party"
         assert out.owner_organization_id == ORG_DOR  # stamped with the creator's org node
     finally:
-        obj = db.get(Organization, org_id)
-        if obj is not None:
-            db.delete(obj)
-            db.commit()
+        # Clean up by the id the API RETURNED, never the one we asked for: it upper-cases and
+        # strips (`ascii_alnum(raw.upper())`), so `CONX_ab12cd` is stored as `CONX_AB12CD` and a
+        # lookup by the requested id silently finds nothing. That is how 69 orphan contractors
+        # accumulated in the dev database, two per suite run.
+        _drop_org(db, out)
 
 
 def test_super_created_third_party_is_unowned(db):
     sfx = uuid.uuid4().hex[:6]
-    org_id = f"CONS_{sfx}"
+    out = None
     try:
         out = create_organization(
-            OrganizationCreate(organization_id=org_id, name="Gamma Ltd", org_category="third_party"),
+            OrganizationCreate(organization_id=f"CONS_{sfx}", name="Gamma Ltd", org_category="third_party"),
             db=db,
             current_user=_super(),
         )
         assert out.owner_organization_id is None  # super creations stay global/unowned
     finally:
-        obj = db.get(Organization, org_id)
-        if obj is not None:
-            db.delete(obj)
-            db.commit()
+        _drop_org(db, out)
 
 
 # ── Gap B: project-staffing scope ────────────────────────────────────────────
