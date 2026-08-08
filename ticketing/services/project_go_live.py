@@ -509,7 +509,13 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                     message="Every package names the organizations it needs"
                     if b3_ok
                     else f"Name the organization for: {'; '.join(gaps[:5])}",
-                    section="packages",
+                    # **Organizations, not packages** (2026-08-08). The per-package organization
+                    # editor moved to the Organizations section that day, listed under the
+                    # project-level slot it overrides — but this check kept pointing at Packages,
+                    # so the rail put a red dot and a "Fix →" on a screen that no longer holds
+                    # the control. Exactly the drift `projectSections.ts` warns about: the check
+                    # names the pane that fixes it, so moving a control means moving this too.
+                    section="actors",
                 )
             )
 
