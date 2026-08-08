@@ -1,23 +1,29 @@
 "use client";
 
 /**
- * <ProjectCreateModal> — new project: **organization → type → name it**.
+ * <ProjectCreateModal> — new project: **type → name it**. Nothing else.
  *
- * The organization comes first because it decides which templates are on offer. It fills
- * **no slot**: creation used to write it into the type's first required organization role,
- * which assumed list order said something about which role it plays — and put a government
- * department into a "Donor" slot the moment a type happened to list Donor first. The project
- * screen names every organization by role, and go-live blocks until the required ones are
- * named. Everything else (workflows, category routing) comes from the type; what is left after
- * that is locations and officers, the work that needs local knowledge.
+ * **The "Organization in charge" picker was removed 2026-08-08** (Philippe: organizations are
+ * allocated after). It was already not an organization *of* the project — creation stopped
+ * filling any slot on 2026-08-04, after writing the chosen organization into the type's first
+ * required role and dropping a government department into a "Donor" slot whenever a type
+ * happened to list Donor first. What survived was a required field that narrowed the type
+ * dropdown and was then thrown away: never sent to `POST /projects`, recorded nowhere.
+ *
+ * It did not even narrow usefully. `GET /project-types` already returns the global types plus
+ * the caller's own subtree (doc 13 §3.1), so asking for the organization made the author do by
+ * hand what authority scoping does anyway — and made it a blocking first step.
+ *
+ * Organizations are named by role on the project screen, where the type says which ones the
+ * project needs and go-live blocks until the required ones are filled. Workflows and category
+ * routing come from the type; what is left after that is packages and officers — the work that
+ * needs local knowledge.
  */
 import React, { useState, useEffect } from "react";
 import {
   createProject,
-  listOrganizations,
   listProjects,
   listProjectTypes,
-  type OrganizationItem,
   type ProjectItem,
   type ProjectTypeItem,
 } from "@/lib/api";
@@ -28,7 +34,6 @@ import {
 } from "@/lib/entityCodes";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
 
-const GOVERNMENT_CATEGORIES = new Set(["government", "local_government"]);
 
 export function ProjectCreateModal({
   onCreated,
@@ -41,8 +46,6 @@ export function ProjectCreateModal({
   const [shortCode, setShortCode] = useState("");
   const [country, setCountry]   = useState("NP");
   const [desc, setDesc]         = useState("");
-  const [orgId, setOrgId]       = useState("");
-  const [orgs, setOrgs]         = useState<OrganizationItem[]>([]);
   const [typeKey, setTypeKey]   = useState("");
   const [types, setTypes]       = useState<ProjectTypeItem[]>([]);
   const [typesLoading, setTypesLoading] = useState(false);
@@ -50,41 +53,24 @@ export function ProjectCreateModal({
   const [error, setError]       = useState("");
   const [resumeProject, setResumeProject] = useState<ProjectItem | null>(null);
 
-  // The bodies that run projects: a ministry or a local body, at the top of its tree.
-  // Contractors and consultants are named later, in the type's other slots.
+  // Every type the caller may use — the endpoint already scopes to the global ones plus the
+  // caller's own subtree (doc 13 §3.1), which is exactly the list an "organization in charge"
+  // picker used to narrow by hand.
   useEffect(() => {
-    listOrganizations()
-      .then((rows) =>
-        setOrgs(
-          rows.filter(
-            (o) =>
-              o.is_active
-              && !o.parent_organization_id
-              && GOVERNMENT_CATEGORIES.has((o.org_category ?? "").toLowerCase()),
-          ),
-        ),
-      )
-      .catch(() => {});
-  }, []);
-
-  // The organization decides what is on offer: its own templates plus the shared ones.
-  useEffect(() => {
-    if (!orgId) { setTypes([]); setTypeKey(""); return; }
     setTypesLoading(true);
-    listProjectTypes(true, orgId)
+    listProjectTypes(true)
       .then((rows) => {
         setTypes(rows);
         setTypeKey((prev) => (rows.some((t) => t.type_key === prev) ? prev : rows[0]?.type_key ?? ""));
       })
       .catch(() => setTypes([]))
       .finally(() => setTypesLoading(false));
-  }, [orgId]);
+  }, []);
 
   const selectedType = types.find((t) => t.type_key === typeKey) ?? null;
   const requiredRoles = selectedType?.actor_roles.filter((r) => r.required) ?? [];
 
   async function handleCreate() {
-    if (!orgId) { setError("Choose the organization in charge of this project."); return; }
     if (!typeKey) { setError("Choose a project type."); return; }
     if (!name.trim()) { setError("Project name is required."); return; }
     const codeErr = validateEntityCode(shortCode, "Project code");
@@ -155,42 +141,20 @@ export function ProjectCreateModal({
           )}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-xs font-medium text-gray-500 block mb-1" htmlFor="new-project-org">
-                Organization in charge *
-              </label>
-              <select
-                id="new-project-org"
-                value={orgId}
-                onChange={(e) => setOrgId(e.target.value)}
-                className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400"
-              >
-                <option value="">— choose an organization —</option>
-                {orgs.map((o) => (
-                  <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
-                ))}
-              </select>
-              <p className="text-xs text-gray-400 mt-1">
-                It decides which project types you can use.
-              </p>
-            </div>
-
-            <div className="col-span-2">
               <label className="text-xs font-medium text-gray-500 block mb-1" htmlFor="new-project-type">
                 Project type *
               </label>
               <select
                 id="new-project-type"
                 value={typeKey}
-                disabled={!orgId || typesLoading}
+                disabled={typesLoading}
                 onChange={(e) => setTypeKey(e.target.value)}
                 className="w-full text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50"
               >
-                {!orgId ? (
-                  <option value="">— choose an organization first —</option>
-                ) : typesLoading ? (
+                {typesLoading ? (
                   <option value="">Loading…</option>
                 ) : types.length === 0 ? (
-                  <option value="">No project types for this organization</option>
+                  <option value="">No project types yet — add one under Workflows</option>
                 ) : (
                   types.map((t) => (
                     <option key={t.type_key} value={t.type_key}>{t.label}</option>
@@ -207,9 +171,9 @@ export function ProjectCreateModal({
                     : ""}
                 </p>
               )}
-              {orgId && !typesLoading && types.length === 0 && (
+              {!typesLoading && types.length === 0 && (
                 <p className="text-xs text-amber-700 mt-1">
-                  Create one under Settings → Project types first.
+                  Create one under Workflows → Project types first.
                 </p>
               )}
               <p className="text-xs text-gray-400 mt-1">
@@ -252,7 +216,7 @@ export function ProjectCreateModal({
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>
-          <button onClick={handleCreate} disabled={creating || !orgId || !typeKey || !name.trim() || !shortCode.trim()}
+          <button onClick={handleCreate} disabled={creating || !typeKey || !name.trim() || !shortCode.trim()}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
             {creating ? "Creating…" : "Create project"}
           </button>
