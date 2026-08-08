@@ -370,24 +370,47 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             for e in (pt.actor_roles or [])
             if e.get("key")
         }
-        missing = [
-            str(labels.get(k, k))
-            for k in sorted(required)
-            if not _slot_filled(db, project=project, type_row=pt, role_key=k)
-        ]
-        b1_ok = not missing
-        checks.append(
-            GoLiveCheck(
-                id="B1",
-                label="Partner organizations",
-                severity="block",
-                status="pass" if b1_ok else "fail",
-                message="Every organization this project needs is named"
-                if b1_ok
-                else f"Name the organization for: {', '.join(missing)}",
-                section="actors",
+        # A type that names NO organizations used to make this check **pass** (2026-08-08):
+        # nothing is required, so nothing is missing, so "Every organization this project needs
+        # is named" — vacuously true and, on screen, a lie. The rail showed Organizations green
+        # while the section itself said it could do nothing until the type named some. A project
+        # nobody is accountable for is not ready; it is unconfigured, and it is worse than it
+        # looks — `services/org_reach.py` decides who sees a grievance in reports from the
+        # organizations named on its project, so this project's grievances reach nobody at all.
+        if not (pt.actor_roles or []):
+            checks.append(
+                GoLiveCheck(
+                    id="B1",
+                    label="Organizations",
+                    severity="block",
+                    status="fail",
+                    message=(
+                        f"The project type \"{pt.label or pt.type_key}\" names no organizations, "
+                        "so none can be named here and nobody would see this project's "
+                        "grievances. Add them to the type under Settings → Project types."
+                    ),
+                    section="actors",
+                )
             )
-        )
+        else:
+            missing = [
+                str(labels.get(k, k))
+                for k in sorted(required)
+                if not _slot_filled(db, project=project, type_row=pt, role_key=k)
+            ]
+            b1_ok = not missing
+            checks.append(
+                GoLiveCheck(
+                    id="B1",
+                    label="Organizations",
+                    severity="block",
+                    status="pass" if b1_ok else "fail",
+                    message="Every organization this project needs is named"
+                    if b1_ok
+                    else f"Name the organization for: {', '.join(missing)}",
+                    section="actors",
+                )
+            )
     else:
         # A legacy project created before types existed. Nothing names the organizations it
         # needs, so there is nothing to check — say so rather than pass silently. New projects

@@ -236,11 +236,33 @@ def _validate_config(
     *,
     actor_roles: list[dict[str, Any]],
     workflow_bindings: list[dict[str, Any]],
+    require_actor_roles: bool = True,
 ) -> None:
     """Check the *resulting* configuration before it is stored.
 
     Raises 422 with a message an admin can act on (doc ui/05 §2.5 — no field names, no codes).
     """
+    # A type must name at least one organization (Philippe, 2026-08-08, after saving one that
+    # named none). The type is where a project learns which organizations it must have, so a
+    # type that names none produces projects whose Organizations section can do nothing — and
+    # nobody sees their grievances, because `services/org_reach.py` reads exactly this list to
+    # decide who a grievance reaches in reports. Same shape as "no name, no save" on workflow
+    # jobs: catch it where it is authored, not four screens later where it is only a symptom.
+    #
+    # Only when the caller is actually *setting* the catalog (`require_actor_roles`). A PATCH
+    # that touches just the name falls back to the stored list, and a frozen type in use keeps
+    # its name editable on purpose (§8) — enforcing here would make an existing empty type
+    # unrenamable, which is the one thing its author still needs to be able to do.
+    if require_actor_roles and not actor_roles:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Name at least one organization for this type. Projects built from it can only "
+                "name the organizations listed here, and an organization must be named to see "
+                "the project's grievances."
+            ),
+        )
+
     seen: set[str] = set()
     for entry in actor_roles:
         key = (entry.get("key") or "").strip()
@@ -450,6 +472,7 @@ def update_project_type(
         db,
         actor_roles=actor_roles,
         workflow_bindings=bindings if body.workflow_bindings is not None else [],
+        require_actor_roles=body.actor_roles is not None,
     )
 
     if body.label is not None:

@@ -762,11 +762,25 @@ function ProjectTypeEditor({
         </p>
       </div>
 
+      {/* No organization, no save (2026-08-08). A type with an empty catalog produces projects
+          whose Organizations section can do nothing — and whose grievances reach nobody, since
+          an organization sees a project's grievances only by being named on it. Said here, at
+          the moment of authoring, rather than discovered on a project four screens later. The
+          API refuses it too (422); this is so nobody has to meet that error. */}
+      {roles.length === 0 && (
+        <p className="max-w-xl rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Name at least one organization above before saving. Projects built from this type can
+          only name the organizations listed here, and an organization must be named to see the
+          project&apos;s grievances.
+        </p>
+      )}
+
       <div className="flex items-center gap-3">
         <button
           type="button"
-          disabled={saving}
+          disabled={saving || roles.length === 0}
           onClick={() => void save()}
+          title={roles.length === 0 ? "Name at least one organization first" : undefined}
           className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save project type"}
