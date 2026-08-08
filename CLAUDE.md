@@ -8,10 +8,11 @@
 | --------------------------------------- | --------------------------------------------------------------------------- |
 | **→ `docs/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
 | **→ `docs/TODO.md`**     | Open gaps, next features, tech debt                                         |
+| **→ `docs/engineering/00_engineering_index.md`** | **HOW we build** — DB, service layer, API, tests, frontend, doc lifecycle. Binding on every change. |
 | **→ `docs/deployment/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
 | **→ `docs/README.md`**   | Index of the full spec tree (services, ticketing, chatbot, SEAH, deployment) |
 
-`PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `DOCKER.md` tells you how to run it. This file has the locked architecture.
+`PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `docs/engineering/` tells you **how to build it** (craft rules, per layer). `DOCKER.md` tells you how to run it. This file has the locked **architecture** — the decisions the craft rules follow from. Where a craft rule and this file disagree on a locked decision, this file wins; on _how_ to implement it, `docs/engineering/` wins.
 
 ## 🐳 BUILD & RUN ONLY WITH DOCKER (non-negotiable)
 
