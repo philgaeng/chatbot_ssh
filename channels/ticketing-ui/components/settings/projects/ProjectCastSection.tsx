@@ -57,31 +57,57 @@ export function ProjectCastSection({
   }, [project.workflow_slots, project.standard_workflow_id, project.seah_workflow_id]);
 
   const [selectedWfId, setSelectedWfId] = useState<string | null>(boundWorkflows[0]?.id ?? null);
-  const [steps, setSteps] = useState<WorkflowStep[]>([]);
+  /** Steps for EVERY bound workflow, not just the open tab.
+   *
+   *  Loading only the open tab is what made the per-package switch look broken (2026-08-08):
+   *  an author ticked "Staffed for each package" on the Road hazard workflow, opened Staffing,
+   *  landed on the *first* tab — Safeguards, where every level is project-wide — and read a
+   *  banner saying no package is asked about. True of that tab, and the screen had no way to
+   *  say "but the next one does", because it had never looked. */
+  const [stepsByWf, setStepsByWf] = useState<Record<string, WorkflowStep[]>>({});
   const [loading, setLoading] = useState(false);
 
   const activePackages = useMemo(() => packages.filter((p) => p.is_active), [packages]);
 
+  const wfIdsKey = boundWorkflows.map((w) => w.id).join(",");
   const loadSteps = useCallback(async () => {
-    if (!selectedWfId) { setSteps([]); return; }
+    const ids = wfIdsKey ? wfIdsKey.split(",") : [];
+    if (!ids.length) { setStepsByWf({}); return; }
     setLoading(true);
     try {
-      const wf = await getWorkflow(selectedWfId);
-      setSteps(
-        (wf.steps ?? [])
-          .filter((s) => !s.is_deleted)
-          .slice()
-          // Last level first — the settled, project-wide end of the ladder.
-          .sort((a, b) => b.step_order - a.step_order),
+      const loaded = await Promise.all(
+        ids.map(async (id) => {
+          try {
+            const wf = await getWorkflow(id);
+            return [id, (wf.steps ?? [])
+              .filter((s) => !s.is_deleted)
+              .slice()
+              // Last level first — the settled, project-wide end of the ladder.
+              .sort((a, b) => b.step_order - a.step_order)] as const;
+          } catch {
+            return [id, [] as WorkflowStep[]] as const;
+          }
+        }),
       );
-    } catch {
-      setSteps([]);
+      setStepsByWf(Object.fromEntries(loaded));
     } finally {
       setLoading(false);
     }
-  }, [selectedWfId]);
+  }, [wfIdsKey]);
 
   useEffect(() => { void loadSteps(); }, [loadSteps]);
+
+  const steps = useMemo(
+    () => (selectedWfId ? stepsByWf[selectedWfId] ?? [] : []),
+    [stepsByWf, selectedWfId],
+  );
+
+  /** Bound workflows that ask for an officer on each package — used to mark their tab, and to
+   *  point at them from a tab that does not. */
+  const perPackageWorkflows = useMemo(
+    () => boundWorkflows.filter((w) => (stepsByWf[w.id] ?? []).some((s) => s.staff_per_package)),
+    [boundWorkflows, stepsByWf],
+  );
 
   if (boundWorkflows.length === 0) {
     return (
@@ -102,15 +128,42 @@ export function ProjectCastSection({
         for the whole project, or package by package — the workflow decides which.
       </p>
 
-      {/* A project with packages whose workflow marks no level per-package shows no packages here at all.
-          That is correct, and silently confusing: someone who has just created packages expects to
-          staff them. Say where the setting lives instead of leaving a hole. */}
+      {/* A tab whose levels are all project-wide shows no packages, which is correct and reads
+          as broken to someone who has just ticked "Staffed for each package" — on another
+          workflow. So this says which workflow it is talking about, and, when a sibling tab
+          does ask per package, names it instead of sending the reader to Workflows to look for
+          a setting that is already on. */}
       {activePackages.length > 0 && steps.length > 0 && !steps.some((s) => s.staff_per_package) && (
         <p className="mt-2 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-          This project has {activePackages.length} {activePackages.length === 1 ? "package" : "packages"}, and
-          every level below is staffed once for the whole project — so no package is asked about
-          here. To staff a level package by package, tick <strong>Staffed for each package</strong> on that
-          level, under Workflows.
+          This project has {activePackages.length} {activePackages.length === 1 ? "package" : "packages"}.
+          Every level of{" "}
+          <strong>{boundWorkflows.find((w) => w.id === selectedWfId)?.label ?? "this workflow"}</strong>{" "}
+          is staffed once for the whole project, so no package is asked about on this tab.{" "}
+          {perPackageWorkflows.length > 0 ? (
+            <>
+              {perPackageWorkflows.length === 1 ? "It is " : "These are "}
+              {perPackageWorkflows.map((w, i) => (
+                <span key={w.id}>
+                  {i > 0 && ", "}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedWfId(w.id)}
+                    className="font-semibold text-blue-600 hover:underline"
+                  >
+                    {w.label}
+                  </button>
+                </span>
+              ))}
+              {perPackageWorkflows.length === 1
+                ? " that asks for an officer on each package."
+                : " that ask for an officer on each package."}
+            </>
+          ) : (
+            <>
+              To staff a level package by package, tick <strong>Staffed for each package</strong> on
+              that level, under Workflows.
+            </>
+          )}
         </p>
       )}
 
@@ -136,6 +189,10 @@ export function ProjectCastSection({
                 {w.label}
                 {w.track === "seah" && (
                   <span className="ml-1.5 text-xs font-semibold text-red-700">Sensitive</span>
+                )}
+                {/* Says where the per-package work is without opening every tab to find out. */}
+                {perPackageWorkflows.some((p) => p.id === w.id) && (
+                  <span className="ml-1.5 text-xs font-normal text-gray-500">by package</span>
                 )}
               </button>
             );

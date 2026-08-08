@@ -551,15 +551,14 @@ export function CastStaffing({
                 );
               })}
             </div>
-            {TIERS.filter((t) => tiers.includes(t.key)).some((t) => byRoleFor(step, t).length) && (
-              // Said once per level, not on every job: three grey words per chip ("· by role")
-              // were undecodable, and repeating the sentence per row taxes a second-language
-              // reader for no extra meaning (ui/05 §2 rules 4 + 10).
-              <p className="border-t border-gray-100 bg-gray-50/60 px-3 py-2 text-[11px] text-gray-500">
-                Dashed names are not assigned here — those officers cover the job because they
-                hold its role. Assign someone to name a specific officer.
-              </p>
-            )}
+            {/* The per-level explainer ("Dashed names are not assigned here — those officers
+                cover the job because they hold its role…") was deleted 2026-08-08 (Philippe:
+                "extremely confusing"). It replaced a per-chip "· by role" in 2139f145 and was
+                the second attempt to put the covered-vs-assigned distinction into words; three
+                clauses of prose is not an improvement on three grey words. The dashed chip
+                already reads as "not set here", and the Assign button next to it is the action.
+                If the distinction ever does need a word, it belongs as a short label on the
+                dashed group — not a sentence under every level. */}
           </div>
         );
       })}
