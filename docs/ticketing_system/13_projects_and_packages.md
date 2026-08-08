@@ -13,7 +13,7 @@ This document covers **`ticketing.projects`** and related package/QR configurati
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a package-level naming reaches that package only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 
 ## 1. Purpose
@@ -22,7 +22,7 @@ A **project** is the routing hub for a financed infrastructure intervention (e.g
 
 - Which **workflows** handle its grievances — one **default**, plus any others the project needs (§5B)
 - Its **implementing agency** (the accountable ministry) and optional **donors**
-- Which **locations** and **packages** (lots/segments) exist
+- Which **locations** and **packages** (packages/segments) exist
 - Whether the project is **active** and can **accept tickets**
 
 ### Who edits what (admin matrix)
@@ -80,13 +80,13 @@ N rows per project — each one a **named link**: `display_label` (the project's
 
 ### `ticketing.packages` (`project_packages`)
 
-Physical lots within a project. Fields: `package_id`, `project_id`, `name`, `is_active`.
+Physical packages within a project. Fields: `package_id`, `project_id`, `name`, `is_active`.
 
-### `ticketing.package_organizations` — the per-lot half of the catalog
+### `ticketing.package_organizations` — the per-package half of the catalog
 
-Holds organization slots filled **for one lot** — the catalog entries the type marks `required_package` / `scope: package` (e.g. a different contractor on lot 3). Reinstated with the catalog 2026-08-04.
+Holds organization slots filled **for one package** — the catalog entries the type marks `required_package` / `scope: package` (e.g. a different contractor on package 3). Reinstated with the catalog 2026-08-04.
 
-Per-lot variation in **people** is a different thing and remains a **staffing override** (position-first, §5A): a package can override a workflow level's staffing, otherwise it inherits the project-wide staffing.
+Per-package variation in **people** is a different thing and remains a **staffing override** (position-first, §5A): a package can override a workflow level's staffing, otherwise it inherits the project-wide staffing.
 
 ### `ticketing.package_locations`
 
@@ -137,14 +137,67 @@ List columns: name, short code, actor org summary, location count.
 | 2 | **Overview & go-live** | Binary readiness checks (§7) + Activate / Deactivate |
 | 3 | **Grievance workflows** | Name each workflow, bind it to a published one, set the **default**, and say which chatbot menu + categories come to it (§5B) |
 | 4 | **Officer messaging** | Optional officer assignment SMS — see [06_messaging_rules_whatsapp_sms.md](06_messaging_rules_whatsapp_sms.md) §5 |
-| 5 | **Partner organizations** | Implementing agency + optional donors *(no actor-role catalog — DECISION 2026-07-10)* |
-| 6 | **Project-wide staffing** | Fill each workflow level's cast — position-first (§5A) |
-| 7 | **Linked locations** | Province / district / municipality coverage |
-| 8 | **Packages** | Lots: metadata, locations, QR, per-lot **staffing override** (§5A) |
+| 5 | **Packages** | Where the project works. Code, name, description, **locations** — and nothing else (§5C) |
+| 6 | **Organizations** | Every slot the type names, filled project-wide, plus the packages that use a different one (§5C.3) |
+| 7 | **Staffing** | Fill each workflow level's cast — position-first (§5A) |
 
 Current as-built components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal` (the redesign replaces the old `ProjectActorAddRow` + actor sections).
 
 **Staffing & officer assignment** are specified authoritatively in **[§5A](#5a-staffing--position-first-officer-assignment)** (position-first). Coverage gaps show inline per workflow level and in the go-live rail (§7).
+
+---
+
+## 5C. Packages — where the project works (as built 2026-08-08)
+
+> **Decided 2026-08-08 (Philippe).** *"We create first the package — a project with one package
+> is like a project without package. A package has four attributes: code, name, description,
+> locations and that is it."*
+
+### 5C.1 One section, not two
+
+**Linked locations** and **Packages** were separate sections until this date, and both linked
+districts against the same tree. Only one of them routed anything: officer resolution goes
+location → **package** → officer scope (`engine/workflow_engine.py`, branch C);
+`services/project_routing.py` still carries the comment that location→package resolution *there*
+is "reserved, unused today". Nothing read `project_locations` except its own CRUD and go-live's
+**D1**, which only asserted the list was non-empty.
+
+Two declarations of the same fact, one of them load-bearing, so they drifted. On staging:
+
+| Project | Project locations | Packages | Package locations |
+|---|---|---|---|
+| Kakarbhitta–Laukahi Road | 0 | 5 | 3 |
+| SASEC Highway Enhancement | 3 | 5 | 3 |
+| test road | 2 | 2 | 0 |
+
+D1 would have blocked the first (it works fine) and passed the third (no grievance can reach
+it). The second copy is deleted; `project_locations` is left in the database, unread, pending
+the cleanup logged in `docs/sprints/followups/`.
+
+### 5C.2 Every project has at least one package
+
+A project with one package looks like a project with none. The package created with the project
+carries `is_unnamed = true`: it still has a code and a name (routing and the unique constraint
+need them, and they come from the project), but the screen does not ask for either — it asks
+only where the project works. Add a second package and the first stops being unnamed, showing
+the name it always had; the API refuses `is_unnamed` on a project with two packages (**409**),
+because two packages both displaying the project's name cannot be told apart.
+
+**Packages may overlap.** A bridge contract legitimately covers districts that road packages
+also cover (Philippe, 2026-08-08). A grievance in an overlapping district reaches the officers
+of *every* covering package — the engine unions them — so no uniqueness constraint applies, and
+"which package owns this grievance" has no single answer and needs none. `tickets.package_id`
+is a QR-scan artifact, not a routing key.
+
+### 5C.3 Organizations are not named here
+
+A package names an organization only to **override** the project-wide one in the same role —
+the different contractor on package 3. That override moved to the **Organizations** section on
+2026-08-08, listed under the project-level slot it overrides. It used to be a permanently open
+form on every package card, under the heading "Organizations on this package", with an empty state
+reading "No organizations named for this package yet" — which made a rare exception look like a
+required step on every row, in a column too narrow to hold it. Staffing left the package card
+for the same reason on 2026-08-04.
 
 ---
 
@@ -250,7 +303,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 
 **Implemented:** `ticketing.services.project_routing.resolve_ticket_organization()`.
 
-`resolve_ticket_organization()` sets `tickets.organization_id`, a **descriptive stamp** since 2026-08-04. Order: the **lot's** first organization (a lot is more specific) → the organization filling the project type's **first required** role → `implementing_agency_org_id` → any organization named on the project.
+`resolve_ticket_organization()` sets `tickets.organization_id`, a **descriptive stamp** since 2026-08-04. Order: the **package's** first organization (a package is more specific) → the organization filling the project type's **first required** role → `implementing_agency_org_id` → any organization named on the project.
 
 > **Superseded 2026-08-04 — [DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md).** The stamp no longer decides who sees a grievance, so nothing about it is authored any more. **Which organizations see a project's grievances** is answered by membership — `services/org_reach.py`, §6.1 below. The stamp survives because `tickets.organization_id` is NOT NULL and rides along in a few payloads. Pinned by `test_project_type_freeze.py::test_stamp_follows_the_first_required_role`.
 
@@ -260,7 +313,7 @@ See [12_workflows_configuration.md](12_workflows_configuration.md) §8.
 the report query and the XLSX export:
 
 > Every organization named on a project sees that project's grievances. An organization named on
-> **one lot** sees that lot only. A **parent** organization sees everything its children see.
+> **one package** sees that package only. A **parent** organization sees everything its children see.
 
 Same shape as the location filter (`_location_codes_with_descendants`), applied to the org tree
 via `descendant_org_ids`. An organization named nowhere matches **nothing** — not everything.
@@ -284,23 +337,23 @@ Chatbot may still send `organization_id: "DOR"` in the webhook body; ticketing r
 
 ### 5A.6 Staffing, as built 2026-08-04
 
-**One screen, `ProjectCastSection`.** Per-lot staffing left the Packages section: a lot is where
+**One screen, `ProjectCastSection`.** Per-package staffing left the Packages section: a package is where
 you say *where* the work is and *which organizations* do it; *who works each level* is one place,
-so you can see at a glance where a lot differs instead of opening each lot in turn.
+so you can see at a glance where a package differs instead of opening each package in turn.
 
 - **One tab per workflow.** Each has its own levels, and staffing them is a separate job. (A
   dropdown hid the fact that a second workflow existed.)
 - **Levels run last → first** (L4 → L1), the reverse of how a grievance travels. The upper ladder
-  is the stable part you settle once; the lower levels are the ones that vary by lot, so the
+  is the stable part you settle once; the lower levels are the ones that vary by package, so the
   screen gets more specific as you work down.
-- **A level staffed per lot asks for an officer on each lot, inline** — read from
+- **A level staffed per package asks for an officer on each package, inline** — read from
   `workflow_steps.staff_per_package` ([12 §2](12_workflows_configuration.md)). The project has no
   say: the workflow author decided, and a typed project cannot deviate from its type.
 
-The **go-live gate follows the same flag** and stops guessing (§7 C1/C5): a per-lot level needs an
-officer on **every active lot** — a project-wide officer does not answer it, and neither does the
+The **go-live gate follows the same flag** and stops guessing (§7 C1/C5): a per-package level needs an
+officer on **every active package** — a project-wide officer does not answer it, and neither does the
 country L1 fallback, which is an assignment safety net rather than a staffing plan. A project-wide
-level needs one project-wide officer and is never asked about lots.
+level needs one project-wide officer and is never asked about packages.
 
 ---
 
@@ -313,7 +366,7 @@ level needs one project-wide officer and is never asked about lots.
 
 **Binary (2026-07-30, Q-GL-1/2):** every check is either a **Blocker** (must pass to Activate) or **Optional** (never blocks). No "warning" tier. A blocked check states the one thing to fix.
 
-> **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, B1, C1, C4, C5, D1, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
+> **As-built since 2026-08-04.** Binary is now real: `_ACTIVATION_BLOCK_IDS = {A1, B1, B2, B3, C1, C4, C5, E1, R1}` — exactly the Blockers below. **A1 (default workflow), D1 (locations), E1 (name + code) and C4 (sensitive workflow staffing) were promoted from warnings**, so a project with no default workflow and no linked locations can no longer be activated. Everything else carries `severity="info"` and never blocks; the UI shows it as **optional**, not amber ([`ui/04`](ui/04_projects_packages_redesign.html), `ProjectConsoleRail`). Projects activated **before** this change keep `is_active = true` until someone deactivates them — the gate is on activation, not a sweep.
 >
 > **A3 and A5 were deleted the same day** ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md) §7). Both hardcoded the two organizations the platform happened to know about — an implementing agency and a donor. **B1 asks the same question in the author's own words**, against whatever organizations the project's *type* names, and is now a Blocker. The donor guardrail is expressible in that model: mark the donor slot required, put its role in the last level's kept-informed job, and C5 enforces it like any other required job. Legacy reads keep old projects passing — B1 accepts `implementing_agency_org_id` for an `implementing_agency` slot and `project_donors` for a `donor` slot.
 
@@ -322,11 +375,11 @@ level needs one project-wide officer and is never asked about lots.
 | ID | Check | Notes |
 |----|-------|-------|
 | B1 | **Every required organization is named** | The **type's** catalog (`actor_roles[].required`); the message names the gap in the author's words ("Name the organization for: Ward Office"). Replaced A3 + A5 on 2026-08-04 |
-| B3 | **Every lot names the organizations it needs** | The per-lot twin of B1 (`actor_roles[].required_package`). **Promoted from optional 2026-08-04**: ticking "must be named" and ticking "named for each lot" are the same authorial statement at two scopes, so one cannot block while the other advises — and the lot row's warning would otherwise contradict "Ready to activate". A **project-level** naming covers every lot: a lot's organization is an *override* of the project's in the same role |
+| B3 | **Every package names the organizations it needs** | The per-package twin of B1 (`actor_roles[].required_package`). **Promoted from optional 2026-08-04**: ticking "must be named" and ticking "named for each package" are the same authorial statement at two scopes, so one cannot block while the other advises — and the package row's warning would otherwise contradict "Ready to activate". A **project-level** naming covers every package: a package's organization is an *override* of the project's in the same role |
 | A1 | **A default workflow is chosen** | Routing has nowhere to fall back without it (§5B.1) |
 | A4 | **Every step's required cast tiers staffed** | Actor always; plus supervisor / participant / observer the workflow marks mandatory (`required_tiers`, [12 §6.2](12_workflows_configuration.md)) |
 | C1 | **L1 actor staffed** | Also **gates ticket intake** — fail ⇒ create rejected |
-| D1 | **≥1 project location linked** | Routing needs it |
+| B2 | **Every package says where it works** | **Replaced D1 on 2026-08-08**, inheriting its blocking role. D1 asked `project_locations` to be non-empty — a table nothing routed on (routing is location → *package* → officer). The two coverage lists drifted, so D1 blocked working projects and passed unreachable ones. Coverage is declared on packages now, and this is the whole of it |
 | ~~A2~~ / C4 | **Sensitive workflow L1 staffed** | **A2 removed 2026-08-02** — a project needs no sensitive workflow ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §1.3). C4 still applies **if** one is linked: its levels are staffed like any other workflow's (A4) |
 | E1 | **Name + short code set** | — |
 
@@ -358,7 +411,7 @@ Activation (`PATCH` with `is_active: true`) returns 422 if `can_activate` is fal
 | `GET/POST/DELETE` | `/projects/{id}/donors` | Optional donor participants (0..n); drives the last-step-informed guardrail |
 | `GET/POST` | `/projects/{id}/locations/{code}` | Location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages` | Package CRUD |
-| `/projects/{id}/packages/{pkg}/organizations` | POST/DELETE | Per-lot organization slots — the catalog entries scoped to a package (§2). Reinstated 2026-08-04 |
+| `/projects/{id}/packages/{pkg}/organizations` | POST/DELETE | Per-package organization slots — the catalog entries scoped to a package (§2). Reinstated 2026-08-04 |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/...` | Package locations |
 | `GET/POST/DELETE` | `/qr-tokens` (via scan router) | QR management |
 

@@ -15,17 +15,23 @@ export type SectionKey =
   | "messaging"
   | "actors"
   | "staffing"
-  | "locations"
   | "packages";
 
 /**
- * Setup order (Philippe, 2026-08-04) — the order the work is actually done in:
- * decide what the project is, where it works, which lots it has, **then** who is involved.
- * You cannot name the contractor of a lot before the lot exists, and organizations are set up
- * once while officers change often, so they are the last two and they are separate.
+ * Setup order (Philippe, 2026-08-04, revised 2026-08-08) — the order the work is actually done
+ * in: decide what the project is, where it works and how it is packaged, **then** who is
+ * involved. You cannot name the contractor of a package before the package exists, and
+ * organizations are set up once while officers change often, so they are the last two and they
+ * are separate.
  *
- * Group headings were dropped in the same pass: with eight sections in the right order the
- * headings only added noise, and "Geography" was a poor fit for a contract lot anyway.
+ * **Locations folded into Packages 2026-08-08.** They were two sections that both linked
+ * districts, and only the package copy routed anything — so the project copy drifted and lied.
+ * A project that was never split up has one package standing in for it, which is why one
+ * section can serve both shapes. It also settles the naming problem the old comment flagged:
+ * "Geography" was a poor fit for a contract package, and now nothing has to carry both meanings.
+ *
+ * Group headings were dropped in the 08-04 pass: with the sections in the right order the
+ * headings only added noise.
  */
 export const PROJECT_SECTIONS: {
   key: SectionKey;
@@ -37,9 +43,8 @@ export const PROJECT_SECTIONS: {
   { key: "identity",  label: "Identity",              restingHint: "Name & code set" },
   { key: "workflows", label: "Grievance workflows" },
   { key: "messaging", label: "Officer messaging",     restingHint: "Optional" },
-  { key: "locations", label: "Locations" },
-  { key: "packages",  label: "Packages (lots)" },
-  { key: "actors",    label: "Partner organizations" },
+  { key: "packages",  label: "Packages" },
+  { key: "actors",    label: "Organizations" },
   { key: "staffing",  label: "Staffing" },
 ];
 

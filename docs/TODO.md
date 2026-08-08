@@ -42,6 +42,19 @@ the ui/04 wireframe still mocking "Implementing agency + Donors".
 
 ---
 
+## 🔵 Packages are the only coverage — BUILT 2026-08-08 (`followups/drop-project-locations.md`)
+
+Decided by Philippe 2026-08-08: a package is **code + name + description + locations, and that
+is it**; every project has at least one; coverage is declared nowhere else. Locations folded into
+Packages, per-package organizations moved to Organizations, and **"lot" is retired** — one
+object, one word ([ui/05 §4.1](ticketing_system/ui/05_ui_copy_style.md)).
+
+| Outstanding | Why it is not done |
+|---|---|
+| **Drop `ticketing.project_locations`** | Left in place, unread. Dropping a populated table is irreversible and belongs in its own migration — see [`followups/drop-project-locations.md`](sprints/followups/drop-project-locations.md) |
+| **Staffing screen wording for overlapping packages** | Packages may overlap (a bridge contract covers several road packages), so a district can have *plural* responsible officers. The engine already unions them; the Staffing screen has not been checked for copy that implies one |
+| **`ui/04` mockup is stale** | The HTML mockup still shows Locations and Packages as separate sections, and organizations inside the package card |
+
 ## 🟡 Tests coupled to live demo config (2026-08-07, `followups/tests-coupled-to-live-demo-config.md`)
 
 - [ ] **10 ticket tests fail whenever an admin closes KL Road's intake.** `test_ticket_uniqueness.py`

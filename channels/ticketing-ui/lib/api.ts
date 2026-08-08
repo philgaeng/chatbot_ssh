@@ -181,7 +181,7 @@ export interface WorkflowStep {
   /** Non-actor tiers the author marked mandatory. The actor is always required and is never
    *  listed here. Drives go-live's level-staffing gate. */
   required_tiers?: string[];
-  /** Is this level staffed lot by lot (true) or once for the project (false)? Set by the
+  /** Is this level staffed package by package (true) or once for the project (false)? Set by the
    *  workflow author, so a typed project inherits it and cannot deviate. */
   staff_per_package?: boolean;
   is_deleted?: boolean;
@@ -730,7 +730,7 @@ export interface StepPayload {
   tier_labels?: Record<string, { label: string; description?: string }>;
   /** Non-actor tiers the author marks mandatory; "actor" is rejected server-side. */
   required_tiers?: string[];
-  /** Is this level staffed lot by lot (true) or once for the project (false)? Set by the
+  /** Is this level staffed package by package (true) or once for the project (false)? Set by the
    *  workflow author, so a typed project inherits it and cannot deviate. */
   staff_per_package?: boolean;
 }
@@ -2556,6 +2556,9 @@ export interface PackageItem {
   description:       string | null;
   organizations:     PackageOrgItem[];
   is_active:         boolean;
+  /** The project was never split into packages — this row stands in for it, and the screen
+   *  does not ask for a code or a name. Only meaningful while it is the project's only one. */
+  is_unnamed:        boolean;
   /** District/municipality codes this package covers. */
   location_codes:    string[];
   created_at:        string;

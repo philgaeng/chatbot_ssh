@@ -91,7 +91,7 @@ def _second_standard_step_role(db: Session, project: Project) -> str | None:
 
 
 def _first_standard_step_per_package(db: Session, project: Project) -> bool:
-    """Is Level 1 staffed lot by lot? The level's own answer (`staff_per_package`)."""
+    """Is Level 1 staffed package by package? The level's own answer (`staff_per_package`)."""
     if not project.standard_workflow_id:
         return False
     step = db.execute(
@@ -160,7 +160,7 @@ def _packages_missing_role(
     for pkg in packages:
         if _has_officer_on_package(db, package_id=pkg.package_id, grm_role_key=grm_role_key):
             continue
-        gaps.append(pkg.package_code or pkg.package_id[:8])
+        gaps.append(_package_label(pkg))
     return gaps
 
 
@@ -199,14 +199,14 @@ def _standard_level_gaps(
 
     **Reads the level's own answer since 2026-08-04** (`workflow_steps.staff_per_package`,
     migration `p2r4t6v8`). Before that this had to guess: it accepted a project-wide officer OR
-    full per-lot coverage for every level, because nothing said which the author intended. So a
-    level meant to be staffed lot by lot passed with one project-wide officer, and a project-wide
-    level was never asked for lots at all — the check was green either way and told you nothing.
+    full per-package coverage for every level, because nothing said which the author intended. So a
+    level meant to be staffed package by package passed with one project-wide officer, and a project-wide
+    level was never asked for packages at all — the check was green either way and told you nothing.
 
     Now:
-      • **per-lot level** — every active lot needs its own officer. A project-wide officer does
-        not satisfy it (that is the point of marking the level per lot).
-      • **project-wide level** — one project-wide officer. Lots are not asked about.
+      • **per-package level** — every active package needs its own officer. A project-wide officer does
+        not satisfy it (that is the point of marking the level per package).
+      • **project-wide level** — one project-wide officer. Packages are not asked about.
 
     Step 1 keeps the country L1 fallback either way — it exists so intake never dead-ends.
     """
@@ -222,14 +222,14 @@ def _standard_level_gaps(
     def _covered(role: str, *, is_actor_l1: bool, per_package: bool) -> bool:
         # The country L1 fallback is an emergency net for *assignment* so intake never
         # dead-ends. It is not a staffing plan, so it does not answer a level the author said
-        # is staffed lot by lot — that would put us straight back to guessing.
+        # is staffed package by package — that would put us straight back to guessing.
         if is_actor_l1 and not per_package and _has_officer_on_project_wide(
             db, project=project, grm_role_key=COUNTRY_L1_FALLBACK_ROLE
         ):
             return True
         if per_package:
-            # The author said this level is staffed lot by lot, so every lot must have someone.
-            # A project with no lots yet cannot satisfy it — that is a real gap, not a pass.
+            # The author said this level is staffed package by package, so every package must have someone.
+            # A project with no packages yet cannot satisfy it — that is a real gap, not a pass.
             if not packages:
                 return False
             return not _packages_missing_role(
@@ -286,6 +286,18 @@ def _standard_level_gaps(
             if not any(_covered(r, is_actor_l1=False, per_package=per_package) for r in tier_roles):
                 gaps.append(f"L{step.step_order} ({_job_name(step, tier, tier_roles[0])})")
     return gaps
+
+
+def _package_label(pkg: ProjectPackage) -> str:
+    """How a package is named back to the author.
+
+    An `is_unnamed` package is the project standing in for itself — calling it "01" would point
+    at a code the author never chose and cannot see on screen, so it answers with its name
+    (which is the project's). Otherwise the code, which is what the package card leads with.
+    """
+    if pkg.is_unnamed:
+        return pkg.name
+    return pkg.package_code or pkg.name
 
 
 def _package_has_role(db: Session, package_id: str, role_key: str) -> bool:
@@ -400,7 +412,17 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
         ).scalars().all()
     )
 
-    # B2 Package locations
+    # B2 Every package says where it works — the ONE coverage check since 2026-08-08.
+    #
+    # It absorbed D1 ("Project locations"), which asserted `project_locations` was non-empty.
+    # That table was a second declaration of coverage that routed nothing: officer resolution
+    # goes location → *package* → officer scope (`engine/workflow_engine.py` branch C). Two
+    # copies, one of them load-bearing, so they drifted — staging had a project with 5 packages
+    # and 0 project locations passing D1 by luck, and another with 2 project locations and no
+    # package coverage at all, which D1 called ready while nothing could route to it.
+    #
+    # So this inherits D1's **block** severity rather than staying advisory: with project
+    # locations gone, a package without locations is a package no grievance can reach.
     if packages:
         from sqlalchemy import func as sqlfunc
 
@@ -412,31 +434,31 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 .where(PackageLocation.package_id == pkg.package_id)
             ) or 0
             if cnt == 0:
-                missing_locs.append(pkg.package_code or pkg.package_id[:8])
+                missing_locs.append(_package_label(pkg))
         b2_ok = not missing_locs
         checks.append(
             GoLiveCheck(
                 id="B2",
                 label="Package locations",
-                severity="info",
-                status="pass" if b2_ok else "warn",
-                message="Every active package has locations"
+                severity="block",
+                status="pass" if b2_ok else "fail",
+                message="Every package says where it works"
                 if b2_ok
-                else f"No locations on: {', '.join(missing_locs)}",
+                else f"Say where these work: {', '.join(missing_locs)}",
                 section="packages",
             )
         )
 
-    # B3 Every lot names the organizations the type requires per lot.
+    # B3 Every package names the organizations the type requires per package.
     #
     # **Blocker since 2026-08-04**, so it matches B1: ticking "must be named" and ticking
-    # "named for each lot" are the same authorial statement at two scopes, and it made no sense
+    # "named for each package" are the same authorial statement at two scopes, and it made no sense
     # for one to stop activation while the other was advisory. It also removes a contradiction
-    # on screen — the lot row warns "Needs Donor" while the header said "Ready to activate".
+    # on screen — the package row warns "Needs Donor" while the header said "Ready to activate".
     #
-    # A **project-level** naming still covers every lot: a lot's organization is an *override*
+    # A **project-level** naming still covers every package: a package's organization is an *override*
     # of the project's in the same role (doc 13 §2), so naming the contractor once for the
-    # project is a complete answer unless a lot needs a different one.
+    # project is a complete answer unless a package needs a different one.
     if pt and packages:
         pkg_roles = package_required_role_keys(pt)
         if pkg_roles:
@@ -452,16 +474,16 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                         continue
                     if _project_org_has_role(project, rk):
                         continue
-                    # The author's word and the lot's own code — never a role key (ui/05 §2.5).
-                    gaps.append(f"{pkg.package_code or pkg.name}: {labels.get(rk, rk)}")
+                    # The author's word and the package's own code — never a role key (ui/05 §2.5).
+                    gaps.append(f"{_package_label(pkg)}: {labels.get(rk, rk)}")
             b3_ok = not gaps
             checks.append(
                 GoLiveCheck(
                     id="B3",
-                    label="Lot organizations",
+                    label="Package organizations",
                     severity="block",
                     status="pass" if b3_ok else "fail",
-                    message="Every lot names the organizations it needs"
+                    message="Every package names the organizations it needs"
                     if b3_ok
                     else f"Name the organization for: {'; '.join(gaps[:5])}",
                     section="packages",
@@ -470,13 +492,13 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
 
     # C1 Level 1 staffed — and it also gates ticket intake, so it must agree with C5 exactly.
     # Which shape it asks for comes from the level itself (`staff_per_package`, 2026-08-04): per
-    # lot ⇒ every active lot needs an officer; project-wide ⇒ one project-wide officer. The
+    # package ⇒ every active package needs an officer; project-wide ⇒ one project-wide officer. The
     # country L1 fallback satisfies either, because it exists so intake never dead-ends.
     l1_role = _first_standard_step_role(db, project)
     l1_per_package = _first_standard_step_per_package(db, project)
     if l1_per_package:
-        # Every active lot needs its own Level 1 officer, and a project with no lots at all
-        # cannot satisfy a per-lot level.
+        # Every active package needs its own Level 1 officer, and a project with no packages at all
+        # cannot satisfy a per-package level.
         l1_gaps = _packages_missing_role(
             db,
             project=project,
@@ -495,12 +517,12 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             severity="block",
             status="pass" if c1_ok else ("fail" if l1_role else "warn"),
             message=(
-                ("Every lot has a Level 1 officer" if l1_per_package else "Level 1 officer assigned")
+                ("Every package has a Level 1 officer" if l1_per_package else "Level 1 officer assigned")
                 if c1_ok
                 else (
-                    f"Add a Level 1 officer ({l1_role}) for these lots: {', '.join(l1_gaps[:5])}"
+                    f"Add a Level 1 officer ({l1_role}) for these packages: {', '.join(l1_gaps[:5])}"
                     if l1_gaps
-                    else "This level is staffed for each lot — add a lot first"
+                    else "This level is staffed for each package — add a package first"
                     if l1_role and l1_per_package and not packages
                     else f"Add a Level 1 officer ({l1_role})"
                     if l1_role
@@ -529,10 +551,10 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             severity="info",
             status="pass" if c2_ok else ("warn" if l2_role else "info"),
             message=(
-                "Every lot has a Level 2 officer"
+                "Every package has a Level 2 officer"
                 if c2_ok
                 else (
-                    f"Add a Level 2 officer ({l2_role}) for these lots: {', '.join(l2_gaps[:5])}"
+                    f"Add a Level 2 officer ({l2_role}) for these packages: {', '.join(l2_gaps[:5])}"
                     if l2_gaps
                     else "Add a workflow with a Level 2 to this project"
                 )
@@ -628,18 +650,8 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
             )
         )
 
-    # D1 Project locations
-    d1_ok = len(project.locations) > 0
-    checks.append(
-        GoLiveCheck(
-            id="D1",
-            label="Project locations",
-            severity="block",
-            status="pass" if d1_ok else "fail",
-            message="At least one location linked" if d1_ok else "Link the provinces, districts or municipalities this project covers",
-            section="locations",
-        )
-    )
+    # D1 (Project locations) was deleted 2026-08-08 — coverage is declared on packages only,
+    # and B2 is the one check that asks for it. See B2 for why the second copy had to go.
 
     # D2 QR tokens
     if packages:
@@ -725,8 +737,12 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
     # A1/D1/E1/C4 were promoted 2026-08-04: they were documented Blockers shipping as warnings,
     # so a project with no default workflow and no locations could be activated.
     # A3/A5 → B1 the same day: the organization gate is now the type's own catalog (§7).
-    # B3 joined them 2026-08-04 — the per-lot twin of B1, and the same authorial statement.
-    _ACTIVATION_BLOCK_IDS = {"A1", "B1", "B3", "C1", "C4", "C5", "D1", "E1", "R1"}
+    # B3 joined them 2026-08-04 — the per-package twin of B1, and the same authorial statement.
+    # **B2 replaced D1 on 2026-08-08**, inheriting its blocking role along with its job: coverage
+    # is declared on packages only, so "this package says where it works" is now the *whole*
+    # coverage question. Dropping D1 without promoting B2 would have left activation ungated on
+    # location entirely — a project could go live that no grievance could ever route into.
+    _ACTIVATION_BLOCK_IDS = {"A1", "B1", "B2", "B3", "C1", "C4", "C5", "E1", "R1"}
     can_activate = not any(
         c.id in _ACTIVATION_BLOCK_IDS and c.status == "fail" for c in checks
     )

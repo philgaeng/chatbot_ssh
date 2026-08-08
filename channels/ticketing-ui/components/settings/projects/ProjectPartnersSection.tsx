@@ -16,12 +16,15 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import {
+  addPackageOrg,
   addProjectOrg,
   getProjectActorRoles,
   listProjectOrganizations,
+  removePackageOrg,
   removeProjectOrg,
   type OrgRole,
   type OrganizationItem,
+  type PackageItem,
   type ProjectItem,
   type ProjectOrgItem,
 } from "@/lib/api";
@@ -33,15 +36,21 @@ function initials(name: string) {
 
 export function ProjectPartnersSection({
   project,
+  packages,
   orgs,
   canEdit,
   onUpdated,
+  onPackagesChanged,
   flash,
 }: {
   project: ProjectItem;
+  /** Declared under Packages, which is why that section comes first: you cannot name the
+   *  contractor of a package before the package exists. */
+  packages: PackageItem[];
   orgs: OrganizationItem[];
   canEdit: boolean;
   onUpdated: (p: ProjectItem) => void;
+  onPackagesChanged: (packages: PackageItem[]) => void;
   flash: (msg: string) => void;
 }) {
   const [catalog, setCatalog] = useState<OrgRole[]>([]);
@@ -49,6 +58,8 @@ export function ProjectPartnersSection({
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
   const [adding, setAdding] = useState<string | null>(null);
+  /** Which package row has its picker open, as `${roleKey}:${packageId}`. */
+  const [addingPkg, setAddingPkg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -101,6 +112,50 @@ export function ProjectPartnersSection({
       const linked = await listProjectOrganizations(project.project_id);
       setLinks(linked);
       onUpdated({ ...project, organizations: linked });
+      flash("Removed");
+    } catch (e: unknown) {
+      flash(friendlyError(e));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function assignToPackage(pkg: PackageItem, roleKey: string, orgId: string) {
+    setWorking(true);
+    try {
+      const item = await addPackageOrg(project.project_id, pkg.package_id, orgId, roleKey);
+      onPackagesChanged(
+        packages.map((x) =>
+          x.package_id === pkg.package_id
+            ? { ...x, organizations: [...(x.organizations ?? []), item] }
+            : x,
+        ),
+      );
+      setAddingPkg(null);
+      flash("Saved ✓");
+    } catch (e: unknown) {
+      flash(friendlyError(e));
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function unassignFromPackage(pkg: PackageItem, roleKey: string, orgId: string) {
+    setWorking(true);
+    try {
+      await removePackageOrg(project.project_id, pkg.package_id, orgId, roleKey);
+      onPackagesChanged(
+        packages.map((x) =>
+          x.package_id === pkg.package_id
+            ? {
+                ...x,
+                organizations: (x.organizations ?? []).filter(
+                  (po) => !(po.organization_id === orgId && po.org_role === roleKey),
+                ),
+              }
+            : x,
+        ),
+      );
       flash("Removed");
     } catch (e: unknown) {
       flash(friendlyError(e));
@@ -209,10 +264,88 @@ export function ProjectPartnersSection({
               )
             )}
 
-            {role.required_package && (
-              <p className="text-xs text-gray-400 mt-1.5">
-                Can also be named for each lot, under Packages.
-              </p>
+            {/* Per package — the override. Lives here, next to the project-wide naming it
+                overrides, so the exception reads as an exception. It used to be a permanently
+                open form on every package card, which made a rare case look like a required
+                step on every row. A package with nothing of its own says so in words. */}
+            {role.required_package && packages.length > 0 && (
+              <div className="mt-3 border-t border-gray-100 pt-3">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  By package
+                </div>
+                <ul className="space-y-1">
+                  {packages.map((pkg) => {
+                    const own = (pkg.organizations ?? []).find((po) => po.org_role === role.key);
+                    const ownOrg = own ? orgById(own.organization_id) : null;
+                    return (
+                      <li
+                        key={pkg.package_id}
+                        className="flex items-center gap-3 rounded border border-gray-100 px-3 py-2 text-sm"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-gray-700">
+                          {pkg.is_unnamed
+                            ? "Everywhere this project works"
+                            : `${pkg.package_code} · ${pkg.name}`}
+                        </span>
+                        {own ? (
+                          <>
+                            <span className="shrink-0 font-medium text-gray-900 truncate max-w-[40%]">
+                              {ownOrg?.name ?? own.organization_id}
+                            </span>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                disabled={working}
+                                onClick={() => void unassignFromPackage(pkg, role.key, own.organization_id)}
+                                className="shrink-0 text-xs font-semibold text-red-600 hover:underline disabled:opacity-40"
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span className="shrink-0 text-xs text-gray-400 truncate max-w-[40%]">
+                              {filled.length
+                                ? `Same as the project — ${orgById(filled[0].organization_id)?.name ?? filled[0].organization_id}`
+                                : "Not named yet"}
+                            </span>
+                            {canEdit &&
+                              (addingPkg === `${role.key}:${pkg.package_id}` ? (
+                                <select
+                                  value=""
+                                  autoFocus
+                                  disabled={working}
+                                  onChange={(e) =>
+                                    e.target.value && void assignToPackage(pkg, role.key, e.target.value)
+                                  }
+                                  onBlur={() => setAddingPkg(null)}
+                                  className="shrink-0 text-sm border border-gray-300 rounded px-2 py-1"
+                                  aria-label={`Choose a different ${role.label} for ${pkg.is_unnamed ? project.name : pkg.name}`}
+                                >
+                                  <option value="">— choose an organization —</option>
+                                  {orgs
+                                    .filter((o) => o.is_active)
+                                    .map((o) => (
+                                      <option key={o.organization_id} value={o.organization_id}>{o.name}</option>
+                                    ))}
+                                </select>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setAddingPkg(`${role.key}:${pkg.package_id}`)}
+                                  className="shrink-0 text-xs font-semibold text-blue-600 hover:underline"
+                                >
+                                  Use a different one
+                                </button>
+                              ))}
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
             )}
           </div>
         );

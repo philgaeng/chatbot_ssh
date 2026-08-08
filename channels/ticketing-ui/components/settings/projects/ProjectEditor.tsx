@@ -236,28 +236,9 @@ export function ProjectEditor({
     }
   }
 
-  async function handleAddLoc(code: string) {
-    if (!code) return;
-    setWorking(true); setLocError("");
-    try {
-      await addProjectLocation(p.project_id, code);
-      setP({ ...p, location_codes: [...p.location_codes, code] });
-      flash("Location linked ✓");
-    } catch (e: unknown) {
-      setLocError(e instanceof Error && e.message.includes("404") ? `Location '${code}' not found` : "Failed");
-    }
-    setWorking(false);
-  }
-
-  async function handleRemoveLoc(code: string) {
-    setWorking(true);
-    try {
-      await removeProjectLocation(p.project_id, code);
-      setP({ ...p, location_codes: p.location_codes.filter((x) => x !== code) });
-      flash("Removed ✓");
-    } catch { flash("Failed"); }
-    setWorking(false);
-  }
+  // Project-level locations were removed 2026-08-08: coverage is declared on packages, and
+  // only there. `addProjectLocation` / `removeProjectLocation` still exist in lib/api.ts and
+  // the endpoints still answer — nothing in the UI calls them. See the Packages section below.
 
   // ── Packages ──
   const [packages, setPackages]           = useState<PackageItem[]>([]);
@@ -606,8 +587,10 @@ export function ProjectEditor({
               {activeSection === "actors" && (
                 <ProjectPartnersSection
                   project={p}
+                  packages={packages}
                   orgs={orgs}
                   canEdit={canManageProjectCatalog}
+                  onPackagesChanged={setPackages}
                   flash={flash}
                   onUpdated={(updated) => { setP(updated); onUpdated(updated); setGoLiveKey((k) => k + 1); }}
                 />
@@ -623,50 +606,25 @@ export function ProjectEditor({
                 />
               )}
 
-              {/* ── Locations ── */}
-              {activeSection === "locations" && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Search for the provinces, districts or municipalities this project covers. Linking a
-                    district covers its municipalities.
-                  </p>
-                  {locError && <p className="text-xs text-red-600 mb-2">{locError}</p>}
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {p.location_codes.length === 0 && (
-                      <span className="text-xs text-gray-400 italic">No locations linked yet. Search to add one.</span>
-                    )}
-                    {p.location_codes.map((code) => (
-                      <span key={code} className="flex items-center gap-1.5 text-xs font-mono bg-blue-50 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full">
-                        {code}
-                        <button onClick={() => handleRemoveLoc(code)} disabled={working}
-                          className="text-blue-400 hover:text-red-500 leading-none disabled:opacity-50">×</button>
-                      </span>
-                    ))}
-                  </div>
-                  <div className="max-w-sm">
-                    <LocationSearch
-                      country={p.country_code || "NP"}
-                      placeholder="Search province, district or municipality…"
-                      excludeCodes={p.location_codes}
-                      onSelect={(code) => handleAddLoc(code)}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* ── Packages (lots) ── */}
+              {/* ── Packages ──
+                  Was two sections until 2026-08-08: a project drew its own districts here, and
+                  then each package drew its own again. Only the package copy routed anything
+                  (location → package → officer), so the project copy drifted and misled. One
+                  section now, and a project that was never split up has one package standing in
+                  for it — which is why this reads the same for both. */}
               {activeSection === "packages" && (
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
                     <p className="text-sm text-gray-600 max-w-2xl">
-                      Lots or contracts within this project — where each one works, and which
-                      organizations work on it. Officers are set under Staffing.
+                      Where this project works. A package is one contract — its own districts, its
+                      own officers. A project that is not split into packages has one, covering
+                      everywhere it works. Organizations and officers come next.
                     </p>
                     <button
                       onClick={() => setShowCreatePkg(true)}
                       className="text-sm bg-blue-600 text-white px-3 py-1.5 rounded hover:bg-blue-700 transition font-medium shrink-0"
                     >
-                      + Add a lot
+                      + Add a package
                     </button>
                   </div>
 
@@ -682,7 +640,7 @@ export function ProjectEditor({
                   {pkgLoading ? (
                     <p className="text-sm text-gray-400 animate-pulse">Loading…</p>
                   ) : packages.length === 0 ? (
-                    <p className="text-xs text-gray-400 italic">No lots yet.</p>
+                    <p className="text-xs text-gray-400 italic">No packages yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {packages.map((pkg) => {
@@ -690,19 +648,11 @@ export function ProjectEditor({
                         return (
                           <PackageRow
                             key={pkg.package_id}
-                            project={p}
-                            projectId={p.project_id}
                             pkg={pkg}
-                            orgs={orgs}
-                            actorRoles={projectActorRoles}
+                            onlyPackage={packages.length === 1}
                             expanded={expanded}
                             onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
                             onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}
-                            onActorsChange={(organizations) =>
-                              setPackages((prev) =>
-                                prev.map((pk) => (pk.package_id === pkg.package_id ? { ...pk, organizations } : pk)),
-                              )
-                            }
                             onAddLoc={(code) => handleAddPkgLoc(pkg.package_id, code)}
                             onRemoveLoc={(code) => handleRemovePkgLoc(pkg.package_id, code)}
                           />

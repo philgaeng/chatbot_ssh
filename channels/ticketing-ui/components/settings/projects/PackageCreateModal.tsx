@@ -64,12 +64,12 @@ export function PackageCreateModal({
               placeholder="01"
               maxLength={ENTITY_CODE_MAX_LEN}
               className="w-full text-sm font-mono border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
-            <p className="text-xs text-gray-400 mt-1">Default is next lot number. A–Z, 0–9, underscore, max {ENTITY_CODE_MAX_LEN}.</p>
+            <p className="text-xs text-gray-400 mt-1">Default is next package number. A–Z, 0–9, underscore, max {ENTITY_CODE_MAX_LEN}.</p>
           </div>
           <div>
             <label className="text-xs font-medium text-gray-500 block mb-1">Name *</label>
             <input value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Lot 1 — Kakarbhitta to Sitapur"
+              placeholder="e.g. Package 1 — Kakarbhitta to Sitapur"
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           </div>
           <div>
@@ -78,7 +78,10 @@ export function PackageCreateModal({
               placeholder="e.g. Km 0+000 to Km 45+000"
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
           </div>
-          <p className="text-xs text-gray-500">Assign package actors after creating the lot.</p>
+          <p className="text-xs text-gray-500">
+            Say which districts it covers next. Organizations and officers come after that, under
+            Organizations and Staffing.
+          </p>
         </div>
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded">Cancel</button>

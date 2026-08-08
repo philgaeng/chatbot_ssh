@@ -1,11 +1,17 @@
 """
-ticketing.project_packages   — civil-works lots / packages within a project
+ticketing.project_packages   — civil-works packages within a project
 ticketing.package_locations  — many-to-many: package ↔ location nodes
 
-A project is divided into civil-works packages (lots/contracts).
-Each package is awarded to one contractor and covers specific districts.
-L1 GRM officers are scoped to a package — they only see tickets at locations
-within their package's coverage area.
+A project is divided into civil-works packages (contracts). Each package covers
+specific districts, and a package is where coverage is declared — the only place,
+since 2026-08-08. L1 GRM officers are scoped to a package: they see tickets at
+locations within their package's coverage area.
+
+**Every project has at least one package.** A project that was never split up has a
+single `is_unnamed` package standing in for it, so there is one shape to route
+against instead of two. Packages may overlap: a bridge contract legitimately covers
+districts that road packages also cover, and a grievance there reaches the officers
+of every covering package (`engine/workflow_engine.py`, branch C).
 """
 from __future__ import annotations
 
@@ -31,8 +37,8 @@ def _uuid() -> str:
 
 class ProjectPackage(Base):
     """
-    A civil-works package (lot/contract) within a project.
-    e.g. KL Road / Lot 1 = SHEP/OCB/KL/01 / Kakarbhitta–Sitapur / Km 0–45 / Contractor TBD
+    A civil-works package (contract) within a project.
+    e.g. KL Road / package 01 / Kakarbhitta–Sitapur / Km 0–45
     """
     __tablename__ = "project_packages"
     __table_args__ = (
@@ -47,12 +53,17 @@ class ProjectPackage(Base):
         ForeignKey("ticketing.projects.project_id", ondelete="CASCADE"),
         nullable=False,
     )
-    # Short lot id within project, e.g. '01' — max 8 chars, A-Z 0-9 _
+    # Short package id within project, e.g. '01' — max 8 chars, A-Z 0-9 _
     package_code: Mapped[str] = mapped_column(String(8), nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # The project was never split into packages: this row stands in for it, and the screen
+    # does not ask for a code or a name. Both are still stored (routing and the unique
+    # constraint need them) — filled from the project. Ticking it is only meaningful while
+    # the project has exactly one package.
+    is_unnamed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
@@ -66,7 +77,7 @@ class ProjectPackage(Base):
 
 class PackageOrganization(Base):
     """
-    Organization + role on a specific package (lot). Overrides project-wide actor
+    Organization + role on a specific package (package). Overrides project-wide actor
     with the same role for this package only.
     """
     __tablename__ = "package_organizations"
