@@ -100,7 +100,20 @@
       "Bash(python -m pyflakes backend/actions/forms/seah_shared.py backend/actions/forms/form_seah_2.py backend/actions/forms/form_seah_focal_point.py)",
       "Bash(python3 /tmp/claude-1000/-home-philg-projects-nepal-chatbot/efb64dcc-9fc7-4d6d-8ca6-a0237b926793/scratchpad/drive_create.py)",
       "Bash(python3 /tmp/claude-1000/-home-philg-projects-nepal-chatbot/efb64dcc-9fc7-4d6d-8ca6-a0237b926793/scratchpad/drive_copy.py)",
-      "Bash(awk '/^## 7\\\\./,/^## 8\\\\./' docs/ticketing_system/13_projects_and_packages.md)"
+      "Bash(awk '/^## 7\\\\./,/^## 8\\\\./' docs/ticketing_system/13_projects_and_packages.md)",
+      "Bash(timeout 300 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'docker builder prune -f 2>&1 | tail -3; echo \"--- disk after ---\"; df -h / | tail -1')",
+      "Bash(echo \"DEPLOY_EXIT=$?\")",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"HEAD: $\\(git rev-parse --short HEAD\\) \\($\\(git rev-parse --abbrev-ref HEAD\\)\\)\" && echo \"=== containers ===\" && docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | sort && echo \"=== disk ===\" && df -h / | tail -1')",
+      "Bash(timeout 90 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml exec -T db psql -U user -d app_db -t -c \" *)",
+      "Bash(sort -t: -k2 -rn)",
+      "Bash(python -m py_compile ticketing/services/project_go_live.py ticketing/api/routers/locations.py ticketing/models/package.py ticketing/migrations/versions/t6v8x0z2_every_project_has_a_package.py)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 600 python -m pytest tests/ticketing -q -m \"not integration\" --strict-markers -p no:cacheprovider)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_package_is_the_only_coverage.py -q -p no:cacheprovider)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 900 python -m pytest tests/ticketing -q --strict-markers -p no:cacheprovider)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_step_staffing_scope.py::test_a_per_lot_level_is_not_satisfied_by_a_project_wide_officer -q -p no:cacheprovider)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_grievance_sync.py tests/ticketing/test_ticket_uniqueness.py -q -p no:cacheprovider)",
+      "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_step_staffing_scope.py tests/ticketing/test_package_is_the_only_coverage.py -q -p no:cacheprovider)",
+      "Bash(python -m py_compile ticketing/api/routers/scan.py ticketing/api/routers/tickets/crud.py ticketing/api/routers/reports.py ticketing/services/report_rows.py ticketing/api/routers/locations.py ticketing/models/package.py ticketing/services/org_reach.py)"
     ]
   }
 }

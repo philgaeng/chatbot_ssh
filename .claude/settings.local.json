@@ -142,7 +142,12 @@
       "Bash(curl -s -o /dev/null -X PATCH localhost:5002/api/v1/workflows/__TRACKED_VAR__/steps/__TRACKED_VAR__ -H 'Content-Type: application/json' -d '{\"tier_labels\":{\"actor\":{\"label\":\"Site Safeguards Focal Person\"},\"supervisor\":{\"label\":\"PD / PIU Safeguards Focal\"}}}')",
       "Bash(python3 -c \"import ast;ast.parse\\(open\\('ticketing/seed/kl_road_standard.py'\\).read\\(\\)\\);ast.parse\\(open\\('ticketing/seed/kl_road_seah.py'\\).read\\(\\)\\);print\\('parses'\\)\")",
       "Bash(curl -s \"localhost:5002/api/v1/users/roster\")",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(timeout 60 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new ubuntu@52.76.171.73 'cd /home/ubuntu/nepal_chatbot && echo \"BRANCH: $\\(git rev-parse --abbrev-ref HEAD\\)\" && echo \"HEAD:   $\\(git rev-parse --short HEAD\\)\" && echo \"--- local modifications ---\" && git status --short | head -10 && echo \"--- disk ---\" && df -h / | tail -1')",
+      "Bash(timeout 60 ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"BRANCH: $\\(git rev-parse --abbrev-ref HEAD\\)\" && echo \"HEAD:   $\\(git rev-parse --short HEAD\\)\" && echo \"--- local mods ---\" && git status --short | head -10 && echo \"--- disk ---\" && df -h / | tail -1')",
+      "Bash(timeout 60 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"BRANCH: $\\(git rev-parse --abbrev-ref HEAD\\)\" && echo \"HEAD:   $\\(git rev-parse --short HEAD\\)\" && echo \"--- local mods ---\" && git status --short | head -10 && echo \"--- disk ---\" && df -h / | tail -1')",
+      "Bash(timeout 90 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'docker system df 2>&1 | head -8; echo \"--- running ---\"; docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | head -20')",
+      "Bash(make -n aws-deploy REMOTE_HOST_RUNNING=grm-aws-staging)"
     ],
     "additionalDirectories": [
       "/home/philg/projects/nepal_chatbot/channels/ticketing-ui/app/api/v1/[...path]"
