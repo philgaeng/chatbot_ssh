@@ -100,6 +100,27 @@ export function blockerCount(report: GoLiveReport | null): number {
   return report.checks.filter((c) => c.severity === "block" && c.status === "fail").length;
 }
 
+/**
+ * How many blockers each section holds.
+ *
+ * The rail shows one dot and one hint per section, which silently equated "this section has a
+ * problem" with "this section has *one* problem" (2026-08-08). A project reading "5 blockers"
+ * above two red dots and two sentences left the other three nowhere on screen — four of the
+ * five were in Staffing, and the rail named only the first. The total and the dots have to
+ * reconcile, or the header looks wrong and the reader goes hunting.
+ */
+export function blockersBySection(report: GoLiveReport | null): Partial<Record<SectionKey, number>> {
+  const out: Partial<Record<SectionKey, number>> = {};
+  if (!report) return out;
+  for (const c of report.checks) {
+    if (!(c.severity === "block" && c.status === "fail")) continue;
+    const key = sectionOfCheck(c);
+    if (!key) continue;
+    out[key] = (out[key] ?? 0) + 1;
+  }
+  return out;
+}
+
 export function passingCount(report: GoLiveReport | null): { passed: number; total: number } {
   if (!report) return { passed: 0, total: 0 };
   return {

@@ -13,6 +13,7 @@ import type { GoLiveReport } from "@/lib/api";
 import {
   PROJECT_SECTIONS,
   blockerCount,
+  blockersBySection,
   passingCount,
   sectionHints,
   sectionStatuses,
@@ -40,6 +41,7 @@ export function ProjectConsoleRail({
   const statuses = sectionStatuses(report);
   const hints = sectionHints(report);
   const blockers = blockerCount(report);
+  const perSection = blockersBySection(report);
   const { passed, total } = passingCount(report);
   const pct = total ? Math.round((passed / total) * 100) : 0;
 
@@ -77,6 +79,10 @@ export function ProjectConsoleRail({
           const st = statuses[s.key];
           const isActive = active === s.key;
           const hint = hints[s.key] ?? s.restingHint ?? "";
+          // A section can hold more than one blocker, and the hint only ever names the first.
+          // Without the count, "5 blockers" above two red dots is unaccountable — Staffing
+          // alone held four, and three of them appeared nowhere on screen.
+          const nHere = perSection[s.key] ?? 0;
           return (
             <button
               key={s.key}
@@ -95,11 +101,16 @@ export function ProjectConsoleRail({
                 {hint && (
                   <span className="block text-[11px] text-gray-400 truncate leading-tight" title={hint}>
                     {hint}
+                    {nHere > 1 && (
+                      <span className="text-red-600 font-semibold"> +{nHere - 1} more</span>
+                    )}
                   </span>
                 )}
               </span>
               {st === "block" && (
-                <span className="text-[10px] font-bold text-red-600 shrink-0">FIX</span>
+                <span className="text-[10px] font-bold text-red-600 shrink-0">
+                  {nHere > 1 ? `FIX ${nHere}` : "FIX"}
+                </span>
               )}
             </button>
           );
