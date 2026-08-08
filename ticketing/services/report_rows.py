@@ -244,7 +244,7 @@ def build_ticket_query(
             q = q.where(Ticket.location_code.in_(expanded))
     if organization_id:
         # Same shape as the location filter above, applied to the org tree: an organization
-        # gets the grievances of the projects it is named on, the lots it is named on, and
+        # gets the grievances of the projects it is named on, the packages it is named on, and
         # everything its children are named on (DECISION-organization-membership, 2026-08-04).
         from ticketing.services.org_reach import ticket_filter_for_org
 

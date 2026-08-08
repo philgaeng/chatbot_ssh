@@ -28,15 +28,15 @@
 | Tab shell (`Organizations & officers / Workflows / Projects & packages / Settings`) | [`app/settings/page.tsx`](../../../channels/ticketing-ui/app/settings/page.tsx) | Projects lives under the `projects` main tab, and is the landing. **`Setup & go-live` was removed 2026-08-07** — it re-listed every project's go-live checks in a second layout one click from the console that owns them, so it could only agree with the console by accident. |
 | Go-live status panel ("6 blockers · can't activate yet") | [`ProjectGoLivePanel.tsx`](../../../channels/ticketing-ui/components/settings/ProjectGoLivePanel.tsx) | **Listed in rail order, ungrouped** (2026-08-07). A check's `section` is the pane that fixes it, so reading down the list is reading down the rail. The old `group` taxonomy (Routing / Commercial / Officers / Geography / Metadata) answered a different question than the nav, put "Package locations" three headings from Packages, and is deleted from the API response. |
 | Per-project frame (identity, workflows, messaging, actors, locations, packages) | [`ProjectEditor.tsx`](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx) | `Grievance workflows` :423 · `Messaging` :464 · `Project actors` :556 · `Linked locations` :649 · `Packages` :682 · override callout :697 |
-| Project-wide cast (L1–L4 Actor/Supervisor/Participants) | [`ProjectCastSection.tsx`](../../../channels/ticketing-ui/components/settings/projects/ProjectCastSection.tsx), [`CastStaffing.tsx`](../../../channels/ticketing-ui/components/settings/projects/CastStaffing.tsx) | "shared ladder", "every lot inherits it" |
-| Package/lot rows | [`PackageRow.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageRow.tsx), [`PackageCreateModal.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageCreateModal.tsx) | Lot code / name / km range / package actors |
+| Project-wide cast (L1–L4 Actor/Supervisor/Participants) | [`ProjectCastSection.tsx`](../../../channels/ticketing-ui/components/settings/projects/ProjectCastSection.tsx), [`CastStaffing.tsx`](../../../channels/ticketing-ui/components/settings/projects/CastStaffing.tsx) | "shared ladder", "every package inherits it" |
+| Package/package rows | [`PackageRow.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageRow.tsx), [`PackageCreateModal.tsx`](../../../channels/ticketing-ui/components/settings/projects/PackageCreateModal.tsx) | Package code / name / km range / package actors |
 | Bilingual infra (exists, **not used on this screen**) | [`lib/i18n/resolve.ts`](../../../channels/ticketing-ui/lib/i18n/resolve.ts), `<Bilingual>` | EN source-of-record + optional `ne` overlay; used in [`PositionTypesPanel.tsx:228`](../../../channels/ticketing-ui/components/settings/org/PositionTypesPanel.tsx#L228) |
 
-**The screen, top to bottom (one long vertical scroll):** SEAH-access banner → title + `Deactivate` link → **Go-live status** checklist → **Description** → **Grievance workflows** (label / published workflow / Default toggle / classifications multiselect / Save workflows) → **Messaging** (Officer SMS toggle / Save messaging) → **Project actors** (org + role-on-project + Add officer; + New organization) → **Linked locations** (search province/district/municipality) → **Project-wide cast** (L1 Site Safeguards → L4 Legal, each with Actor / Supervisor / Participants + assign) → **Packages** (override callout + expandable lot cards: code / name / description / package actors).
+**The screen, top to bottom (one long vertical scroll):** SEAH-access banner → title + `Deactivate` link → **Go-live status** checklist → **Description** → **Grievance workflows** (label / published workflow / Default toggle / classifications multiselect / Save workflows) → **Messaging** (Officer SMS toggle / Save messaging) → **Project actors** (org + role-on-project + Add officer; + New organization) → **Linked locations** (search province/district/municipality) → **Project-wide cast** (L1 Site Safeguards → L4 Legal, each with Actor / Supervisor / Participants + assign) → **Packages** (override callout + expandable package cards: code / name / description / package actors).
 
 ### What already works — the keep-list (don't regress these)
 
-1. **"Lot" / "Package"** are correct DOR/ADB civil-works contract terms — a road engineer thinks in exactly these units. Keep.
+1. **"Package" / "Package"** are correct DOR/ADB civil-works contract terms — a road engineer thinks in exactly these units. Keep.
 2. **Chainage** ("Km 0+000 to Km 45+000") is native road-engineer language.
 3. **Location search spanning province / district / municipality** matches Nepal's federal structure.
 4. **Implementing Agency / Donor** roles map to the ADB project org chart (and match the 2026-07 participants simplification in [13 §note](../13_projects_and_packages.md)).
@@ -50,14 +50,14 @@
 
 The spec says "GoN civil servants, low IT literacy." I hypothesised a **split audience** below; **Phil's answers collapse it** — this screen is org-admin-only (Q-AUD-1) and that population is English-fluent. The split is kept here as the record of what was considered:
 
-- **Audience A — ADB-fluent safeguards consultants / PIU setup staff.** Comfortable with "Implementing Agency", "GRC", "lot". Present during setup. Will cope with most of the current UI.
+- **Audience A — ADB-fluent safeguards consultants / PIU setup staff.** Comfortable with "Implementing Agency", "GRC", "package". Present during setup. Will cope with most of the current UI.
 - **Audience B — DOR / municipal / ward staff who inherit the system after consultants leave.** Lower English + IT literacy. This is who lives inside the tool long-term and who the spec premise targets. Yet they are all educated in English and use English websites regularly so no need to translate.
 
 > **✅ Q-AUD-1 — Who do we optimise the Projects & packages editor for?**
 >Response (c) explicitly two modes already specced for org_admin and super_admin - this screen is only for admins
 > **Claude →** Locks the audience to **org-level admins, English-fluent** — this is what retires the D1 *translation* finding.
 >
-> **✅ Q-AUD-2 — Lifecycle:** Is project *setup* a one-time consultant task, or will DOR/municipal staff routinely re-configure (add lots, restaff) over the project's life? Response :Project are made only by org-level staff. Lower ranks may just invite officers for given positions
+> **✅ Q-AUD-2 — Lifecycle:** Is project *setup* a one-time consultant task, or will DOR/municipal staff routinely re-configure (add packages, restaff) over the project's life? Response :Project are made only by org-level staff. Lower ranks may just invite officers for given positions
 > **Claude →** Config is **revisited over the project's life** by org admins — so D4 keeps a free-form editor, not a wizard-as-primary.
 
 ---
@@ -97,11 +97,11 @@ Proposed scoring lenses. We rate the screen (and later, each redesign) against t
 
 ## 5. D2 — Terminology & mental model
 
-**Current state.** The UI leaks internal engineering names. Three unrelated metaphor families collide: **theatre** ("Project-wide **cast**"), **physical** ("the shared **ladder**"), **software/OO** ("every lot **inherits** it", "Default **catch-all**", workflow "**binding**"). Roles are abstracted to generic primitives — **Actor** ("owns & works the case") / **Supervisor** ("escalation / reassign") / **Participants** ("informed + notes") — instead of the real GRM titles (Site Safeguards Focal Person, PD/PIU, GRC Chair/Member) the officer actually knows. Other terms of art on-screen: "taxonomy", "classifications", "intake paths", "re-route after category edit", "reassignment authority", "field tiers". "SEAH" appears as a bare acronym in the red banner.
+**Current state.** The UI leaks internal engineering names. Three unrelated metaphor families collide: **theatre** ("Project-wide **cast**"), **physical** ("the shared **ladder**"), **software/OO** ("every package **inherits** it", "Default **catch-all**", workflow "**binding**"). Roles are abstracted to generic primitives — **Actor** ("owns & works the case") / **Supervisor** ("escalation / reassign") / **Participants** ("informed + notes") — instead of the real GRM titles (Site Safeguards Focal Person, PD/PIU, GRC Chair/Member) the officer actually knows. Other terms of art on-screen: "taxonomy", "classifications", "intake paths", "re-route after category edit", "reassignment authority", "field tiers". "SEAH" appears as a bare acronym in the red banner.
 
 **Shortcomings (ranked):**
 1. **"Actor / Supervisor / Participants" forces a translation step** — the officer must map "Actor → our focal person" on every row of every level.
-2. **Metaphor soup** (cast/ladder/lot/tier/inherit) raises load for zero domain benefit — these are our words, not theirs.
+2. **Metaphor soup** (cast/ladder/package/tier/inherit) raises load for zero domain benefit — these are our words, not theirs.
 3. **Bare "SEAH" acronym** on the most sensitive workflow — worst place to be terse.
 4. **"Default (catch-all)" / "binding"** are DB/routing concepts surfaced raw.
 
@@ -109,35 +109,35 @@ Proposed scoring lenses. We rate the screen (and later, each redesign) against t
 >
 > **Claude → No — I am not asking to resurrect roles, and I'd keep your abstraction.** Re-coupling the engine to a fixed role catalog (Actor → "Safeguards Officer L1") is exactly the trap you avoided — it welds the workflow to ADB-safeguards semantics and breaks reuse across hazards / CA / SEAH / other donors. **Keep Actor / Supervisor / Participants in the engine.** What I under-credited: the domain meaning is *already* delivered by the **workflow's level names** ("Level 1 – Site Safeguards", "GRC", "Legal Institutions") — workflow *content*, not hardcoded roles — so the officer reads "Actor" *under* "Level 1 – Site Safeguards" plus the sub-caption ("owns & works the case"), which is enough. **D2 #1 is retracted.** The only residual (not a roles feature): UX quality rides on authors naming levels well — a workflow with "Step 1 / Step 2" levels would make the generic tiers opaque, so the lever is a soft "level has no descriptive name" check at authoring time. ✅ **Q-TERM-2 (de-jargon)** and ✅ **Q-TERM-3 (keep "SEAH")** accepted.
 > **⤷ Evolved 2026-07-30 (§13):** superseded — the workflow **author names each tier per level** ("Safeguard Officer", "GRC Chairman") and the staffing UI shows *those* names, not "Actor / Supervisor". The 4-tier abstraction stays **engine-only**. See [doc 12 §6.2](../12_workflows_configuration.md).
-> **✅ Q-TERM-2 — De-jargon pass.** OK to rename the leaked engineering terms in UI copy (cast→staffing, catch-all→"used when nothing else matches", inherit→"applies to every lot unless overridden")? Any terms that must stay verbatim for training/ToR alignment? Response: OK
+> **✅ Q-TERM-2 — De-jargon pass.** OK to rename the leaked engineering terms in UI copy (cast→staffing, catch-all→"used when nothing else matches", inherit→"applies to every package unless overridden")? Any terms that must stay verbatim for training/ToR alignment? Response: OK
 > **✅ Q-TERM-3 — SEAH.** Expand on first use / tooltip? Confirm the exact Nepali-appropriate phrasing for a sensitive topic (this is a sensitivity call, not just copy). Response: SEAH is ok
 
 ---
 
 ## 6. D3 — Configuration-model comprehensibility (inherit / override)
 
-**Current state.** Project-wide cast staffs L1–L4 once; "every lot inherits it"; a yellow callout ([`ProjectEditor.tsx:697`](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx#L697)) explains a package actor "replaces the project-wide actor with the **same role** on that lot only." This is object-oriented inheritance exposed to a non-programmer.
+**Current state.** Project-wide cast staffs L1–L4 once; "every package inherits it"; a yellow callout ([`ProjectEditor.tsx:697`](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx#L697)) explains a package actor "replaces the project-wide actor with the **same role** on that package only." This is object-oriented inheritance exposed to a non-programmer.
 
 **Shortcomings (ranked):**
-1. **Silent inheritance is invisible** — a lot with no officer *listed* may be fully staffed by inheritance, or genuinely empty; the UI doesn't distinguish "inherited from project" vs. "overridden here" vs. "unstaffed" at a glance. This is exactly where mis-staffing (→ grievance routes to nobody) will hide.
-2. **Two-layer reasoning** — the user must hold project-default + per-lot-override in their head to answer "who gets this lot's L1 case?"
+1. **Silent inheritance is invisible** — a package with no officer *listed* may be fully staffed by inheritance, or genuinely empty; the UI doesn't distinguish "inherited from project" vs. "overridden here" vs. "unstaffed" at a glance. This is exactly where mis-staffing (→ grievance routes to nobody) will hide.
+2. **Two-layer reasoning** — the user must hold project-default + per-package-override in their head to answer "who gets this package's L1 case?"
 3. **The explanation is a paragraph, not the UI** — if a callout has to explain the model in prose, the model isn't showing itself.
 
-> **✅ Q-CAST-1 — Surface inheritance state.** Should each lot level show an explicit badge — `Inherited: <name>` / `Overridden: <name>` / `⚠ Unstaffed`? (There's already an "⚠ L1 actor unstaffed" badge per the git log — extend that vocabulary to inheritance?)
-> **✅ Q-CAST-2 — Is per-lot override actually used at demo/early stage,** or is project-wide staffing the 95% case? If the latter, we can collapse override behind an "advanced" affordance and simplify the default view. Response: in real life, level 1 and probably level 2 are at package level while level 3 and 4 are at project level for a mid size project. the current design provides flexibility to handle these case. plus one package may be in a district difficult of access or another province and have his own L3 for instance while 3 other packagees share the same L3.
+> **✅ Q-CAST-1 — Surface inheritance state.** Should each package level show an explicit badge — `Inherited: <name>` / `Overridden: <name>` / `⚠ Unstaffed`? (There's already an "⚠ L1 actor unstaffed" badge per the git log — extend that vocabulary to inheritance?)
+> **✅ Q-CAST-2 — Is per-package override actually used at demo/early stage,** or is project-wide staffing the 95% case? If the latter, we can collapse override behind an "advanced" affordance and simplify the default view. Response: in real life, level 1 and probably level 2 are at package level while level 3 and 4 are at project level for a mid size project. the current design provides flexibility to handle these case. plus one package may be in a district difficult of access or another province and have his own L3 for instance while 3 other packagees share the same L3.
 >
-> **Claude → decision.** Your answer makes override the **norm** (L1/L2 package-level, L3/L4 project-level, plus the remote-package-with-its-own-L3 case) — which kills the "hide override behind advanced" idea and *raises* the priority of **✅ Q-CAST-1 = yes**: every lot level shows an explicit badge — **`Inherited: <name>` / `Overridden: <name>` / `⚠ Unstaffed`** — so "who works this lot's L1?" is answerable at a glance. Bonus: your L1/L2-package + L3/L4-project pattern is a natural **default template** to pre-apply on lot creation and cut clicks. 
+> **Claude → decision.** Your answer makes override the **norm** (L1/L2 package-level, L3/L4 project-level, plus the remote-package-with-its-own-L3 case) — which kills the "hide override behind advanced" idea and *raises* the priority of **✅ Q-CAST-1 = yes**: every package level shows an explicit badge — **`Inherited: <name>` / `Overridden: <name>` / `⚠ Unstaffed`** — so "who works this package's L1?" is answerable at a glance. Bonus: your L1/L2-package + L3/L4-project pattern is a natural **default template** to pre-apply on package creation and cut clicks. 
 
 ---
 
 ## 7. D4 — Information architecture & density
 
-**Current state.** Everything for a project is one long vertical scroll (go-live → description → workflows → messaging → actors → locations → cast → nested lots). Saves are fragmented: distinct **"Save workflows"** and **"Save messaging"** buttons, while actors/locations/cast appear to persist per-action **[verify — trace save paths in `ProjectEditor.tsx`]**.
+**Current state.** Everything for a project is one long vertical scroll (go-live → description → workflows → messaging → actors → locations → cast → nested packages). Saves are fragmented: distinct **"Save workflows"** and **"Save messaging"** buttons, while actors/locations/cast appear to persist per-action **[verify — trace save paths in `ProjectEditor.tsx`]**.
 
 **Shortcomings (ranked):**
 1. **Ambiguous save model** — "did my change save?" is unanswerable at a glance when some sections have Save buttons and others auto-persist. High risk of lost work for a cautious low-IT user.
 2. **No overview/progress spine** — the only structure is the go-live panel at the very top; after scrolling past it the user has no "where am I / what's left."
-3. **Long-scroll re-find cost** — editing lot 5's staffing means scrolling the whole page each time.
+3. **Long-scroll re-find cost** — editing package 5's staffing means scrolling the whole page each time.
 
 > **✅ Q-IA-1 — Container.** Keep single scroll, or move to (a) sub-tabs/accordion sections with a sticky spine · (b) a left in-page nav mirroring go-live groups · (c) a guided stepper for first-time setup, free-form after. Tie to Q-AUD-2. Response: I want your expert reco here
 > **✅ Q-IA-2 — Save model.** Unify to one explicit "Save project" with dirty-state indicator, or make everything auto-save with clear "Saved ✓" feedback? (Pick one; mixed is the current problem.) - Response: Your reco here.
@@ -145,7 +145,7 @@ Proposed scoring lenses. We rate the screen (and later, each redesign) against t
 > **Claude → Q-IA-1 reco: keep the single page; promote the go-live panel into a sticky spine.** Not sub-tabs (they hide go-live status while you fix cast — wrong for a "make it all green" task); not a wizard-as-primary (config is *revisited*, per Q-AUD-2). Scaffolding is already half-built — `sectionRefs` + `jumpToSection` exist ([ProjectEditor.tsx:117](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx#L117)) and the go-live "Fix" links already jump. So: **pin the go-live panel as a left rail (≥1280px) / top bar (14″ fallback), make it progress + nav, and make long sections (cast, packages) collapsible.** One move fixes "where am I" (D4) *and* the go-live UX (D5).
 > **Claude → Q-IA-2 reco: consistent, explicit, per-section save with dirty/saved state.** Not one global "Save project" (couples everything onto one flaky-4G round-trip); not full auto-save (restaffing is consequential — silent persist on a dropping link half-writes state). Generalise the *existing* "Save workflows / Save messaging" pattern to every section: **"Unsaved changes" pill → Save → "Saved ✓"**, plus warn-on-leave when dirty. Sole exception: the activate/deactivate toggle stays immediate (D6).
 >
-> **🎨 Prototype (2026-07-30) — [interactive mockup: `04_projects_packages_redesign.html`](04_projects_packages_redesign.html)** (open in a browser — standalone, no server). The mockup **refines the reco one step further**: instead of a single collapsible page, it uses a **two-pane console** — a sticky left rail that *fuses the go-live checklist with section nav* (each row carries a binary pass/blocker/optional dot + value summary) and a right pane showing **one section at a time**. This kills the scroll more decisively than collapsing, and it neutralises my original anti-tab objection ("tabs hide go-live status") because the rail shows every section's status permanently. Built on the real app palette (light-only, blue/red/amber/green/violet per `02_design_system.md`) and embeds the locked decisions: **binary go-live** (D5), **Inherited/Overridden/⚠ Unstaffed** badges (D3), **per-section save state** (D4), **guarded Deactivate** (D6), **BS dates** (Q-LOC-2), and the 2026-07-30 staffing model (**§13**): **author-named tiers**, the **position-first two-step picker** (position → person), **seat anchor + Reassign**, and the **narrow-first scope stepper**. **Done since:** per-lot override in Packages (same §5A two-step) + "required" badges on author-marked tiers; the **authoring side** is mocked in [`06_workflows_step_cast_editor.html`](06_workflows_step_cast_editor.html). **Next:** port the mockups to the real components (`ProjectEditor.tsx` + the Workflows step editor).
+> **🎨 Prototype (2026-07-30) — [interactive mockup: `04_projects_packages_redesign.html`](04_projects_packages_redesign.html)** (open in a browser — standalone, no server). The mockup **refines the reco one step further**: instead of a single collapsible page, it uses a **two-pane console** — a sticky left rail that *fuses the go-live checklist with section nav* (each row carries a binary pass/blocker/optional dot + value summary) and a right pane showing **one section at a time**. This kills the scroll more decisively than collapsing, and it neutralises my original anti-tab objection ("tabs hide go-live status") because the rail shows every section's status permanently. Built on the real app palette (light-only, blue/red/amber/green/violet per `02_design_system.md`) and embeds the locked decisions: **binary go-live** (D5), **Inherited/Overridden/⚠ Unstaffed** badges (D3), **per-section save state** (D4), **guarded Deactivate** (D6), **BS dates** (Q-LOC-2), and the 2026-07-30 staffing model (**§13**): **author-named tiers**, the **position-first two-step picker** (position → person), **seat anchor + Reassign**, and the **narrow-first scope stepper**. **Done since:** per-package override in Packages (same §5A two-step) + "required" badges on author-marked tiers; the **authoring side** is mocked in [`06_workflows_step_cast_editor.html`](06_workflows_step_cast_editor.html). **Next:** port the mockups to the real components (`ProjectEditor.tsx` + the Workflows step editor).
 
 ---
 
@@ -173,12 +173,12 @@ Response: we need to review our warnings with simple pass or go, no warnings any
 
 **Shortcomings (revised on review):**
 1. **`Deactivate` guard + placement** — **[verified]** one-click toggle with **no confirmation** ([`toggleActive`, ProjectEditor.tsx:121](../../../channels/ticketing-ui/components/settings/projects/ProjectEditor.tsx#L121)), sitting next to the title. But it is **reversible** (flips `is_active` back) — so *not* destructive; "destructive-ish" was too strong. Fix = placement + a light guard, not danger-zone treatment.
-2. **Silent misconfiguration** — unstaffed/inherited lots (D3) and unset default workflow (D5) fail quietly, not loudly. (Addressed by Q-SAFE-2 = yes + the go-live blockers in D5.)
+2. **Silent misconfiguration** — unstaffed/inherited packages (D3) and unset default workflow (D5) fail quietly, not loudly. (Addressed by Q-SAFE-2 = yes + the go-live blockers in D5.)
 
 > **✅ Q-SAFE-1 — Deactivate.** Add confirmation + state what deactivation does to in-flight tickets? Move it out of the title bar (into an overflow/danger zone)? Rename to something unambiguous in EN/NE? Response: what world do you suggest in English?
 >
 > **Claude → keep the word "Deactivate"** — it pairs cleanly with the panel's existing **"Activate"** and admins know it. The label isn't the problem; **placement + a one-line guard** are. Move it off the title bar to sit beside the go-live Activate action, and add a confirm: *"Stop accepting new grievances? Existing tickets are unaffected — you can reactivate anytime."* If you want a softer verb, **"Pause intake"** is the honest alternative (it literally stops intake), but I'd keep Activate/Deactivate for symmetry. ✅ **Q-SAFE-2 (inline field validation) = yes**, noted.
-> **✅ Q-SAFE-2 — Inline validation.** Should errors surface *at the field* (e.g. "no L1 officer for this lot") in addition to the top go-live panel? Response: Yes
+> **✅ Q-SAFE-2 — Inline validation.** Should errors surface *at the field* (e.g. "no L1 officer for this package") in addition to the top go-live panel? Response: Yes
 
 ---
 
@@ -188,10 +188,10 @@ Response: we need to review our warnings with simple pass or go, no warnings any
 
 **Shortcomings (ranked):**
 1. **Place-name romanisation** — Kakarbhitta / Kakadbhitta / Kakarvitta / काकडभिट्टा. If search is exact Latin match, admins "fail" to find locations that exist → duplicate/blank entries.
-2. **Devanagari round-trip** — can officer/project/lot names be *entered* and *displayed* in Devanagari cleanly (search, sort, truncation)? Unverified.
+2. **Devanagari round-trip** — can officer/project/package names be *entered* and *displayed* in Devanagari cleanly (search, sort, truncation)? Unverified.
 
 > **✅ Q-SEARCH-1 — Location search tolerance.** Do we need fuzzy/alias matching + Devanagari↔romanised search over the location table? (Depends on whether the seeded location set already carries `name_ne`/aliases — I can check.) Response : Yes - we already have the helpers in place
-> **✅ Q-SEARCH-2 — Devanagari input.** Are project/lot/officer names expected in Nepali, English, or both? (Feeds Q-LOC-1c.) - Response: Englisg or roman scripts
+> **✅ Q-SEARCH-2 — Devanagari input.** Are project/package/officer names expected in Nepali, English, or both? (Feeds Q-LOC-1c.) - Response: Englisg or roman scripts
 >
 > **Claude →** ✅ Then the build task is just **wiring the existing helpers into the location search box** and confirming it's live — not new logic. And English/roman-only names mean **no Devanagari input path** is needed, which reinforces Q-LOC-1 = English-only. (Data entry limited to super-admin from proven sources further shrinks the risk — your D7 note.)
 
@@ -238,7 +238,7 @@ Made during the D4 mockup work; they postdate Draft 2. **Authoritative** in [doc
 - **Supersedes Q-TERM-1's "keep Actor/Supervisor labels":** the display now uses the author's per-tier names; the 4-tier abstraction stays **engine-only**.
 - **Continuity:** a filled slot records the **anchored seat** + the officer; on transfer, **Reassign** re-points the seat's new holder in one step.
 
-**Mockup coverage:** Staffing pane rebuilt to all of this (author-named slots, position-first picker, seat anchor + Reassign, narrow-first scope stepper). **Done since (2026-08-02):** the per-lot **override in Packages** now uses the same §5A two-step, and **"required" badges** show on author-marked tiers — both former "pending" items are complete. The **authoring side** — where the workflow author binds roles, names each tier, and marks required — is mocked at [`06_workflows_step_cast_editor.html`](06_workflows_step_cast_editor.html) (doc 12 §6.2).
+**Mockup coverage:** Staffing pane rebuilt to all of this (author-named slots, position-first picker, seat anchor + Reassign, narrow-first scope stepper). **Done since (2026-08-02):** the per-package **override in Packages** now uses the same §5A two-step, and **"required" badges** show on author-marked tiers — both former "pending" items are complete. The **authoring side** — where the workflow author binds roles, names each tier, and marks required — is mocked at [`06_workflows_step_cast_editor.html`](06_workflows_step_cast_editor.html) (doc 12 §6.2).
 
 ---
 
@@ -277,9 +277,9 @@ _Reviewed 2026-07-24 (Draft 2). Format: Q-id · decision · rationale._
 - **Q-LOC-1/3** — **English-only** on this screen; no `<Bilingual>` adoption. Names in English/roman.
 - **Q-LOC-2** — **BS-only.** All dates render in Bikram Sambat (not dual); AD added later only if a donor-facing export needs it.
 - **Q-TERM-1** — **Keep the Actor/Supervisor/Participants abstraction** in the engine; do **not** resurrect roles. D2 #1 retracted. **Evolved 2026-07-30 (§13):** the UI now shows the **author's per-tier name** per level ("Safeguard Officer", "GRC Chairman"), not "Actor/Supervisor"; the abstraction stays engine-only.
-- **Q-TERM-2** — **De-jargon approved** (cast→staffing, catch-all→"used when nothing else matches", inherit→"applies to every lot unless overridden").
+- **Q-TERM-2** — **De-jargon approved** (cast→staffing, catch-all→"used when nothing else matches", inherit→"applies to every package unless overridden").
 - **Q-TERM-3** — Keep "SEAH" as-is.
-- **Q-CAST-1/2** — Override is the **norm**; surface **Inherited / Overridden / ⚠ Unstaffed** badges per lot level; consider an L1/L2-package + L3/L4-project default template.
+- **Q-CAST-1/2** — Override is the **norm**; surface **Inherited / Overridden / ⚠ Unstaffed** badges per package level; consider an L1/L2-package + L3/L4-project default template.
 - **Q-IA-1** — **Single page + sticky go-live spine** (reuse existing `jumpToSection`) + collapsible sections. No sub-tabs, no wizard-as-primary.
 - **Q-IA-2** — **Consistent per-section explicit save** with dirty + "Saved ✓" state; warn-on-leave. Toggle stays immediate.
 - **Q-GL-1/2** — Go-live becomes **binary pass/blocker**, no warning tier; reclassify the four current yellows; blocked checks state the single fix.

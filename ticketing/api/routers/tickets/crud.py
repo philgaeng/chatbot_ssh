@@ -314,7 +314,7 @@ def list_tickets(
     if status_code:
         stmt = stmt.where(Ticket.status_code == status_code)
     if organization_id:
-        # An organization's grievances are the ones on its projects — and on its lots, and on
+        # An organization's grievances are the ones on its projects — and on its packages, and on
         # everything its child organizations are named on (DECISION-organization-membership,
         # 2026-08-04). Not the ones stamped with its id: that stamp could only ever name one
         # body per grievance, so it answered wrongly for every other organization involved.

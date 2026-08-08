@@ -4,8 +4,8 @@
 superseding the `routing_org_role` anchor:
 
 > A grievance belongs to a **project**. Every organization named on that project sees it —
-> donor, ministry, department, contractor alike. An organization named on a **single lot** sees
-> that lot only. And because organizations form a tree ([doc 16 §3.1](../../docs/ticketing_system/16_org_chart_and_positions.md)),
+> donor, ministry, department, contractor alike. An organization named on a **single package** sees
+> that package only. And because organizations form a tree ([doc 16 §3.1](../../docs/ticketing_system/16_org_chart_and_positions.md)),
 > a parent sees everything its children see.
 
 So the question "which grievances are the Department of Roads'?" is answered by *membership* —
@@ -40,8 +40,8 @@ def project_and_package_reach(
 ) -> tuple[set[str], set[str]]:
     """(project_ids, package_ids) this organization's grievances come from.
 
-    A **project-level** naming covers the whole project, lots included. A **package-level**
-    naming covers that lot only — naming a contractor on lot 3 is a statement about lot 3
+    A **project-level** naming covers the whole project, packages included. A **package-level**
+    naming covers that package only — naming a contractor on package 3 is a statement about package 3
     (Q1, 2026-08-04). The organization above it still sees everything, through the tree.
     """
     reach = org_reach_ids(db, organization_id)
@@ -62,7 +62,7 @@ def project_and_package_reach(
             )
         ).scalars().all()
     )
-    # A lot inside a project the organization already covers adds nothing.
+    # A package inside a project the organization already covers adds nothing.
     if package_ids and project_ids:
         redundant = set(
             db.execute(
@@ -103,7 +103,7 @@ def organization_ids_for_project(db: Session, project_id: str) -> list[str]:
     """Every organization named on a project — the report's "Organizations" column.
 
     Package-level names are included: they are part of the project's cast of organizations even
-    though their *reach* is one lot.
+    though their *reach* is one package.
     """
     project_orgs = db.execute(
         select(ProjectOrganization.organization_id).where(

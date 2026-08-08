@@ -9,7 +9,7 @@
  * **The checks are listed in the rail's own order** (2026-08-07, Philippe). A check's `section`
  * is the pane that fixes it, so reading down this list is reading down the rail, and a red dot
  * beside "Staffing" has its checks where the eye already is. This pane used to group by a
- * *second* taxonomy — "Routing / Organizations & lots / Officers / Geography / Project details" —
+ * *second* taxonomy — "Routing / Organizations & packages / Officers / Geography / Project details" —
  * which answered a different question than the nav and put "Package locations" under a heading
  * three away from Packages. Two orders on one screen, and neither of them the one you navigate
  * by. The headings went with it: with the order right they only named what the rail already says.

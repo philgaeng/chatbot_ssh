@@ -598,7 +598,7 @@ function ProjectTypeEditor({
                 <li key={r.key} className="text-sm text-gray-700">
                   <span className="font-medium">{r.label}</span>
                   {r.required && <span className="text-xs text-red-700"> · required</span>}
-                  {r.required_package && <span className="text-xs text-gray-500"> · for each lot</span>}
+                  {r.required_package && <span className="text-xs text-gray-500"> · for each package</span>}
                   {r.description && <span className="block text-xs text-gray-500">{r.description}</span>}
                 </li>
               ))}
@@ -641,7 +641,7 @@ function ProjectTypeEditor({
                   <th className="pb-1 pr-3 font-bold">Name</th>
                   <th className="pb-1 pr-3 font-bold">What it does on the project</th>
                   <th className="pb-1 px-2 font-bold text-center whitespace-nowrap">Must be named</th>
-                  <th className="pb-1 px-2 font-bold text-center whitespace-nowrap">For each lot</th>
+                  <th className="pb-1 px-2 font-bold text-center whitespace-nowrap">For each package</th>
                   <th className="pb-1" />
                 </tr>
               </thead>
@@ -679,7 +679,7 @@ function ProjectTypeEditor({
                         type="checkbox"
                         checked={!!r.required_package}
                         onChange={(e) => patchRole(i, { required_package: e.target.checked })}
-                        aria-label={`${r.label || "This organization"} is named for each lot`}
+                        aria-label={`${r.label || "This organization"} is named for each package`}
                       />
                     </td>
                     <td className="py-1 pl-2 text-right">
@@ -706,7 +706,7 @@ function ProjectTypeEditor({
         </button>
         <p className="text-xs text-gray-500 mt-2">
           Every organization named on a project sees that project&apos;s grievances in its
-          reports. One named for a single lot sees that lot only.{" "}
+          reports. One named for a single package sees that package only.{" "}
           <span className="text-gray-400">
             &ldquo;Must be named&rdquo; blocks go-live until the project names it.
           </span>

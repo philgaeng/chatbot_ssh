@@ -455,7 +455,7 @@ def export_report(
         None,
         description=(
             "Grievances of every project this organization — or any organization below it — is "
-            "named on; a lot-level naming reaches that lot only."
+            "named on; a package-level naming reaches that package only."
         ),
     ),
     project_ids: Optional[str] = Query(None),

@@ -533,7 +533,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             onChange={setScopeFilter}
             options={scopeOptions}
             disabled={catalogLoading}
-            hint="Organizations appear under each scope they hold on this project — named on the project, or on one lot."
+            hint="Organizations appear under each scope they hold on this project — named on the project, or on one package."
           />
         )}
         <div className="flex items-center gap-2">

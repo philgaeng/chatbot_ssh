@@ -58,11 +58,11 @@
 | Current | Plainer |
 |---|---|
 | "Inherited from project" | "Same as project" |
-| "Overridden here" | "Set for this lot" |
+| "Overridden here" | "Set for this package" |
 | "Unstaffed" | "Not staffed" |
-| "applies to every lot unless overridden" | "used for every lot unless you set a different one" |
+| "applies to every package unless overridden" | "used for every package unless you set a different one" |
 
-**Keep — correct domain terms:** lot · package · chainage (Km) · GRC *(expand once: Grievance Redress Committee)* · implementing agency · donor · province / district / municipality · SEAH.
+**Keep — correct domain terms:** package · chainage (Km) · GRC *(expand once: Grievance Redress Committee)* · implementing agency · donor · province / district / municipality · SEAH.
 
 ### 4.1 Canonical vocabulary — one word per concept (project-wide)
 
@@ -75,7 +75,7 @@ Use the **same word for the same thing on every screen.** This short list is the
 | A GRM staff member | **officer** | user, agent, staff, actor |
 | A partner body (DOR, ADB, contractor) | **organization** | org, entity, agency, party |
 | A financed road intervention | **project** | scheme, programme |
-| A lot / contract within a project | **package** (a.k.a. **lot**) | segment |
+| A contract within a project | **package** | lot ‡, segment |
 | Admin geography | **province · district · municipality** | region, zone, area |
 | The escalation chain | **workflow** | flow, process, pipeline |
 | A stage in a workflow | **level** (L1–L4) | step †, stage |
@@ -92,6 +92,8 @@ Use the **same word for the same thing on every screen.** This short list is the
 | End a grievance with an outcome | **resolve** | close, complete |
 
 † *Internal / code term — never surface it:* "ticket" (code name for a grievance record), "step" (code name for a level).
+
+‡ **"lot" was retired 2026-08-08** (Philippe): *"let's use only the word package and not lot and package… one object / one word to not confuse the users"*. Until then this table blessed both — "**package** (a.k.a. **lot**)" — which is not a vocabulary rule, it is permission to use either, and the screens took it: one section was headed "Packages (lots)" while its button said "+ Add a lot" and its rows warned "This lot still needs…". A reader cannot tell whether a lot and a package are the same thing without being told, and nothing on screen told them. Both words are correct English for the concept; **one** of them is the vocabulary. `package` won because it is what the database, the API and the routing already call it.
 **Decided 2026-07-30:** always **grievance** (never "case") and **resolve** (never "close"); "ticket" stays code-only.
 
 - **Empty state** = what it is + the single next action: *"No locations linked yet. Search to add one."* — no dev copy.

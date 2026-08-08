@@ -3,7 +3,7 @@
 /**
  * <CastStaffing> — staff ONE scope's cast (DESIGN-cast-model §3.6): the workflow's steps ×
  * enabled tiers, assign/remove officers. `package=null` is the project-wide (shared) cast;
- * a package is a per-lot override that shows the project-wide officers greyed as inherited.
+ * a package is a per-package override that shows the project-wide officers greyed as inherited.
  *
  * Self-contained: loads the workflow's steps, the relevant cast rows, and the officer roster.
  * Each assignment writes an `officer_scope` via the sanctioned backend writer, so auto-assign,
@@ -86,15 +86,15 @@ export function CastStaffing({
 }: {
   project: ProjectItem;
   orgs: OrganizationItem[];
-  /** null = project-wide (shared) cast; a package = per-lot override. */
+  /** null = project-wide (shared) cast; a package = per-package override. */
   package?: PackageItem | null;
   /** Explicit workflow to staff; defaults to the project's standard/default workflow. */
   workflowId?: string | null;
   /** Render only these levels (in the order given). null = every level of the workflow.
-   *  The staffing screen drives this: a level staffed per lot is rendered once per lot. */
+   *  The staffing screen drives this: a level staffed per package is rendered once per package. */
   stepIds?: string[] | null;
-  /** False when the parent already names the level (the per-lot blocks on the staffing
-   *  screen) — otherwise the level's name appears twice, once per lot. */
+  /** False when the parent already names the level (the per-package blocks on the staffing
+   *  screen) — otherwise the level's name appears twice, once per package. */
   showStepHeader?: boolean;
   /** Called after an assign/remove — lets the parent refresh coverage indicators. */
   onChanged?: () => void;
@@ -312,7 +312,7 @@ export function CastStaffing({
   if (!resolvedWfId) {
     return (
       <p className="text-xs text-gray-400">
-        Link a published workflow (Grievance workflows) to staff this {isPkg ? "lot" : "project"}.
+        Link a published workflow (Grievance workflows) to staff this {isPkg ? "package" : "project"}.
       </p>
     );
   }
@@ -324,13 +324,13 @@ export function CastStaffing({
       {error && (
         <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
       )}
-      {/* Only true where a lot CAN inherit — a level the workflow marks "staffed for each lot"
+      {/* Only true where a package CAN inherit — a level the workflow marks "staffed for each package"
           has no project-wide counterpart to inherit from, and the staffing screen renders those
           without a header. */}
       {isPkg && showStepHeader && (
         <p className="text-[11px] text-gray-400">
           Inherits Project-wide unless overridden. Greyed rows come from Project-wide; use
-          &ldquo;+ assign&rdquo; to add an officer for this lot only.
+          &ldquo;+ assign&rdquo; to add an officer for this package only.
         </p>
       )}
       {visibleSteps.map((step) => {
@@ -502,7 +502,7 @@ export function CastStaffing({
                                 checked={pickerLocMatch}
                                 onChange={(e) => setPickerLocMatch(e.target.checked)}
                               />
-                              in this lot&rsquo;s locations
+                              in this package&rsquo;s locations
                             </label>
                           )}
                         </div>

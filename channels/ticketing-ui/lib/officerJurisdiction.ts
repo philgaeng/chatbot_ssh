@@ -157,7 +157,7 @@ export function packagesForOrganizationOnProject(
 
 /**
  * All organizations that may scope officers on a project: project actors plus
- * contractors/consultants linked on packages (e.g. main_contractor per lot).
+ * contractors/consultants linked on packages (e.g. main_contractor per package).
  */
 export function organizationsOnProject(
   project: ProjectItem | undefined,
