@@ -179,11 +179,17 @@ the cleanup logged in `docs/sprints/followups/`.
 ### 5C.2 Every project has at least one package
 
 A project with one package looks like a project with none. The package created with the project
-carries `is_unnamed = true`: it still has a code and a name (routing and the unique constraint
-need them, and they come from the project), but the screen does not ask for either — it asks
-only where the project works. Add a second package and the first stops being unnamed, showing
-the name it always had; the API refuses `is_unnamed` on a project with two packages (**409**),
-because two packages both displaying the project's name cannot be told apart.
+is called **"Package 1"** and is an ordinary package — code, name, description, districts, all
+editable.
+
+> **Amended 2026-08-09** (Philippe: *"it should be package 1 by default and could be renamed
+> obviously as well as a description added"*). It briefly carried an `is_unnamed` flag: the row
+> took the **project's** name and the card hid its code, name and description behind "Everywhere
+> this project works". Two faults showed the first time somebody built a project with three
+> packages — the default name read as a mistake beside "Package 2", and the package most likely
+> to want a chainage description was the one that could not have one. Migration `v8x0z2b4` drops
+> the flag, renames the rows still carrying it, and removes the "this project is not split into
+> packages" checkbox it drove.
 
 **Packages may overlap.** A bridge contract legitimately covers districts that road packages
 also cover (Philippe, 2026-08-08). A grievance in an overlapping district reaches the officers

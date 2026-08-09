@@ -26,20 +26,19 @@ from ticketing.services import project_go_live as go_live_svc
 
 # ── No database needed ────────────────────────────────────────────────────────
 
-def test_a_package_is_named_by_default():
-    """Every package that existed before the column was one somebody named, so the default has
-    to be False or the migration would have silently hidden every existing package's name."""
-    assert ProjectPackage.__table__.c.is_unnamed.default.arg is False
+def test_a_package_is_named_back_by_its_code():
+    """The code is what the package card leads with, so it is what a go-live message names.
 
-
-def test_an_unnamed_package_answers_with_its_name_not_its_code():
-    """`is_unnamed` means the screen never showed a code, so a go-live message that named one
-    would point at a string the author cannot find. It says the project's name instead."""
-    unnamed = ProjectPackage(project_id="p", package_code="01", name="KL Road", is_unnamed=True)
-    assert go_live_svc._package_label(unnamed) == "KL Road"
-
-    named = ProjectPackage(project_id="p", package_code="02", name="Bridge works", is_unnamed=False)
-    assert go_live_svc._package_label(named) == "02"
+    This briefly forked on an `is_unnamed` flag — the auto-created package answered with the
+    *project's* name because its code was hidden on screen. The flag is gone (`v8x0z2b4`): the
+    first package is "Package 1" and shows its code like any other.
+    """
+    assert go_live_svc._package_label(
+        ProjectPackage(project_id="p", package_code="01", name="Package 1")
+    ) == "01"
+    assert go_live_svc._package_label(
+        ProjectPackage(project_id="p", package_code="02", name="Bridge works")
+    ) == "02"
 
 
 # ── Against the demo database ─────────────────────────────────────────────────

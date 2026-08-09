@@ -1402,16 +1402,19 @@ def create_project(
     # Every project has at least one package (2026-08-08, Philippe): *"we create first the
     # package — a project with one package is like a project without package"*. Coverage is
     # declared on packages and nowhere else, so a project with none has nowhere to say where it
-    # works, and routing (location → package → officer) has nothing to match. This one stands in
-    # for the project until somebody splits it up: `is_unnamed`, so the screen asks for a code
-    # and a name only once there are two to tell apart.
+    # works, and routing (location → package → officer) has nothing to match.
+    #
+    # It is called "Package 1", not the project's name (2026-08-09): the project's name reads as
+    # a mistake beside "Package 2", and the author renames it and adds a description like any
+    # other package. It briefly carried an `is_unnamed` flag that hid those fields — dropped in
+    # `v8x0z2b4`, because the package most likely to need a chainage description was the one
+    # that could not have one.
     db.add(
         ProjectPackage(
             project_id=project.project_id,
             package_code=entity_codes_svc.next_package_code(db, project.project_id),
-            name=project.name,
+            name="Package 1",
             is_active=True,
-            is_unnamed=True,
         )
     )
     db.flush()
@@ -2198,7 +2201,6 @@ class PackageResponse(BaseModel):
     description:       str | None
     organizations:     list[PackageOrgItem] = []
     is_active:         bool
-    is_unnamed:        bool = False
     location_codes:    list[str] = []
     created_at:        datetime
     updated_at:        datetime
@@ -2228,7 +2230,6 @@ class PackageUpdate(BaseModel):
     name:              str | None = None
     description:       str | None = None
     is_active:         bool | None = None
-    is_unnamed:        bool | None = None
 
     @field_validator("package_code", mode="before")
     @classmethod
@@ -2253,7 +2254,6 @@ def _package_to_dict(pkg: ProjectPackage) -> dict:
             for po in (pkg.organizations or [])
         ],
         "is_active":         pkg.is_active,
-        "is_unnamed":        pkg.is_unnamed,
         "location_codes":    [pl.location_code for pl in pkg.locations],
         "created_at":        pkg.created_at,
         "updated_at":        pkg.updated_at,
@@ -2332,17 +2332,6 @@ def create_package(
         is_active=body.is_active,
     )
     db.add(pkg)
-    # A second package ends the single-package project: the one that was standing in for it now
-    # needs to be told apart from this one, so its name (the project's) becomes visible. Nothing
-    # is invented — the name was always stored, only hidden.
-    db.execute(
-        update(ProjectPackage)
-        .where(
-            ProjectPackage.project_id == project_id,
-            ProjectPackage.is_unnamed.is_(True),
-        )
-        .values(is_unnamed=False, updated_at=_now())
-    )
     db.flush()
     db.refresh(pkg, ["locations", "organizations"])
     db.commit()
@@ -2377,19 +2366,6 @@ def update_package(
     if body.name              is not None: pkg.name              = body.name
     if body.description       is not None: pkg.description       = body.description
     if body.is_active         is not None: pkg.is_active         = body.is_active
-    if body.is_unnamed is not None:
-        # "Don't name it" only means anything while the project *is* the package. With a second
-        # package on the project the two would be indistinguishable on screen, both showing the
-        # project's name, and the author would have no way to tell them apart.
-        if body.is_unnamed and _package_count(db, project_id) > 1:
-            raise HTTPException(
-                status_code=409,
-                detail=(
-                    "This project has more than one package, so each one needs its own name. "
-                    "Remove the others first, or name this one."
-                ),
-            )
-        pkg.is_unnamed = body.is_unnamed
     pkg.updated_at = _now()
     db.commit()
     db.refresh(pkg)

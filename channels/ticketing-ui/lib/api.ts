@@ -2556,9 +2556,6 @@ export interface PackageItem {
   description:       string | null;
   organizations:     PackageOrgItem[];
   is_active:         boolean;
-  /** The project was never split into packages — this row stands in for it, and the screen
-   *  does not ask for a code or a name. Only meaningful while it is the project's only one. */
-  is_unnamed:        boolean;
   /** District/municipality codes this package covers. */
   location_codes:    string[];
   created_at:        string;

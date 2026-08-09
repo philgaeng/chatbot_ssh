@@ -13,8 +13,11 @@
  *    (project-level slots, then the packages that differ) reads better in one place.
  *  • **Staffing** moved out 2026-08-04, for the same reason.
  *
- * A package that is `is_unnamed` is a project that was never split up: it shows its locations
- * and nothing else, because there is no second package to tell it apart from.
+ * **Every package is an ordinary package** (2026-08-09). The auto-created first one used to
+ * carry an `is_unnamed` flag: it took the *project's* name and the card hid its code, name and
+ * description, showing "Everywhere this project works". That read as a mistake beside "Package
+ * 2" — and the package most likely to want a chainage description was the one that could not
+ * have one. It is called "Package 1" now, and is renamed and described like any other.
  */
 import React, { useState } from "react";
 import { type PackageItem } from "@/lib/api";
@@ -29,7 +32,6 @@ import { warning } from "@/lib/design-tokens";
 
 export function PackageRow({
   pkg,
-  onlyPackage,
   expanded,
   onToggle,
   onUpdate,
@@ -37,8 +39,6 @@ export function PackageRow({
   onRemoveLoc,
 }: {
   pkg:          PackageItem;
-  /** Is this the project's only package? "Don't name it" means nothing once there are two. */
-  onlyPackage:  boolean;
   expanded:     boolean;
   onToggle:     () => void;
   onUpdate:     (payload: Partial<PackageItem>) => Promise<void>;
@@ -50,8 +50,6 @@ export function PackageRow({
   const [descVal, setDescVal] = useState(pkg.description ?? "");
   const [saving, setSaving]   = useState(false);
   const [dirty, setDirty]     = useState(false);
-
-  const unnamed = pkg.is_unnamed;
 
   React.useEffect(() => {
     setCodeVal(pkg.package_code);
@@ -90,10 +88,9 @@ export function PackageRow({
             expanded ? "rotate-90 text-blue-500" : "text-gray-400"
           }`}
         >▶</span>
-        {/* An unnamed package has a code, but it is ours, not the author's — so we don't show it. */}
-        {!unnamed && <span className="font-mono text-xs text-gray-500 shrink-0">{pkg.package_code}</span>}
+        <span className="font-mono text-xs text-gray-500 shrink-0">{pkg.package_code}</span>
         <span className={`font-medium text-sm flex-1 min-w-0 truncate ${expanded ? "text-blue-700" : "text-gray-800"}`}>
-          {unnamed ? "Everywhere this project works" : pkg.name}
+          {pkg.name}
         </span>
         {noCoverage && (
           // The project's standard warning element (02_design_system §2/§4 amber tokens,
@@ -125,8 +122,7 @@ export function PackageRow({
 
       {expanded && (
         <div className="border-t border-gray-100 px-4 py-4 bg-gray-50 space-y-4 rounded-b-lg">
-          {!unnamed && (
-            <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs font-medium text-gray-500 block mb-1">Package code</label>
                 <input
@@ -156,7 +152,6 @@ export function PackageRow({
                 />
               </div>
             </div>
-          )}
 
           {/* Locations — the reason this card exists. */}
           <div>
@@ -193,28 +188,9 @@ export function PackageRow({
               <span className="text-sm text-gray-700">Active</span>
             </label>
 
-            {/* Offered only while this IS the project — with a second package the two would
-                both show the project's name and nothing would tell them apart (the API
-                refuses it with 409 for the same reason). */}
-            {onlyPackage && (
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={unnamed}
-                  onChange={(e) => onUpdate({ is_unnamed: e.target.checked })}
-                  className="w-4 h-4 rounded"
-                />
-                <span className="text-sm text-gray-700">
-                  This project is not split into packages
-                  <span className="block text-xs text-gray-400">
-                    Skip the code and name — just say where the project works.
-                  </span>
-                </span>
-              </label>
-            )}
           </div>
 
-          {dirty && !unnamed && (
+          {dirty && (
             <div className="flex justify-end pt-1">
               <button
                 onClick={handleSave}

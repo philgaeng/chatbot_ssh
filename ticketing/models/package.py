@@ -8,10 +8,13 @@ since 2026-08-08. L1 GRM officers are scoped to a package: they see tickets at
 locations within their package's coverage area.
 
 **Every project has at least one package.** A project that was never split up has a
-single `is_unnamed` package standing in for it, so there is one shape to route
-against instead of two. Packages may overlap: a bridge contract legitimately covers
-districts that road packages also cover, and a grievance there reaches the officers
-of every covering package (`engine/workflow_engine.py`, branch C).
+single one — "Package 1" — so there is one shape to route against instead of two.
+It is an ordinary package: named, described and renamed like the rest (`v8x0z2b4`
+dropped the `is_unnamed` flag that used to hide its fields).
+
+Packages may overlap: a bridge contract legitimately covers districts that road
+packages also cover, and a grievance there reaches the officers of every covering
+package (`engine/workflow_engine.py`, branch C).
 """
 from __future__ import annotations
 
@@ -59,11 +62,6 @@ class ProjectPackage(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
-    # The project was never split into packages: this row stands in for it, and the screen
-    # does not ask for a code or a name. Both are still stored (routing and the unique
-    # constraint need them) — filled from the project. Ticking it is only meaningful while
-    # the project has exactly one package.
-    is_unnamed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
 
@@ -77,8 +75,8 @@ class ProjectPackage(Base):
 
 class PackageOrganization(Base):
     """
-    Organization + role on a specific package (package). Overrides project-wide actor
-    with the same role for this package only.
+    Organization + role on a specific package. Overrides the project-wide organization
+    holding the same role, for this package only.
     """
     __tablename__ = "package_organizations"
     __table_args__ = (

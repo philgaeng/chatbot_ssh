@@ -649,7 +649,6 @@ export function ProjectEditor({
                           <PackageRow
                             key={pkg.package_id}
                             pkg={pkg}
-                            onlyPackage={packages.length === 1}
                             expanded={expanded}
                             onToggle={() => setExpandedPkg(expanded ? null : pkg.package_id)}
                             onUpdate={(payload) => handleUpdatePkg(pkg.package_id, payload)}

@@ -289,14 +289,7 @@ def _standard_level_gaps(
 
 
 def _package_label(pkg: ProjectPackage) -> str:
-    """How a package is named back to the author.
-
-    An `is_unnamed` package is the project standing in for itself — calling it "01" would point
-    at a code the author never chose and cannot see on screen, so it answers with its name
-    (which is the project's). Otherwise the code, which is what the package card leads with.
-    """
-    if pkg.is_unnamed:
-        return pkg.name
+    """How a package is named back to the author — its code, which the card leads with."""
     return pkg.package_code or pkg.name
 
 

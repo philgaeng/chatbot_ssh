@@ -113,7 +113,17 @@
       "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_step_staffing_scope.py::test_a_per_lot_level_is_not_satisfied_by_a_project_wide_officer -q -p no:cacheprovider)",
       "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_grievance_sync.py tests/ticketing/test_ticket_uniqueness.py -q -p no:cacheprovider)",
       "Bash(APP_ENV=dev AUTH_MODE=bypass KEYCLOAK_ISSUER=\"\" TICKETING_SECRET_KEY=ci-test-secret PYTHONPATH=. timeout 300 python -m pytest tests/ticketing/test_step_staffing_scope.py tests/ticketing/test_package_is_the_only_coverage.py -q -p no:cacheprovider)",
-      "Bash(python -m py_compile ticketing/api/routers/scan.py ticketing/api/routers/tickets/crud.py ticketing/api/routers/reports.py ticketing/services/report_rows.py ticketing/api/routers/locations.py ticketing/models/package.py ticketing/services/org_reach.py)"
+      "Bash(python -m py_compile ticketing/api/routers/scan.py ticketing/api/routers/tickets/crud.py ticketing/api/routers/reports.py ticketing/services/report_rows.py ticketing/api/routers/locations.py ticketing/models/package.py ticketing/services/org_reach.py)",
+      "Bash(timeout 90 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'df -h / | tail -1; docker system df 2>/dev/null | head -5')",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"HEAD: $\\(git rev-parse --short HEAD\\)\" && docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | sort && df -h / | tail -1')",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml exec -T db psql -U user -d app_db -c \" *)",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml exec -T db psql -U user -d app_db -c \"\\\\d ticketing.workflow_definitions\" | head -20')",
+      "Bash(echo \"TSC=$?\")",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml exec -T db psql -U user -d app_db -c \"\\\\d ticketing.project_workflows\" | head -18')",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"HEAD: $\\(git rev-parse --short HEAD\\)\" && docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | grep -E \"grm_ui|nginx\"')",
+      "Bash(python -m py_compile ticketing/api/routers/project_types.py ticketing/services/project_go_live.py)",
+      "Bash(timeout 120 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"HEAD: $\\(git rev-parse --short HEAD\\)\" && docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | grep -cE \"healthy\" && docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | grep -vE \"healthy\" | head -3')"
     ]
   }
 }
