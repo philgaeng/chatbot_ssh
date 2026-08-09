@@ -56,6 +56,7 @@ LOC_MORANG_CODE    = "P1_MOR"   # Morang
 LOC_SUNSARI_CODE   = "P1_SUN"   # Sunsari
 
 WORKFLOW_STANDARD_ID = "00000000-0000-0000-0001-000000000001"
+WORKFLOW_KEY = "KL_ROAD_STANDARD"
 
 STEP_L1_ID = "00000000-0000-0000-0001-000000000011"
 STEP_L2_ID = "00000000-0000-0000-0001-000000000012"
@@ -67,6 +68,36 @@ ASSIGNMENT_STANDARD_ID          = "00000000-0000-0000-0001-000000000021"
 # don't match the province-scoped assignment. resolve_workflow() tries None
 # after the specific location code, so this fires for all DOR/KL_ROAD tickets.
 ASSIGNMENT_STANDARD_FALLBACK_ID = "00000000-0000-0000-0001-000000000022"
+
+
+
+# ── Per-slot role keys (2026-08-09) ──────────────────────────────────────────
+# Each (step, tier) slot owns its key. Naming two slots with one operational role — as this
+# seed did, giving level N's supervisor and level N+1's actor the same key — made cast
+# assignments ambiguous: `officer_scopes` records a role_key and nothing else, so officers
+# staffed into the earlier slot surfaced against the later one, and go-live resolved them as
+# candidates for both. Migration `x0z2b4d6` converted existing databases; this keeps fresh
+# ones from re-creating it.
+def _slot(step_key: str, tier: str) -> str:
+    from ticketing.services.cast_staffing import step_tier_role_key
+
+    return step_tier_role_key(WORKFLOW_KEY, step_key, tier)
+
+
+def _mint_slot_roles(db: Session, workflow: WorkflowDefinition, steps) -> None:
+    """Create the `roles` row backing every slot key the steps use."""
+    from ticketing.constants.tiers import STEP_FIELD_BY_TIER, TIERS
+    from ticketing.services.cast_staffing import ensure_tier_role, is_synthetic_key
+
+    for step in steps:
+        for tier in TIERS:
+            value = getattr(step, STEP_FIELD_BY_TIER[tier], None)
+            for key in (value if isinstance(value, list) else [value]):
+                if is_synthetic_key(key):
+                    ensure_tier_role(
+                        db, role_key=key, tier=tier, workflow=workflow,
+                        step_name=step.display_name or step.step_key,
+                    )
 
 
 def seed_organizations(db: Session) -> None:
@@ -156,7 +187,7 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=1,
             step_key="LEVEL_1_SITE",
             display_name="Level 1 – Site Safeguards",
-            assigned_role_key="site_safeguards_focal_person",
+            assigned_role_key=_slot("LEVEL_1_SITE", "actor"),
             # Staffed package by package (2026-08-08). Migration `p2r4t6v8` defaulted every
             # existing step to False to preserve behaviour, and the seed never said otherwise —
             # so the feature shipped switched off everywhere and read as broken: an author who
@@ -168,7 +199,7 @@ def seed_standard_workflow(db: Session) -> None:
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'Safeguard Officer', 'description': 'receives the grievance at site and resolves it'}, 'supervisor': {'label': 'PIU Safeguards Focal'}},
-            supervisor_role="pd_piu_safeguards_focal",
+            supervisor_role=_slot("LEVEL_1_SITE", "supervisor"),
             informed_roles=[],
             observer_roles=[],
             informed_pii_access=False,
@@ -188,11 +219,11 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=2,
             step_key="LEVEL_2_PIU",
             display_name="Level 2 – PD/PIU Safeguards",
-            assigned_role_key="pd_piu_safeguards_focal",
+            assigned_role_key=_slot("LEVEL_2_PIU", "actor"),
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'PIU Safeguards Focal'}, 'supervisor': {'label': 'National Project Director'}},
-            supervisor_role="adb_national_project_director",
+            supervisor_role=_slot("LEVEL_2_PIU", "supervisor"),
             informed_roles=[],
             observer_roles=[],
             informed_pii_access=False,
@@ -212,12 +243,12 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=3,
             step_key="LEVEL_3_GRC",
             display_name="Level 3 – Grievance Redress Committee (GRC)",
-            assigned_role_key="grc_chair",
+            assigned_role_key=_slot("LEVEL_3_GRC", "actor"),
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'GRC Chairperson', 'description': 'chairs the hearing and records the decision'}, 'supervisor': {'label': 'ADB Safeguards'}, 'participant': {'label': 'GRC Member'}},
-            supervisor_role="adb_hq_safeguards",
-            informed_roles=["grc_member"],   # GRC members are standing Informed at L3
+            supervisor_role=_slot("LEVEL_3_GRC", "supervisor"),
+            informed_roles=[_slot("LEVEL_3_GRC", "informed")],  # GRC members stand Informed at L3
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -242,7 +273,7 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=4,
             step_key="LEVEL_4_LEGAL",
             display_name="Level 4 – Legal Institutions",
-            assigned_role_key="adb_hq_safeguards",
+            assigned_role_key=_slot("LEVEL_4_LEGAL", "actor"),
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={
@@ -253,7 +284,7 @@ def seed_standard_workflow(db: Session) -> None:
             # Donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6): ADB is a donor
             # on KL Road, so the final standard step keeps a donor tier in the informed
             # cast → donor staff are notified on final escalation. SEAH-suppressed.
-            informed_roles=["donor_national"],
+            informed_roles=[_slot("LEVEL_4_LEGAL", "informed")],
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -277,6 +308,7 @@ def seed_standard_workflow(db: Session) -> None:
         db.add(step)
         logger.info("  + step: %s (order=%d)", step.step_key, step.step_order)
 
+    _mint_slot_roles(db, workflow, steps)
     db.flush()
 
 

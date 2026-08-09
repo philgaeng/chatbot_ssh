@@ -4,8 +4,10 @@ _role_usage_counts (used by DELETE /roles to 409 an in-use role) previously coun
 step only via assigned_role_key, so a role held only as supervisor/informed/observer
 could be deleted and orphan those references. It now counts all four tiers.
 
-Integration-only: exercised against the seeded KL_ROAD workflows, where
-adb_national_project_director is a supervisor-only role and grc_member is informed-only.
+Integration-only: exercised against the seeded KL_ROAD workflows. The keys are the per-slot
+ones (2026-08-09) — each (step, tier) slot owns its key, so "supervisor-only" and
+"informed-only" are now literally true of a key rather than a property of an operational role
+that happened to appear in one field.
 """
 from __future__ import annotations
 
@@ -28,19 +30,19 @@ def db():
 
 
 def test_supervisor_only_role_is_counted(db):
-    # supervisor on LEVEL_2_PIU, never an assigned role — the old guard missed it.
-    steps, _ = _role_usage_counts(db, "adb_national_project_director")
+    # Held as supervisor of L2 and nothing else — the old guard counted only assigned_role_key.
+    steps, _ = _role_usage_counts(db, "wf:KL_ROAD_STANDARD:LEVEL_2_PIU:supervisor")
     assert steps >= 1
 
 
 def test_informed_only_role_is_counted(db):
-    # appears only in LEVEL_3_GRC informed_roles.
-    steps, _ = _role_usage_counts(db, "grc_member")
+    # Appears only in LEVEL_3_GRC informed_roles.
+    steps, _ = _role_usage_counts(db, "wf:KL_ROAD_STANDARD:LEVEL_3_GRC:informed")
     assert steps >= 1
 
 
 def test_assigned_role_still_counted(db):
-    steps, _ = _role_usage_counts(db, "site_safeguards_focal_person")
+    steps, _ = _role_usage_counts(db, "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor")
     assert steps >= 1
 
 

@@ -33,6 +33,14 @@ logger = logging.getLogger(__name__)
 # ── Stable IDs ────────────────────────────────────────────────────────────────
 
 WORKFLOW_SEAH_ID = "00000000-0000-0000-0002-000000000001"
+WORKFLOW_KEY = "KL_ROAD_SEAH"
+
+
+# Each (step, tier) slot owns its key — see kl_road_standard._slot for why.
+def _slot(step_key: str, tier: str) -> str:
+    from ticketing.services.cast_staffing import step_tier_role_key
+
+    return step_tier_role_key(WORKFLOW_KEY, step_key, tier)
 
 STEP_SEAH_L1_ID = "00000000-0000-0000-0002-000000000011"
 STEP_SEAH_L2_ID = "00000000-0000-0000-0002-000000000012"
@@ -69,11 +77,11 @@ def seed_seah_workflow(db: Session) -> None:
             step_order=1,
             step_key="SEAH_LEVEL_1_NATIONAL",
             display_name="SEAH Level 1 – National Officer Investigation",
-            assigned_role_key="seah_national_officer",
+            assigned_role_key=_slot("SEAH_LEVEL_1_NATIONAL", "actor"),
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'SEAH National Officer'}, 'supervisor': {'label': 'SEAH HQ Officer'}},
-            supervisor_role="seah_hq_officer",
+            supervisor_role=_slot("SEAH_LEVEL_1_NATIONAL", "supervisor"),
             informed_roles=[],               # SEAH: no auto-informed; supervisor approval required to add
             observer_roles=[],
             informed_pii_access=False,       # Informed cannot see complainant PII on SEAH cases
@@ -94,11 +102,11 @@ def seed_seah_workflow(db: Session) -> None:
             step_order=2,
             step_key="SEAH_LEVEL_2_HQ",
             display_name="SEAH Level 2 – HQ Officer Review",
-            assigned_role_key="seah_hq_officer",
+            assigned_role_key=_slot("SEAH_LEVEL_2_HQ", "actor"),
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'SEAH HQ Officer'}, 'supervisor': {'label': 'ADB HQ Executive'}},
-            supervisor_role="adb_hq_exec",
+            supervisor_role=_slot("SEAH_LEVEL_2_HQ", "supervisor"),
             informed_roles=[],
             observer_roles=[],
             informed_pii_access=False,
@@ -118,6 +126,9 @@ def seed_seah_workflow(db: Session) -> None:
         db.add(step)
         logger.info("  + SEAH step: %s (order=%d)", step.step_key, step.step_order)
 
+    from ticketing.seed.kl_road_standard import _mint_slot_roles
+
+    _mint_slot_roles(db, workflow, steps)
     db.flush()
 
 

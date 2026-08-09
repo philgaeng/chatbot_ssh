@@ -380,6 +380,25 @@ def publish_workflow(
                 + "; ".join(unnamed[:5])
             ),
         )
+    # One role key may back only ONE slot in a workflow (2026-08-09). A cast assignment is
+    # stored as a role_key with no step or tier beside it, so two slots sharing a key are
+    # indistinguishable in the data: officers staffed into the earlier slot surface against the
+    # later one, and — worse — assignment and go-live resolve by role_key, so being "kept
+    # informed" at one level silently makes someone a candidate Actor at another.
+    from ticketing.services.cast_staffing import duplicate_slot_keys
+
+    dupes = duplicate_slot_keys(active_steps)
+    if dupes:
+        detail = "; ".join(f"{key} is used at {' and '.join(slots)}" for key, slots in sorted(dupes.items()))
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot publish: one job cannot be filled by the same role at two levels, "
+                "because officers assigned to one would appear at the other. "
+                f"Give each its own job: {detail}"
+            ),
+        )
+
     # SH-2: every step's role references must exist and match the workflow track —
     # publish is the full-workflow gate that also catches legacy/wrong-track bindings.
     for s in active_steps:

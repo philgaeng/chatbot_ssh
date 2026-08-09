@@ -23,7 +23,13 @@ from ticketing.models.workflow import WorkflowDefinition
 ORG_DOR = "DOR"
 ORG_ADB = "ADB"
 PROJECT_KL_ROAD = "KL_ROAD"
-ROLE_L1 = "site_safeguards_focal_person"
+# Per-slot keys (2026-08-09): each (step, tier) slot owns its role key, because a key shared by
+# two slots made cast assignments ambiguous — officers staffed into one surfaced against the
+# other. The seed writes these; `site_safeguards_focal_person` and friends remain *operational*
+# roles (permissions, tracks) but no longer name a slot.
+ROLE_L1 = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor"
+ROLE_L1_SUPERVISOR = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:supervisor"
+ROLE_L2 = "wf:KL_ROAD_STANDARD:LEVEL_2_PIU:actor"
 COUNTRY_L1_FALLBACK_ROLE = "country_l1_fallback"
 
 LOC_P1 = "P1"              # Koshi province

@@ -66,6 +66,17 @@ class DemoOfficerSpec:
 # P1_MOR, P1 (province 1) — match kl_road_standard seed codes.
 
 
+# Slot keys, not operational roles (2026-08-09). A demo officer is staffed into a specific
+# (step, tier) slot; the operational roles they *also* hold — permissions, tracks — are seeded
+# separately. One key naming two slots is what made staffing ambiguous, so these name slots.
+SLOT_L1_ACTOR = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor"
+SLOT_L1_SUPERVISOR = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:supervisor"
+SLOT_L3_ACTOR = "wf:KL_ROAD_STANDARD:LEVEL_3_GRC:actor"
+SLOT_L3_SUPERVISOR = "wf:KL_ROAD_STANDARD:LEVEL_3_GRC:supervisor"
+SLOT_L3_INFORMED = "wf:KL_ROAD_STANDARD:LEVEL_3_GRC:informed"
+SLOT_SEAH_L1_ACTOR = "wf:KL_ROAD_SEAH:SEAH_LEVEL_1_NATIONAL:actor"
+SLOT_SEAH_L1_SUPERVISOR = "wf:KL_ROAD_SEAH:SEAH_LEVEL_1_NATIONAL:supervisor"
+
 DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
     DemoOfficerSpec(
         OFFICER_ADMIN, "GRM", "Admin", "super_admin", "DOR",
@@ -83,54 +94,54 @@ DEMO_OFFICER_SPECS: tuple[DemoOfficerSpec, ...] = (
         user_role_location="P1", keycloak_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_SITE_L1, "Site", "Officer L1", "site_safeguards_focal_person", "DOR",
+        OFFICER_SITE_L1, "Site", "Officer L1", SLOT_L1_ACTOR, "DOR",
         user_role_location="P1_MOR", keycloak_location="P1_MOR",
     ),
     DemoOfficerSpec(
-        OFFICER_SITE_L1_2, "Site", "Officer L1-2", "site_safeguards_focal_person", "DOR",
+        OFFICER_SITE_L1_2, "Site", "Officer L1-2", SLOT_L1_ACTOR, "DOR",
         user_role_location="P1_JHA", keycloak_location="P1_JHA",
     ),
     DemoOfficerSpec(
-        OFFICER_SITE_L1_3, "Site", "Officer L1-3", "site_safeguards_focal_person", "DOR",
+        OFFICER_SITE_L1_3, "Site", "Officer L1-3", SLOT_L1_ACTOR, "DOR",
         user_role_location="P1_SUN", keycloak_location="P1_SUN",
     ),
     DemoOfficerSpec(
-        OFFICER_SITE_L1_4, "Site", "Officer L1-4", "site_safeguards_focal_person", "DOR",
+        OFFICER_SITE_L1_4, "Site", "Officer L1-4", SLOT_L1_ACTOR, "DOR",
         user_role_location="P1_MOR", keycloak_location="P1_MOR",
     ),
     DemoOfficerSpec(
-        OFFICER_PIU_L2, "PIU", "Officer L2", "pd_piu_safeguards_focal", "DOR",
+        OFFICER_PIU_L2, "PIU", "Officer L2", SLOT_L1_SUPERVISOR, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_PIU_L2_2, "PIU", "Officer L2-2", "pd_piu_safeguards_focal", "DOR",
+        OFFICER_PIU_L2_2, "PIU", "Officer L2-2", SLOT_L1_SUPERVISOR, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_PIU_L2_3, "PIU", "Officer L2-3", "pd_piu_safeguards_focal", "DOR",
+        OFFICER_PIU_L2_3, "PIU", "Officer L2-3", SLOT_L1_SUPERVISOR, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_GRC_CHAIR, "GRC", "Chair", "grc_chair", "DOR",
+        OFFICER_GRC_CHAIR, "GRC", "Chair", SLOT_L3_ACTOR, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_GRC_MEMBER_1, "GRC", "Member 1", "grc_member", "DOR",
+        OFFICER_GRC_MEMBER_1, "GRC", "Member 1", SLOT_L3_INFORMED, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_GRC_MEMBER_2, "GRC", "Member 2", "grc_member", "DOR",
+        OFFICER_GRC_MEMBER_2, "GRC", "Member 2", SLOT_L3_INFORMED, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_SEAH_NATIONAL, "SEAH", "Officer", "seah_national_officer", "DOR",
+        OFFICER_SEAH_NATIONAL, "SEAH", "Officer", SLOT_SEAH_L1_ACTOR, "DOR",
         user_role_location="P1",
     ),
     DemoOfficerSpec(
-        OFFICER_SEAH_HQ, "SEAH", "HQ Officer", "seah_hq_officer", "ADB",
+        OFFICER_SEAH_HQ, "SEAH", "HQ Officer", SLOT_SEAH_L1_SUPERVISOR, "ADB",
     ),
     DemoOfficerSpec(
-        OFFICER_ADB, "ADB", "Safeguards", "adb_hq_safeguards", "ADB",
+        OFFICER_ADB, "ADB", "Safeguards", SLOT_L3_SUPERVISOR, "ADB",
     ),
 )
 

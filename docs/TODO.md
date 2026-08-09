@@ -42,6 +42,21 @@ the ui/04 wireframe still mocking "Implementing agency + Donors".
 
 ---
 
+## 🔵 One role key per slot — BUILT 2026-08-09 (`followups/seed-synthetic-slot-keys.md`)
+
+`officer_scopes` identifies a cast assignment by `role_key` alone — no step, no tier — so two
+slots sharing a key were indistinguishable in the data. `adb_hq_safeguards` backed both
+L3-supervisor and L4-actor, and 18 assignments made at Level 3 all surfaced at Level 4; worse,
+assignment and go-live resolve by `role_key`, so "kept informed" at one level made someone a
+candidate **Actor** at another. Five keys collided, `dor_dpd_adb` across four slots.
+
+Migration `x0z2b4d6` gives every slot its own synthetic key, the seeds author them, and publish
+refuses a workflow that reuses one. A fresh migrate + seed reports zero collisions.
+
+| Outstanding | Why |
+|---|---|
+| **Scopes left where the key backed 2 slots in one workflow** | Which slot a row meant is unknowable; guessing could promote an observer to actor. They are inert (no slot uses those keys) — re-assign those officers on screen |
+
 ## 🔵 Packages are the only coverage — BUILT 2026-08-08 (`followups/drop-project-locations.md`)
 
 Decided by Philippe 2026-08-08: a package is **code + name + description + locations, and that

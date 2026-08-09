@@ -18,19 +18,28 @@ from ticketing.services.seah_visibility import seah_track_role_keys, user_is_sea
 pytestmark = pytest.mark.integration
 
 
+# The seeded SEAH workflow's slots. Named operational roles (`seah_national_officer`) stopped
+# appearing on steps on 2026-08-09: each (step, tier) slot owns its key now, because a key shared
+# by two slots made cast assignments ambiguous. Track membership is still "cast on a SEAH-track
+# workflow" — it is the keys that changed, not the rule.
+SEAH_L1_ACTOR = "wf:KL_ROAD_SEAH:SEAH_LEVEL_1_NATIONAL:actor"
+SEAH_L2_ACTOR = "wf:KL_ROAD_SEAH:SEAH_LEVEL_2_HQ:actor"
+STD_L1_ACTOR = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor"
+
+
 def test_seeded_seah_roles_are_track_members(db):
     keys = seah_track_role_keys(db)
     # The seeded KL_ROAD_SEAH workflow casts these on its steps.
-    assert "seah_national_officer" in keys
-    assert "seah_hq_officer" in keys
-    # Standard operational roles are NOT SEAH-track (isolation).
-    assert "site_safeguards_focal_person" not in keys
+    assert SEAH_L1_ACTOR in keys
+    assert SEAH_L2_ACTOR in keys
+    # Standard slots are NOT SEAH-track (isolation).
+    assert STD_L1_ACTOR not in keys
     assert "grc_chair" not in keys
 
 
 def test_user_is_seah_track_member(db):
-    assert user_is_seah_track_member(db, ["seah_national_officer"]) is True
-    assert user_is_seah_track_member(db, ["site_safeguards_focal_person"]) is False
+    assert user_is_seah_track_member(db, [SEAH_L1_ACTOR]) is True
+    assert user_is_seah_track_member(db, [STD_L1_ACTOR]) is False
     assert user_is_seah_track_member(db, []) is False
 
 

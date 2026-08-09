@@ -169,3 +169,39 @@ def self_escalation_conflict(
             OfficerScope.project_id == project_id,
         )
     return db.execute(stmt.limit(1)).first() is not None
+
+
+def duplicate_slot_keys(steps) -> dict[str, list[str]]:
+    """Role keys that back more than one (step, tier) slot in one workflow.
+
+    **Why this cannot be allowed** (2026-08-09). A cast assignment is stored in
+    ``officer_scopes`` as a ``role_key`` and nothing else — no step, no tier. So two slots
+    sharing a key are indistinguishable *in the data*, and everything downstream picks one:
+
+      * ``read_cast`` builds ``role_key -> (step, tier)`` and the last step processed wins, so
+        officers staffed into the earlier slot render against the later one. On staging,
+        ``adb_hq_safeguards`` backed both L3-supervisor and L4-actor, and 18 assignments made at
+        Level 3 all appeared at Level 4 — the author concluded, reasonably, that Level 3 could
+        not be staffed at all.
+      * Worse than display: go-live and assignment resolve officers by ``role_key``, so anyone
+        added as "kept informed" at L3 silently became a candidate **Actor** at L4.
+
+    Synthetic per-slot keys (``step_tier_role_key``) are unique by construction and are what
+    ``set_step_tier_keys`` mints — but only into *empty* fields, so workflows seeded with named
+    operational roles kept theirs and collided. This makes the collision unpublishable rather
+    than merely repaired once.
+
+    Returns ``{role_key: ["L3/supervisor", "L4/actor"]}`` for the offenders only.
+    """
+    from collections import defaultdict
+
+    seen: dict[str, list[str]] = defaultdict(list)
+    for step in steps:
+        for tier in (ACTOR, SUPERVISOR, PARTICIPANT, OBSERVER):
+            field = STEP_FIELD_BY_TIER[tier]
+            value = getattr(step, field, None)
+            keys = value if isinstance(value, list) else [value]
+            for key in keys:
+                if key:
+                    seen[key].append(f"L{step.step_order}/{tier}")
+    return {k: v for k, v in seen.items() if len(v) > 1}

@@ -252,6 +252,16 @@ def seed_mock_officer_scopes(db: Session) -> None:
     """
     from sqlalchemy import select
 
+    def STD(step_key: str, tier: str) -> str:
+        from ticketing.seed.kl_road_standard import _slot
+
+        return _slot(step_key, tier)
+
+    def SEAH(step_key: str, tier: str) -> str:
+        from ticketing.seed.kl_road_seah import _slot as seah_slot
+
+        return seah_slot(step_key, tier)
+
     scopes = [
         # Project admin: KL Road project setup (province-wide)
         dict(user_id=OFFICER_PROJECT_ADMIN, role_key="project_admin",
@@ -259,57 +269,75 @@ def seed_mock_officer_scopes(db: Session) -> None:
              project_code="KL_ROAD", includes_children=True),
 
         # L1 site officers — one primary district each (+ L1-4 also Morang for load balance)
-        dict(user_id=OFFICER_SITE_L1, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_2, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_2, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_JHAPA_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_3, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_3, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_SUNSARI_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_4, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_4, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # L2 PIU: Province 1 + all children (three officers for load balancing)
-        dict(user_id=OFFICER_PIU_L2, role_key="pd_piu_safeguards_focal",
+        # PIU focals hold two jobs: supervisor of L1 and actor of L2. Under one shared key that
+        # was a single row and an ambiguity; per-slot keys make it two honest rows.
+        dict(user_id=OFFICER_PIU_L2, role_key=STD("LEVEL_1_SITE", "supervisor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_PIU_L2_2, role_key="pd_piu_safeguards_focal",
+        dict(user_id=OFFICER_PIU_L2_2, role_key=STD("LEVEL_1_SITE", "supervisor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_PIU_L2_3, role_key="pd_piu_safeguards_focal",
+        dict(user_id=OFFICER_PIU_L2_3, role_key=STD("LEVEL_1_SITE", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        # …and the same three as actors of L2, the level they own.
+        dict(user_id=OFFICER_PIU_L2, role_key=STD("LEVEL_2_PIU", "actor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_2, role_key=STD("LEVEL_2_PIU", "actor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_3, role_key=STD("LEVEL_2_PIU", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # GRC chair: Province 1 level
-        dict(user_id=OFFICER_GRC_CHAIR, role_key="grc_chair",
+        dict(user_id=OFFICER_GRC_CHAIR, role_key=STD("LEVEL_3_GRC", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # GRC members: Province 1 level
-        dict(user_id=OFFICER_GRC_MEMBER_1, role_key="grc_member",
+        dict(user_id=OFFICER_GRC_MEMBER_1, role_key=STD("LEVEL_3_GRC", "informed"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_GRC_MEMBER_2, role_key="grc_member",
+        dict(user_id=OFFICER_GRC_MEMBER_2, role_key=STD("LEVEL_3_GRC", "informed"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # SEAH national: Province 1 + all children (covers Sunsari etc.)
-        dict(user_id=OFFICER_SEAH_NATIONAL, role_key="seah_national_officer",
+        dict(user_id=OFFICER_SEAH_NATIONAL, role_key=SEAH("SEAH_LEVEL_1_NATIONAL", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # SEAH HQ: no location = sees all DOR SEAH tickets across KL_ROAD
         # (organization_id=DOR because all tickets are owned by DOR, the executing agency)
-        dict(user_id=OFFICER_SEAH_HQ, role_key="seah_hq_officer",
+        dict(user_id=OFFICER_SEAH_HQ, role_key=SEAH("SEAH_LEVEL_1_NATIONAL", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+        dict(user_id=OFFICER_SEAH_HQ, role_key=SEAH("SEAH_LEVEL_2_HQ", "actor"),
              organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
         # ADB observer: no location = observes all DOR standard tickets
         # (organization_id=DOR because tickets belong to the executing agency, not the donor)
-        dict(user_id=OFFICER_ADB, role_key="adb_hq_safeguards",
+        dict(user_id=OFFICER_ADB, role_key=STD("LEVEL_3_GRC", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+        dict(user_id=OFFICER_ADB, role_key=STD("LEVEL_4_LEGAL", "actor"),
              organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 

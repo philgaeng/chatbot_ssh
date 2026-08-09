@@ -10,8 +10,16 @@ from __future__ import annotations
 COUNTRY_L1_FALLBACK_ROLE = "country_l1_fallback"
 
 # Step assigned_role_key → country fallback role (None = no country tier).
+#
+# Keyed on whatever the **step** holds, which changed on 2026-08-09: each (step, tier) slot now
+# owns its key, so the seeded Level 1 actor is `wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor`. The
+# named role stays mapped as well — it is what a database still carries before migration
+# `x0z2b4d6` runs, and what any workflow authored the old way still uses. Both mean the same
+# thing here: a Level 1 with nobody in range falls back to the country officer so intake never
+# dead-ends.
 STEP_ROLE_COUNTRY_FALLBACK: dict[str, str] = {
     "site_safeguards_focal_person": COUNTRY_L1_FALLBACK_ROLE,
+    "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor": COUNTRY_L1_FALLBACK_ROLE,
 }
 
 

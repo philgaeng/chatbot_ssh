@@ -42,6 +42,7 @@ from tests.ticketing.conftest import (
     ORG_DOR,
     PROJECT_KL_ROAD,
     ROLE_L1,
+    ROLE_L1_SUPERVISOR,
     WORKFLOW_SEAH_KEY,
     WORKFLOW_STANDARD_KEY,
     _uid,
@@ -277,7 +278,7 @@ class TestNoMatchAndExclusions:
         contained, not dependent on incidental seed coverage)."""
         supervisor = _uid("p2-supervisor")
         ctx.add_scope(
-            supervisor, role_key="pd_piu_safeguards_focal",
+            supervisor, role_key=ROLE_L1_SUPERVISOR,
             location_code=LOC_P2_PAR_BIR, project_code=PROJECT_KL_ROAD,
         )
         assigned = _simulate_create_assignment(ctx.db, location_code=LOC_P2_PAR_BIR)
@@ -436,7 +437,7 @@ class TestSupervisorFallback:
         l2_officer = _uid("l2-supervisor")
         ctx.add_scope(
             l2_officer,
-            role_key="pd_piu_safeguards_focal",
+            role_key=ROLE_L1_SUPERVISOR,
             location_code=None,
             package_id=pkg.package_id,
         )
@@ -447,7 +448,7 @@ class TestSupervisorFallback:
             PROJECT_KL_ROAD,
             ctx.db,
             ticket_package_id=pkg.package_id,
-            supervisor_role="pd_piu_safeguards_focal",
+            supervisor_role=ROLE_L1_SUPERVISOR,
         )
         assert assigned == l2_officer
 
