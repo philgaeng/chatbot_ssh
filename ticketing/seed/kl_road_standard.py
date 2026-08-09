@@ -157,6 +157,14 @@ def seed_standard_workflow(db: Session) -> None:
             step_key="LEVEL_1_SITE",
             display_name="Level 1 – Site Safeguards",
             assigned_role_key="site_safeguards_focal_person",
+            # Staffed package by package (2026-08-08). Migration `p2r4t6v8` defaulted every
+            # existing step to False to preserve behaviour, and the seed never said otherwise —
+            # so the feature shipped switched off everywhere and read as broken: an author who
+            # ticked it saw nothing change, because the level they were looking at was one of
+            # the levels nobody had ticked. This is the level the flag exists for: a site
+            # officer belongs to a stretch of road, not to the whole project. Upper levels stay
+            # project-wide — one PD/PIU focal, one GRC chair, one ADB HQ officer.
+            staff_per_package=True,
             # The author's name for each job at this level (doc 12 §6.2) —
             # what officers read on staffing, the case view and go-live.
             tier_labels={'actor': {'label': 'Safeguard Officer', 'description': 'receives the grievance at site and resolves it'}, 'supervisor': {'label': 'PIU Safeguards Focal'}},

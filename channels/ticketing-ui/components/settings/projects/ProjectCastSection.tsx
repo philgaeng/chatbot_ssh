@@ -41,22 +41,35 @@ export function ProjectCastSection({
   orgs: OrganizationItem[];
   onChanged?: () => void;
 }) {
+  /** One entry per **slot**, not per workflow.
+   *
+   *  Two slots may share a workflow, and the seeded `construction_road` type does exactly that:
+   *  "Safeguards GRM" and "Road hazard" both point at the standard workflow, the second only to
+   *  route Road Hazard classifications down the same ladder. Keying the tabs on `workflow_id`
+   *  therefore produced two tabs with the *same* React key, and selecting either one selected
+   *  both — indistinguishable on screen (2026-08-08). `project_workflow_id` is the slot's own
+   *  id, so tabs stay distinct however many share a workflow. */
   const boundWorkflows = useMemo(() => {
     const slots = (project.workflow_slots ?? []).slice().sort((a, b) => a.sort_order - b.sort_order);
     if (slots.length) {
       return slots.map((s) => ({
+        slotId: s.project_workflow_id,
         id: s.workflow_id,
         label: s.display_label || (s.workflow_track === "seah" ? "SEAH" : "Standard"),
         track: s.workflow_track,
       }));
     }
-    const out: { id: string; label: string; track: string }[] = [];
-    if (project.standard_workflow_id) out.push({ id: project.standard_workflow_id, label: "Standard", track: "standard" });
-    if (project.seah_workflow_id) out.push({ id: project.seah_workflow_id, label: "SEAH", track: "seah" });
+    // Legacy projects with no slot rows: the two mirrored columns. One workflow each, so the
+    // workflow id doubles as the slot id.
+    const out: { slotId: string; id: string; label: string; track: string }[] = [];
+    if (project.standard_workflow_id) out.push({ slotId: project.standard_workflow_id, id: project.standard_workflow_id, label: "Standard", track: "standard" });
+    if (project.seah_workflow_id) out.push({ slotId: project.seah_workflow_id, id: project.seah_workflow_id, label: "SEAH", track: "seah" });
     return out;
   }, [project.workflow_slots, project.standard_workflow_id, project.seah_workflow_id]);
 
-  const [selectedWfId, setSelectedWfId] = useState<string | null>(boundWorkflows[0]?.id ?? null);
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(boundWorkflows[0]?.slotId ?? null);
+  const selectedSlot = boundWorkflows.find((w) => w.slotId === selectedSlotId) ?? boundWorkflows[0] ?? null;
+  const selectedWfId = selectedSlot?.id ?? null;
   /** Steps for EVERY bound workflow, not just the open tab.
    *
    *  Loading only the open tab is what made the per-package switch look broken (2026-08-08):
@@ -69,7 +82,8 @@ export function ProjectCastSection({
 
   const activePackages = useMemo(() => packages.filter((p) => p.is_active), [packages]);
 
-  const wfIdsKey = boundWorkflows.map((w) => w.id).join(",");
+  // Deduped: two slots sharing a workflow fetch it once.
+  const wfIdsKey = Array.from(new Set(boundWorkflows.map((w) => w.id))).join(",");
   const loadSteps = useCallback(async () => {
     const ids = wfIdsKey ? wfIdsKey.split(",") : [];
     if (!ids.length) { setStepsByWf({}); return; }
@@ -108,6 +122,7 @@ export function ProjectCastSection({
     () => boundWorkflows.filter((w) => (stepsByWf[w.id] ?? []).some((s) => s.staff_per_package)),
     [boundWorkflows, stepsByWf],
   );
+  const isPerPackage = (slotId: string) => perPackageWorkflows.some((p) => p.slotId === slotId);
 
   if (boundWorkflows.length === 0) {
     return (
@@ -137,7 +152,7 @@ export function ProjectCastSection({
         <p className="mt-2 max-w-2xl rounded border border-gray-200 bg-gray-50 px-3 py-2 text-xs text-gray-600">
           This project has {activePackages.length} {activePackages.length === 1 ? "package" : "packages"}.
           Every level of{" "}
-          <strong>{boundWorkflows.find((w) => w.id === selectedWfId)?.label ?? "this workflow"}</strong>{" "}
+          <strong>{selectedSlot?.label ?? "this workflow"}</strong>{" "}
           is staffed once for the whole project, so no package is asked about on this tab.{" "}
           {perPackageWorkflows.length > 0 ? (
             <>
@@ -147,7 +162,7 @@ export function ProjectCastSection({
                   {i > 0 && ", "}
                   <button
                     type="button"
-                    onClick={() => setSelectedWfId(w.id)}
+                    onClick={() => setSelectedSlotId(w.slotId)}
                     className="font-semibold text-blue-600 hover:underline"
                   >
                     {w.label}
@@ -172,14 +187,14 @@ export function ProjectCastSection({
       {boundWorkflows.length > 1 && (
         <div className="mt-3 flex gap-0 border-b border-gray-200" role="tablist">
           {boundWorkflows.map((w) => {
-            const on = w.id === selectedWfId;
+            const on = w.slotId === selectedSlotId;
             return (
               <button
-                key={w.id}
+                key={w.slotId}
                 type="button"
                 role="tab"
                 aria-selected={on}
-                onClick={() => setSelectedWfId(w.id)}
+                onClick={() => setSelectedSlotId(w.slotId)}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   on
                     ? "border-blue-500 text-blue-600"
@@ -191,7 +206,7 @@ export function ProjectCastSection({
                   <span className="ml-1.5 text-xs font-semibold text-red-700">Sensitive</span>
                 )}
                 {/* Says where the per-package work is without opening every tab to find out. */}
-                {perPackageWorkflows.some((p) => p.id === w.id) && (
+                {isPerPackage(w.slotId) && (
                   <span className="ml-1.5 text-xs font-normal text-gray-500">by package</span>
                 )}
               </button>

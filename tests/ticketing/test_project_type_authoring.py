@@ -73,9 +73,19 @@ def _binding(label, wid, *, default=False, route="new_grievance", categories=Non
 # named on a project sees its grievances, so there is nothing to designate.
 
 
-def test_a_type_can_start_empty():
-    """A new type has no organizations yet; the author adds them before offering it."""
-    _validate_config(None, actor_roles=[], workflow_bindings=[])
+def test_a_type_cannot_start_empty():
+    """**Reversed 2026-08-08** (Philippe). This asserted the opposite — that a new type may have
+    no organizations and the author adds them later — and "later" turned out to be never: a type
+    saved empty produced a project whose Organizations section was a dead end, while the go-live
+    rail called that section green (nothing required, so nothing missing, so B1 passed).
+
+    The rule and its reasoning live in `test_package_is_the_only_coverage`'s sibling,
+    `test_project_type_needs_an_organization.py`; asserted here too because this is the file
+    someone reads when changing type authoring.
+    """
+    with pytest.raises(HTTPException) as exc:
+        _validate_config(None, actor_roles=[], workflow_bindings=[])
+    assert exc.value.status_code == 422
 
 
 def test_duplicate_roles_are_refused():
@@ -105,7 +115,7 @@ def test_exactly_one_default(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _validate_config(
             None,
-            actor_roles=[],
+            actor_roles=[ROLE_IA],
             workflow_bindings=[_binding("A", "w1", default=True), _binding("B", "w2", default=True)],
         )
     assert "exactly one" in exc.value.detail.lower()
@@ -118,7 +128,7 @@ def test_the_default_cannot_be_sensitive(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _validate_config(
             None,
-            actor_roles=[],
+            actor_roles=[ROLE_IA],
             workflow_bindings=[_binding("Sensitive", "seah", default=True)],
         )
     assert "sensitive" in exc.value.detail.lower()
@@ -129,7 +139,7 @@ def test_a_non_default_workflow_needs_a_chatbot_menu(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _validate_config(
             None,
-            actor_roles=[],
+            actor_roles=[ROLE_IA],
             workflow_bindings=[
                 _binding("Default", "w1", default=True),
                 {**_binding("Hazards", "w2"), "intake_route": None},
@@ -143,7 +153,7 @@ def test_a_category_belongs_to_one_workflow(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         _validate_config(
             None,
-            actor_roles=[],
+            actor_roles=[ROLE_IA],
             workflow_bindings=[
                 _binding("Default", "w1", default=True),
                 _binding("Hazards", "w2", categories=["Environmental"]),
