@@ -615,9 +615,15 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 "Every level has someone who can reassign a grievance"
                 if r1_ok
                 else (
+                    # Names the remedies the author can reach from where they are standing.
+                    # It used to end "or add a project administrator" — a screen that is
+                    # super_admin-only, at the far end of Settings, with a free-text project
+                    # field. Telling someone to do a thing they may not be permitted to do,
+                    # and not naming the two they can, is how a real blocker reads as a wall.
                     "No one can reassign at: "
                     + ", ".join(r1_gaps[:5])
-                    + " — staff a supervisor, or add a project administrator"
+                    + " — staff a supervisor at that level, or let its officer reassign "
+                    "(both on the workflow's level)"
                 )
             ),
             section="staffing",

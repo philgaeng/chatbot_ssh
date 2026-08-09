@@ -97,8 +97,19 @@ def _dispatcher_holder(db: Session, project_refs: list[str], package_id: str | N
     return None
 
 
-def _project_admin_holder(db: Session, project_refs: list[str]) -> str | None:
-    """A project_admin over the project — the guaranteed backstop."""
+def _project_admin_holder(db: Session, project_refs: list[str], project=None) -> str | None:
+    """An administrator who can act on this project — the guaranteed backstop.
+
+    **Widened 2026-08-09** (Philippe: *"I don't see the need for a project administrator as this
+    is 100% managed in the admin section and whoever creates the project has indeed rights to
+    administrate it"*). This asked only for a `project_admin` row on the project, which is the
+    **third** tier of the ladder — so a project administered by an `org_admin` whose subtree
+    covers it, or by a `super_admin`, had no reassigner as far as go-live was concerned, and R1
+    demanded a row granting authority those people already had. That is a check disagreeing with
+    the permission model, not a real gap.
+
+    Order is cheapest-first: the project's own admins, then the tiers above it.
+    """
     if not project_refs:
         return None
     rows = db.execute(
@@ -107,7 +118,38 @@ def _project_admin_holder(db: Session, project_refs: list[str]) -> str | None:
             AdminScope.project_id.in_(project_refs),
         )
     ).scalars().all()
-    return _first_active(db, rows)
+    uid = _first_active(db, rows)
+    if uid:
+        return uid
+
+    # A super_admin administers every project, unbounded (doc 11 §2.2).
+    rows = db.execute(
+        sa.select(OfficerScope.user_id).where(OfficerScope.role_key == "super_admin")
+    ).scalars().all()
+    uid = _first_active(db, rows)
+    if uid:
+        return uid
+
+    # An org_admin reaches the projects whose implementing agency sits in its subtree — the
+    # same rule `org_admin_manages_project` applies in the other direction. An unanchored
+    # project (no implementing agency yet) is reachable by any org_admin, matching that helper.
+    if project is None:
+        return None
+    from ticketing.services.org_tree import descendant_org_ids
+    from ticketing.services.donor_guardrail import implementing_agency_org_id
+
+    ia = implementing_agency_org_id(db, project)
+    org_admins = db.execute(
+        sa.select(AdminScope.user_id, AdminScope.organization_id).where(
+            AdminScope.role_key == "org_admin"
+        )
+    ).all()
+    for user_id, org_id in org_admins:
+        # NULL org = the country-wide bridge; it reaches everything.
+        if not ia or not org_id or ia in descendant_org_ids(db, org_id):
+            if officer_is_active(db, user_id):
+                return user_id
+    return None
 
 
 def _pool_staffed(db: Session, project_refs: list[str], role_key: str | None) -> bool:
@@ -158,7 +200,10 @@ def resolve_reassignment_authority(
     ):
         return ReassignmentAuthority(ticket.assigned_to_user_id, "actor_self")
 
-    pa = _project_admin_holder(db, refs)
+    project = (
+        db.get(Project, ticket.project_id) if getattr(ticket, "project_id", None) else None
+    )
+    pa = _project_admin_holder(db, refs, project)
     if pa:
         return ReassignmentAuthority(pa, "project_admin")
 
@@ -181,4 +226,4 @@ def step_has_reachable_reassigner(
         return True
     if getattr(step, "actor_can_reassign", False) and _pool_staffed(db, refs, step.assigned_role_key):
         return True
-    return _project_admin_holder(db, refs) is not None
+    return _project_admin_holder(db, refs, project) is not None
