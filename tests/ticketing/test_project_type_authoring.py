@@ -73,19 +73,14 @@ def _binding(label, wid, *, default=False, route="new_grievance", categories=Non
 # named on a project sees its grievances, so there is nothing to designate.
 
 
-def test_a_type_cannot_start_empty():
-    """**Reversed 2026-08-08** (Philippe). This asserted the opposite — that a new type may have
-    no organizations and the author adds them later — and "later" turned out to be never: a type
-    saved empty produced a project whose Organizations section was a dead end, while the go-live
-    rail called that section green (nothing required, so nothing missing, so B1 passed).
+def test_a_type_can_start_empty():
+    """Restored 2026-08-08 after a guard briefly forbade it and made new types uncreatable.
 
-    The rule and its reasoning live in `test_package_is_the_only_coverage`'s sibling,
-    `test_project_type_needs_an_organization.py`; asserted here too because this is the file
-    someone reads when changing type authoring.
+    A type is authored empty and filled in — `ProjectTypesTab` creates it with no organizations
+    and `is_active: false`, then says "Set it up, then turn it on". What it may not do is be
+    *turned on* empty; that rule lives in `test_project_type_needs_an_organization.py`.
     """
-    with pytest.raises(HTTPException) as exc:
-        _validate_config(None, actor_roles=[], workflow_bindings=[])
-    assert exc.value.status_code == 422
+    _validate_config(None, actor_roles=[], workflow_bindings=[])
 
 
 def test_duplicate_roles_are_refused():

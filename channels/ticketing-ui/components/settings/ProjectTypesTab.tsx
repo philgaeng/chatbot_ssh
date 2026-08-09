@@ -101,6 +101,7 @@ export function ProjectTypesTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
+  const [msgTone, setMsgTone] = useState<"ok" | "error">("ok");
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -132,9 +133,20 @@ export function ProjectTypesTab() {
     listOrganizations().then(setOrgs).catch(() => {});
   }, []);
 
+  /** A confirmation. Green, and it clears itself. */
   function flash(t: string) {
+    setMsgTone("ok");
     setMsg(t);
     setTimeout(() => setMsg(""), 3000);
+  }
+
+  /** A refusal. Red, and it stays until the next action — a rule the user has to read and act
+   *  on is not a toast. Both used to go through `flash()` into one green line, so a 422 saying
+   *  "name at least one organization" arrived looking like success (2026-08-08, Philippe:
+   *  "can you explain this bug? I was not able to create a new type"). */
+  function fail(t: string) {
+    setMsgTone("error");
+    setMsg(t);
   }
 
   const orgName = useCallback(
@@ -176,7 +188,7 @@ export function ProjectTypesTab() {
       setOpenKey(created.type_key);
       flash("Project type created. Set it up, then turn it on.");
     } catch (e: unknown) {
-      flash(friendlyError(e));
+      fail(friendlyError(e));
     }
   }
 
@@ -193,7 +205,18 @@ export function ProjectTypesTab() {
         Once a project is live on a type, its setup can no longer change. Copy the type to make
         changes.
       </p>
-      {msg && <p className="text-xs text-green-700 font-medium mb-3">{msg}</p>}
+      {msg && (
+        <p
+          role={msgTone === "error" ? "alert" : undefined}
+          className={`text-xs font-medium mb-3 ${
+            msgTone === "error"
+              ? "rounded border border-red-200 bg-red-50 px-3 py-2 text-red-700"
+              : "text-green-700"
+          }`}
+        >
+          {msg}
+        </p>
+      )}
 
       <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 mb-4">
         {types.length === 0 ? (
@@ -261,7 +284,7 @@ export function ProjectTypesTab() {
                     setOpenKey(copy.type_key);
                     flash("Copy created. Edit it, then turn it on.");
                   }}
-                  onError={flash}
+                  onError={fail}
                 />
               )}
             </div>
@@ -753,7 +776,12 @@ function ProjectTypeEditor({
 
       <div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={offered} onChange={(e) => setOffered(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={offered}
+            disabled={roles.length === 0}
+            onChange={(e) => setOffered(e.target.checked)}
+          />
           Can be chosen when creating a project
         </label>
         <p className="text-xs text-gray-500 mt-1 ml-6">
@@ -762,14 +790,13 @@ function ProjectTypeEditor({
         </p>
       </div>
 
-      {/* No organization, no save (2026-08-08). A type with an empty catalog produces projects
-          whose Organizations section can do nothing — and whose grievances reach nobody, since
-          an organization sees a project's grievances only by being named on it. Said here, at
-          the moment of authoring, rather than discovered on a project four screens later. The
-          API refuses it too (422); this is so nobody has to meet that error. */}
+      {/* An empty type saves fine — it is authored empty and filled in. What it cannot do is
+          be turned ON empty (2026-08-08): a project built from it would open its Organizations
+          section to a dead end, and nobody would see its grievances, since an organization sees
+          a project's grievances only by being named on it. The API refuses that too (422). */}
       {roles.length === 0 && (
         <p className="max-w-xl rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Name at least one organization above before saving. Projects built from this type can
+          Name at least one organization before turning this type on. Projects built from it can
           only name the organizations listed here, and an organization must be named to see the
           project&apos;s grievances.
         </p>
@@ -778,9 +805,8 @@ function ProjectTypeEditor({
       <div className="flex items-center gap-3">
         <button
           type="button"
-          disabled={saving || roles.length === 0}
+          disabled={saving}
           onClick={() => void save()}
-          title={roles.length === 0 ? "Name at least one organization first" : undefined}
           className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded hover:bg-blue-700 disabled:opacity-50"
         >
           {saving ? "Saving…" : "Save project type"}

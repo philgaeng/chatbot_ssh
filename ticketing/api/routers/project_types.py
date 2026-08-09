@@ -236,33 +236,11 @@ def _validate_config(
     *,
     actor_roles: list[dict[str, Any]],
     workflow_bindings: list[dict[str, Any]],
-    require_actor_roles: bool = True,
 ) -> None:
     """Check the *resulting* configuration before it is stored.
 
     Raises 422 with a message an admin can act on (doc ui/05 §2.5 — no field names, no codes).
     """
-    # A type must name at least one organization (Philippe, 2026-08-08, after saving one that
-    # named none). The type is where a project learns which organizations it must have, so a
-    # type that names none produces projects whose Organizations section can do nothing — and
-    # nobody sees their grievances, because `services/org_reach.py` reads exactly this list to
-    # decide who a grievance reaches in reports. Same shape as "no name, no save" on workflow
-    # jobs: catch it where it is authored, not four screens later where it is only a symptom.
-    #
-    # Only when the caller is actually *setting* the catalog (`require_actor_roles`). A PATCH
-    # that touches just the name falls back to the stored list, and a frozen type in use keeps
-    # its name editable on purpose (§8) — enforcing here would make an existing empty type
-    # unrenamable, which is the one thing its author still needs to be able to do.
-    if require_actor_roles and not actor_roles:
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "Name at least one organization for this type. Projects built from it can only "
-                "name the organizations listed here, and an organization must be named to see "
-                "the project's grievances."
-            ),
-        )
-
     seen: set[str] = set()
     for entry in actor_roles:
         key = (entry.get("key") or "").strip()
@@ -369,6 +347,37 @@ def _validate_owner(db: Session, owner_organization_id: str | None) -> None:
         )
 
 
+
+def _require_organizations_to_offer(
+    actor_roles: list[dict[str, Any]], *, offered: bool
+) -> None:
+    """A type may be **created** empty, but it may not be **offered** empty.
+
+    Philippe, 2026-08-08, after building a project on a type that named no organizations: its
+    Organizations section was a dead end, and go-live's B1 called it green (nothing required, so
+    nothing missing). `services/org_reach.py` reads that same list to decide who sees a grievance
+    in reports, so such a project's grievances reach nobody.
+
+    **The first attempt put this on create and broke type authoring entirely.** Types are
+    authored empty on purpose — `ProjectTypesTab` posts `actor_roles: []`, `is_active: false`
+    and then says "Set it up, then turn it on" — so requiring organizations at POST meant no new
+    type could ever be created. `test_a_type_can_start_empty` said exactly that and was
+    overridden rather than read.
+
+    The gate is being **offered**: an empty type can exist and be worked on, and cannot be
+    chosen for a project until it names someone. That is the step where the harm begins.
+    """
+    if offered and not actor_roles:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Name at least one organization before turning this type on. Projects built "
+                "from it can only name the organizations listed here, and an organization must "
+                "be named to see the project's grievances."
+            ),
+        )
+
+
 @router.get("/project-types", response_model=list[ProjectTypeResponse])
 def list_project_types(
     active_only: bool = True,
@@ -416,6 +425,7 @@ def create_project_type(
     actor_roles = [r.model_dump() for r in body.actor_roles]
     bindings = [b.model_dump() for b in body.workflow_bindings]
     _validate_config(db, actor_roles=actor_roles, workflow_bindings=bindings)
+    _require_organizations_to_offer(actor_roles, offered=bool(body.is_active))
     standard_wf, seah_wf = (
         _legacy_workflow_mirrors(db, bindings)
         if bindings
@@ -472,7 +482,10 @@ def update_project_type(
         db,
         actor_roles=actor_roles,
         workflow_bindings=bindings if body.workflow_bindings is not None else [],
-        require_actor_roles=body.actor_roles is not None,
+    )
+    _require_organizations_to_offer(
+        actor_roles,
+        offered=body.is_active if body.is_active is not None else row.is_active,
     )
 
     if body.label is not None:
