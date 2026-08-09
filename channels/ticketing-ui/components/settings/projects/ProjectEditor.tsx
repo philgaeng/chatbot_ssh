@@ -137,6 +137,24 @@ export function ProjectEditor({
 
   useEffect(() => { void loadGoLive(); }, [loadGoLive, goLiveKey]);
 
+  /** Re-run the go-live checks.
+   *
+   *  **Every mutation on this screen must call this** (2026-08-09, Philippe: *"when one makes
+   *  one change it doesn't refresh the pass/no pass tests"*). The package handlers below
+   *  updated their own state and stopped there, so adding a district left B2 red and naming a
+   *  package's contractor left B3 red until the page was reloaded — on the two sections where
+   *  most of the setup work happens. Named rather than inlined so the omission is visible. */
+  const refreshGoLive = useCallback(() => setGoLiveKey((k) => k + 1), []);
+
+  /** A net, not the mechanism: re-check when the reader moves to another section.
+   *
+   *  The explicit calls above are what keep the rail honest. This costs one request per
+   *  navigation and means a *missed* call shows stale state only until the next click, instead
+   *  of until a page reload — which is how this went unnoticed long enough to be reported as
+   *  "several occasions". If it ever surfaces a change the rail should already have shown, the
+   *  bug is a missing `refreshGoLive()`, not this. */
+  useEffect(() => { refreshGoLive(); }, [activeSection, refreshGoLive]);
+
   function goToSection(key: SectionKey) {
     setActiveSection(key);
     topRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -174,7 +192,7 @@ export function ProjectEditor({
       const updated = await updateProject(p.project_id, { is_active: !p.is_active });
       setP(updated);
       onUpdated(updated);
-      setGoLiveKey((k) => k + 1);
+      refreshGoLive();
       flash(updated.is_active ? "Project activated ✓" : "Project deactivated");
     } catch (e: unknown) {
       flash(friendlyError(e));
@@ -259,6 +277,7 @@ export function ProjectEditor({
     try {
       const updated = await updatePackage(p.project_id, packageId, payload);
       setPackages((prev) => prev.map((pk) => pk.package_id === packageId ? updated : pk));
+      refreshGoLive();
       flash("Saved ✓");
     } catch { flash("Failed"); }
   }
@@ -273,6 +292,7 @@ export function ProjectEditor({
           ? { ...pk, location_codes: [...pk.location_codes, uc] }
           : pk
       ));
+      refreshGoLive();
       flash("Location added ✓");
     } catch (e: unknown) {
       flash(e instanceof Error && e.message.includes("404") ? `'${uc}' not found` : "Failed");
@@ -287,6 +307,7 @@ export function ProjectEditor({
           ? { ...pk, location_codes: pk.location_codes.filter((c) => c !== code) }
           : pk
       ));
+      refreshGoLive();
     } catch { flash("Failed"); }
   }
 
@@ -384,7 +405,7 @@ export function ProjectEditor({
                   report={report}
                   loading={reportLoading}
                   error={reportError}
-                  onRefresh={() => setGoLiveKey((k) => k + 1)}
+                  onRefresh={refreshGoLive}
                   onJumpSection={jumpToSection}
                 />
               )}
@@ -453,7 +474,7 @@ export function ProjectEditor({
                         const updated = await updateProject(p.project_id, { project_type_key: typeKey });
                         setP(updated);
                         onUpdated(updated);
-                        setGoLiveKey((k) => k + 1);
+                        refreshGoLive();
                         flash("Project type changed \u2713 — check Partner organizations");
                       } catch (e: unknown) {
                         flash(friendlyError(e));
@@ -487,7 +508,7 @@ export function ProjectEditor({
                         };
                         setP(updated);
                         onUpdated(updated);
-                        setGoLiveKey((k) => k + 1);
+                        refreshGoLive();
                       }}
                     />
                   </div>
@@ -565,7 +586,7 @@ export function ProjectEditor({
                                 whatsapp_levels: messaging.whatsapp_levels,
                               });
                               setMessaging(saved);
-                              setGoLiveKey((k) => k + 1);
+                              refreshGoLive();
                               flash("Saved ✓");
                             } catch (e: unknown) {
                               flash(friendlyError(e));
@@ -590,9 +611,9 @@ export function ProjectEditor({
                   packages={packages}
                   orgs={orgs}
                   canEdit={canManageProjectCatalog}
-                  onPackagesChanged={setPackages}
+                  onPackagesChanged={(next) => { setPackages(next); refreshGoLive(); }}
                   flash={flash}
-                  onUpdated={(updated) => { setP(updated); onUpdated(updated); setGoLiveKey((k) => k + 1); }}
+                  onUpdated={(updated) => { setP(updated); onUpdated(updated); refreshGoLive(); }}
                 />
               )}
 
@@ -602,7 +623,7 @@ export function ProjectEditor({
                   project={p}
                   packages={packages}
                   orgs={orgs}
-                  onChanged={() => setGoLiveKey((k) => k + 1)}
+                  onChanged={refreshGoLive}
                 />
               )}
 
