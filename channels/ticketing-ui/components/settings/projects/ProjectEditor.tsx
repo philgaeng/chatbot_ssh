@@ -349,6 +349,15 @@ export function ProjectEditor({
           )}
 
           <div className="ml-auto flex items-center gap-3">
+            {/* Four states, not two. This read only the blocker count, so a project that was
+                already running said "Ready to activate" — an instruction to do the thing it
+                had done, next to a Deactivate button (2026-08-10, Philippe).
+
+                A live project CAN still have blockers: activation is gated when you press the
+                button, not swept afterwards, so promoting a check (D1 → B2, B3, C4…) can leave
+                an activated project short. That says "Active · N to fix" in red — red because
+                a gap on a project taking real grievances is worse than one on a draft, never
+                green, and never the word "Ready". */}
             {!reportLoading && report && (
               <span
                 className={`inline-flex items-center gap-2 text-xs font-semibold px-2.5 py-1 rounded-full border ${
@@ -358,9 +367,13 @@ export function ProjectEditor({
                 }`}
               >
                 <span className={`h-2 w-2 rounded-full ${blockers ? "bg-red-500" : "bg-green-500"}`} />
-                {blockers
-                  ? `${blockers} ${blockers === 1 ? "blocker" : "blockers"} · can’t activate yet`
-                  : "Ready to activate"}
+                {p.is_active
+                  ? blockers
+                    ? `Active · ${blockers} to fix`
+                    : "Active"
+                  : blockers
+                    ? `${blockers} ${blockers === 1 ? "blocker" : "blockers"} · can’t activate yet`
+                    : "Ready to activate"}
               </span>
             )}
             {canManageProjectCatalog && (
