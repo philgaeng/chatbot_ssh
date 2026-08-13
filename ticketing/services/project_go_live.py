@@ -697,9 +697,16 @@ def evaluate_go_live(db: Session, project_id: str) -> GoLiveReport:
                 label="Package QR tokens",
                 severity="info",
                 status="pass" if not missing_qr else "info",
+                # Says where they live. QR codes are their own page, not a section of this
+                # editor, so "Fix →" used to land on Packages — which has no QR anything.
+                # Packages mint a token at creation now, so this should only ever describe
+                # packages made before that (migration `z2b4d6f8` backfilled the rest).
                 message="All packages have QR tokens"
                 if not missing_qr
-                else f"Optional: add QR for {', '.join(missing_qr[:5])}",
+                else (
+                    f"Optional: no QR code yet for {', '.join(missing_qr[:5])} — "
+                    "open the QR codes page to create them"
+                ),
                 section="packages",
             )
         )

@@ -234,7 +234,15 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     organizations: list[ProjectOrgItem] = []
+    #: **Legacy, and empty on anything set up since 2026-08-08** — coverage moved to packages.
+    #: Kept so older clients do not break; read `package_count` / `covered_location_count`.
     location_codes: list[str] = []
+    #: Packages on the project, and the distinct districts they cover between them. The project
+    #: list used to report `len(location_codes)`, which became "none" for every project the day
+    #: coverage moved — a project with three packages covering three districts read as covering
+    #: nowhere.
+    package_count: int = 0
+    covered_location_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -1273,6 +1281,20 @@ def _validate_project_workflow(
         )
 
 
+def _package_coverage(db: Session, project_id: str) -> dict:
+    """How many packages a project has, and how many distinct districts they cover."""
+    pkg_ids = db.execute(
+        select(ProjectPackage.package_id).where(ProjectPackage.project_id == project_id)
+    ).scalars().all()
+    if not pkg_ids:
+        return {"package_count": 0, "covered_location_count": 0}
+    covered = db.execute(
+        select(func.count(func.distinct(PackageLocation.location_code)))
+        .where(PackageLocation.package_id.in_(pkg_ids))
+    ).scalar_one()
+    return {"package_count": len(pkg_ids), "covered_location_count": int(covered)}
+
+
 def _project_to_response(p: Project, db: Session) -> dict:
     slots = [
         ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(link, db))
@@ -1299,6 +1321,7 @@ def _project_to_response(p: Project, db: Session) -> dict:
             for po in p.organizations
         ],
         "location_codes": [pl.location_code for pl in p.locations],
+        **_package_coverage(db, p.project_id),
     }
 
 
@@ -1409,15 +1432,15 @@ def create_project(
     # other package. It briefly carried an `is_unnamed` flag that hid those fields — dropped in
     # `v8x0z2b4`, because the package most likely to need a chainage description was the one
     # that could not have one.
-    db.add(
-        ProjectPackage(
-            project_id=project.project_id,
-            package_code=entity_codes_svc.next_package_code(db, project.project_id),
-            name="Package 1",
-            is_active=True,
-        )
+    first_package = ProjectPackage(
+        project_id=project.project_id,
+        package_code=entity_codes_svc.next_package_code(db, project.project_id),
+        name="Package 1",
+        is_active=True,
     )
+    db.add(first_package)
     db.flush()
+    _mint_qr_token(db, first_package.package_id, getattr(current_user, "user_id", None))
 
     try:
         types_svc.instantiate_project_from_type(db, project, body.project_type_key)
@@ -2260,6 +2283,21 @@ def _package_to_dict(pkg: ProjectPackage) -> dict:
     }
 
 
+def _mint_qr_token(db: Session, package_id: str, user_id: str | None) -> None:
+    """Give a new package its QR token immediately (2026-08-09, Philippe: *"the QR should be
+    generated when we create the packages"*).
+
+    Tokens used to appear only when somebody opened the **QR codes** page, which auto-creates
+    the missing ones as a side effect of listing them. So a package created and never visited
+    there had none, and go-live's D2 reported "Optional: add QR for 01, 02" with a "Fix →" that
+    jumped to Packages — a screen with no QR anything. The token is one row and depends on
+    nothing but the package, so there is no reason to defer it.
+    """
+    from ticketing.models.qr_token import QrToken
+
+    db.add(QrToken(package_id=package_id, created_by_user_id=user_id))
+
+
 def _package_count(db: Session, project_id: str) -> int:
     return db.execute(
         select(func.count())
@@ -2333,6 +2371,7 @@ def create_package(
     )
     db.add(pkg)
     db.flush()
+    _mint_qr_token(db, pkg.package_id, getattr(_admin, "user_id", None))
     db.refresh(pkg, ["locations", "organizations"])
     db.commit()
     return _package_to_dict(pkg)

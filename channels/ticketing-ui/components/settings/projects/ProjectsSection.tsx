@@ -189,7 +189,16 @@ export function ProjectsSection({
                   <div className="text-xs text-gray-400 mt-0.5 flex items-center gap-3">
                     <span>Organizations: {orgSummary.length > 0 ? orgSummary.join(", ") : <em>none</em>}</span>
                     <span>·</span>
-                    <span>Locations: {p.location_codes.length > 0 ? `${p.location_codes.length} linked` : <em>none</em>}</span>
+                    {/* Coverage comes from packages (2026-08-08). This read
+                        `location_codes.length` — the project-level list that stopped being
+                        written that day — so a project with three packages covering three
+                        districts reported "Locations: none". */}
+                    <span>
+                      Packages: {p.package_count ?? 0}
+                      {(p.covered_location_count ?? 0) > 0
+                        ? ` · ${p.covered_location_count} district${p.covered_location_count === 1 ? "" : "s"}`
+                        : " · nowhere yet"}
+                    </span>
                   </div>
                 </div>
                 <button type="button" onClick={() => setEditing(p)} className="text-sm text-blue-600 hover:underline shrink-0 mr-3">

@@ -1974,7 +1974,11 @@ export interface ProjectItem {
   updated_at: string;
   /** Organizations linked to this project, each with an optional role. */
   organizations: ProjectOrgItem[];
+  /** @deprecated empty since coverage moved to packages (2026-08-08) — use the counts below. */
   location_codes: string[];
+  /** Packages on the project, and the distinct districts they cover between them. */
+  package_count?: number;
+  covered_location_count?: number;
 }
 
 export interface ProjectCreate {
