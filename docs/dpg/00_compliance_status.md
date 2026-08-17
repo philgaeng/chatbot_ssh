@@ -56,6 +56,13 @@ flattering one.
   payload, an indicator-7 problem as well.
 - **Two items need people, not code:** the IP-ownership determination (indicator 3) and the privacy
   assessment against Nepal's Individual Privacy Act 2018 (indicator 7).
+- **Two decisions taken 2026-08-17 that change what we are asking you.** **(a) Self-hosted inference (T2)
+  is parked** — no owner for the run costs, and we will not start a system nobody funds. A hosted
+  open-weights provider is therefore the **steady state**, so grievance text crosses a border
+  indefinitely rather than during a transition, and redaction becomes the only control on it.
+  **(b) Production will run the open configuration**, on cost grounds. That is *more* than indicator 4
+  asks for. **What we now need instead of a GPU budget is a small metered inference budget** — see Q15,
+  and it is the only ask on this list that blocks work rather than paperwork.
 
 ---
 
@@ -64,12 +71,12 @@ flattering one.
 | # | Indicator | Status | What is missing |
 |---|---|---|---|
 | 1 | Relevance to SDGs | ✅ **Compliant** | Needs writing up, not building. SDG 16.6 / 16.10, SDG 9.1 |
-| 2 | Use of approved open licence | 🟠 **Gap — trivial to close** | The repo is **public with no `LICENSE` file** — the one real gap. Dependency tree is clean; the Redis licence drift is fixed, `psycopg2-binary` is the only open question (§3.1) |
+| 2 | Use of approved open licence | 🟠 **Gap — trivial, now waiting on us both** | The repo is **public with no `LICENSE` file**. Dependency tree is clean; the Redis drift is fixed (§3.1b), `psycopg2-binary` is the only flag. ⚠ **We need two answers before the file can land:** which licence (yours — Apache-2.0 recommended) and which copyright holder (ADB OGC, Q1) |
 | 3 | Clear ownership | 🔴 **Blocked — external** | Written IP determination from ADB. **Nobody on the project can resolve this** |
 | 4 | Platform independence | 🔴 **Gap — the main work** | Model provider is hard-coded in **9 call sites across 2 subsystems, in 4 files**. §4 is entirely about this |
 | 5 | Documentation | ✅ **Compliant, strong** | A ~200-file spec tree, Docker runbook, OpenAPI on both APIs. Deployability warts (§3.3) — the root `README.md` still advertises a Rasa service that does not exist, which works against §2.2. Sprint ticket **DPG-06** |
 | 6 | Mechanism for data extraction | ✅ **Compliant** | PostgreSQL, documented schema in 3 migration streams, XLSX + PDF exports, REST APIs |
-| 7 | Privacy & applicable laws | 🟠 **Partial** | Encryption and access control are built. **Missing:** legal assessment, data-flow diagram, and free-text PII leaves the country on every model call |
+| 7 | Privacy & applicable laws | 🟠 **Partial** | Encryption and access control are built. **Missing:** legal assessment, data-flow diagram, and free-text PII leaves the country on every model call — ⚠ and with T2 parked that egress is now **permanent, not transitional** (§4.5) |
 | 8 | Standards & best practices | 🟢 **Mostly compliant** | OpenAPI, OIDC/Keycloak, Alembic-migrated schema. Missing the open-source *project* hygiene files (§3.4) — sprint ticket **DPG-05** |
 | 9 | Do no harm by design | 🟢 **Mostly compliant** | RBAC, audit log, SEAH isolation, anonymous intake are built. Retention/breach policy and third-party-PII redaction outstanding |
 
@@ -313,8 +320,11 @@ Missing, and all of it documentation gated on a legal read:
 - **A data-flow diagram** naming every place personal data crosses a boundary. We know the inventory
   is incomplete until §4.3's audit runs.
 - **Retention and deletion policy**, and a **breach procedure**.
-- **The live gap: grievance narratives currently leave Nepal on every model call**, unredacted, to a
-  US-based provider. See §4.3 — it is the same finding as indicator 4, seen from the privacy side.
+- **The live gap: grievance narratives leave Nepal on every model call**, unredacted, to a third-party
+  provider. See §4.3 — the same finding as indicator 4, seen from the privacy side. ⚠ **And it is now
+  permanent rather than transitional:** with self-hosting parked (§4.5), the provider changes and the
+  cross-border transfer does not. That raises the bar on the assessment: it has to justify an indefinite
+  arrangement, and redaction stops being defence-in-depth and becomes the control.
 
 ---
 
@@ -424,17 +434,32 @@ Two clarifications, because the two problems are often conflated:
 
 Our plan is a redaction layer at the model-call boundary — deterministic patterns first (Nepali phone
 formats, Devanagari digits, citizenship and vehicle numbers), then NER — with measured recall published
-on a labelled Nepali test set rather than asserted. Two design questions inside it are genuinely open
-and we would value the consultant's view:
+rather than asserted.
 
-- **Redact before transmission, or before storage?** We favour transmission: the officer handling the
-  case still needs to see which official was named — for a GRM, complaints naming officials are a large
-  share of the useful ones. Redacting before storage would destroy the record's evidentiary value. But
-  if the agency's legal position is that PII must not be stored in free text at all, that is a much
-  larger change (**Q8**).
-- **Is the third-party dependency acceptable at all once redacted**, or does the privacy analysis
-  itself push us to self-hosting regardless of what indicator 4 requires? Note the recursion:
-  the most accurate Nepali NER models are the ones with unstated licences (**Q9**).
+**✅ We have decided the design question we had flagged (Q8): redact at transmission, not before storage.**
+The officer handling the case still needs to see which official was named — for a GRM, complaints naming
+officials are a large share of the useful ones, and redacting before storage would destroy the record's
+evidentiary value. The full record stays; a redacted derivative goes to models and logs. **We would still
+like to know whether that conflicts with any position you or ADB safeguards hold** — if the agency's legal
+view is that PII must not be *stored* in free text at all, that is a much larger change than the sprint.
+
+**⚠ And one gap we are choosing to leave open in the first pass, which we would rather state than have you
+find.** Person-name detection needs an ML model; the Nepali NER model with the best published accuracy has
+**no licence stated** on its model card, so shipping it would swap one closed dependency for another inside
+the very submission meant to remove it (**Q9**). We have therefore split the work:
+
+- **Landing now:** the deterministic layer — Nepali phone formats in **both** digit systems (Devanagari
+  digits defeat an ASCII regex, and `९८४१२३४५६७` is a phone number in plain text), citizenship numbers,
+  vehicle registrations, emails. Plus redaction of the logging, Celery and backup paths, which is where
+  leaks actually happen.
+- **Not landing yet:** person names. Which means **third-party names in narrative still reach the
+  provider** — *"the site engineer Ram Bahadur refused to…"*. With T2 parked, that is an indefinite
+  exposure, not a transitional one. We are treating it as a **disclosed residual**, not a solved problem.
+- **The intended fix, and it may interest ADB beyond this project:** fine-tune a Nepali NER model on an
+  openly-licensed corpus, **release it openly**, and run it as a standalone anonymiser service usable by
+  any country programme where in-country self-hosting is impossible. Permissively-licensed Nepali NLP
+  tooling barely exists, so that would be a genuine DPG *contribution* rather than only a compliance fix.
+  **Q9** asks whether you would see it that way and whether there is appetite to fund it.
 
 We should also be honest that one of our own documents currently claims summaries are PII-scrubbed
 before storage, and nothing scrubs them. It is on our list to fix the document
@@ -449,16 +474,21 @@ We would rather bring the consultant honest unknowns than optimistic estimates:
   low-resource. We have no benchmark set and no numbers, so any statement that an open model is
   "close enough" on grievance classification would be invention. Building the labelled set is the
   long pole of this work and it is data effort, not engineering.
-- **Nepali ASR is the weakest link, and it is weak for the closed model too.** If open-weights ASR
-  turns out materially worse, the honest options are (a) accept documented degradation on voice while
-  keeping text at parity, (b) keep ASR on a hosted provider and disclose it as a remaining closed
-  dependency, or (c) invest in a Nepali fine-tune. **Q6** asks how the DPGA treats a *partial* open
-  alternative — one that works but performs worse.
+- **Nepali ASR is the weakest link, and it is weak for the closed model too** — and ⚠ **we have to disclose
+  that voice transcription is not currently running at all.** It is switched off for lack of inference
+  budget, which means **we have no incumbent baseline to compare open ASR against.** If we ship an open
+  ASR path, the honest framing is *"we shipped a working voice path where there was none"*, not *"we matched
+  the incumbent"*. If open-weights ASR turns out materially worse, the options are (a) accept documented
+  degradation on voice while text stays at parity, (b) keep ASR hosted and disclose it as a remaining
+  closed dependency, or (c) fund a Nepali fine-tune on the 165 openly-licensed hours of OpenSLR SLR54.
+  **Q6** asks how the DPGA treats a *partial* open alternative — one that works but performs worse.
 - **Translation may want a specialist model.** A purpose-built seq2seq translation model will likely
   beat a general chat model on Nepali↔English, but it needs its own service rather than a chat
   endpoint. That is a real deployment cost, and the benchmark should decide it, not our prior.
-- **Whether production actually switches.** Distinct from the DPG claim, and a cost/quality decision
-  for ADB and the agency, not for us.
+- ~~**Whether production actually switches.**~~ ✅ **Decided 2026-08-17: it does.** Production will run the
+  open configuration, on cost grounds, with the commercial provider retained as a configurable fallback if
+  government users report quality problems. **What we still do not know is the quality gap** — that is the
+  benchmark, and the benchmark needs Q15's inference budget to run.
 
 ### 4.5 The deployment ladder — one variable changes
 
@@ -575,16 +605,21 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it
 
 ### Privacy
 
-- **Q8 — Redaction posture.** Redact before transmission (our preference — it preserves the record's
-  value for the officer handling the case) or before storage? Does the DPGA or ADB safeguards policy
-  have a position?
+- **Q8 — Redaction posture: we have decided, and we want to know if it conflicts with anything you hold.**
+  ✅ **We redact at transmission, not before storage** — the officer needs to see which official was named,
+  and redacting before storage destroys the record's evidentiary value. **Does the DPGA or ADB safeguards
+  policy take a contrary position?** If the requirement is that PII must not be *stored* in free text at
+  all, that is a far larger change than the sprint and we would want to know now rather than later.
 - **Q9 — The NER recursion.** The most accurate Nepali NER model we have found has **no licence
   stated** on its model card. Shipping it would swap one closed dependency for another, inside the
   very submission meant to remove it. Our fallback is to fine-tune our own on an openly-licensed
   corpus and **release it openly** — which would itself be a genuine DPG contribution, since
   permissively-licensed Nepali NLP tooling barely exists. **Would the DPGA see that as a positive, and
   is there ADB appetite to fund it?**
-- **Q11 — Hosting jurisdiction.** Does the DPGA have any position on cross-border hosting for a
+- **Q11 — Hosting jurisdiction. ⏸ Moot for now — self-hosting is parked (§4.5)**, so there is no instance
+  to place. We keep the question on the list because it returns the day it is unparked, and because the
+  *provider's* jurisdiction is now a permanent question rather than a transitional one.
+  Does the DPGA have any position on cross-border hosting for a
   national-government DPG, beyond compliance with local law? Practically: does anything in the
   Standard prefer Singapore over Mumbai, or is this purely a Nepal legal question?
 
@@ -594,8 +629,12 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it
   `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue templates, public roadmap,
   release tags and versioning, governance model. We would rather build the required set once than
   guess and iterate.
-- **Q12 — Sustainability.** Does the DPG assessment look at who funds and operates the system after
-  the pilot? We believe it should, and we would like to use that as leverage for a named budget line.
+- **Q12 — Sustainability, and it has already bitten us.** Does the DPG assessment look at who funds and
+  operates the system after the pilot? We believe it should — and we are living the answer: **we parked
+  self-hosted inference precisely because no run-cost owner exists** (§4.5). That is the Babyl failure mode
+  avoided by not starting, and we would like to use the DPG process as leverage for a named budget line.
+  ⚠ **Note the ask has changed shape, not just size:** with T2 parked we no longer need a GPU budget; we need
+  a small **metered inference** budget to produce the evidence at all. See **Q15**.
 - **Q13 — Sequencing.** Can we begin the assessment process with indicator 4 in progress and the CI
   evidence not yet green, or should we complete the engineering first? A rough timeline for the
   assessment itself would help us schedule the sprints against it.
