@@ -1,0 +1,512 @@
+# Sprint 3 — PII redaction at every egress (DPG-30…36)
+
+> Branch `dpg/sprint3-pii` · **Depends on Sprint 1** (redaction hooks into the client factory; without a
+> single chokepoint the hook has to be pasted into nine call sites and one will be missed).
+> **Goal:** no personally identifiable information leaves the agency's control — in model calls, logs, or traces.
+>
+> **⚠ Two owner decisions on 2026-08-17 changed this sprint's weight and its scope, in opposite directions.**
+>
+> **It matters more.** [T2 is parked](03-open-models-spec.md#dpg-25) (Q-03 + Q-05): there is no owner for GPU
+> run costs, so **T1 — a hosted third-party provider — is the steady state, not a transition.** Grievance text
+> leaves the country **indefinitely**, and production is moving to a hosted open-weights provider (Q-04)
+> rather than off-provider. Redaction was the control that made a temporary exposure acceptable; it is now
+> **the only control on a permanent one.** That is a promotion from prudent to necessary.
+>
+> **It ships less.** Q-12c: the NER layer becomes **its own initiative** — a reusable Presidio+ML anonymiser
+> service for any country where in-country self-hosting is impossible — on a medium-term horizon, not this
+> sprint. So **this sprint delivers DPG-30, DPG-31, DPG-33, DPG-34 and DPG-36**, and
+> [DPG-32](#dpg-32) + [DPG-35](#dpg-35) move out. DPG-31 was designed to ship without DPG-32; that design is
+> now load-bearing. ⚠ **Confirm this split** — see DPG-32.
+
+---
+
+## Required reading
+
+1. [`CLAUDE.md`](../../../CLAUDE.md) — **§Data rules**, all six, and the amendment note. Rule 3 (no complainant PII columns in `ticketing.*`) and rule 5 (PII fetched fresh, never cached) are **pinned by tests**; rule 4's honest caveat about `grievance_summary` is the exact problem this sprint attacks. Also §Service boundaries and §Docker-only
+2. [`docs/PROGRESS.md`](../../PROGRESS.md) → [`docs/TODO.md`](../../TODO.md)
+3. [`docs/engineering/00_engineering_index.md`](../../engineering/00_engineering_index.md) — **rule 6** (no complainant PII in `ticketing.*`, ever, in any form — column, cache, **or log**)
+4. └ [`02_python_services.md`](../../engineering/02_python_services.md) — **binding** for `pii_service.py`
+5. └ [`04_testing.md`](../../engineering/04_testing.md) — **binding**; DPG-35 is a measured recall number, not a green tick
+6. └ [`06_documentation_lifecycle.md`](../../engineering/06_documentation_lifecycle.md) — honesty markers; **DPG-36 exists because a live spec carries an unbuilt claim**
+7. [`docs/deployment/11_llm_pipeline_policy.md`](../../deployment/11_llm_pipeline_policy.md) — **the live spec this sprint makes true.** Its §PII boundary model says `public.grievances.grievance_summary` "MUST be PII-scrubbed before storage". ⚠ **Nothing scrubs it today**
+8. [`docs/seah/`](../../seah/) — the canonical parties model and PII vault. SEAH text is the highest-sensitivity content in the system
+9. [`docs/deployment/13_security.md`](../../deployment/13_security.md) — DPG-34's log/backup posture lands here
+10. [`docs/sprints/archive/2026-08_tier3_structural/03-pii-boundary-spec.md`](../archive/2026-08_tier3_structural/03-pii-boundary-spec.md) — **read this before claiming anything about the PII boundary.** T3-04 already fixed the structured-PII path and left two pinning tests behind
+11. [`docs/sprints/README.md`](../README.md) — the standing deferral rule
+12. [`00-dpg-context-and-decisions.md`](00-dpg-context-and-decisions.md) §4 — indicators 7, 9, 9a
+
+---
+
+## §0 — What is already solved, and what this sprint is actually about
+
+**Do not re-solve T3-04.** Structured complainant PII is handled: the backend decrypts server-side,
+`GET /api/grievance/{id}` returns plaintext over an authenticated + audited endpoint, ticketing holds no
+key and has no accessor, and `tests/ticketing/test_pii_boundary.py` + `test_boundary_policy.py` pin it.
+Those tests **stay green through this entire sprint**; if one goes red you have broken a locked rule.
+
+This sprint is a **different problem**: free text leaving the agency's control.
+
+> Collecting name and contact in structured fields, separately from the narrative, is good design and it
+> eliminates the easy version of the problem. **Two leaks it structurally cannot close:**
+>
+> **Third-party PII — the sharper exposure.** A road-sector grievance names the site engineer, the
+> contractor, the ward official. Those people never consented to anything. Your complainant consented to
+> give *their* details; nobody asked the engineer whose conduct is described. Different legal category,
+> and asking the complainant separately does nothing about it. For a GRM, complaints naming officials
+> are not an edge case — **they are a large share of the useful ones.**
+>
+> **People self-identify in the free-text box anyway.** *"My name is Ram Bahadur, I am from ward 4, and I
+> want to complain about…"* is the most common grievance opening in every system. **The voice channel
+> guarantees it** — nobody speaking naturally observes your field boundaries.
+
+---
+
+## Order (BINDING)
+
+```
+1. DPG-30  MEASURE      — enumerate every egress of grievance text, in code, against
+                          DPG-04's data-flow diagram. Same discipline as DPG-10:
+                          you cannot redact a boundary you have not found.
+
+2. DPG-31  DETERMINISTIC — Devanagari digits + Nepali patterns. No ML, no new heavy deps,
+                           high value. Ships and is useful on its own — which is now the
+                           whole of this sprint's redaction engine, not its first half.
+
+3. DPG-33 ∥ DPG-34      — the two boundaries. Model calls, and logs/Celery/Redis.
+                          34 is the one that actually leaks (see below). Do not defer it.
+
+4. DPG-36  RECONCILE    — make 11_llm_pipeline_policy.md's claim true, or mark it.
+                          Q-12b settled the decision it was waiting on.
+
+── moved out of this sprint (Q-12c) ──────────────────────────────────────────
+   DPG-32  NER          — becomes the standalone anonymiser service initiative.
+   DPG-35  MEASURE      — recall on a labelled set: it measures the NER layer,
+                          so it travels with DPG-32. ⚠ But see DPG-35: the
+                          *deterministic* recall this sprint ships still needs
+                          a number, and that part stays.
+```
+
+---
+
+## DPG-30 — Measure the egress surface first {#dpg-30}
+
+**No production code.** Output is `docs/dpg/pii-egress-inventory.md`: every path by which grievance free
+text leaves the agency's control, found **in the code**, not assumed from the diagram.
+
+### The known starting set (verify and extend — this list is not the answer)
+
+| Egress | Carries | Status today |
+|---|---|---|
+| 9 LLM call sites (see [`02`](02-llm-agnostic-spec.md) §0) | Raw narrative, contact strings, officer notes, field reports, audio | **Unredacted** |
+| Celery task payloads → **Redis** | `input_data["values"]["grievance_description"]` (`grievance_intake/classification.py`) | **Unredacted.** Check Redis persistence (RDB/AOF) and whether the volume is backed up |
+| Application logs (`backend/logger/`) | Varies per call site — audit each | Partially mitigated: `db_debug_log.text_len_for_log` logs **lengths**, not text. Follow that precedent |
+| Exception reports carrying request bodies | Full payloads | Audit |
+| Database backups (`backups_data` volume) | Everything | **Name the destination and its jurisdiction** |
+| XLSX quarterly reports, PDF closure documents | Summaries, resolutions | Audit recipients and transport |
+| Messaging API → AWS SNS (SMS) / SMTP relay | Complainant-facing text | Third-party by design; assess |
+| `POST /message` → orchestrator | Officer replies | Internal |
+| Observability | — | **None installed** (no Langfuse, no OTel, no Sentry — verified). The source narrative's §3.4 assumes Langfuse; it does not exist here. Write the rule for whatever is added later |
+
+### Steps
+
+1. Grep-and-read every path. For each: what text, to whom, over what transport, retained where, for how long.
+2. **Reconcile against DPG-04's data-flow diagram** and report every leg the diagram missed. A diagram
+   nobody checked against code is a compliance artefact, not a control.
+3. Rank by **actual likelihood of exposure**, not by how much the path worries people:
+
+   > The model call is the leak everyone designs against. **Logs and traces are the leak that actually
+   > occurs.** Logs, exception reports carrying request bodies, Celery payloads sitting in Redis,
+   > database backups shipped offsite, analytics exports — these get copied, attached to bug reports,
+   > pasted into chat, and stored on third-party infrastructure far more casually than any API call.
+
+4. Write the inventory. It is the scope statement for DPG-33/34 and an indicator-7 artefact in its own right.
+
+### Acceptance
+
+- [ ] `docs/dpg/pii-egress-inventory.md` written, every egress found in code with a file:line reference
+- [ ] Reconciled against DPG-04's diagram; discrepancies listed in both documents
+- [ ] Redis persistence configuration and backup destination **verified in-container**, not assumed
+- [ ] Ranked by likelihood of real exposure
+- [ ] Anything out of scope for DPG-33/34 logged as a followup + `TODO.md` row
+
+---
+
+## DPG-31 — The deterministic layer {#dpg-31}
+
+`backend/services/pii_service.py`. **No ML.** Ships independently, and it contains the single
+highest-value line in this sprint.
+
+### 31.1 — Devanagari digits (do this first)
+
+**Devanagari digits will defeat your phone regex.** Nepali users type `९८४१२३४५६७`. An ASCII `\d` pattern
+misses it completely — and that is a phone number sitting in plain text heading to a third party.
+
+```python
+DEVANAGARI_DIGITS = str.maketrans("०१२३४५६७८९", "0123456789")
+normalised = text.translate(DEVANAGARI_DIGITS)
+```
+
+Normalise before pattern matching, **or** match both character classes. This is exactly the kind of thing
+that passes every test written by an English speaker.
+
+⚠ **Normalising for matching must not normalise what you send.** The redacted text keeps its original
+digits everywhere a span was not replaced — offsets are computed on the normalised string, applied to the
+original. Since `str.translate` on this mapping is length-preserving 1:1, offsets align; **assert that in
+a test** rather than relying on it, because it stops being true the moment someone adds a multi-character
+mapping.
+
+### 31.2 — Nepali recognisers
+
+Custom Presidio recognisers (or plain regex at this stage) for:
+
+- `+977` international prefix
+- Ten-digit mobiles on `97x` / `98x` prefixes
+- Landline area codes
+- Citizenship certificate numbers
+- **Vehicle registration numbers** — named in [`00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.3
+  and missing from this list until 2026-08-17. Not an afterthought in a **road-sector** GRM: *"the contractor's
+  tipper ba 2 kha 1234 dumps spoil at night"* identifies a vehicle, its owner, and often its driver. Nepali
+  plates carry a zone/province token in Devanagari plus digits, so this recogniser needs the digit
+  normalisation of §31.1 more than any other pattern here
+- Email (the generic recogniser is fine)
+
+Both digit systems, for every numeric pattern.
+
+### 31.3 — Replacement semantics
+
+Three choices matter, and each has a reason:
+
+- **Placeholders, not deletion.** `<PERSON_1>`, not removal. The sentence keeps its grammatical shape so
+  the classifier still parses it. Deleting words degrades classification noticeably; substituting a token
+  barely does.
+- **Consistent mapping within a document.** Same name → same token: *"`<PERSON_1>` promised to fix it,
+  then `<PERSON_1>` refused to return."* Fresh tokens per occurrence destroy exactly the narrative
+  structure the classifier uses.
+- **Reversible where the officer needs the original.** Keep two representations: the full record for
+  officer action, the redacted derivative for model calls and logs.
+  **Redact before transmission, never before storage.**
+
+  ✅ **DECIDED (Q-12b, 2026-08-17): redact at transmission.** The officer keeps the original;
+  `11_llm_pipeline_policy.md` gets reconciled (DPG-36), not the design. The conflict is resolved in favour
+  of the officer's ability to act on a case — a GRM officer needs to know which engineer was named.
+
+  > ### ⚠ The answer added a constraint this spec did not have: **the mapping is PII**
+  >
+  > The owner's answer notes that *"in practice we store both"* — transmission is near-real-time, so the
+  > redacted derivative is persisted alongside the original (`TicketContextCache` and friends). That is
+  > fine for the *derivative*, which is by definition less sensitive. **It is not fine for the mapping.**
+  >
+  > `restore()` needs `<PERSON_1> → "Ram Bahadur"`. **A stored mapping is a plaintext PII store** — a
+  > compact, high-value one, since it is nothing but identifiers. Three constraints follow, and they are
+  > acceptance criteria, not advice:
+  > 1. **The mapping never lands in `ticketing.*`.** CLAUDE.md data rule 3 is pinned by
+  >    `tests/ticketing/test_boundary_policy.py`; a `<PERSON_n>` table in the ticketing schema would break
+  >    it, and rightly.
+  > 2. **Prefer not persisting it at all.** If `restore()` only ever runs inside the same request or task
+  >    that produced the redaction — which is true of translation output and the classification summary —
+  >    the mapping can live in memory for the duration and never be written. **Establish whether any caller
+  >    genuinely needs cross-request restore before building a store for it.**
+  > 3. **If it must be persisted**, it inherits the original's protection: same encryption boundary, same
+  >    access control, same audit trail, same retention clock as the record it dereferences — and it is a
+  >    new leg on DPG-04's data-flow diagram.
+
+- **Do not redact LOCATION** if the classifier derives district from the narrative — you will break your
+  own pipeline. Either leave `LOC` intact (a district name alone is not identifying) or take district
+  from the structured field and redact freely. ⚠ **Check which applies here**: the classification prompt
+  (`LLM_services.py:206`) injects district and province from structured slots, so district may already
+  come from the structured side — verify before choosing.
+
+### API
+
+```python
+redact_for_model(text: str) -> tuple[str, Mapping]   # (redacted, reversible mapping)
+restore(text: str, mapping: Mapping) -> str
+```
+
+Per-document mapping scope. Never a process-global counter (two concurrent grievances must not share
+`<PERSON_1>`).
+
+### Acceptance
+
+- [ ] `backend/services/pii_service.py` exists, follows [`02_python_services.md`](../../engineering/02_python_services.md)
+- [ ] Devanagari normalisation, with an offset-alignment assertion
+- [ ] Nepali mobile / landline / `+977` / citizenship-number / **vehicle-registration** / email recognisers,
+      both digit systems
+- [ ] Consistent, reversible, per-document placeholder mapping
+- [ ] **Whether any caller needs cross-request `restore()` is established, and recorded.** If none does, the
+      mapping is never persisted and the acceptance says so explicitly
+- [ ] **If the mapping is persisted:** not in `ticketing.*` (data rule 3, pinned by test); same encryption,
+      access control, audit and retention as the record it dereferences; added to DPG-04's data-flow diagram
+- [ ] `redact_for_model` / `restore` round-trip is lossless for non-PII text
+- [ ] LOCATION policy decided, with the reason recorded
+- [ ] **No new heavy dependency in this ticket** — it must ship without DPG-32
+
+### Tests
+
+[`TESTS.md`](TESTS.md) → **T-31-a … T-31-e**. T-31-a (a Devanagari-digit phone number is detected) is the
+single most important test in this sprint.
+
+---
+
+## DPG-32 — The NER layer — ⏸ **moved out of this sprint** {#dpg-32}
+
+> **⚠ SCOPE DECISION 2026-08-17 (Q-12c) — needs one confirmation.**
+>
+> The owner's answer: *"medium term, I see this as an independent service running on a dedicated Nepali
+> instance… a workflow based on Presidio + ML to anonymise grievances or other queries before they are sent
+> to LLMs, in order to follow data-privacy laws in countries where in-country self-hosting is not
+> possible."* **That is a better idea than this ticket, and a bigger one** — a reusable anonymiser is worth
+> more than a Nepal-GRM-internal NER layer, and it is exactly the *"is there ADB appetite to fund it"*
+> conversation the compliance briefing opens (consultant-Q9).
+>
+> **The sequencing consequence I have written in, and want confirmed:** Sprint 3 ships **DPG-31 only** as its
+> redaction engine — deterministic, no ML, no ~1 GB dependency — and this ticket plus [DPG-35](#dpg-35) leave
+> the sprint. DPG-31's *"must ship without DPG-32"* constraint was written for exactly this and now carries
+> real weight.
+>
+> **What that costs, stated plainly so the trade is visible:** **person names in narrative go unredacted.**
+> Deterministic patterns catch phones, citizenship numbers, vehicle plates and emails; they do **not** catch
+> *"the site engineer Ram Bahadur refused to…"*. Since T2 is parked and T1 is permanent, that text goes to a
+> third party indefinitely. **Sprint 3 therefore closes the numeric-identifier leak and leaves the
+> third-party-name leak open** — which must be said in `docs/dpg/pii-egress-inventory.md`, in DPG-04's
+> privacy assessment, and to the consultant. It is a defensible staging decision; it is not a solved problem,
+> and it must not be reported as one.
+>
+> ⭐ **If that gap is unacceptable before the anonymiser service exists**, the cheap interim is a **deny-list
+> of the project's own known personnel** — officers, contractors, ward officials are enumerable from
+> `ticketing.*` and the project documents. Poor general recall, but high precision on exactly the people a
+> road-sector GRM names most. Say the word and I will spec it as DPG-31.4.
+
+**Person-name detection is the hard part**, and it is where a redaction layer fails quietly.
+
+spaCy ships no trained Nepali NER pipeline, so Presidio's defaults find **nothing** in Devanagari. Deny
+lists of names are weak here — the Nepali name space is large and many given names double as common
+nouns, giving poor recall *and* poor precision.
+
+The working route is Presidio's **transformers NLP engine**, configured per language with
+`model_to_presidio_entity_mapping` (`PER → PERSON`, `LOC → LOCATION`, `ORG → ORGANIZATION`). A Nepali
+XLM-RoBERTa NER fine-tune exists, reporting **PER F1 0.87**, overall F1 0.79.
+
+### ⚠ Three caveats, all material
+
+1. **Its licence is not stated** on the model card — an indicator-2 *and* indicator-4 problem for a DPG
+   submission. You would be swapping one closed dependency for another, **inside the very submission meant
+   to remove it.** Resolve it with the author, or fine-tune your own on an openly-licensed corpus.
+   **Q-12, blocking this ticket.**
+   > **The fallback is also an opportunity, and it is being raised with ADB as one.** A Nepali NER
+   > fine-tune released openly would be a genuine DPG *contribution* — permissively-licensed Nepali NLP
+   > tooling barely exists. The compliance briefing asks whether the DPGA would credit that and whether
+   > there is ADB appetite to fund it
+   > ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q9). Same shape as DPG-22's
+   > SLR54 ASR fine-tune. **Both are out of scope here** — but if funding lands, this ticket's licence
+   > blocker becomes the deliverable, so keep the corpus and threshold work reusable rather than one-off.
+2. **It is trained on WikiANN** — Wikipedia prose, not colloquial spoken grievances transcribed from
+   voice. Expect meaningfully worse than 0.87 on real traffic. **Measure on your own data (DPG-35).**
+3. **Dependency weight.** Presidio + transformers + torch adds roughly a gigabyte to the image, in a
+   stack that today has **no ML dependency at all** — `requirements.txt` has `openai` and nothing else in
+   that family. This changes build times, image size, and the deployment footprint on a single EC2 host
+   running ~11 services. **Q-12c: which image carries it?** Options: the backend image (simplest, heaviest);
+   a dedicated `pii` service the others call over HTTP (cleanest boundary, one more container); or a
+   hosted NER endpoint (lightest, **but it re-introduces the exact third-party egress this sprint exists
+   to close — almost certainly wrong**).
+
+### Tune for recall, not precision
+
+**A missed name is a privacy breach; an over-redacted common noun is a small classification quality hit.**
+Set the score threshold low and accept false positives. Then measure the classification-quality cost of
+that choice (DPG-35) so the trade is known rather than assumed.
+
+### Acceptance
+
+- [ ] NER licence resolved (Q-12) — used, replaced, or self-fine-tuned. **Do not ship an unlicensed model into a DPG submission**
+- [ ] Hosting decision made (Q-12c) and its image-size cost measured and recorded
+- [ ] Presidio transformers engine wired with the per-language entity mapping
+- [ ] Threshold tuned for recall; the chosen threshold and its rationale recorded
+- [ ] Dependencies added to the right requirements file per CLAUDE.md, and the image builds **in Docker**
+- [ ] Graceful degradation: if the NER model fails to load, DPG-31's deterministic layer still runs and
+      the failure is loud (a silent drop to regex-only is a privacy failure that looks like success)
+
+### ✅ Questions — answered
+
+- **Q-12** — ✅ **email the author first; budget the openly-licensed fine-tune as the fallback** and treat it
+  as a releasable DPG contribution. No longer blocks Sprint 3, because this ticket left the sprint.
+- **Q-12b** — ✅ **redact at transmission** (see [DPG-31](#dpg-31), and the mapping-is-PII constraint it added).
+- **Q-12c** — ✅ **a dedicated service, medium term, as its own initiative.** Hence the scope banner above.
+
+---
+
+## DPG-33 — Redaction at the model-call boundary {#dpg-33}
+
+Both surfaces. **This is why Sprint 1 comes first**: after DPG-11/DPG-12 there are two chokepoints
+instead of nine call sites.
+
+### Steps
+
+1. Hook `redact_for_model` into the client factory path — as an explicit, opt-**out** step, not an
+   opt-in one a new call site can forget.
+2. **Restore where the output needs the original.** Classification output is machine-consumed and stays
+   redacted. But `grievance_summary` is shown to the complainant and stored, and translation output
+   feeds the English record — those need `restore()` applied to the model's output using the same
+   mapping. Get this wrong in either direction and you either leak or you ship `<PERSON_1>` to a user.
+3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
+   *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
+   descriptors"* (`llm_client.py:125-127`). **A prompt instruction is not a control** — it does nothing
+   about what is *sent*, only about what comes back. Keep it (defence in depth) and add real redaction
+   on the input.
+4. **Audio is not redactable.** `transcribe_audio_file` sends the raw waveform; a voice note carries the
+   speaker's name in the speaker's own voice. There is no redaction step available before transcription.
+   **State this explicitly in the inventory and the privacy assessment**, and note that it is the
+   strongest single argument for T2: for voice, only moving the inference endpoint solves it. Redaction
+   applies to the transcript, immediately after.
+5. Verify `parse_llm_response`'s error path (`LLM_services.py:282`) — it currently logs the **raw model
+   response**. That is a log-side leak on the model-call path; DPG-34 owns the fix, but flag it here.
+
+### Acceptance
+
+- [ ] Redaction applied at both client chokepoints, opt-out rather than opt-in
+- [ ] `restore()` applied where output reaches a human or storage; a test per direction
+- [ ] Ticketing prompt instruction kept **and** input redaction added
+- [ ] Audio's irreducibility documented in the inventory and the privacy assessment
+- [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green
+- [ ] `docs/deployment/11_llm_pipeline_policy.md` updated (with DPG-36)
+
+---
+
+## DPG-34 — Redaction at the logging, Celery, and backup boundary {#dpg-34}
+
+**The leak that actually happens.** Do not treat this as the smaller half of the sprint.
+
+### Steps
+
+1. **A logging filter that redacts before anything is written.** Wire it into `backend/logger/logger.py`
+   (`TaskLogger`) so it covers every service, rather than at individual call sites — one filter,
+   installed once, cannot be forgotten by the next call site.
+2. **Fix the known raw-text log sites**, at minimum:
+   - `LLM_services.py:282` — logs the raw model response on a JSON parse error
+   - `LLM_services.py:335`, `:343` — the translation error paths interpolate the **entire `input_data`
+     dict**, which contains `grievance_description`, into a `ValueError` message. That string then
+     propagates as an exception, gets logged, and may reach a Celery result backend in Redis
+   - Audit the rest against DPG-30's inventory
+   - **Follow the existing precedent**: `db_debug_log.text_len_for_log` already logs lengths, not content
+3. **Celery payloads.** `input_data["values"]["grievance_description"]` is serialised into Redis on every
+   intake. Decide and implement: pass a grievance ID and let the task read the text from Postgres, or
+   redact the payload. **Passing the ID is cleaner** and removes the store entirely rather than
+   obscuring it — but it changes the task signature, which touches `backend/task_queue/`, a stable shared
+   service. Weigh it; if deferred, log it.
+4. **Redis persistence.** Check whether RDB/AOF is on and whether the volume is backed up. An unredacted
+   payload in memory for 30 seconds is a different risk from one in a nightly snapshot.
+5. **Backups.** Confirm destination and jurisdiction. This is an indicator-7 answer, not a nice-to-have.
+6. **Write the rule for future observability.** There is no tracing tool today. When one is added it must
+   not capture full prompt bodies. Put that in `docs/deployment/13_security.md` so it is found by the
+   person who adds it, not after.
+
+### Acceptance
+
+- [ ] Logging filter installed at `TaskLogger`, covering every service
+- [ ] The three known raw-text log sites fixed; the rest audited against DPG-30
+- [ ] Celery payload decision made, implemented or logged as a followup with a measured rationale
+- [ ] Redis persistence and backup jurisdiction verified **in-container** and documented
+- [ ] The future-observability rule written into `docs/deployment/13_security.md`
+- [ ] A test proving a grievance narrative passed to a logger does not appear in the emitted record
+
+---
+
+## DPG-35 — Measure recall, and publish the number — **split** {#dpg-35}
+
+> **⚠ SPLIT 2026-08-17.** With [DPG-32](#dpg-32) moved out (Q-12c), most of this ticket's metrics measure a
+> layer this sprint no longer ships. But **"we shipped redaction and never measured it" is not an acceptable
+> outcome either** — the whole point of this ticket is that an unmeasured control is a compliance artefact.
+> So:
+>
+> | Metric | Where it lands |
+> |---|---|
+> | **Phone recall, split by digit system** | **Stays in Sprint 3.** It measures DPG-31, and it is the single most important number here — see T-31-a |
+> | **Vehicle / citizenship / email recall** | **Stays.** Deterministic patterns, shipped this sprint |
+> | **Classification-quality delta, redacted vs raw** | **Stays**, reduced: measures over-redaction from deterministic patterns only |
+> | PERSON recall / precision | ⏸ **Travels with DPG-32** — there is no person detection to measure |
+> | Third-party-name recall | ⏸ **Travels with DPG-32.** ⚠ And until then it is effectively **0** by construction, which is the number to report rather than omit |
+> | Voice-origin subset | ⏸ **Deferred** — voice is not live (Q-13.2) and there is no ASR budget |
+>
+> **The honest headline for Sprint 3 is therefore:** *numeric identifiers measured and closed; person names
+> not yet addressed.* Publish it that way. A recall table that silently omits PERSON reads as a control that
+> covers names.
+
+A redaction system nobody measured is a compliance artefact, not a control. DPG-20's labelled PII spans
+serve this (synthetic in phase 1, Q-15).
+
+### Measure
+
+| Metric | Why |
+|---|---|
+| **PERSON recall** | The number that matters. A missed name is a breach |
+| PERSON precision | The cost side of the recall-first threshold |
+| Phone recall, **split by digit system** | ASCII vs Devanagari, reported separately — an aggregate hides the exact failure this sprint exists to prevent |
+| Third-party-name recall | Reported separately from complainant self-identification; different legal category, and likely different model performance |
+| **Classification-quality delta, redacted vs raw** | The cost of over-redaction. If accuracy falls materially, the threshold is wrong |
+| Voice-origin subset, separately | Transcribed speech is the hardest input and the one that guarantees self-identification |
+
+### Acceptance
+
+- [ ] Recall measured on the labelled Nepali test set and **published** at `docs/dpg/pii-redaction-evaluation.md`
+- [ ] Phone recall split by digit system
+- [ ] Third-party names scored separately
+- [ ] Classification-quality delta measured — the over-redaction cost is known, not assumed
+- [ ] Voice subset reported separately
+- [ ] The number stated plainly, including where it is weak. WikiANN-trained NER on colloquial
+      transcribed speech will underperform its published F1; **say so**
+
+---
+
+## DPG-36 — Reconcile the live spec {#dpg-36}
+
+`docs/deployment/11_llm_pipeline_policy.md` §PII boundary model states:
+
+> `public.grievances.grievance_summary` ← **MUST be PII-scrubbed before storage**
+
+**Nothing scrubs it.** There is no scrubber in the codebase today. This is a live spec asserting a
+control that does not exist — engineering rule 9, and precisely the failure mode CLAUDE.md's own amended
+data-rules section documents at length (*"This line claimed decryption for months before it was true"*).
+
+Also reconcile CLAUDE.md data rule 4's honest caveat — *"`grievance_summary` is free text and can contain
+self-disclosed PII… The asymmetry is intentional. Do not 'fix' it"* — with whatever this sprint actually
+builds. If redaction now happens at transmission rather than at storage, that caveat still stands and
+should say so explicitly, with the new reason.
+
+### Steps
+
+1. ~~Decide (Q-12b)~~ ✅ **Decided: redact at transmission** (2026-08-17). This ticket no longer waits on a
+   decision — it is now purely the doc fix, which is what it should have been all along.
+2. Rewrite the section to describe what is **built**, with the reason moved alongside the rule
+   (engineering rule 7). ⚠ **And what is *not* built:** with DPG-32 out of scope, person names are not
+   redacted. The rewritten section must say so with a `⚠ Not built` marker rather than describing redaction
+   in general terms that imply name coverage.
+3. If any part remains aspirational, mark it `⚠ Not built` — do not leave a second unverified claim.
+4. Update the data-flow diagram (DPG-04) to show the redaction boundary where it actually sits.
+5. Update CLAUDE.md data rule 4's caveat if this sprint changes what it describes.
+
+### Acceptance
+
+- [ ] `11_llm_pipeline_policy.md` describes built behaviour, with reasons attached
+- [ ] Anything unbuilt marked `⚠ Not built`
+- [ ] Data-flow diagram shows the redaction boundary
+- [ ] CLAUDE.md rule 4's caveat reconciled
+- [ ] No new unverified claim introduced anywhere in this sprint's documentation
+
+---
+
+## Sprint 3 acceptance criteria
+
+- [ ] **No unredacted numeric identifier** in any outbound model call — verified by test, at the chokepoint
+- [ ] No raw grievance text in logs, traces, or Celery payloads — verified by test
+- [ ] **Devanagari-digit phone numbers detected** — explicit test case (T-31-a)
+- [ ] ⏸ **Third-party names in narrative — NOT detected this sprint** (DPG-32 moved out, Q-12c). The gap is
+      **stated explicitly** in the egress inventory, the privacy assessment, and to the consultant. This box
+      is deliberately unticked, not overlooked
+- [ ] Deterministic recall measured and published, with PERSON reported as **not covered** rather than omitted
+- [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at storage
+- [ ] **The restore mapping is either never persisted, or protected as the PII it is** — and not in `ticketing.*`
+- [ ] Audio's irreducibility documented. ⚠ It is **no longer a T2 argument** — T2 is parked (Q-03/Q-05), so
+      it stands as an accepted, disclosed residual exposure instead
+- [ ] Data-flow diagram updated to reflect the redaction boundary
+- [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` green throughout
+- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit

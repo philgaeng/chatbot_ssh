@@ -19,6 +19,7 @@ docs/
 ├── ticketing_system/    GRM ticketing product and implementation specs (+ ui/)
 ├── rest_chatbot/        Chatbot architecture, flow, frontend, operations
 ├── seah/                SEAH intake flow + privacy/vault/reveal specs
+├── dpg/                Digital Public Good qualification: compliance status + evidence pack
 ├── reviews/             Devil's-advocate reviews (specs, codebase)
 └── sprints/             One summary per sprint; full originals in sprints/archive/
 ```
@@ -136,6 +137,18 @@ Start at [`seah/README.md`](seah/README.md).
 | [`01_seah_intake_flow.md`](seah/01_seah_intake_flow.md) | As-built intake: victim/witness/focal routes, slots, outro, close controls |
 | [`02_vault_privacy_and_reveal.md`](seah/02_vault_privacy_and_reveal.md) | Canonical model, `grievance_parties`, vault, reveal + audit (with implementation-status table) |
 | [`03_seah_decision_log.md`](seah/03_seah_decision_log.md) | Condensed decision log with statuses + open items |
+
+---
+
+## Digital Public Good (`docs/dpg`)
+
+Qualification of the platform as a [Digital Public Good](https://www.digitalpublicgoods.net/standard), and the evidence pack that supports it.
+
+| Document | Description |
+|---|---|
+| [`00_compliance_status.md`](dpg/00_compliance_status.md) | Indicator-by-indicator status: what complies, what does not, the LLM platform-independence question, and the open questions for ADB's DPG consultant |
+
+The engineering that closes the gaps is specced in [`sprints/2026-08-llm/`](sprints/2026-08-llm/README.md).
 
 ---
 

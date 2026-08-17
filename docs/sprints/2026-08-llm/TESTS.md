@@ -1,0 +1,224 @@
+# Test ledger — DPG compliance & LLM independence
+
+> **These are acceptance criteria, not suggestions.** Every ticket ships with its tests in the same commit
+> ([`README.md`](README.md) → Conventions).
+> Standard: [`docs/engineering/04_testing.md`](../../engineering/04_testing.md) — the pyramid, markers,
+> fixtures, what CI runs, and what "pinned" means. Read it before writing the first test.
+> Tracker: [`PROGRESS.md`](PROGRESS.md)
+
+---
+
+## The two rules that govern this ledger
+
+**1. A test that cannot go red is not a test.** Every entry below has a **mutation check**: the specific
+change to production code that must turn it red. Run the mutation, watch it fail, revert. If it stays
+green, the test is decorative — this project has been bitten by exactly that
+(`test_the_fixture_really_is_encrypted`, and the boundary test that pinned the code against a dict inside
+itself). Record the mutation you ran in the commit message.
+
+**2. No new quarantine.** T3 ended the `@integration` quarantine and grew CI from 364 to 897 tests. The
+`live_llm` marker introduced here is deselected in `backend-tests` **and selected in
+`dpg-platform-independence`** — it runs on every commit, in a different job. A marker that nothing runs
+is a quarantine with better branding.
+
+---
+
+## Where these tests live
+
+| Path | Contents | Runs in |
+|---|---|---|
+| `tests/backend/test_llm_services.py` | T-10-a…f, T-11-a…c, T-13, T-14, T-15 (chatbot surface) | `backend-tests` (mocked) |
+| `tests/ticketing/test_llm_client.py` | T-10 (ticketing surface), T-12 | `backend-tests` (mocked) |
+| `tests/test_spdx_headers.py` | T-01 — the licence-header walker (repo-level, matches `tests/test_*.py`) | `backend-tests` |
+| `tests/backend/test_llm_config.py` | T-17-a…d — the shared registry, both surfaces | `backend-tests` |
+| `tests/backend/test_llm_config_pins.py` | T-11-d, T-16-a, T-17-b…c — the grep/drift pins | `backend-tests` |
+| `tests/backend/test_pii_service.py` | T-31-a…e, T-33, T-34 | `backend-tests` |
+| `tests/data/benchmark/` | DPG-20 fixtures (data, not tests) | — |
+| marked `@pytest.mark.live_llm` | T-24-a…b — real round-trips against the open config | `dpg-platform-independence` only |
+
+---
+
+## Sprint 0
+
+### DPG-01 — the licence-header pin
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-01** | Every in-scope source file carries `SPDX-License-Identifier: Apache-2.0`. Scope per [`01`](01-licensing-and-governance-spec.md#dpg-01) step 3: tracked `.py` under `backend/`, `ticketing/`, `ops/`, `scripts/` and tracked `.ts`/`.tsx` under `channels/`; generated files, vendored assets, `docs/` excluded. Migrations keep their mandated safety header — SPDX goes **above** it, not instead of it | Add a new module without the header → red |
+
+**Why the one test in Sprint 0 earns its place:** indicator-2 evidence decays silently. Without this,
+coverage lapses the first week someone adds a module and nobody learns until a reviewer greps.
+
+⚠ **The other Sprint 0 tickets have no tests, deliberately.** DPG-02/03/04 are documents; DPG-05 (hygiene
+files) and DPG-06 (the root README) are documents too. DPG-06's real check — *no claim in `README.md` that a
+grep of the compose files contradicts* — is **manual, and must run before the consultant meeting**. The
+existing `docs-links` CI gate catches link rot, not false claims. If that check is ever automated, it lands
+here as T-06.
+
+---
+
+## Sprint 1
+
+### DPG-10 — the net (must pass on **unmodified** code)
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-10-a** | Each of the 9 call sites sends the expected model name and `response_format` to a mocked client | Change any hard-coded model string → red |
+| **T-10-b** | Each call site's **happy-path parse**: realistic provider response in, documented dict out | Drop a key from the parsed result → red |
+| **T-10-c** | Each call site's **failure contract** — raise / sentinel dict / `None`, per the table in [`02`](02-llm-agnostic-spec.md#dpg-10). Nine functions, three different idioms; pin each as it is | Change `return None` to `raise` in any client function → red |
+| **T-10-d** | `client is None` guard, per function (module client is `None` when the key is unset) | Remove any `if not client` guard → red |
+| **T-10-e** | `parse_llm_response`: valid JSON · the `"{}"` sentinel → localized "not enough information" · malformed JSON → `{}` · all four language codes in `error_response_dict` | Change the `en` fallback string → red |
+| **T-10-f** | `detect_sensitive_content_llm` clamps an out-of-range `level` to `"low"` | Remove the clamp at `:390-391` → red |
+
+⚠ **T-10-a must patch `backend.services.LLM_services.OpenAI` (the class), not the module-level `client`.**
+`classify_and_summarize_grievance` builds its own client at `:199`; patching only the module attribute
+misses the product's primary AI path.
+
+### DPG-17 — one config file
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-17-a** | All eight task keys resolve to today's models by default, and each honours its documented `MODEL_*` override; `ticket_translate` falls back to `translate` when unset | Change a default, or drop one env override → red |
+| **T-17-b** | **Portability pin.** `backend/config/llm_config.py` imports nothing **first-party** — no `backend.*`, `ticketing.*` or `ops.*` (AST-parsed, not grepped; `pydantic`/`pydantic_settings` are allowed) | Add `from backend.config.constants import ...` → red |
+| **T-17-c** | **The single-source pin.** No model name, base URL, timeout or `MODEL_*` default literal exists in `backend/` or `ticketing/` outside `llm_config.py` — and `findings_task()` is the only SEAH model ternary in the repo | Restore `_MODEL_STANDARD` in `resolved_summary_builder.py` → red |
+| **T-17-d** | **The drift pin.** One `LLM_BASE_URL` / `LLM_API_KEY` env change moves **both** factories — construct `backend`'s and `ticketing`'s clients in one test and assert both point at the new endpoint | Give either surface its own base-URL default → red |
+
+**T-17-d is the test that makes "two factories, one config" enforceable.** T-11-d stops a *new* hard-coded
+model; T-17-d stops the subtler failure — two registries that both read env, drift apart, and leave the
+complainant-facing output on a closed model while the repo advertises an open one.
+
+⚠ **T-17-c must cover `ticketing/services/resolved_summary_builder.py` and `ticketing/tasks/llm.py`**, not
+just the two client modules. Those two files are where the duplication already happened, and `:299` writes
+its copy into a **persisted** provenance field.
+
+### DPG-11 / DPG-12 — the factories
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-11-a** | `get_llm_client()` honours `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES` | Hard-code the base URL → red |
+| **T-11-b** | `get_asr_client()` is independent — a different `ASR_BASE_URL` produces a different client | Point ASR at the chat client → red |
+| **T-11-c** | The model registry resolves per task (`classify`/`extract`/`translate`/`detect`/`asr`) and each is overridable by env | Ignore one `MODEL_*` override → red |
+| **T-11-d** | **The pin.** No `OpenAI(` outside the two client modules; no `gpt-`/`whisper-1` literal in `backend/` or `ticketing/` outside comments | Add `model="gpt-4o"` anywhere in `backend/` → red |
+| **T-12-a** | `TicketingSettings` exposes base URL + model registry; `_get_client()` reads them | Hard-code `base_url` → red |
+| **T-12-b** | The standard/SEAH model split survives as **two config keys** | Collapse them to one → red |
+| **T-12-c** | A config with only the deprecated `openai_api_key` set **warns** and still authenticates | Silently ignore the alias → red |
+
+**T-11-d is the test that keeps the indicator-4 claim true after this sprint ends.** Without it, the
+next feature adds a hard-coded model and nobody notices until a DPG reviewer does.
+
+### DPG-13 — structured output
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-13-a** | Each of the 7 JSON call sites sends `json_schema` when the configured mode allows it | Revert one site to `json_object` → red |
+| **T-13-b** | The response is validated through its Pydantic model; a schema-violating response is rejected, not silently accepted | Replace `model_validate_json` with `json.loads` → red |
+| **T-13-c** | The degradation ladder: `LLM_STRUCTURED_OUTPUT=json_object` and `=prompt` each produce the right request shape, and the mode used is logged | Skip a rung → red |
+| **T-13-d** | **The silent-failure fix**: a malformed model response is distinguishable from a legitimately empty result at the call site | Restore the bare `except JSONDecodeError: return {}` → red |
+| **T-13-e** | Category values validate against the **live catalogue**, not a frozen enum — adding a category to `CLASSIFICATION_DATA` does not require a code change | Freeze a `Literal[...]` of categories → red |
+
+### DPG-14 — the defects
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-14-a** | Classification returns a populated result on a valid response, **and** the `status="error"` contract on an exception — so a model-name failure is distinguishable from an empty classification | Swallow the exception → red |
+| **T-14-b** | Only **one** client is constructed on the classification path (no shadow) | Re-introduce the inner `OpenAI(...)` → red |
+| **T-14-c** | ⚠ **Write only if DPG-14.3 is confirmed in-container.** The ASR call passes the SDK's real language parameter; a call with a language code reaches the client without raising `TypeError` | Rename the kwarg back to `language_code` → red |
+
+### DPG-15 — degraded mode
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-15-a** | **The sprint's headline criterion.** With `LLM_BASE_URL` on a dead port, a full intake completes: the grievance row is durable, the classification status is terminal, no exception reaches the user | Make intake await the model call → red |
+| **T-15-b** | `/health/llm` reports reachability and the base-URL **host**; the response contains no API key | Include the key → red |
+| **T-15-c** | `/health` stays green while `/health/llm` is red — an LLM outage does not restart the container | Wire the probe into the container healthcheck → red |
+
+### DPG-16 — env drift
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-16-a** | Every name in DPG-17's `declared_env_vars()` appears in `.env.example`, and `.env.example` declares nothing the registry does not read — compared programmatically, not eyeballed | Add a new env read without documenting it, **or** leave a stale variable in `.env.example` → red |
+
+---
+
+## Sprint 2
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-24-a** | `@live_llm` — a real chat round-trip against the configured open endpoint returns a parseable structured result | Point at an invalid model → red |
+| **T-24-b** | `@live_llm` — a real transcription round-trip against the configured open ASR endpoint | Same |
+| **T-24-c** | The `live_llm` marker is **deselected** by `backend-tests` and **selected** by `dpg-platform-independence`. Assert on the config, so the "runs nowhere" quarantine cannot re-form silently | Remove the marker from the DPG job's selection → red |
+| **T-24-d** | The DPG job **skips cleanly** (not fails) when `HF_TOKEN` is absent — fork PRs must not show a red X on a public-good repo | Make the absent-secret path fail → red |
+
+Benchmarks (DPG-22/23) are **measurements, not tests** — they produce numbers in
+`docs/dpg/model-benchmarks.md`, and they must not gate CI. A benchmark asserted as a threshold becomes a
+flaky test the first time a provider changes a model behind a tag.
+
+---
+
+## Sprint 3
+
+### DPG-31 — the deterministic layer
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-31-a** | ⭐ **A Devanagari-digit phone number (`९८४१२३४५६७`) is detected and replaced.** The single most important test in this sprint | Remove the digit normalisation → red |
+| **T-31-b** | ASCII and Devanagari forms of the same number are both caught; `+977`, `97x`/`98x` mobiles, landlines, citizenship numbers, email | Drop any recogniser → red |
+| **T-31-c** | Offset alignment: replacements land on the correct spans of the **original** string after normalisation | Apply normalised-string offsets to a non-length-preserving mapping → red |
+| **T-31-d** | Consistent mapping within a document — the same name yields the same token on every occurrence; **different documents do not share a counter** | Use a global counter → red |
+| **T-31-e** | `redact_for_model` → `restore` round-trips losslessly for text containing no PII | Break the reverse mapping → red |
+
+### ⏸ DPG-32 — NER — **moved out of Sprint 3** (Q-12c)
+
+> The NER layer became a standalone anonymiser-service initiative (Q-12c), so **T-32-a…c travel with it.**
+> They stay written here because the tests are the spec of what the service must do, and re-deriving them
+> later is waste. ⚠ **Do not count them toward Sprint 3's coverage** — and note that T-31-a…e now carry the
+> whole of the sprint's redaction evidence, which makes T-31-a (a Devanagari-digit phone number is detected)
+> the most load-bearing test in the sprint rather than merely the most important one.
+
+### DPG-32 — NER
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-32-a** | A Devanagari person name in a realistic grievance sentence is detected | Lower the recall threshold to precision-first → red |
+| **T-32-b** | ⭐ **A third-party name** (site engineer, contractor, ward official) is detected — not only complainant self-identification | Restrict detection to the opening sentence → red |
+| **T-32-c** | If the NER model fails to load, the deterministic layer still runs **and the failure is loud** — a silent drop to regex-only is a privacy failure that looks like success | Make the load failure silent → red |
+
+### DPG-33 / DPG-34 — the boundaries
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-33-a** | No raw narrative reaches a mocked client on **any** of the 9 call sites — asserted at the chokepoint, not per site | Bypass redaction on one site → red |
+| **T-33-b** | `restore()` is applied where output reaches a human or storage — a complainant never receives `<PERSON_1>` | Skip restore on the summary path → red |
+| **T-33-c** | `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green (existing pins; regression guard for the locked rules) | — |
+| **T-34-a** | A grievance narrative passed to `TaskLogger` does not appear in the emitted record | Remove the logging filter → red |
+| **T-34-b** | The translation error path does not interpolate `grievance_description` into its exception message | Restore the `input_data` interpolation → red |
+| **T-34-c** | `parse_llm_response` logs a **length**, not the raw response, on parse failure | Log the raw response → red |
+
+### DPG-35 — measurement — **split** (Q-12c)
+
+> Deterministic recall (phone by digit system, vehicle, citizenship, email; and the classification-quality
+> delta) **stays in Sprint 3**. PERSON recall/precision, third-party-name recall and the voice subset
+> **travel with DPG-32** — there is nothing to measure until it ships. ⚠ **Report PERSON as "not covered"
+> rather than omitting the row:** a recall table missing PERSON reads as a control that covers names.
+
+### DPG-35 — measurement
+
+Not a pass/fail test. A published number in `docs/dpg/pii-redaction-evaluation.md`, reported as:
+PERSON recall · PERSON precision · phone recall **split by digit system** · third-party-name recall
+(separately from self-identification) · classification-quality delta redacted-vs-raw · voice subset
+separately. **State the weaknesses**: a WikiANN-trained NER model on colloquial transcribed speech will
+underperform its published F1, and the report should say so before a reviewer does.
+
+---
+
+## Coverage summary
+
+| Sprint | Test IDs | New files |
+|---|---|---|
+| 0 | T-01 | `tests/test_spdx_headers.py` |
+| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
+| 2 | T-24-a…d | `@live_llm`-marked subset |
+| 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |
+
+**Baseline: 0.** No test in the repository imports `LLM_services.py` or `ticketing/clients/llm_client.py`
+today. Every number above is net new.
