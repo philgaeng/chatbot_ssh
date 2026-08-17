@@ -212,7 +212,14 @@ services:
       start_period: 40s
 
   redis:
-    image: redis:7
+    # Pinned to the 8.10 MINOR, not `redis:8`. Redis relicensed at a minor bump once
+    # already: 7.2 was BSD-3-Clause, 7.4 went RSALv2/SSPLv1 (not OSI-approved), and the
+    # floating `redis:7` tag followed it silently. Redis 8 is tri-licensed RSALv2 /
+    # SSPLv1 / AGPLv3 — we take it under AGPLv3, which IS OSI-approved, and that is what
+    # answers DPG indicator 2. A two-segment pin means patches still arrive but a future
+    # relicence is opt-in. Bump in lockstep with .github/workflows/ci.yml or CI tests a
+    # different Redis than production runs. See docs/dpg/00_compliance_status.md §3.1(b).
+    image: redis:8.10
     # requirepass is enabled only when REDIS_PASSWORD is non-empty (prod); empty
     # (dev default) starts plain redis so existing WSL flows keep working.
     command: ["sh", "-c", "exec redis-server $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
