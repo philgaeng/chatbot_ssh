@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resolve project workflow from intake_route (story_main) + optional classification re-route."""
 from __future__ import annotations
 

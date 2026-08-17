@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Position types + the position→role matrix (OC-02, doc 16 §3.2 / §9).
 

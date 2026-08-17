@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.projects              — admin-managed project registry
 ticketing.project_organizations — many-to-many projects ↔ organizations

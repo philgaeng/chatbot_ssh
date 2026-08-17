@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resolution categories and note formatting (spec §2.2)."""
 
 from __future__ import annotations

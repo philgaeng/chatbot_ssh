@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.project_types — super-admin archetypes (construction_road, …).
 

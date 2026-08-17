@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { OfficerRosterEntry, OfficerRosterScope, PackageItem, ProjectItem } from "@/lib/api";
 import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 

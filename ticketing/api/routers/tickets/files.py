@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """File attachment endpoints (complainant chatbot files + officer uploads).
 
   GET  /tickets/{ticket_id}/files

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Backfill ticket_overdue_episodes from SLA-related ticket_events (demo / legacy rows).
 

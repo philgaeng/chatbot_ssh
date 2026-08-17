@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Executive Summary report — docs/ticketing_system/09_reports_and_report_builder.md §12–§13.
 """

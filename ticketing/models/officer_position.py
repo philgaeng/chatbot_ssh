@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.officer_positions — an officer holds a position type at an org unit (OC-03).
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shareable report links — internal (officers) and public (complainant-safe) snapshots (TP-05)."""
 from __future__ import annotations
 

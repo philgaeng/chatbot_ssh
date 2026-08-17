@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 CollectingDispatcher - adapter matching Rasa's CollectingDispatcher surface
 so existing Rasa actions can run without Rasa's runtime.

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """projects, project_organizations, project_locations, scope includes_children, tickets.project_id
 
 Revision ID: e8d4b6a0f291

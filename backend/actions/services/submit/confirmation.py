@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Post-submit confirmation messages (chat + SMS body)."""
 
 from __future__ import annotations

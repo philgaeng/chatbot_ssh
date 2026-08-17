@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Common action_ask methods shared across multiple forms.
 These are reusable action_ask methods that don't belong to a specific form.

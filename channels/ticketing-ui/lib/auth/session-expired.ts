@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Query param on /login when the user was sent here after an expired OIDC token. */
 export const SESSION_EXPIRED_QUERY = "session_expired";
 

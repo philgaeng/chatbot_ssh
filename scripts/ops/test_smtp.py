@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Verify SMTP configuration: TCP reachability, login, optional test send.
 

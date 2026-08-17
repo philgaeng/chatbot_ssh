@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { type SlaUrgency } from "@/lib/api";
 import { STATUS_BADGE, STATUS_LABELS, PRIORITY_BADGE, SLA_DOT } from "@/lib/design-tokens";
 import { intakeRouteBadgeSpec } from "@/lib/intakeRouteBadge";

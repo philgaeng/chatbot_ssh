@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Human, non-slug rendering of a territory location code (build sheet frame-03 §5: never
  * render a raw code). "NP-P1-D-JHAPA" → "Jhapa".

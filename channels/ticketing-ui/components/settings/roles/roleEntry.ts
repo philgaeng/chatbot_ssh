@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * roleEntry.ts — the shared GRM role view-model for the Settings surfaces.
  *

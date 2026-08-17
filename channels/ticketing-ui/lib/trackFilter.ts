@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * trackFilter.ts — single source of truth for workflow-track ↔ role filtering.
  *

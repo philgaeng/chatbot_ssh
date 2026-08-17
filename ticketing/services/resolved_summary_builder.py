@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Assemble officer + public closure documents (spec §3)."""
 
 from __future__ import annotations

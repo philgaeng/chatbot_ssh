@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Tier-derived permission resolution (DESIGN-cast-model §3.1, §6 — Option A).
 

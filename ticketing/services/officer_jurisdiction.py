@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resolve officer scope rows against projects and tickets."""
 
 from __future__ import annotations

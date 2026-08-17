@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Locations, Countries, Organizations, and Projects — read + admin CRUD endpoints.
 

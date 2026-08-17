@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Officer-facing error copy — strips API paths/status and maps known validation cases (TP-13).
  */

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """In-process TTL cache for the per-request officer onboarding-status sync (H2-05).
 
 ``get_current_user`` calls ``sync_officer_onboarding_status`` on every authenticated request

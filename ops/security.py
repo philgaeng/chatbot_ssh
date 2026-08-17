@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Security monitoring (spec 12) — report-only, run by the ops scheduler.
 

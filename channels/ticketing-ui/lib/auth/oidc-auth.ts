@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // PKCE-enabled OIDC client for Keycloak (drop-in replacement for CognitoAuthClient).
 
 import { OIDC_CLIENT_ID, OIDC_ISSUER } from "./runtime-config";

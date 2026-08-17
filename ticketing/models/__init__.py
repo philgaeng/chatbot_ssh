@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from .base import Base
 from .country import Country, LocationLevelDef, Location, LocationTranslation
 from .organization import Organization

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Default jurisdiction mode per GRM role (how officer scopes are validated and matched).
 

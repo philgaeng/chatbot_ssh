@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Canonical GRM officer role definitions — single source for seed + UI metadata.
 

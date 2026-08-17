@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Project-scoped organization role vocabulary and validation."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * H2-06 — `useTicketThread`: the shared orchestration layer behind the desktop
  * (`app/tickets/[id]`) and mobile (`app/m/tickets/[id]`) ticket-thread screens.

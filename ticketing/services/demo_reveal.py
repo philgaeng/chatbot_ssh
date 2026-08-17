@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Demo-only reveal fallback when seed grievance_ids are not in public.grievances.
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates/modifies ops.* objects + the scoped ops_app role
 # Does NOT touch: grievances, complainants, public.* or ticketing.* tables (read-only grants only)
 """ops schema + system_health_checks + ops_app scoped role

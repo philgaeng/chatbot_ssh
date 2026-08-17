@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Ticket lifecycle CRUD endpoints.
 
   POST  /tickets                       — create ticket from grievance (API key)

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Read-only Keycloak user lookups for admin roster display."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Seed data: KL Road SEAH (Sexual Exploitation, Abuse and Harassment) workflow.
 

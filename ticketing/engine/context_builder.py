@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 context_builder.py — PII-clean ticket context assembly (Layer 1)
 

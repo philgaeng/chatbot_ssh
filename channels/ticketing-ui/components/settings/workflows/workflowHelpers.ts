@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * workflowHelpers.ts — shared leaf helpers for the workflows cluster.
  *

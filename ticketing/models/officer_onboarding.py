@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Per-officer onboarding status (invited vs active), keyed by ticketing user_id."""
 
 from __future__ import annotations

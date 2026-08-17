@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.position_types — the org-chart position catalog + position→role matrix (OC-02).
 

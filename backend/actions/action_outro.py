@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared outro actions for grievance and SEAH flows."""
 import asyncio
 from typing import Any, Dict, List, Text

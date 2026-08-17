@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Status-check follow-up phone eligibility (single source of truth).
 
 The eligibility rule (no phone on file, or phone not OTP-verified only while SMS

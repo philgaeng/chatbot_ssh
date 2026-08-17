@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 State machine: drives all flows from flow.yaml.
 

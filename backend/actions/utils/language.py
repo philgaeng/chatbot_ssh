@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Language detection, skip-instruction matching, and category label helpers."""
 
 from __future__ import annotations

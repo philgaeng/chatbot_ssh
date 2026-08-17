@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Org-tree helpers (OC-01, doc 16 §3.1).
 

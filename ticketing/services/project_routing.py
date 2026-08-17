@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Resolve ticket routing organization from project / package actor configuration.
 

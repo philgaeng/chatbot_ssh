@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Officer admin helpers: jurisdiction validation, Keycloak sync, audit logging.
 """

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Maintenance jobs (spec 11 §9.4) — run by the ops scheduler.
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Shared parsing + validation + DB-write logic for org-tree CSV import (OC-01, doc 16 §9).
 

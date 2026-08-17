@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Officer-action engine (H2-02 Pass 3).
 
 Pure business logic for the officer actions that used to be inlined in the

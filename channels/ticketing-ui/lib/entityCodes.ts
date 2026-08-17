@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Shared rules for project short_code and package package_code. */
 
 export const ENTITY_CODE_MAX_LEN = 8;

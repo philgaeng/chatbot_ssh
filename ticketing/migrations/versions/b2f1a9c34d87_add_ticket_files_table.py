@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """add ticketing.ticket_files table
 
 Revision ID: b2f1a9c34d87

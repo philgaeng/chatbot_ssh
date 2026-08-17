@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Officer positions — invite/staff an officer by position type (OC-03, doc 16 §3.3/§5.2).
 

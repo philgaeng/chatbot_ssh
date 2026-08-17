@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Officer action + messaging endpoints.
 
   POST /tickets/{ticket_id}/actions   — validate + authz → engine dispatch table

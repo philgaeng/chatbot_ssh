@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Align with ticketing.constants.jurisdiction — used before role catalog loads. */
 
 export type JurisdictionMode = "field" | "country" | "global";

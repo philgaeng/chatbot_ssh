@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SEAH outro utterance variant resolution."""
 
 from __future__ import annotations

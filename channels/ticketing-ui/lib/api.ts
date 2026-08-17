@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // GRM Ticketing API client
 // All requests use relative paths (/api/v1/...) so they are proxied through
 // the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).

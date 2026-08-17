@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pivot-table aggregation for the report builder (Excel / Google Sheets style).
 """

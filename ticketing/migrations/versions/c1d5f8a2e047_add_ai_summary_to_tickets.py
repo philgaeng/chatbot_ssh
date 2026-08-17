@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only adds two nullable columns to ticketing.tickets
 # Does NOT touch: grievances, complainants, or any existing public.* table
 """add ai_summary_en and ai_summary_updated_at to ticketing.tickets

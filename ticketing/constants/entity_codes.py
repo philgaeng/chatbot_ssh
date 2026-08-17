@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared validation for project short_code and package package_code."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Tickets router package (H2-02 Pass 4).
 
 Split of the former monolithic ``routers/tickets.py`` into cohesive submodules.

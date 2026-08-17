@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates/modifies ticketing.* tables
 # Does NOT touch: grievances, complainants, or any existing public.* table
 """The first package is "Package 1" — a package like any other.

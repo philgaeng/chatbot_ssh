@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Apply district centroid coordinates to ticketing.locations (level 2, NP)."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Form for modifying an existing grievance (Spec 13: Add more info flow).
 

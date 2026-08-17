@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * workflowHelpers.test.ts — T3-05.
  *

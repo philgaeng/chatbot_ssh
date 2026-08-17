@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Action registry: invoke Rasa actions with adapters and parse events to slot updates.
 """

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Approximate WGS84 centroids for Nepal districts (level_number=2).
 

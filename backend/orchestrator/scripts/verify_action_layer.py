@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Verify Agent 2 deliverables: action_start_grievance_process runs with adapters,
 dispatcher.messages and return events are correct.

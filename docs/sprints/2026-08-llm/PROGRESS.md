@@ -12,7 +12,7 @@
 
 | Ticket | Title | Status | Branch | Commit(s) | Tests green | Notes |
 |---|---|---|---|---|---|---|
-| **DPG-01** | LICENSE + NOTICE + SPDX | ⬜ | `dpg/sprint0-licensing` | | | ⚠ **Gated on TWO externals now** — DPG-03 (holder) and Q-02 (which licence) |
+| **DPG-01** | LICENSE + NOTICE + SPDX | ✅ | `dpg/sprint0-licensing` | | ✅ T-01 (9) | Apache-2.0 landed **provisionally** (owner: proceed, revisit if the consultant advises — Q-02). 583 files stamped; `NOTICE` holder is an explicit `⚠ PENDING` per DPG-03 |
 | **DPG-02** | Dependency licence audit | ⬜ | `dpg/sprint0-licensing` | | | Closes open decision #3 (Rasa) |
 | **DPG-03** | IP ownership (ADB OGC) | ⬜ | non-code | | n/a | **Longest lead. Date sent: ______** |
 | **DPG-04** | Privacy assessment + data-flow | ⬜ | `dpg/sprint0-licensing` | | n/a | Gates Q-03 (jurisdiction) |
@@ -106,6 +106,9 @@ above once a ticket touches it.
 | P-14 | `env.local` holds a live OpenAI key in plaintext. Gitignored and normal for a local env file, but it is the credential this sprint replaces — rotate when the migration lands | `env.local:39` | DPG-16 |
 | P-15 | ⚠ **A second copy of `_MODEL_STANDARD` / `_MODEL_SEAH`**, in a module the inventory missed — written into the resolved-case summary as `llm.model` (`:299`), i.e. a **persisted provenance field** computed from a copy rather than from the module that made the call. Change the client's mapping and miss this file → every resolved case records a model that never ran it | `ticketing/services/resolved_summary_builder.py:26-27`, `:299` | DPG-17 / DPG-12 |
 | P-16 | A **third** copy of the same SEAH ternary, re-derived for a log line — the log can disagree with the call it is logging | `ticketing/tasks/llm.py:163` (and a stale key reference at `:15`) | DPG-17 / DPG-12 |
+| D-01 | ⚠ **CI never runs 21 test files.** `ci.yml`'s pytest step names four paths explicitly (`tests/ticketing tests/orchestrator tests/actions tests/backend`), so the **21 test files sitting directly in `tests/`** — `test_complainant_functions.py`, `test_postgres_services.py`, `test_seah_*.py` and 18 more — plus `tests/shared/`, have never executed in CI. Found while deciding where T-01 should live; it is why `tests/repo/` exists rather than `tests/test_spdx_headers.py`. **Not fixed here** — those files may not pass, and finding out is its own ticket, not a licence commit. Logged as a followup | `.github/workflows/ci.yml:178` | followup |
+| D-02 | ⚠ **The `"use client"` directive placement is reasoned, not empirically confirmed.** 110 `.tsx` files now carry `// SPDX-License-Identifier` **above** their `"use client"` directive. Per ECMAScript, comments are trivia and do not break a Directive Prologue, so the directive is still the first *statement* — and `tsc --noEmit` is clean plus all 88 vitest tests pass. But **vitest does not exercise the directive** and there was no prior comment-above-directive precedent in the repo to lean on. `next build` is the confirming gate and it must not run on the host (CLAUDE.md §Docker-only). **Check `ui-checks` on the first CI run of this branch** — if it fails, the fix is to move the header below the directive for `.tsx` only, which is a three-line change to `insertion_line()` | 110 files under `channels/ticketing-ui/` | **verify in CI** |
+| D-03 | The pre-sprint reading of "encoding declarations in scope" was a **false positive** — the grep matched `encoding="utf-8"` inside `open()` calls, not PEP 263 headers. There are **no** encoding declarations in scope; the shebang case (13 files) is real and handled | — | closed |
 | P-22 | **There is no LLM budget** — *"I can shoulder a few calls per day to nano, not transcription"* (Q-13). Voice transcription is consequently **not live at all**, and Sprint 2 is built almost entirely from inference calls that nobody priced | Q-13 · DPG-22/23/24 | **Q-19** (new) |
 | P-23 | **T2 parked** (Q-03/Q-05) — no run-cost owner. T1 becomes the steady state, so grievance egress to a third party is **permanent, not transitional**, which promotes Sprint 3 and removes the vLLM-in-production sentence from the indicator-4 answer | Q-03, Q-05 | DPG-25, DPG-04, Sprint 3 |
 | P-24 | ✅ **A deterministic SEAH pre-filter exists and is wired in** — `shared_functions/keyword_detector.py:257` (scored, `:342`) via `helpers_repo.py:58` → `services/seah/sensitive_detection.py:25` → `base_mixins.py:170`, as synchronous slot validation. So the LLM leg's fail-open degrades a **second** pass. Strengthens indicator 9b, which the compliance doc credited to the LLM alone | verified 2026-08-17 | DPG-15, compliance §2.6 |
@@ -139,6 +142,10 @@ user see when it fails?
 ---
 
 ## Commit log
+
+| Date | Ticket | Commit | What landed |
+|---|---|---|---|
+| 2026-08-17 | **DPG-01** | _(this branch)_ | `LICENSE` (canonical Apache-2.0, 202 lines, md5 `3b83ef96…`) · `NOTICE` with an explicit pending-holder disclosure · `scripts/ops/add_spdx_headers.py` (idempotent, `--check` mode) · **583 files stamped** (408 `.py`, 175 `.ts`/`.tsx`) · `tests/repo/test_spdx_headers.py` (T-01, 9 assertions) · `tests/repo` wired into `ci.yml` |
 
 | Date | Ticket | Commit | Summary |
 |---|---|---|---|

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
 from rasa_sdk import Tracker

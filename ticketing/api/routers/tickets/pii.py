@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Sensitive-data disclosure endpoints (PII broker + vault reveal).
 
   GET  /tickets/{ticket_id}/pii            — brokered complainant PII from backend

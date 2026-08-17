@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared helpers for the tickets router package.
 
 Small, cross-cutting utilities used by more than one submodule of the split

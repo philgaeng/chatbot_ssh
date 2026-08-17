@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure OTP code generation and verification helpers.
 
 Reusable, tracker-free helpers extracted from ValidateFormOtp / ActionAskOtpInput

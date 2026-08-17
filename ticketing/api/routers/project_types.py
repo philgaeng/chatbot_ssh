@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Project types — the template a project is built from (DECISION-author-defined-slots).
 
 A type binds the workflows a project runs and names the organizations it must have

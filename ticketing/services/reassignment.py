@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Reassignment authority resolution (DESIGN-cast-model §3.4).
 

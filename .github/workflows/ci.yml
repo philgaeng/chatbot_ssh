@@ -174,7 +174,15 @@ jobs:
             --max-level 3
           python -m ticketing.seed.mock_tickets --reset
 
-      - name: Run pytest (ticketing, orchestrator, actions, backend)
+      - name: Run pytest (repo, ticketing, orchestrator, actions, backend)
+        # DPG-01 (2026-08-17) — tests/repo ADDED, and it must stay in this list. This step names
+        # its test paths explicitly, so a directory that is not named here never runs: 21 test
+        # files sitting directly in tests/ are invisible to CI for exactly that reason (logged in
+        # docs/sprints/2026-08-llm/PROGRESS.md). tests/repo holds repo-wide pins — the SPDX
+        # licence-header walker today, the hard-coded-model grep pin next — whose whole purpose is
+        # to fail when someone adds a file that breaks a compliance claim. A pin CI does not run is
+        # the quarantine pattern T3-08 dismantled, wearing a different hat.
+        #
         # T3-08 (2026-07-15) — the `-m "not integration"` quarantine is GONE, and
         # tests/backend is included. Both were measured, not assumed:
         #
@@ -197,7 +205,7 @@ jobs:
         # require the seeded DB above; if one fails, the seed and the test have drifted
         # apart, and that is the bug. `pytest.ini` documents the marker's contract.
         run: |
-          PYTHONPATH=. python -m pytest tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers
+          PYTHONPATH=. python -m pytest tests/repo tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers
 
   ui-checks:
     runs-on: ubuntu-latest

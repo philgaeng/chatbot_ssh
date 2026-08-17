@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Project-level officer SMS on assignment (link-only, no PII)."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates/modifies ticketing.* tables
 # Does NOT touch: grievances, complainants, or any existing public.* table
 """reassignment authority — step actor_can_reassign toggle + reassign_dispatcher role

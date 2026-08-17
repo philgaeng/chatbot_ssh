@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.workflow_definitions, ticketing.workflow_steps, ticketing.workflow_assignments
 """

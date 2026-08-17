@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * friendlyError.ts — the shared friendly-error contract for the Settings surfaces.
  *

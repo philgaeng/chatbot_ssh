@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Registered Tasks Module - Clean Task Functions with Automatic Service Configuration
 

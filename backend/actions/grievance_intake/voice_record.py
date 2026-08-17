@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Voice-only grievance detail intake (CB-01)."""
 
 from __future__ import annotations

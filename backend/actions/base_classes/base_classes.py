@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from abc import abstractmethod, ABC
 import re
 from rasa_sdk.forms import FormValidationAction

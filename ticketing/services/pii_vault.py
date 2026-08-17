@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 PII masking helpers for the ticketing API broker.
 

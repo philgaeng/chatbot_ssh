@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Safe one-line summaries for service / DB DEBUG and INFO logs.
 

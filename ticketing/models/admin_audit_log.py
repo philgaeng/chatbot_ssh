@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Admin audit trail for officer and settings changes (no complainant PII)."""
 from __future__ import annotations
 

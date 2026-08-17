@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure road-hazard subtype catalog + category/description/parsing helpers.
 
 Extracted from ``backend.actions.forms.form_road_hazard`` so the Rasa form keeps

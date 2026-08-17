@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates/modifies ops.* objects
 # Does NOT touch: grievances, complainants, public.* or ticketing.* tables
 """ops.dependency_findings (CVE / advisory tracking)

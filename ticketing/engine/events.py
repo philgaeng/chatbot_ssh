@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Canonical ticket-event writer (H2-02).
 
 Single definition of `_add_event`, shared by the router action path

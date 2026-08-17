@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 SQLAlchemy models for the dedicated `ops` schema.
 

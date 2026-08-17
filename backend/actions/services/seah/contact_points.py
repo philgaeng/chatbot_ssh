@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SEAH contact-centre lookup and formatting."""
 
 from __future__ import annotations

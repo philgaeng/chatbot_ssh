@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.countries            — country registry
 ticketing.location_level_defs  — admin level names per country (Province, District, …)

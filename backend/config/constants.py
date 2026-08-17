@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import csv
 from typing import Any, Dict, List, Tuple

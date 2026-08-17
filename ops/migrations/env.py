@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Alembic env.py for the ops (monitoring) schema.
 Scoped to ops.* only — never touches public.* or ticketing.* tables.

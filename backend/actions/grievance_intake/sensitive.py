@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Sensitive content detection during grievance text intake."""
 
 from __future__ import annotations

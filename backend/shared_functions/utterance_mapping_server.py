@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Server-side utterance mapping for multi-language support.
 This is separate from the Rasa actions utterance mapping.

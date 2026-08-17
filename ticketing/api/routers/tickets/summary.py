@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resolved-case summary + AI findings endpoints.
 
   GET  /tickets/{ticket_id}/resolved-summary

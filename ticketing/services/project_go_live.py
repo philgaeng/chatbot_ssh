@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Go-live readiness checks for projects (§17 demo rules)."""
 from __future__ import annotations
 

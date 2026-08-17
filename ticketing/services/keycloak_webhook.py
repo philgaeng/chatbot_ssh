@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Parse Keycloak event payloads and resolve ticketing.user_id (email-style identity).
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure button-assembly helpers for grievance/SEAH outro actions.
 
 Extracted from ``backend.actions.action_outro`` so the Rasa actions keep only

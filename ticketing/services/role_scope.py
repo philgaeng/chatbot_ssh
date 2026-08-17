@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SH-2 — role ↔ workflow-track scope logic (single source).
 
 A workflow step binds up to four role references (assigned / supervisor / informed /

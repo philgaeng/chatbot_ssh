@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 TaskManager Module - Centralized Task Management with Automatic Service Configuration
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates/modifies ticketing.* tables
 # Does NOT touch: grievances, complainants, or any existing public.* table
 """Back-fill project types from the workflows projects already run.

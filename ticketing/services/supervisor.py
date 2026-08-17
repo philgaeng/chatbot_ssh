@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Per-(project, step) supervisor resolver (OC-03, DECISION 2026-07-10 §5).
 

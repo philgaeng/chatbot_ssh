@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Quarterly report assignments: up to N saved reports per role per calendar quarter.
 

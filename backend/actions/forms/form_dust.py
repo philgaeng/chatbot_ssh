@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Backward-compatible re-exports for CB-09 road hazard fast path."""
 
 from backend.actions.forms.form_road_hazard import (

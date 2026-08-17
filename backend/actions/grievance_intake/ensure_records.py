@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Ensure grievance/complainant IDs and minimal DB rows for intake + attachments."""
 
 from __future__ import annotations

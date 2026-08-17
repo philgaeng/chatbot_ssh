@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.admin_scopes — scoped admin assignments (org_admin / project_admin / officer_admin).
 

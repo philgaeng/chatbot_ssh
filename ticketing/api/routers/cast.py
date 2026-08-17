@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Per-package cast staffing (DESIGN-cast-model §3.3, §3.6).
 

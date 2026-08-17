@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Cast tiers — the fixed, extensible participation model (DESIGN-cast-model §3.1, §6).
 

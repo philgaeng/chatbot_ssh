@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Contact/location slot validators (form_contact logic)."""
 
 from __future__ import annotations

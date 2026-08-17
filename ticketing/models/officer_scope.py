@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.officer_scopes — maps officers to their jurisdictions.
 

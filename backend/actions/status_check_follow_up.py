@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Backward-compatible re-exports.
 
 The status-check follow-up eligibility logic now lives in

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Single source of truth for orchestrator config paths (domain, stories, rules, extract_config inputs).
 

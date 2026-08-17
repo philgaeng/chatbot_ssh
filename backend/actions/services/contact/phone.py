@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Phone validation for contact and OTP forms."""
 
 from __future__ import annotations

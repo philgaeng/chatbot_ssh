@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Queue deadline + tile-bucketing math — pure functions, extracted from app/queue/page.tsx
 // (HR-06) so the SLA-critical arithmetic is unit-testable independent of React rendering.
 // No behavior change: same logic, same call sites.

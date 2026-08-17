@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Classification status resolution on grievance submit."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * labels.ts — plain-language display map (DESIGN §7.C: "labels not slugs on product surfaces").
  *

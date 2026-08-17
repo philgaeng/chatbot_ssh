@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """create ticketing schema and all tables
 
 Revision ID: e3ca0a118dbf

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance description intake helpers (voice, classification, sensitive detection)."""
 
 from backend.actions.grievance_intake.classification import (

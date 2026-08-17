@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Daily ops report (spec 11 §11) — run by the ops scheduler at 07:00 Asia/Kathmandu.
 

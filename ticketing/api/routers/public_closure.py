@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Public complainant closure page API (no auth — spec §3.9.6)."""
 
 from __future__ import annotations

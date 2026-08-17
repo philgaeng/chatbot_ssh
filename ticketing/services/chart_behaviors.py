@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 OC-04 — chart-driven behaviors (doc 16 §5). Read-only helpers only: the org chart drives
 display, visibility, and a ranking *preference* — never an access-control or routing

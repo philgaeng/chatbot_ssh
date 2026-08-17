@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Canonical frontend auth config — the single source for the auth mode + OIDC issuer.
  *

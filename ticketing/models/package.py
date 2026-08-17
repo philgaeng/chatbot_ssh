@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.project_packages   — civil-works packages within a project
 ticketing.package_locations  — many-to-many: package ↔ location nodes

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Initialize the actions_server package.
 This package contains shared code for both the Rasa action server and accessible interface.

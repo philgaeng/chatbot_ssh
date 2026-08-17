@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 FastAPI backend app (Phase 1–2). Production backend API.
 Run: uvicorn backend.api.fastapi_app:app --port 5001

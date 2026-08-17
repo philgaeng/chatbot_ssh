@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Which grievances belong to an organization — by membership, not by a stamp.
 
 **Decided 2026-08-04** ([DECISION-organization-membership](../../docs/sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)),

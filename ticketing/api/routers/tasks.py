@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Task assignment endpoints — in-thread coordination for the mobile UI.
 

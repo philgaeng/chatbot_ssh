@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Ops monitor configuration via pydantic-settings.
 

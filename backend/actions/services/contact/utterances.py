@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Utterance lookup for form_contact validators."""
 
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base

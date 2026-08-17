@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * GRM API proxy — /api/v1/* → TICKETING_API_URL/api/v1/*
  *

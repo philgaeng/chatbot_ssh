@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Public auth endpoints (login + password reset). No JWT required."""
 from __future__ import annotations
 

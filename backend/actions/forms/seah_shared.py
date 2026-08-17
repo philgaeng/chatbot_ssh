@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared SEAH form slot logic (H2-08).
 
 `ValidateFormSeah2` (victim intake) and `ValidateFormSeahFocalPoint2` (focal-point intake)

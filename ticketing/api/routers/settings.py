@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Settings CRUD — key/value store for GRM configuration.
 Only super_admin / local_admin may write settings.

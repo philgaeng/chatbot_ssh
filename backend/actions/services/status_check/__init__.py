@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Status-check flow helpers."""
 
 from backend.actions.services.status_check.grievance_lookup import (

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Upsert GRM roles from ticketing.constants.grm_role_catalog.
 

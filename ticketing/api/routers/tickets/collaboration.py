@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Queue collaboration + SLA endpoints.
 
   GET  /tickets/{ticket_id}/sla

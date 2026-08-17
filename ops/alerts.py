@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Alerting for the ops monitor — deduped email via the Messaging API (HTTP).
 

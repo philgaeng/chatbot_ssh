@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance classification lifecycle codes (Option B — see docs/sprints/June5/04-classification-status-spec.md)."""
 
 from __future__ import annotations

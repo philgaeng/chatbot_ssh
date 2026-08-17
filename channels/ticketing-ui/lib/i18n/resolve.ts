@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * i18n/resolve.ts — pure, framework-free fallback resolvers (RB-1).
  *

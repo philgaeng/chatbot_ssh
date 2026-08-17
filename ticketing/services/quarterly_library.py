@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Named report definitions for quarterly planning (reusable across roles)."""
 from __future__ import annotations
 

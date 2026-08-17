@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Enhanced logging configuration for Rasa actions.
 

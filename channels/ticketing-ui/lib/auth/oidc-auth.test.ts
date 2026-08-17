@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // oidc-auth reads runtime-config (env) at module load, so stub env + reset the

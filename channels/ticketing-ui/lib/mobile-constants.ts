@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Shared constants for the mobile-first thread UI (UI_SPEC.md §2.3).
  * Used by both /m/* routes and the desktop thread view.

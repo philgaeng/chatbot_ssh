@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Fuzzy full-name lookup against complainant DB."""
 
 from __future__ import annotations

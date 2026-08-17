@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Operational report row builder — shared by /reports/query, /reports/build, and XLSX export.
 Decisions: docs/ticketing_system/09_reports_and_report_builder.md §8 (product answers).

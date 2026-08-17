@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Workflow management endpoints — full CRUD for the no-code workflow editor.
 

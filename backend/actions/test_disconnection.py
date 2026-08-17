@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Test action to verify tracker access on disconnection
 This is a simple test to see what data is available in the tracker

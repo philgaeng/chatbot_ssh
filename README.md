@@ -131,3 +131,22 @@ New code belongs only in `ticketing/`, `channels/ticketing-ui/`, and `requiremen
 
 See [`docs/deployment/07_migrations_policy.md`](docs/deployment/07_migrations_policy.md).  
 Security controls index: [`docs/deployment/13_security.md`](docs/deployment/13_security.md).
+
+---
+
+## Licence
+
+Licensed under the **Apache License, Version 2.0** — see [`LICENSE`](LICENSE) and
+[`NOTICE`](NOTICE). Every source file carries an `SPDX-License-Identifier: Apache-2.0` header;
+`scripts/ops/add_spdx_headers.py` maintains that coverage and `tests/repo/test_spdx_headers.py`
+fails the build if a file drifts out of it.
+
+Apache-2.0 was chosen over MIT for its express patent grant, which matters when a government adopts
+the code and other country teams fork it.
+
+> ⚠ **Two provisional points, stated rather than glossed.** The licence is adopted so that work and
+> review can proceed and may be revisited on the advice of ADB's Digital Public Goods consultant.
+> And the **copyright holder is not yet determined** — parts of this platform were developed under an
+> ADB-financed engagement, so a written determination has been requested from ADB's Office of the
+> General Counsel. `NOTICE` says so explicitly instead of naming a holder by inference. Context:
+> [`docs/dpg/00_compliance_status.md`](docs/dpg/00_compliance_status.md).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Classification status codes — keep in sync with backend/config/classification_status.py."""
 
 from __future__ import annotations

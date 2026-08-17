@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Officer login and password reset (Keycloak + Messaging API)."""
 from __future__ import annotations
 

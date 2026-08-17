@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Centralized per-ticket authorization (HR-02).
 

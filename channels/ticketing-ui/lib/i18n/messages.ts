@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * i18n/messages.ts — the EN/NE message dictionaries + a typed accessor (RB-1).
  *

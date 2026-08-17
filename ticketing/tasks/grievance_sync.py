@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Grievance sync task — keeps ticketing.tickets cache aligned with public.grievances.
 

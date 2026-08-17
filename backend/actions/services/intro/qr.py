@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure helpers for the /introduce landing action: payload parsing + QR lookup.
 
 Extracted from ``ActionIntroduce`` so the action keeps only its dispatch flow.

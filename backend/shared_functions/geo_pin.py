@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Complainant location geo + optional file metadata helpers (CB-06 / CB-08)."""
 
 from __future__ import annotations

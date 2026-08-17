@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Report limits — super-admin JSON (ticketing.settings.report_limits).
 

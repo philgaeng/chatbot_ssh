@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Ticketing service configuration via pydantic-settings.
 All values loaded from env.local / .env — no hardcoded credentials.

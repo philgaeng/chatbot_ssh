@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Track-derived SEAH visibility (DESIGN-cast-model §3.1).
 

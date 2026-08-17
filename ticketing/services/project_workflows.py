@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """CRUD for ticketing.project_workflows."""
 from __future__ import annotations
 

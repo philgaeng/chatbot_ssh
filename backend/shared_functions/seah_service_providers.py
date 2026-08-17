@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Lookup and message formatting for SEAH service provider directory rows."""
 from __future__ import annotations
 

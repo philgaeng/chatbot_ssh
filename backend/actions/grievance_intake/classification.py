@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """LLM classification trigger and retrieve-time polling."""
 
 from __future__ import annotations

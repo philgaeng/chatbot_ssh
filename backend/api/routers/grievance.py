@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Grievance API router. Same URL surface and behaviour as Flask backend.
 """

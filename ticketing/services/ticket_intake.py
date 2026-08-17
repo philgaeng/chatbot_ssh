@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Create ticketing.tickets from chatbot intake — shared by POST /api/v1/tickets and sync backfill.
 """

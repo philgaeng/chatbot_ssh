@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Seed ~5 real DoR standard-track position types (OC-02, doc 16 §3.2).
 

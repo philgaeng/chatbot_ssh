@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SEAH project picker buttons and validation."""
 
 from __future__ import annotations

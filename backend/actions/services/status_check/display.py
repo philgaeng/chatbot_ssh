@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance summary text for user display."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure helpers for grievance_sync backfill timing (no Celery / DB imports)."""
 from __future__ import annotations
 

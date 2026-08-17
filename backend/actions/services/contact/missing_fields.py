@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Missing contact fields for modify-contact flow (Spec 13)."""
 
 from __future__ import annotations

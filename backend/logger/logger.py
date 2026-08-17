@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Task logging functionality for the Nepal Chatbot Queue System.
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """add ticketing.officer_scopes table
 
 Revision ID: d5f3e1a09c28

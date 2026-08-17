@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Derive human-readable organization_id values and allocate unique PKs."""
 
 from __future__ import annotations

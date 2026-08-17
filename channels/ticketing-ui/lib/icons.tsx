@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * GRM Icon system — all Lucide icons used in the app, re-exported from one place.
  *

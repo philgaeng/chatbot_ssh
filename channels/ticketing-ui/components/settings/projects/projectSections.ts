@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * projectSections.ts — the project editor's section model (doc 13 §5, ui/04).
  *

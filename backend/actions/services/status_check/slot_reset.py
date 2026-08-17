@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Flow-specific slot reset for status check / new grievance / OTP."""
 
 from __future__ import annotations

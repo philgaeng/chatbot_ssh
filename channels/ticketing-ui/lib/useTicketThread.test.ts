@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { describe, expect, it } from "vitest";
 import { filterThreadEvents, type ThreadFilterContext } from "@/lib/useTicketThread";
 import type { FilterChip } from "@/components/thread/FilterChips";

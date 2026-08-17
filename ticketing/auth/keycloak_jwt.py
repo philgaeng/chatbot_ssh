@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Verify JWTs issued by Keycloak using the realm JWKS endpoint.
 Keys are cached for 5 minutes to avoid a fetch on every request.

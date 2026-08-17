@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Fuzzy duplicate-candidate finder for organizations (SH-4, design §2.4).
 

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { OrganizationItem, OrgRole, PackageItem, ProjectItem } from "@/lib/api";
 
 /** Legacy organization role, still the sensible first guess on pre-types projects. */

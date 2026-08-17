@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Generic flow actions used by the orchestrator (intro, language, menu, routing)."""
 
 import os

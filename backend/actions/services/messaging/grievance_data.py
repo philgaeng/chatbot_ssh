@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance data assembly from tracker slots and DB."""
 
 from __future__ import annotations

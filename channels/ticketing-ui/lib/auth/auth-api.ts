@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { AuthTokens } from "./token-storage";
 
 export interface ApiErrorDetail {
