@@ -1,9 +1,9 @@
 # Open questions for the project owner
 
-> **21 of 24 answered.** This file holds **only what is still live** — three open and one awaiting an
-> external answer. **Q-20, Q-21 and Q-22 came out of the owner's review of Sprint 1; Q-21 and Q-22 were
-> answered the same day** and moved to [`DECISIONS.md`](DECISIONS.md). Q-20 (the flow's step order)
-> still gates DPG-15b. The register below records every decision in one line each.
+> **22 of 24 answered.** This file holds **only what is still live** — two open and one awaiting an
+> external answer. **Q-20, Q-21 and Q-22 came out of the owner's review of Sprint 1 and were all
+> answered the same day**; they are in [`DECISIONS.md`](DECISIONS.md) with the code that confirms each.
+> **Nothing in the second wave is blocked.** The register below records every decision in one line each.
 >
 > **The answered questions moved to [`DECISIONS.md`](DECISIONS.md)** with the owner's answer verbatim, the
 > original framing, and a pointer to the spec each landed in. Nothing was discarded: **expand any row by
@@ -15,23 +15,23 @@
 
 ---
 
-## Still live — 4
+## Still live — 3
 
 | Q | Subject | State | What it blocks |
 |---|---|---|---|
 | [**Q-02**](#q-02) | Which open licence — Apache-2.0 or MIT | 🔴 **open** | **[DPG-01](01-licensing-and-governance-spec.md#dpg-01)** — delegated to the consultant, so `LICENSE` now waits on *two* externals: which text (Q-02) and which holder (Q-01). Indicator 2 fails outright with no licence at all, so this is the cheapest unblock on the list |
 | [**Q-19**](#q-19) | The LLM budget | 🔴 **open** (new) | **Most of Sprint 2** — [DPG-22](03-open-models-spec.md#dpg-22), [DPG-23](03-open-models-spec.md#dpg-23), [DPG-24](03-open-models-spec.md#dpg-24). Raised by the answers themselves: there is no inference budget, and those three tickets are made of inference calls |
-| [**Q-20**](#q-20) | Where the review step sits in the flow | 🔴 **open** (new) | **[DPG-15b](02-llm-agnostic-spec.md#dpg-15b)** — if the complainant confirms the AI summary *before* contact collection, moving the wait to submission means they sometimes confirm nothing, and the fix is a step reorder, not a timeout |
 | [**Q-01**](#q-01) | Who opens the ADB OGC IP request | 🔶 in flight | **[DPG-03](01-licensing-and-governance-spec.md#dpg-03)** and the submission. ⚠ The owner is writing to the *DPG consultant*, which is not the OGC channel the question meant |
 
 ---
 
-## Decision register — 20 answered
+## Decision register — 21 answered
 
 Full text, verbatim answers and reasoning: [`DECISIONS.md`](DECISIONS.md).
 
 | Q | Subject | Decision | Detail |
 |---|---|---|---|
+| **Q-20** | Where the review step sits | **After submission** — verified in the state machine. The wait is already last; only the budget changes | [→](DECISIONS.md#q-20) |
 | **Q-21** | Which single text model | **Two models: Whisper + `gpt-5-nano`** — eight keys, two values | [→](DECISIONS.md#q-21) |
 | **Q-22** | The four unreachable LLM paths | **Not legacy — the parked voice-notes flow.** Declare and label; delete nothing | [→](DECISIONS.md#q-22) |
 | **Q-18** | Shared LLM config module | `backend/config/llm_config.py`, pydantic-settings, dep moved to `requirements.txt` | [→](DECISIONS.md#q-18) |
@@ -181,26 +181,4 @@ Stated so you know they were considered and settled rather than overlooked:
   `backend/services/` one — a distinction the original bullet elided.
 
 ---
-
-## Q-20 — Where does the classification review step sit in the intake flow? {#q-20}
-
-**Owns:** [DPG-15b](02-llm-agnostic-spec.md#dpg-15b) · **Raised:** 2026-08-18, by the owner's own
-proposal to move the checkpoint · **Blocks:** any code in that ticket
-
-Your description of the flow was: *"the classification happens while we request the complainant to
-fill in his contact info; the actual submission happens then, and that should be the time where we
-check."* Measured, the wait is at
-`backend/actions/forms/form_grievance_complainant_review.py:75` — the step where the complainant
-**confirms the AI summary and categories**.
-
-So the question is what that step is for, and when it runs:
-
-- If it runs **after** contact collection, your design works as stated: the classification has had
-  the whole contact conversation to finish, and submission is a backstop with a 90 s budget.
-- If it runs **before**, then removing the wait means the complainant is sometimes asked to confirm
-  a summary that does not exist yet — and the right fix is to **reorder the steps**, not to change a
-  timeout.
-
-**What I need:** confirmation of the intended order. I can trace the live flow to establish the
-actual order (about an hour), but the *intended* one is a product decision and it is yours.
 

@@ -6,8 +6,21 @@
 > **Status:** 🟡 **superseded 2026-08-18 — now owned by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)**,
 > in this sprint. · **Size:** S to measure properly, M to fix well
 >
-> ⚠ **The owner's answer is better than this document's framing.** This was written as "the deadline
-> is too short"; the answer is that **the deadline is in the wrong place**. Classification runs while
+> ⚠ **Corrected twice, and the second correction is the honest one.** This was written as *"the
+> deadline is too short"*. The first correction said *"the deadline is in the wrong place"*. **Q-20's
+> tracing showed it is in exactly the right place** — the review step runs *after* submission, at the
+> end of a flow containing two forms and an SMS round-trip, so the measured 14–20.5 s classification
+> is normally finished long before anyone waits on it. **The deadline is a backstop that is rarely
+> reached.**
+>
+> ⚠ **Where it does bite, and this is the finding worth keeping:** a complainant who declines to share
+> contact details skips the OTP form entirely (`form_otp.required_slots()` returns `[]`), so the gap
+> can collapse to seconds. **The fast path through the flow is the privacy-conscious path**, and it is
+> the anonymous complainant who sees the empty classification. That is the case the 90 s budget is
+> for — a better argument than the average case this document was written from.
+>
+> ⚠ **And raising the budget without fixing D-34 makes it worse**: a failed classification is not
+> terminal, so the poll runs its full length — 20 seconds becomes 90. Classification runs while
 > the complainant fills in contact details, so the checkpoint belongs at *submission*, with a 90 s
 > budget and a late arrival updating the submitted grievance — not at the review step with a 20 s
 > poll. The measurements below stand and are the input to that ticket; the framing does not.

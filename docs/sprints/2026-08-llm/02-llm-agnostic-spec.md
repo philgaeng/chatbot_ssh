@@ -1598,74 +1598,98 @@ that told the owner his mental model was wrong when it was right.
 
 ---
 
-## DPG-15b — The classification wait belongs at submission, not at review {#dpg-15b}
+## DPG-15b — The wait is already in the right place; raise the budget and make failure terminal {#dpg-15b}
 
-> *"The classification happens while we request the complainant to fill in his contact info. The
-> actual submission of the grievance happens then, and that should be the time where we check if the
-> classification is done or not. We could very well allocate a way longer timer — like 90 s — and
-> just make sure that we update the submission once the classification is done, if submission is
-> done before the classification task is finished."* — owner
+> ✅ **Q-20 answered 2026-08-18** — the owner described the flow and the code confirms it, so the
+> premise this ticket was drafted on was wrong and the ticket shrank.
+>
+> *"I have allocated enough time during the submission flow for the classification to happen in the
+> background while the user fills more forms, so that he can review the results of the classification
+> by himself."*
 
-**This supersedes two deviations from DPG-15's audit**: D-30 (14–20.5 s measured against a 20 s
-deadline) and D-34 (`LLM_failed` unreachable). The owner's design answers both, and answers them
-better than "raise the timeout" would have.
+### 15b.0 — The flow, verified in the state machine rather than assumed
 
-### 15b.0 — The flow as it is, measured
+| # | Step | Where | What happens |
+|---|---|---|---|
+| 1 | `form_grievance` → `submit_details` | `forms/intake_submit.py:18` | Grievance row written as `pending`; **classification enqueued**. Intake never waits |
+| 2 | `form_contact` | `forms/form_contact.py` | Province, district, municipality, village, ward, address, consent, name, email |
+| 3 | `form_otp` | `forms/form_otp.py` | Phone, OTP consent, **an SMS round-trip**, OTP input |
+| 4 | `action_submit_grievance` | `action_submit_grievance.py:96` | Persists, sends the recap SMS, **dispatches the ticket to ticketing** |
+| 5 | **review** | `state_machine.py:392` `_start_grievance_review_after_submit` → `action_retrieve_classification_results` | ⏱ **the 20 s poll**, then the complainant reviews summary + categories |
+| 6 | outro | `action_update_grievance_categorization`, `action_grievance_outro` | The complainant's confirmed or corrected classification is written to the grievance row |
 
-| Step | Where | What happens |
-|---|---|---|
-| Trigger | `backend/actions/forms/intake_submit.py:70` → `trigger_async_classification` | The row is written, then the Celery task is enqueued. **Intake never waits here** — this part is right and stays |
-| Wait | `backend/actions/forms/form_grievance_complainant_review.py:75` → `load_grievance_for_classification` | Polls **20 s**, 0.5 s interval, then gives up and renders whatever is in the row |
-| Resolve | `backend/actions/services/submit/classification.py::classification_status_for_submit` | Re-reads the row; falls back to `"pending"` |
+The state machine says it in its own docstring: *"Run review after submit"*.
 
-And the measurement that makes it urgent (D-30): **14.0 s, 15.2 s, 20.5 s** of server processing for
-one classification — one sample of three already over the deadline, *before* Celery queue wait.
+**So the wait is already as late as it can be**, at the end of a flow containing two forms and an SMS
+round-trip. Against the measured 14–20.5 s classification, the normal path finishes it long before
+step 5. ⚠ **D-30's followup framed this as "the deadline is too short"; it is better described as "the
+deadline is a backstop that is rarely reached"** — and the followup has been corrected.
 
-### 15b.1 — What changes
+**And the late-update half of the requirement already works, further than credited.** The ticket is
+created at step 4 with whatever exists then; `ticketing/tasks/grievance_sync.py` runs **every two
+minutes** (`celery_app.py:70`) and back-fills `grievance_summary`, `grievance_categories`,
+`grievance_location` and `location_code` whenever they change. So both a late classification **and
+the complainant's review edits at step 6** reach the officer automatically, within about two minutes.
+Nothing to build; verify it and write it down.
 
-1. **The budget becomes a registry value, `CLASSIFICATION_WAIT_SECONDS`, default 90** (the owner's
-   number). One value, one place, and DPG-23 can revise it from measurement rather than from feel.
-2. **The blocking wait moves to submission.** The review step stops blocking: if the classification
-   is not ready it renders without it rather than freezing the conversation for 20 seconds.
-   ⚠ **Open, and it must be answered before writing code (Q-20):** the review step is where the
-   complainant *confirms* the summary and categories. Skipping the wait there means either the
-   review step is reached later in the flow (after contact collection, as the owner describes), or
-   the complainant sometimes reviews nothing. **The step order has to be read off the live flow, not
-   assumed** — that is one hour of tracing, and it is the whole design.
-3. **Late classification updates the submitted grievance.** Half of this already exists and it is
-   worth knowing before building the other half: `ticketing/tasks/grievance_sync.py:193,206`
-   back-fills `grievance_summary` on the ticket when it changes, so a classification landing after
-   the ticket was created **does** reach the officer. What is missing is the complainant-facing side
-   and the status write.
-4. **`LLM_failed` becomes reachable** (D-34): the task re-raises so Celery's `autoretry_for` fires,
-   and `_persist_classification_failed_if_final` writes the terminal code once retries are spent.
-   ⚠ This changes the task's terminal state from SUCCESS-with-a-FAILED-payload to a Celery FAILURE,
-   **and the frontend polls task status** — that is why DPG-15 logged it instead of fixing it, and
-   it needs its own check against the webchat status path.
+### 15b.1 — ⚠ The exception, and it is the complainant who most needs the flow to work
+
+**Steps 2 and 3 are not always long.** A complainant who declines to share contact details takes a
+much shorter path:
+
+- `complainant_consent is False` → `form_otp.required_slots()` returns **`[]`** — the whole OTP form,
+  SMS round-trip included, is skipped (`form_otp.py:181-183`)
+- `form_contact`'s required slots shrink correspondingly
+
+**The gap between enqueueing the classification and needing its result can then collapse to
+seconds** — and the measurement says the classification takes 14–20.5. So the case where the 20 s
+poll actually bites is the **anonymous or contact-refusing complainant**: the fast path through the
+flow is the privacy-conscious path, and it is the one that shows an empty classification.
+
+That is the argument for the owner's 90 s, and it is a better argument than the average case.
+
+### 15b.2 — ⚠ The coupling: you cannot raise the budget without making failure terminal
+
+Raising the deadline to 90 s **makes D-34 worse, not better**. Today a failed classification leaves
+the row at `pending` — not terminal — so `load_grievance_for_classification` polls the whole budget
+before giving up. At 20 s that is an awkward pause. **At 90 s it is a ninety-second stall on a
+classification that will never arrive.**
+
+So the two halves ship together, or not at all:
+
+1. `CLASSIFICATION_WAIT_SECONDS` in the registry, default **90**.
+2. **`LLM_failed` reachable** (D-34): the task re-raises so Celery's `autoretry_for` fires, and
+   `_persist_classification_failed_if_final` writes the terminal code once retries are spent. The
+   retrieve step already short-circuits on terminal statuses, so the stall becomes as short as the
+   failure is definite.
+3. The review step must **say** the classification is unavailable rather than rendering blank — a
+   complainant who is shown an empty summary after 90 s has been told nothing, twice.
+
+⚠ **What changing the task's terminal state touches**: it becomes a Celery FAILURE rather than
+SUCCESS-with-a-FAILED-payload, and the webchat polls task status. Check that path, do not assume it.
 
 ### Acceptance
 
 - [ ] `CLASSIFICATION_WAIT_SECONDS` in the registry, default 90; no literal deadline anywhere
-- [ ] The flow's step order **read from the code and written down** before the wait is moved (Q-20)
-- [ ] The review step does not block on a classification that has not arrived
-- [ ] Submission checks, waits up to the budget, and proceeds either way — intake still completes
-      with the endpoint dead (T-15-a stays green)
-- [ ] A classification that lands **after** submission updates the grievance, and the update reaches
-      ticketing (verify the sync path with a real late arrival, in-container)
-- [ ] `LLM_failed` is written after retries are exhausted, **verified against the database** the way
-      DPG-15's runs were — with the webchat task-status path checked, not assumed
-- [ ] D-30 and D-34 closed in `PROGRESS.md`, and their followup docs updated to point here
+- [ ] **`LLM_failed` reachable and verified against the database**, the way DPG-15's runs were —
+      ships in the same commit as the raised budget, per §15b.2
+- [ ] The review step distinguishes *not ready yet* from *will not arrive*, and says so
+- [ ] ⚠ The **no-contact path measured end to end**: decline contact sharing, drive to the review
+      step, and record how long the flow actually takes. This is the case the budget exists for and
+      the only one where the number matters
+- [ ] The two-minute sync's back-fill of a late classification **and** of the complainant's review
+      edits verified in-container with a real late arrival, and written into
+      [`11_llm_pipeline_policy.md`](../../deployment/11_llm_pipeline_policy.md) — it is undocumented
+      and it is what makes the whole design work
+- [ ] The webchat task-status path checked against the new terminal state
+- [ ] D-30 and D-34 closed; their followups updated to point here
+- [ ] The verified step table above written into
+      [`docs/rest_chatbot/`](../../rest_chatbot/) — Q-20 cost an hour of tracing that nobody should
+      have to repeat
 
 ### Tests
 
 [`TESTS.md`](TESTS.md) → **T-15b-a … T-15b-d**.
-
-### ❓ Questions
-
-- 🔴 **Q-20 — where does the review step sit in the flow?** If the complainant confirms the AI
-  summary *before* contact collection, moving the wait to submission means they sometimes confirm
-  nothing, and the fix is a step reorder rather than a timeout change. Needs one hour of tracing and
-  the owner's confirmation of the intended order.
 
 ---
 

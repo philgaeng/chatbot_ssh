@@ -193,6 +193,44 @@ evidence available; it is only cheap once there is a model name that the open en
 
 ---
 
+## Q-20 — Where does the classification review step sit in the flow? {#q-20}
+
+**→ after submission. The wait is already in the right place; the budget is the only thing to change.**
+
+> **ANSWERED 2026-08-18.** *"After the grievance_form completes, the user needs to complete the
+> form_contact and the form_otp, and it is after completing all of them that he finally submits …
+> and after this initial submission, the user is requested to review the results of the
+> classification only when they are available. I have allocated enough time during the submission
+> flow for the classification to happen in the background while the user fills more forms, so that
+> he can review the results of the classification by himself."*
+
+**Confirmed in the state machine, not taken on description** — `state_machine.py:392`
+`_start_grievance_review_after_submit`, whose own docstring reads *"Run review after submit"*, is
+invoked immediately after `action_submit_grievance` (`:1802-1815`). The full verified sequence is in
+[DPG-15b §15b.0](02-llm-agnostic-spec.md#dpg-15b).
+
+**What it settles:** the concern that prompted the question — that moving the wait to submission
+would leave the complainant confirming a summary that does not exist — cannot arise, because the
+review already happens after submission. The classification has two forms and an SMS round-trip to
+finish in, against a measured 14–20.5 s. **D-30 was framed as "the deadline is too short"; it is
+better described as "a backstop that is rarely reached"**, and its followup has been corrected.
+
+**Two things the tracing added that the question did not ask for:**
+
+1. ⚠ **The no-contact path is short.** `complainant_consent is False` makes `form_otp` return **no
+   required slots at all** — the SMS round-trip disappears and `form_contact` shrinks with it. So the
+   gap can collapse to seconds, and the case where the poll actually bites is the **anonymous or
+   contact-refusing complainant**. The fast path through the flow is the privacy-conscious one.
+2. ✅ **The late-update half already works, and further than credited.** `grievance_sync` runs every
+   two minutes and back-fills summary, **categories**, location and location_code — so a late
+   classification *and* the complainant's review corrections both reach the officer automatically.
+   It is undocumented; DPG-15b writes it down rather than rebuilding it.
+
+⚠ **And the coupling that matters:** raising the budget to 90 s makes **D-34 worse** until it is
+fixed. A failed classification leaves the row at `pending`, which is not terminal, so the poll runs
+its full length — turning a 20-second pause into a ninety-second stall. The raised budget and the
+reachable `LLM_failed` ship together or not at all.
+
 ## Q-21 — Which single text model? {#q-21}
 
 **→ two models total: Whisper for transcription, `gpt-5-nano` for everything else**
