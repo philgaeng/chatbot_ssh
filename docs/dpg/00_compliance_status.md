@@ -382,6 +382,18 @@ eight: the table below merges the two ticketing findings/summary calls into row 
 
 | # | Subsystem | Function | Model (hard-coded) | What data is sent to the provider |
 |---|---|---|---|---|
+
+> ⚠ **Corrected 2026-08-18 — four of these nine are unreachable, and this table is where a
+> reviewer will count them.** Live: **rows 4 and 6** on the chatbot surface (classification on
+> `gpt-5-nano`; SEAH detection on `gpt-3.5-turbo`) and **rows 7–9** on ticketing. Not live:
+> contact extraction ×2 and grievance translation (their Celery tasks exist and nothing enqueues
+> them), and **ASR, which was switched off by decision** — `registered_tasks.py:157`,
+> *"CB-01 proto: store audio only; transcription/classification deferred to officers"*.
+> **Five live call sites, not nine.** The indicator-4 claim is unaffected — every one of them
+> routes through the same registry — but the *exposure* figure was overstated, and
+> `privacy-assessment.md` leg L4 has been corrected from six chatbot paths to two.
+> Sprint tracker: **D-38** · cleanup: [DPG-19b](../sprints/2026-08-llm/02-llm-agnostic-spec.md#dpg-19b).
+
 | 1 | chatbot | `transcribe_audio_file` — `LLM_services.py:47` | `whisper-1` | **Raw complainant voice recording.** ⚠ **This path is not live** — voice transcription is switched off for lack of inference budget, so no audio is currently sent. It also means we have **no baseline** to benchmark open ASR against, and a suspected SDK-argument bug on this path has never been exercised in the field |
 | 2 | chatbot | `extract_contact_info` — `:79` | `gpt-3.5-turbo` | **Complainant name and phone number**, free text |
 | 3 | chatbot | `extract_all_contact_info` — `:116` | `gpt-3.5-turbo` | As above |

@@ -1138,27 +1138,61 @@ rows should land on it.
 > another. Meaning: we have one entry, then the LLM orchestration layer chooses the model, and then
 > we have a parser function that makes sure we feed the model what is required."* — owner, 2026-08-18
 
-### 18.0 — The correction this ticket starts from: turbo is still live
+### 18.0 — What actually runs: five of the nine call sites, and four are dead
 
-⚠ **`gpt-3.5-turbo` is still called on three of the nine sites, and `gpt-4` on two.** Not an
-opinion — `git log -S` on each literal:
+**The owner's claim — *"only gpt-5-nano is called; I combined classification, summary, translation
+and SEAH detection into one call"* — was checked against the code on 2026-08-18. It is right about
+what runs, wrong about one path, and the full picture is larger than either version.**
 
-| Model | Call sites | In the code since |
-|---|---|---|
-| `gpt-5-nano` | classification | **2025-09-12** — `57e26238` *"updated LLM to gpt-5-nano and modified LLM query"* |
-| `gpt-3.5-turbo` | contact extraction ×2, SEAH detection | **2025-07-07**, never migrated |
-| `gpt-4` | grievance translation, ticketing note translation | pre-dates that |
-| `gpt-4o-mini` / `gpt-4o` | ticketing findings, SEAH findings | 2025-09-11 |
+⚠ **This supersedes the first draft of this section, which said "gpt-3.5-turbo is still on three
+sites and gpt-4 on two". That counted *call sites*, not *reachable* ones — the same mistake the
+privacy assessment's leg L4 made, one week and one document apart.**
 
-**The September migration moved one call site out of five, and the other four kept their old
-models for eleven months.** That is not carelessness — it is precisely what five copies of a model
-name in five modules produce, and it is the argument DPG-17 was written from. The owner's
-recollection was *the intent*; the intent had nowhere to live. It does now: eight lines in one file.
+Reachability was established per site: does anything **enqueue** the task, anywhere outside
+`backend/task_queue/test_tasks.py` (a manual script)?
 
-⚠ **It also means one measurement in this sprint has a bigger consequence than it looked.** `gpt-4`
-rejects JSON mode outright (D-31), which is why `structured_translate` degrades to `prompt`. That is
-not a translation-quality decision anybody made — it is an eleven-month-old default constraining a
-2026 design. Consolidating the model (§18.2) removes the constraint rather than working around it.
+| # | Call site | Model | Live? | Evidence |
+|---|---|---|---|---|
+| 4 | `classify_and_summarize_grievance` | **`gpt-5-nano`** | ✅ **live** | `grievance_intake/classification.py:153` `.delay(...)` |
+| 6 | `detect_sensitive_content_llm` | **`gpt-3.5-turbo`** | ✅ **live** | `forms/form_grievance.py:202` → background thread → `.delay(...)`; result polled at submit |
+| 1 | `transcribe_audio_file` | `whisper-1` | ❌ **switched off by design** | `registered_tasks.py:157` — *"CB-01 proto: store audio only; transcription/classification deferred to officers"*. The upload still stores the file; nothing transcribes it |
+| 2 | `extract_contact_info` | `gpt-3.5-turbo` | ❌ dead | task registered, never enqueued |
+| 3 | `extract_all_contact_info` | `gpt-3.5-turbo` | ❌ dead | no reference at all |
+| 5 | `translate_grievance_to_english_LLM` | `gpt-4` | ❌ dead | task registered, never enqueued |
+| 7–9 | ticketing: note translation, findings, resolved summary | `gpt-4`, `gpt-4o-mini`/`gpt-4o` | ✅ live | their Celery tasks are enqueued from the ticketing API |
+
+**So: five live call sites, not nine. Two on the chatbot surface, three on ticketing.**
+
+#### Where the owner is right
+
+- **Classification, summary and the follow-up question are one call**, on `gpt-5-nano`. Verified
+  live: the request returns exactly those keys.
+- **SEAH detection *is* partly carried by that call** — and this is the part worth naming, because it
+  is not in any spec. `classify_and_summarize_grievance` returns categories, and the review step
+  screens them: `detect_sensitive_categories()` keeps any category containing **"gender"**
+  (`form_grievance_complainant_review.py`). So the nano call is a **third** SEAH signal, alongside
+  the deterministic keyword detector and the LLM detection task.
+- **`gpt-4` is not called on the chatbot surface at all.**
+
+#### Where it does not hold
+
+⚠ **`gpt-3.5-turbo` is still called in production, once — on the SEAH path.** Not merged into the
+nano call: a separate task, fired in a background thread when the complainant adds detail, whose
+result is polled at submit with a keyword fallback. **It is the one live chatbot call site running
+on the oldest model in the repository, and it is the harassment-detection path.**
+
+#### The consequence nobody had written down
+
+**Nothing translates the grievance narrative on the chatbot side.** The translation task is dead, so
+`grievance_description_en` and `grievance_summary_en` are never populated by a live path. Officers
+read English because **ticketing** generates it (`generate_case_findings`, `gpt-4o-mini`) — which is
+almost certainly *why* the chatbot-side translation fell out of use. That is a coherent architecture;
+it has simply never been stated, and three documents still describe the dead path as the English record.
+
+⚠ **And the DPG evidence pack counts nine.** `00_compliance_status.md`, `privacy-assessment.md` and
+this spec all present nine call sites as the indicator-4 and egress inventory. Four are unreachable.
+An inventory that overstates exposure spends the reader's trust on paths that do not exist; corrected
+in [DPG-19b](#dpg-19b).
 
 ### 18.1 — The layer
 
@@ -1217,9 +1251,13 @@ is shared, the calling is not.** *Two factories, one config* becomes *two caller
 
 ### 18.2 — One model, once the layer exists
 
-With the layer in place, consolidating is an edit to `llm_config.py`'s defaults and nothing else.
-**Q-21 is open: which model.** The owner's steer (Q-11) was *"one text model first, then downsize"*,
-and the obvious candidate is the one already carrying the primary path.
+⚠ **§18.0 shrinks this to a single decision.** Four of the six chatbot call sites are dead, so
+"consolidate onto one model" means exactly one thing on the live surface: **does SEAH detection move
+from `gpt-3.5-turbo` to `gpt-5-nano`?** (The ticketing trio is a separate question, deferred to
+DPG-23, since those outputs are officer- and complainant-facing and already do `json_schema`.)
+
+With the layer in place, that move is an edit to `llm_config.py`'s defaults and nothing else.
+**Q-21 is open.** The owner's steer (Q-11) was *"one text model first, then downsize"*.
 
 What consolidation buys, beyond a smaller bill:
 
@@ -1382,6 +1420,68 @@ raise ValueError(
 ### Tests
 
 [`TESTS.md`](TESTS.md) → **T-19-a … T-19-e**.
+
+---
+
+## DPG-19b — Delete the dead LLM paths {#dpg-19b}
+
+> *"Verify my claim and then we can clean up the legacy code."* — owner, 2026-08-18
+
+[§18.0](#dpg-18) establishes it: **four of the nine call sites are unreachable.** This ticket removes
+them, and — more importantly — removes them from the documents that count them as live.
+
+### What goes
+
+| Path | Disposition | Why |
+|---|---|---|
+| `extract_contact_info` + its task | **delete** | No caller. Phone numbers are validated deterministically in a slot validator; this path exists only to send contact PII to a model, which is the opposite of where Sprint 3 is going |
+| `extract_all_contact_info` | **delete** | No reference at all |
+| `translate_grievance_to_english_LLM`, `translate_grievance_to_english`, `extract_input_data_for_translation` + the task | **delete** | No caller, and superseded in fact: officers read English produced by ticketing's `generate_case_findings`. ⚠ Confirm with the owner that no reporting path expects `grievance_description_en` before deleting — the **columns stay** either way; this removes the writer, not the schema |
+| `transcribe_audio_file` + its task | ⚠ **KEEP** | Dead by **decision**, not by rot: CB-01 deferred transcription to officers and the upload path still stores the audio for it. Deleting a deliberately-deferred feature is not cleanup. Mark it `⚠ Switched off (CB-01)` everywhere instead — including DPG-14.3's fix, which stands and is what makes it correct when it is switched back on |
+
+### What goes with them
+
+- Their DPG-10 characterization tests (a test for deleted code is not a net)
+- `ContactExtractionAll`, `single_field_contact_schema`, `GrievanceTranslation` in
+  `backend/services/llm_schemas.py`, and their registry task keys (`extract`, `translate`,
+  `ticket_translate` stays — ticketing still translates notes)
+- ⚠ **`MODEL_EXTRACT` / `MODEL_TRANSLATE` / `STRUCTURED_*` for the deleted tasks** — from
+  `llm_config.py`, `.env.example`, `.env.open`, `.env.openai`. T-16-a fails otherwise, which is the
+  drift pin doing its job
+
+### The documents that count nine
+
+This is the half that matters more than the code, because it is what a reviewer reads:
+
+- [`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) **leg L4** — now **two** live
+  chatbot egress paths (narrative → `gpt-5-nano`; narrative → `gpt-3.5-turbo`), not six. ⚠ Already
+  corrected once today from six to four; four was still wrong
+- [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) — the nine-call-site table
+- [`docs/services/03_voice_grievance_service.md`](../../services/03_voice_grievance_service.md) —
+  claims the webchat voice path *"remains"* with *"the `transcribe_audio_file_task` / Whisper
+  service"*. The upload remains; the transcription does not
+- This spec's §0.3 inventory, and `README.md`'s premise table
+
+### Acceptance
+
+- [ ] Three paths deleted, ASR kept and marked as deferred-by-CB-01
+- [ ] No orphaned registry keys, env vars or schema models; T-16-a and T-11-d green
+- [ ] Every document that says "nine call sites" says **five live, four not** — with the reason per path
+- [ ] `docs/dpg/privacy-assessment.md` L4 lists **two** chatbot paths
+- [ ] The SEAH triple signal (keyword · nano categories · LLM task) written into
+      [`docs/services/06_llm_service.md`](../../services/06_llm_service.md) — it is load-bearing for
+      Q-14's fail-open justification and it was in no spec
+- [ ] Sprint 2's benchmark scope updated: **two** chatbot models to measure, not five
+
+### Tests
+
+[`TESTS.md`](TESTS.md) → **T-19b-a … T-19b-b**.
+
+### ❓ Questions
+
+- 🟡 **Q-22 (widened)** — confirm the deletion list, especially translation: does any report or
+  export expect `grievance_description_en` to be populated by the chatbot? The **columns** survive
+  either way.
 
 ---
 

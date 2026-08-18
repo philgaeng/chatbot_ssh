@@ -198,6 +198,17 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 | **T-19-d** | The translation error message contains the `grievance_id`, **at most three words** of the description, and **never** the summary, the full description or `input_data` | Restore the `input_data` interpolation → red |
 | **T-19-e** | D-29's underlying bug: a pre-call failure now raises the declared `ValueError`, not `UnboundLocalError` | Move the `result` binding back inside the `try` → red |
 
+### DPG-19b — the dead paths, deleted (second wave)
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-19b-a** | The deleted functions and their Celery tasks are **gone** — not merely unreferenced. The registry declares no `extract` or `translate` task key, and `.env.example` declares no `MODEL_EXTRACT` / `MODEL_TRANSLATE` (T-16-a enforces the second half already) | Re-add a task key without its env var, or vice versa → red |
+| **T-19b-b** | ⭐ **The reachability pin.** Every task in `registered_tasks.py` that calls an LLM has at least one **production** enqueue site — `test_tasks.py` does not count. This is what would have caught four dead paths years ago, and it is what stops the fifth | Register an LLM task nothing enqueues → red |
+
+⚠ **T-19b-b is the general fix.** Deleting four dead paths is a one-off; a repository that cannot
+tell a live call site from a dead one produced a nine-item egress inventory with four phantoms in a
+**compliance document**. The pin is cheap and it is the reason this ticket is worth more than its diff.
+
 ### DPG-15b — the classification checkpoint (second wave)
 
 | ID | Test | Mutation check |
@@ -295,7 +306,7 @@ underperform its published F1, and the report should say so before a reviewer do
 | Sprint | Test IDs | New files |
 |---|---|---|
 | 0 | T-01 (9), T-02-a…e (29) — ✅ landed, 38 assertions | `tests/repo/test_spdx_headers.py`, `test_licence_scan.py`, `test_image_pins.py` |
-| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…d, T-19-a…e, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
+| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…d, T-19-a…e, T-19b-a…b, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
 | 2 | T-24-a…d | `@live_llm`-marked subset |
 | 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |
 

@@ -106,6 +106,7 @@ Sprint 1 no longer ships the open-by-default flip.
 | **DPG-18** | **One entry point** — the layer picks the model and shapes the request; one model | both | M | [02](02-llm-agnostic-spec.md#dpg-18) |
 | **DPG-19** | **Meaningful input** — 25-char gate, empty ≠ failure, bounded error text | backend | S/M | [02](02-llm-agnostic-spec.md#dpg-19) |
 | **DPG-15b** | **Classification checkpoint moves to submission** — 90 s, late update | backend | M | [02](02-llm-agnostic-spec.md#dpg-15b) |
+| **DPG-19b** | **Delete the dead LLM paths** — 4 of 9 call sites are unreachable | backend + docs | S/M | [02](02-llm-agnostic-spec.md#dpg-19b) |
 | **DPG-20** | Labelled benchmark set (test data, never production PII) | data | M | [03](03-open-models-spec.md#dpg-20) |
 | **DPG-21** | Provider setup + smoke script (HF Inference Providers) | ops | S | [03](03-open-models-spec.md#dpg-21) |
 | **DPG-22** | ASR evaluation — Nepali WER on the labelled voice subset | eval | M | [03](03-open-models-spec.md#dpg-22) |

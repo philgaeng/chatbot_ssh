@@ -6,10 +6,19 @@
 > `backend/services/accessible/` helpers/orchestration — were removed. This spec is kept
 > for historical reference only.
 >
-> **Still live:** the webchat voice-note path is unrelated shared infrastructure and
-> remains — chunked upload via `/upload-voice-chunk` + `/upload-voice-complete`
-> (`backend/api/routers/files.py`), the `transcribe_audio_file_task` / Whisper service,
-> and the `grievance_voice_recordings` / `grievance_transcriptions` tables. The
+> **Still live:** the webchat voice-note **upload** path — chunked upload via
+> `/upload-voice-chunk` + `/upload-voice-complete` (`backend/api/routers/files.py`) and the
+> `grievance_voice_recordings` / `grievance_transcriptions` tables.
+>
+> ⚠ **Corrected 2026-08-18: the transcription half is NOT live, and this line said it was.**
+> `transcribe_audio_file_task` is registered and **nothing enqueues it**. The upload handler stores
+> the file and stops there, by decision — `backend/task_queue/registered_tasks.py:157`:
+> *"CB-01 proto: store audio only; transcription/classification deferred to officers."*
+> So audio reaches the database and an officer, never a model. This is **deferral, not rot**: the
+> feature is designed for and the recordings are being kept for it. DPG-14.3's signature fix
+> (`language`, not `language_code`) is what makes it correct on the day it is switched back on —
+> and until then, "voice transcription is not live" (Q-13.2) is true for a second reason nobody had
+> recorded: not just the budget, but that no code path calls it. The
 > `/accessible-socket.io` Socket.IO mount is REST_webchat status infra, not part of this
 > retired channel.
 
