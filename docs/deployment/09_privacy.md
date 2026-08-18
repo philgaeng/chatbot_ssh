@@ -199,5 +199,33 @@ Audit stream ownership:
 
 - Ticketing-side implementation lives in `ticketing/` and `channels/ticketing-ui/`.
 - Public schema and chatbot data model changes follow `migrations/public/*` and existing backend migration ownership.
-- Do not implement direct cross-schema joins from `ticketing.*` into `public.*`.
-- Public and ticketing worktrees must each own their migration stream and expose integration through API contracts only.
+- **Ticketing may read and write `public.*` through its own session — but only the enumerated, closed set**
+  in [`CLAUDE.md`](../../CLAUDE.md) §Data rules, rule 1, which is pinned by
+  `tests/ticketing/test_boundary_policy.py`. Adding a table to that set is a deliberate decision, not a
+  default. Grievance **state** changes still go over HTTP (`POST /api/grievance/{id}/status`), never SQL —
+  that invariant is real and stays.
+- **No foreign keys** from `ticketing.*` into `public.*`, and **no complainant PII columns** in
+  `ticketing.*`. Both pinned by tests. These are the two rules that survived, and they are the ones that
+  carry the privacy weight.
+- Each schema owns its migration stream (`ticketing/migrations`, `migrations/public`, `ops/migrations`);
+  no two streams own DDL for the same table.
+
+> ⚠ **Amended 2026-08-18 (sprint deviation D-21), and the reason travels with the rule.** This section
+> previously read *"Do not implement direct cross-schema joins from `ticketing.*` into `public.*`"* and
+> *"expose integration through API contracts only"*. **That rule was deliberately retired by T3-07 on
+> 2026-07-15** and this document was not updated, so a live privacy spec spent a month forbidding what the
+> locked architecture permits and tests enforce.
+>
+> **Why it went.** The rule was written 2026-03-11 to keep two options open: move ticketing to its own
+> database by changing a connection string, and keep the chatbot working if ticketing were removed.
+> **Both goals were abandoned in the code, by both sides, months before anyone amended the rule** —
+> ticketing issues 11 statements against `public.*`, three of them writes, and the chatbot's intake
+> location validation reads `ticketing.locations` through its own connection. The rule had no enforcement
+> (one database, one role), had been false for months, and honouring it today would **degrade privacy**:
+> the direct read sits behind a Keycloak JWT and a jurisdiction gate that `GET /api/grievance/{id}`
+> cannot offer. Evidence and the decision:
+> [`sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+>
+> A doc reorganisation in June deleted that rationale and left the bare rule, which is why it read as
+> arbitrary fiat and then survived a correction it should not have. **If you amend a rule here, move its
+> reason with it** — [engineering rule 7](../engineering/00_engineering_index.md).
