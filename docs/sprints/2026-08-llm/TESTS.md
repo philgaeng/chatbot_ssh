@@ -125,8 +125,8 @@ misses the product's primary AI path.
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-17-a** | All eight task keys resolve to today's models by default, and each honours its documented `MODEL_*` override; `ticket_translate` falls back to `translate` when unset | Change a default, or drop one env override → red |
-| **T-17-b** | **Portability pin.** `backend/config/llm_config.py` imports nothing **first-party** — no `backend.*`, `ticketing.*` or `ops.*` (AST-parsed, not grepped; `pydantic`/`pydantic_settings` are allowed) | Add `from backend.config.constants import ...` → red |
+| **T-17-a** ✅ | All eight task keys resolve to today's models by default, and each honours its documented `MODEL_*` override; `ticket_translate` falls back to `translate` when unset. **Also pins the timeouts** (SDK default / 120 s classify / 30 s ticketing), the ASR endpoint's per-field fallback, that an unknown task key names the known ones, and that an invalid `LLM_STRUCTURED_OUTPUT` fails at load rather than degrading silently. 30 assertions | ✅ **Checked** — changed a default model → red; pointed `ticket_findings_seah` at the standard model → red (3 tests) |
+| **T-17-b** ✅ | **Portability pin.** `backend/config/llm_config.py` imports nothing **first-party** — no `backend.*`, `ticketing.*`, `ops.*`, `channels.*`, `scripts.*`, and no relative import (AST-parsed, not grepped). Second assertion is the stronger form: the file is **copied to a tmp dir and imported with the repo off `sys.path`** | ✅ **Checked** — added `from backend.config.constants import ...` → red (both tests) |
 | **T-17-c** | **The single-source pin.** No model name, base URL, timeout or `MODEL_*` default literal exists in `backend/` or `ticketing/` outside `llm_config.py` — and `findings_task()` is the only SEAH model ternary in the repo | Restore `_MODEL_STANDARD` in `resolved_summary_builder.py` → red |
 | **T-17-d** | **The drift pin.** One `LLM_BASE_URL` / `LLM_API_KEY` env change moves **both** factories — construct `backend`'s and `ticketing`'s clients in one test and assert both point at the new endpoint | Give either surface its own base-URL default → red |
 
@@ -148,7 +148,7 @@ its copy into a **persisted** provenance field.
 | **T-11-d** | **The pin.** No `OpenAI(` outside the two client modules; no `gpt-`/`whisper-1` literal in `backend/` or `ticketing/` outside comments | Add `model="gpt-4o"` anywhere in `backend/` → red |
 | **T-12-a** | `TicketingSettings` exposes base URL + model registry; `_get_client()` reads them | Hard-code `base_url` → red |
 | **T-12-b** | The standard/SEAH model split survives as **two config keys** | Collapse them to one → red |
-| **T-12-c** | A config with only the deprecated `openai_api_key` set **warns** and still authenticates | Silently ignore the alias → red |
+| **T-12-c** ✅ | A config with only the deprecated `OPENAI_API_KEY` set **warns and still authenticates — on both endpoints**, because a key that authenticates chat but not ASR fails as what looks like a model problem. Warns **once per alias, not once per resolution**, and never logs the key's value. Landed with DPG-17, where the alias handling lives | ✅ **Checked** — removed the warning call → red |
 
 **T-11-d is the test that keeps the indicator-4 claim true after this sprint ends.** Without it, the
 next feature adds a hard-coded model and nobody notices until a DPG reviewer does.

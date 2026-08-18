@@ -86,12 +86,24 @@ Produces English normalized copies and metadata for storage.
 
 ## 3) Configuration Dependencies
 
-Environment/config inputs:
+**Every model name, endpoint, timeout, retry count and structured-output mode this service uses is
+declared in one file: [`backend/config/llm_config.py`](../../backend/config/llm_config.py) (DPG-17).**
+This spec deliberately does not restate them — a second list is a list that drifts, and the model
+names in this product had already been copied into four modules before that registry existed.
 
-- `OPENAI_API_KEY`
-- ⏳ **Changing (DPG-17):** model names are hard-coded at each call site today. They move to a single
-  registry, `backend/config/llm_config.py`, which both LLM surfaces read and neither owns.
+- `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_TIMEOUT` / `LLM_MAX_RETRIES` / `LLM_STRUCTURED_OUTPUT`
+- `ASR_BASE_URL` / `ASR_API_KEY` / `ASR_TIMEOUT` — the transcription endpoint, which may be a
+  different provider or machine
+- `MODEL_CLASSIFY`, `MODEL_EXTRACT`, `MODEL_TRANSLATE`, `MODEL_DETECT`, `MODEL_ASR` — per-task,
+  each defaulting to the model this service used before the registry existed
+- `TIMEOUT_CLASSIFY` — classification's own budget (default 120 s); `OPENAI_CLASSIFICATION_TIMEOUT`
+  is honoured as a deprecated alias, with one warning
+- `OPENAI_API_KEY` — deprecated alias for `LLM_API_KEY` / `ASR_API_KEY`; honoured, warned about once
 - category dictionaries from `backend/config/constants.py`
+
+The same registry is read by the ticketing surface (`ticketing/clients/llm_client.py`), so one
+`LLM_BASE_URL` change moves both. That is the DPG indicator-4 property, and it is pinned by a test
+rather than asserted here — `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py`.
 
 ## 4) Error and Fallback Behavior
 

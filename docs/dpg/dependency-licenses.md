@@ -43,8 +43,16 @@ RUN pip install -r /app/requirements.txt && pip install -r /app/requirements.grm
 ```
 
 Verified in the running container: `flask`, `rasa_sdk` and `openai` (chatbot) import alongside
-`pydantic_settings`, `openpyxl` and `apscheduler` (GRM/ops). So the split below is by **manifest**,
+`openpyxl` and `apscheduler` (GRM/ops). So the split below is by **manifest**,
 recovered by parsing each requirements file — not by image, which cannot distinguish them.
+
+> **Amended 2026-08-18 (DPG-17).** `pydantic-settings` moved from `requirements.grm.txt` to
+> `requirements.txt` and its row below now reads `chatbot`. The **counts did not change** — 35
+> declared / 98 transitive — because a package declared in *either* manifest was already counted as
+> declared; only the attribution moved. Recorded rather than silently corrected, because a dated
+> audit that disagrees with the manifests is worse than no audit, and "the counts are unchanged" is
+> itself a finding worth stating. The reason for the move: `backend/config/llm_config.py`, the
+> single LLM registry both surfaces read, is on the chatbot side and imports it.
 
 ## Summary
 
@@ -178,7 +186,7 @@ correctly configured ops container**, and that caveat belongs with the claim.
 | `pip_audit` | 2.10.1 | Apache Software License | GRM/ops |
 | **`psycopg2-binary`** | 2.9.10 | GNU Library or Lesser General Public License (LGPL) | chatbot |
 | `pydantic` | 2.13.4 | MIT | chatbot |
-| `pydantic-settings` | 2.14.2 | MIT | GRM/ops |
+| `pydantic-settings` | 2.14.2 | MIT | chatbot |
 | `pytest` | 9.1.1 | MIT | GRM/ops |
 | `python-dotenv` | 1.1.1 | BSD License | chatbot |
 | `python-jose` | 3.5.0 | MIT License | GRM/ops |

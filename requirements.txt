@@ -15,6 +15,10 @@ uvicorn>=0.22.0,<0.50
 python-multipart>=0.0.9
 pyyaml>=6.0
 pydantic>=2.0
+# Moved here from requirements.grm.txt by DPG-17 (2026-08-18): backend/config/llm_config.py
+# is the single LLM registry both surfaces read, so the base (chatbot) surface now depends on
+# it. Three consumers: backend/config/llm_config.py, ticketing/config/settings.py, ops/config.py.
+pydantic-settings>=2.0
 email-validator>=2.0.0
 
 # --- WebSocket / Socket.IO (FastAPI ASGI: backend.api.websocket_fastapi, orchestrator socket bridge) ---

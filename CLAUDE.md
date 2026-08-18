@@ -511,6 +511,12 @@ docs/ticketing_system/Escalation_rules.md
 ## FOLDER STRUCTURE
 
 ```
+backend/config/
+  llm_config.py         ← ⭐ THE ONLY PLACE ANY MODEL NAME OR LLM ENDPOINT IS DECLARED (DPG-17).
+                          Both LLM surfaces import it; neither owns it. Adding a model call?
+                          Add a task key here — never a literal at the call site. It imports
+                          nothing from backend.*/ticketing.*/ops.*, pinned by a test, so it stays
+                          copy-portable if ticketing is ever extracted.
 ticketing/
   api/
     main.py             ← FastAPI app, port ~5002
@@ -539,7 +545,7 @@ ticketing/
     messaging_api.py    ← HTTP → POST /api/messaging/send-* (SMS fallback + reports)
     orchestrator.py     ← HTTP → POST /message (complainant reply)
   config/
-    settings.py         ← pydantic-settings
+    settings.py         ← pydantic-settings (ticketing runtime; NO model names — see below)
   migrations/
     env.py              ← Alembic with include_object + version_table_schema
     versions/
@@ -597,7 +603,22 @@ ORCHESTRATOR_BASE_URL=http://localhost:8000
 # Keycloak vars (Cognito was superseded — see docs/deployment/16_auth_keycloak.md)
 KEYCLOAK_ISSUER=                ← e.g. https://<host>/keycloak/realms/grm
 KEYCLOAK_CLIENT_ID=
+
+# ── LLM: provider, models, deadlines (DPG-17) ────────────────────────────────
+# Declared in ONE file — backend/config/llm_config.py — which both LLM surfaces read.
+# The full annotated list lives in .env.example and is generated from that file's
+# declared_env_vars(), so this block is a pointer, not a second copy to drift.
+LLM_BASE_URL=                   ← default https://api.openai.com/v1 · T1 open: https://router.huggingface.co/v1
+LLM_API_KEY=                    ← OPENAI_API_KEY still honoured, with one deprecation warning
+MODEL_CLASSIFY=                 ← default gpt-5-nano (the live classification model)
+# … plus MODEL_EXTRACT / TRANSLATE / DETECT / ASR / TICKET_*, ASR_*, LLM_TIMEOUT,
+#     LLM_MAX_RETRIES, LLM_STRUCTURED_OUTPUT, TIMEOUT_CLASSIFY, TIMEOUT_TICKET
 ```
+
+**Adding a model call? Add a task key to `backend/config/llm_config.py` and resolve it with
+`model_for("<task>")`.** A model name written at a call site is the drift this sprint removed: the
+standard/SEAH pair had been copied into four modules, one of them a *persisted provenance field*
+that would have recorded a model which never ran. Pinned by `tests/backend/test_llm_config_pins.py`.
 
 ---
 

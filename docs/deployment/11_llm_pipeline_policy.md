@@ -17,6 +17,13 @@
 Both pipelines are implemented in `ticketing/tasks/llm.py` and `ticketing/clients/llm_client.py`.
 Neither pipeline is called inline — they are always Celery async tasks so API latency is unaffected.
 
+> **Where the model names come from (DPG-17).** Not from this document, and not from the code that
+> calls the model: every model name, endpoint and timeout on **both** LLM surfaces is declared once,
+> in [`backend/config/llm_config.py`](../../backend/config/llm_config.py). The table above names the
+> models for the reader's benefit; the registry is what the code reads. If they ever disagree, the
+> registry is right and this table is stale — `model_for("ticket_findings")` answers the question
+> without ambiguity.
+
 ---
 
 ## PII boundary model

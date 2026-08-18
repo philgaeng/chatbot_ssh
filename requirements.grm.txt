@@ -2,9 +2,12 @@
 # Install inside chatbot-rest conda env (host pytest + local tooling):
 #   make dev-grm-deps
 #   # or: pip install -r requirements.grm.txt
-# Do NOT add to requirements.txt (reserved for existing chatbot stack)
+# Do NOT add to requirements.txt (reserved for existing chatbot stack).
+# ⚠ One deliberate exception, DPG-17 (2026-08-18): `pydantic-settings` moved OUT of this file
+# and into requirements.txt, because backend/config/llm_config.py — the single LLM registry
+# both surfaces read — is on the chatbot side. The rule stands; a dependency that the base
+# surface genuinely imports belongs in the base manifest, or the rule is merely false.
 
-pydantic-settings>=2.0        # ticketing/config/settings.py
 alembic>=1.13                 # ticketing/migrations/
 openpyxl>=3.1                 # quarterly XLSX reports (no pandas)
 python-jose[cryptography]>=3.3 # Keycloak JWT verification (JWKS)
