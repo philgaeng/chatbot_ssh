@@ -147,7 +147,7 @@ its copy into a **persisted** provenance field.
 | **T-11-c** ✅ | The model registry resolves per task and each is overridable by env — **landed with DPG-17** as `tests/backend/test_llm_config.py` (T-17-a, 16 of its 30 assertions), because the registry is where that behaviour now lives. Restating it against the factory would test the same code twice | ✅ **Checked** — see T-17-a |
 | **T-11-d** ◐ | **The pin.** No `OpenAI(` outside the two client modules; no `gpt-`/`whisper-1` literal outside the registry — **AST-parsed, with docstrings exempt** (documentation naming the current default is useful; an executable literal is not). ⚠ Scoped to `backend/` on arrival and **widened to `ticketing/` by DPG-12**, in the commit that removes that surface's literals: a pin that is red on the day it lands teaches the next reader that red is normal here | ✅ **Checked** — `model="gpt-4o"` re-introduced → red; shadow client re-introduced → red |
 | **T-12-a** ✅ | ⚠ **The ticket changed this test's premise, correctly.** `TicketingSettings` exposes **nothing** LLM-related — a second settings object is the drift this sprint removes. `_get_client()` builds from the **shared** registry's `llm_endpoint()`: base URL, key, timeout and retries | ✅ **Checked** — hard-coded `base_url` in the ticketing factory → red (2 tests) |
-| **T-12-b** ✅ | The standard/SEAH model split survives as **two registry keys**, resolved by `findings_task(is_seah)` — pinned on both ticketing call sites and again in the registry's own tests | ✅ **Checked** — made `findings_task()` always return `ticket_findings` → red (2 tests) |
+| **T-12-b** ✅ ⏳ | The standard/SEAH model split survives as **two registry keys**, resolved by `findings_task(is_seah)`. ⏳ **Changing under Q-21:** with one text model the two keys resolve to the same *value*, so the assertion moves from *"they resolve to different models"* to *"they are independently overridable"* — the split survives as **configuration**, which is what makes DPG-23 able to re-open it without a code change | ✅ **Checked** — made `findings_task()` always return `ticket_findings` → red (2 tests) |
 | **T-12-c** ✅ | A config with only the deprecated `OPENAI_API_KEY` set **warns and still authenticates — on both endpoints**, because a key that authenticates chat but not ASR fails as what looks like a model problem. Warns **once per alias, not once per resolution**, and never logs the key's value. Landed with DPG-17, where the alias handling lives | ✅ **Checked** — removed the warning call → red |
 
 **T-11-d is the test that keeps the indicator-4 claim true after this sprint ends.** Without it, the
@@ -202,12 +202,14 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-19b-a** | The deleted functions and their Celery tasks are **gone** — not merely unreferenced. The registry declares no `extract` or `translate` task key, and `.env.example` declares no `MODEL_EXTRACT` / `MODEL_TRANSLATE` (T-16-a enforces the second half already) | Re-add a task key without its env var, or vice versa → red |
-| **T-19b-b** | ⭐ **The reachability pin.** Every task in `registered_tasks.py` that calls an LLM has at least one **production** enqueue site — `test_tasks.py` does not count. This is what would have caught four dead paths years ago, and it is what stops the fifth | Register an LLM task nothing enqueues → red |
+| **T-19b-a** | `PARKED_TASKS` names all four voice-flow paths with a reason, and every name in it is a real task — a parked declaration for a task that no longer exists is a stale excuse | Park a task that does not exist, or park one without a reason → red |
+| **T-19b-b** | ⭐ **The reachability pin.** Every LLM-calling task is either **enqueued in production** (`test_tasks.py` does not count) **or declared in `PARKED_TASKS` with a reason**. Nothing else is allowed | Add an LLM task that is neither enqueued nor parked → red |
 
-⚠ **T-19b-b is the general fix.** Deleting four dead paths is a one-off; a repository that cannot
-tell a live call site from a dead one produced a nine-item egress inventory with four phantoms in a
-**compliance document**. The pin is cheap and it is the reason this ticket is worth more than its diff.
+⚠ **T-19b-b is the general fix, and the distinction it enforces is the whole point.** *Live*,
+*parked* and *rotted* look identical to a grep — which is how a nine-item egress inventory ended up
+with four phantoms in a **compliance document**, and how a correction in `DECISIONS.md` Q-11 told the
+owner his mental model was wrong when it was right. A path that is parked **and says so** is
+documentation. A path that is unreachable and silent is a liability. The pin costs ten lines.
 
 ### DPG-15b — the classification checkpoint (second wave)
 

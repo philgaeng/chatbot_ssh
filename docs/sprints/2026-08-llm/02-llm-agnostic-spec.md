@@ -1249,29 +1249,50 @@ and `ticketing/` would then be reaching into the chatbot's runtime rather than i
 the boundary Q-18 drew deliberately. The rule that survives is the one that matters: **the shaping
 is shared, the calling is not.** *Two factories, one config* becomes *two callers, one contract*.
 
-### 18.2 — One model, once the layer exists
+### 18.2 — Two models, and the seam that keeps it reversible
 
-⚠ **§18.0 shrinks this to a single decision.** Four of the six chatbot call sites are dead, so
-"consolidate onto one model" means exactly one thing on the live surface: **does SEAH detection move
-from `gpt-3.5-turbo` to `gpt-5-nano`?** (The ticketing trio is a separate question, deferred to
-DPG-23, since those outputs are officer- and complainant-facing and already do `json_schema`.)
+> ✅ **Q-21 answered 2026-08-18.** *"Given the nature of the tasks, we just need two models: one for
+> transcription (so far whisper) and then nano 5 for all the other tasks. That will be aligned with
+> what we discussed as well for the open weights model where we agreed to just have two."*
 
-With the layer in place, that move is an edit to `llm_config.py`'s defaults and nothing else.
-**Q-21 is open.** The owner's steer (Q-11) was *"one text model first, then downsize"*.
+**Eight task keys, two values.** The keys stay — they are the seam that lets one task move later
+without touching code, and Q-11's *"one text model first, then downsize"* depends on that seam
+existing. What collapses is the defaults:
 
-What consolidation buys, beyond a smaller bill:
+| Task key | Today | After |
+|---|---|---|
+| `asr` | `whisper-1` | `whisper-1` — the ASR model, unchanged |
+| `classify` | `gpt-5-nano` | `gpt-5-nano` — unchanged |
+| `detect` | `gpt-3.5-turbo` | **`gpt-5-nano`** ← the only change on a **live** path |
+| `extract`, `translate` | `gpt-3.5-turbo`, `gpt-4` | `gpt-5-nano` — parked paths (DPG-19b); they change model when they unpark |
+| `ticket_translate`, `ticket_findings`, `ticket_findings_seah` | `gpt-4`, `gpt-4o-mini`, `gpt-4o` | `gpt-5-nano` ⚠ **needs confirmation, below** |
 
-- **`json_schema` everywhere.** Measured: `gpt-5-nano` ✅, `gpt-4o-mini` ✅, `gpt-3.5-turbo` ❌,
-  `gpt-4` ❌ — three of the four sites currently on a weaker rung are there because of the *model*,
-  not the endpoint.
-- **One model to benchmark** in DPG-23 instead of four, which matters when Q-19 says there is no budget.
-- **One model for T2 to host** if the vLLM tier is ever unparked — each additional model is a second
-  process or a second GPU (Q-11's own reasoning).
+**What the collapse buys, beyond the bill:**
 
-⚠ **What it costs, stated plainly:** translation and SEAH detection are currently on *different*
-models from classification, and nobody has measured whether nano is as good at them. `detect` is a
-**SEAH** path. This ticket therefore ships the consolidation **behind the registry**, with the old
-values one env var away, and DPG-23 measures the delta. Consolidating is not the same as knowing.
+- **`json_schema` everywhere.** Measured (D-31): every weaker rung in the registry is there because
+  of the *model*, not the endpoint. On one text model the per-task `STRUCTURED_*` flags become one
+  value, and DPG-13's ladder goes back to being what it was designed as — a **provider** fallback for
+  the open configuration, not a workaround for four different OpenAI vintages.
+- **Sprint 2 evaluates two things, not five.** DPG-22 measures an ASR model; DPG-23 measures a text
+  model. `.env.open` and `.env.openai` then differ in **two** model choices. On no budget (Q-19) that
+  is the difference between a benchmark that happens and one that does not.
+
+⚠ **The one live behaviour change is the SEAH detection path**, moving off `gpt-3.5-turbo`. The
+deterministic keyword pre-filter still runs underneath (Q-14), so the detection floor does not move —
+but the LLM leg's sensitivity is unmeasured on nano, and this is the harassment path. **Land it as its
+own commit**, and say so in `docs/services/06_llm_service.md`.
+
+#### ⚠ Confirm before the ticketing row lands
+
+The ticketing findings split (`gpt-4o-mini` standard / `gpt-4o` SEAH) is a **deliberate cost-quality
+decision**, documented at the constants and pinned by T-12-b, and its outputs are officer-facing and
+**complainant-facing**. "One text model" collapses it.
+
+**Recommendation: keep two keys, point both defaults at the text model.** The split then survives as
+*configuration* — one env var re-opens it — and DPG-23 can re-decide it with measurements instead of
+by assumption. T-12-b's assertion changes from *"the two keys resolve to different models"* to *"the
+two keys are independently overridable"*, which is the honest pin for this decision rather than the
+previous one.
 
 ### Acceptance
 
@@ -1423,65 +1444,94 @@ raise ValueError(
 
 ---
 
-## DPG-19b — Delete the dead LLM paths {#dpg-19b}
+## DPG-19b — Declare the parked paths, and pin the difference {#dpg-19b}
 
-> *"Verify my claim and then we can clean up the legacy code."* — owner, 2026-08-18
+> ✅ **Q-22 answered 2026-08-18, and it reversed this ticket.** *"`transcribe_audio_file`,
+> `extract_contact_info`, `extract_all_contact_info` and `translate_grievance_to_english_LLM` are
+> functions part of the voice notes flow, which I have not updated in the newest versions as we have
+> no budget for the transcription part."*
+>
+> **The first draft of this ticket proposed deleting three of the four. That was wrong.**
+> Reachability analysis found four paths nothing calls, and "unreachable" was read as "legacy".
+> They are **one coherent feature, deliberately parked** — and the code corroborates it exactly.
 
-[§18.0](#dpg-18) establishes it: **four of the nine call sites are unreachable.** This ticket removes
-them, and — more importantly — removes them from the documents that count them as live.
+### What the code says, and it is unambiguous
 
-### What goes
+`backend/task_queue/test_tasks.py` still holds the chains this feature is made of:
 
-| Path | Disposition | Why |
+```
+transcribe_audio_file_task (grievance audio) → classify_and_summarize_grievance_task
+transcribe_audio_file_task (contact audio)   → extract_contact_info_task
+```
+
+**Contact extraction consumes a transcription of spoken contact details.** It was never meant to run
+on typed input — which is exactly why the typed path validates phone numbers with a deterministic
+slot validator and no model. The switch-off is recorded in the code itself
+(`registered_tasks.py:157`): *"CB-01 proto: store audio only; transcription/classification deferred
+to officers."*
+
+So the inventory is not *five live and four dead*. It is:
+
+| | Paths | State |
 |---|---|---|
-| `extract_contact_info` + its task | **delete** | No caller. Phone numbers are validated deterministically in a slot validator; this path exists only to send contact PII to a model, which is the opposite of where Sprint 3 is going |
-| `extract_all_contact_info` | **delete** | No reference at all |
-| `translate_grievance_to_english_LLM`, `translate_grievance_to_english`, `extract_input_data_for_translation` + the task | **delete** | No caller, and superseded in fact: officers read English produced by ticketing's `generate_case_findings`. ⚠ Confirm with the owner that no reporting path expects `grievance_description_en` before deleting — the **columns stay** either way; this removes the writer, not the schema |
-| `transcribe_audio_file` + its task | ⚠ **KEEP** | Dead by **decision**, not by rot: CB-01 deferred transcription to officers and the upload path still stores the audio for it. Deleting a deliberately-deferred feature is not cleanup. Mark it `⚠ Switched off (CB-01)` everywhere instead — including DPG-14.3's fix, which stands and is what makes it correct when it is switched back on |
+| **Live** | classification (`gpt-5-nano`), SEAH detection (`gpt-3.5-turbo`), ticketing ×3 | running |
+| **Parked — the voice-notes flow** | ASR, contact extraction ×2, grievance translation | ⏸ complete, switched off for lack of transcription budget (Q-13.2, Q-22) |
 
-### What goes with them
+⚠ **`translate_grievance_to_english_LLM` belongs to that flow too**, which resolves something DPG-18
+§18.0 left as a loose end: it is not that translation was "superseded by ticketing" — it is that
+translation was part of the *voice* pipeline, and the typed pipeline never needed it because
+ticketing generates the English officers read.
 
-- Their DPG-10 characterization tests (a test for deleted code is not a net)
-- `ContactExtractionAll`, `single_field_contact_schema`, `GrievanceTranslation` in
-  `backend/services/llm_schemas.py`, and their registry task keys (`extract`, `translate`,
-  `ticket_translate` stays — ticketing still translates notes)
-- ⚠ **`MODEL_EXTRACT` / `MODEL_TRANSLATE` / `STRUCTURED_*` for the deleted tasks** — from
-  `llm_config.py`, `.env.example`, `.env.open`, `.env.openai`. T-16-a fails otherwise, which is the
-  drift pin doing its job
+### What this ticket does instead of deleting
 
-### The documents that count nine
+1. **Declare the parked set in one place.** A `PARKED_TASKS` registry — task key → the reason and the
+   decision that parked it (CB-01, Q-13.2) — living beside the task registry, not in a comment
+   someone has to find.
+2. **Label them where a reader meets them**: a header on each parked function saying it is voice-flow
+   and switched off, not dead.
+3. **Fix the documents that count them as live egress** — the half that matters most, because it is
+   what a DPG reviewer reads:
+   - [`privacy-assessment.md`](../../dpg/privacy-assessment.md) **L4**: **two** live chatbot paths,
+     four parked-with-reason. (Corrected twice on 2026-08-18 already: six → four → two.)
+   - [`00_compliance_status.md`](../../dpg/00_compliance_status.md): the nine-call-site table gains a
+     live/parked column.
+   - [`03_voice_grievance_service.md`](../../services/03_voice_grievance_service.md): it claims the
+     Whisper path *"remains"*. The **upload** remains; the transcription is parked. ⚠ This spec is
+     also now the **best surviving description of the parked flow** — it should say so, because
+     whoever unparks it will start there.
+   - This spec's §0.3 inventory and `README.md`'s premise table.
+4. **Keep every parked path on the registry.** They resolve models through `llm_config.py` like
+   everything else, so unparking is a budget decision, not a migration. Their env vars stay in
+   `.env.example`; T-16-a stays green.
+5. ⚠ **Do not delete their characterization tests.** DPG-10's net is what makes unparking safe, and a
+   parked path with no test is how a feature comes back broken. `transcribe_audio_file`'s test is the
+   clearest case: DPG-14.3's `language` fix is only provably correct *because* the test exists.
 
-This is the half that matters more than the code, because it is what a reviewer reads:
+### The pin that earns the ticket
 
-- [`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) **leg L4** — now **two** live
-  chatbot egress paths (narrative → `gpt-5-nano`; narrative → `gpt-3.5-turbo`), not six. ⚠ Already
-  corrected once today from six to four; four was still wrong
-- [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) — the nine-call-site table
-- [`docs/services/03_voice_grievance_service.md`](../../services/03_voice_grievance_service.md) —
-  claims the webchat voice path *"remains"* with *"the `transcribe_audio_file_task` / Whisper
-  service"*. The upload remains; the transcription does not
-- This spec's §0.3 inventory, and `README.md`'s premise table
+**T-19b-b**: every LLM-calling task must either have a **production enqueue site** or be **declared
+parked with a reason**. Nothing else is allowed.
+
+That is the durable fix. Deleting four paths cleans today; a repository that cannot distinguish
+*live*, *parked* and *rotted* is what produced a nine-item egress inventory with four phantoms in a
+compliance document — and, three weeks earlier, a correction in [`DECISIONS.md` Q-11](DECISIONS.md#q-11)
+that told the owner his mental model was wrong when it was right.
 
 ### Acceptance
 
-- [ ] Three paths deleted, ASR kept and marked as deferred-by-CB-01
-- [ ] No orphaned registry keys, env vars or schema models; T-16-a and T-11-d green
-- [ ] Every document that says "nine call sites" says **five live, four not** — with the reason per path
-- [ ] `docs/dpg/privacy-assessment.md` L4 lists **two** chatbot paths
+- [ ] `PARKED_TASKS` exists, names all four with their reason and the decision that parked them
+- [ ] T-19b-b green: no LLM task is silently unreachable
+- [ ] Every document that says "nine call sites" says **five live, four parked**, with the reason
+- [ ] `privacy-assessment.md` L4 lists **two** chatbot egress paths
+- [ ] `03_voice_grievance_service.md` reads as the parked flow's specification, and says what it costs
+      to unpark: an ASR budget, and DPG-22's WER baseline
+- [ ] No production code deleted; no characterization test deleted
 - [ ] The SEAH triple signal (keyword · nano categories · LLM task) written into
-      [`docs/services/06_llm_service.md`](../../services/06_llm_service.md) — it is load-bearing for
-      Q-14's fail-open justification and it was in no spec
-- [ ] Sprint 2's benchmark scope updated: **two** chatbot models to measure, not five
+      [`06_llm_service.md`](../../services/06_llm_service.md) — load-bearing for Q-14 and in no spec
 
 ### Tests
 
 [`TESTS.md`](TESTS.md) → **T-19b-a … T-19b-b**.
-
-### ❓ Questions
-
-- 🟡 **Q-22 (widened)** — confirm the deletion list, especially translation: does any report or
-  export expect `grievance_description_en` to be populated by the chatbot? The **columns** survive
-  either way.
 
 ---
 

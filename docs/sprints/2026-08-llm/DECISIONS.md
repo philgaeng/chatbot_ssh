@@ -193,6 +193,60 @@ evidence available; it is only cheap once there is a model name that the open en
 
 ---
 
+## Q-21 — Which single text model? {#q-21}
+
+**→ two models total: Whisper for transcription, `gpt-5-nano` for everything else**
+
+> **DECIDED 2026-08-18.** *"Given the nature of the tasks, we just need two models: one for
+> transcription (so far whisper) and then nano 5 for all the other tasks. That will be aligned with
+> what we discussed as well for the open weights model where we agreed to just have two."*
+
+**Why it is a clean answer rather than a compromise:** the registry's eight task keys stay — they are
+the seam that lets a task be moved later, and Q-11's *"one text model first, then downsize"* depends
+on that seam existing. What collapses is the **defaults**: eight keys, two values.
+
+It also aligns the two configurations. Sprint 2 evaluates exactly two things — an ASR model (DPG-22)
+and a text model (DPG-23) — so `.env.open` and `.env.openai` differ in two model choices, not eight.
+That is a materially easier thing to benchmark on no budget (Q-19), and a materially easier thing for
+a reviewer to check.
+
+⚠ **One consequence needs the owner's confirmation** — see [DPG-18 §18.2](02-llm-agnostic-spec.md#dpg-18):
+the ticketing surface's standard/SEAH findings split (`gpt-4o-mini` / `gpt-4o`) is a *deliberate*
+cost-quality decision, and "one text model" collapses it. Recommendation: keep **two keys** so the
+split stays configurable, point both defaults at the single text model, and let DPG-23 re-open it
+with measurements rather than by assumption. That keeps the decision reversible without a code change.
+
+## Q-22 — What happens to the four unreachable LLM paths? {#q-22}
+
+**→ none of them is legacy: they are the voice-notes flow, parked for budget. Keep, label, do not delete.**
+
+> **DECIDED 2026-08-18.** *"`transcribe_audio_file`, `extract_contact_info`, `extract_all_contact_info`
+> and `translate_grievance_to_english_LLM` are functions part of the voice notes flow, which I have
+> not updated in the newest versions as we have no budget for the transcription part."*
+
+**Corroborated in the code**, and the corroboration is exact —
+`backend/task_queue/test_tasks.py` still contains the chains:
+
+```
+transcribe_audio_file_task (grievance audio) → classify_and_summarize_grievance_task
+transcribe_audio_file_task (contact audio)   → extract_contact_info_task
+```
+
+Contact extraction consumes a **transcription** of spoken contact details; it was never meant to run
+on typed input, which is why the typed path validates phone numbers deterministically instead. And
+`registered_tasks.py:157` records the switch-off in the code itself: *"CB-01 proto: store audio only;
+transcription/classification deferred to officers."*
+
+**So my recommendation to delete three of them was wrong**, and it was wrong in an interesting way:
+reachability analysis found four paths nothing calls, and I read "unreachable" as "legacy". They are
+one coherent, deliberately parked feature. Deleting them would have destroyed a designed-for
+capability and left the next person to rebuild it from the voice spec.
+
+**What replaces deletion** ([DPG-19b](02-llm-agnostic-spec.md#dpg-19b)): declare them parked, in one
+place, with the reason — and make the reachability pin enforce *that* rather than enqueue-or-die.
+A path that is parked and says so is documentation; a path that is unreachable and silent is the
+thing that put four phantoms into a compliance document.
+
 ## Q-11 — One model for all text tasks, or a model per task? {#q-11}
 
 **→ one text model first, then downsize per task**
@@ -201,6 +255,10 @@ evidence available; it is only cheap once there is a model name that the open en
 >
 > ⚠ **Two things in the answer need correcting or checking before they enter a spec:**
 > 1. *"I run the translation and classification in one call"* — **the code does not.** `classify_and_summarize_grievance` (`:204-231`) does three steps in one call — categorise, summarise *in the grievance's own language*, and draft a follow-up question — and emits English category names. Translation to English is a **separate `gpt-4` call** (`translate_grievance_to_english_LLM`, `:322`). The true and useful version of the point: **there is no translate-then-classify pipeline** — the model consumes Nepali directly. That is worth preserving; the merged-call claim is not.
+>
+>    ⚠⚠ **This correction was itself incomplete, and the owner was closer to right than it allowed — established 2026-08-18 (D-38).** The separate `gpt-4` translation call **is never enqueued**: `translate_grievance_to_english_task` exists, is registered, and nothing in the repository triggers it. So **no translation of the narrative happens at all** on the chatbot surface, and the owner's mental model — one call, no separate translation step — describes what runs. The English text officers read is produced on the **ticketing** side by `generate_case_findings`.
+>
+>    The reason the correction missed it: it checked *what the code contains*, not *what the code reaches*. Same error as the privacy assessment's leg L4 (six egress paths, two real) and as this sprint's own first draft of DPG-18 §18.0. **Three documents, three weeks, one habit** — which is why T-19b-b (every LLM task must have a production enqueue site, or be declared parked) is the durable fix rather than the deletions.
 > 2. *"I'm maxing out openAI nano"* — plausible (the prompt injects the full category list plus `result_dict_str`) but **unverified**, and it sits in tension with Q-13's *"it works well as a classifier"*. [`02` DPG-14.1](02-llm-agnostic-spec.md#dpg-14) now checks specifically for **length/truncation** failures, not just exceptions.
 
 **Owns:** DPG-17 (was DPG-11)

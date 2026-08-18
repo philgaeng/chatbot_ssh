@@ -383,12 +383,14 @@ eight: the table below merges the two ticketing findings/summary calls into row 
 | # | Subsystem | Function | Model (hard-coded) | What data is sent to the provider |
 |---|---|---|---|---|
 
-> ⚠ **Corrected 2026-08-18 — four of these nine are unreachable, and this table is where a
+> ⚠ **Corrected 2026-08-18 — four of these nine are PARKED, and this table is where a
 > reviewer will count them.** Live: **rows 4 and 6** on the chatbot surface (classification on
 > `gpt-5-nano`; SEAH detection on `gpt-3.5-turbo`) and **rows 7–9** on ticketing. Not live:
-> contact extraction ×2 and grievance translation (their Celery tasks exist and nothing enqueues
-> them), and **ASR, which was switched off by decision** — `registered_tasks.py:157`,
-> *"CB-01 proto: store audio only; transcription/classification deferred to officers"*.
+> the four paths of the **voice-notes flow** — ASR, contact extraction ×2 and grievance translation.
+> ⏸ **Parked, not rotted**: complete, switched off for lack of a transcription budget, and recorded
+> as such in the code — `registered_tasks.py:157`, *"CB-01 proto: store audio only;
+> transcription/classification deferred to officers"*. Unparking is a budget decision, not a
+> migration: they resolve models through the same registry as the live paths.
 > **Five live call sites, not nine.** The indicator-4 claim is unaffected — every one of them
 > routes through the same registry — but the *exposure* figure was overstated, and
 > `privacy-assessment.md` leg L4 has been corrected from six chatbot paths to two.

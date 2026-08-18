@@ -14,8 +14,13 @@
 > `transcribe_audio_file_task` is registered and **nothing enqueues it**. The upload handler stores
 > the file and stops there, by decision — `backend/task_queue/registered_tasks.py:157`:
 > *"CB-01 proto: store audio only; transcription/classification deferred to officers."*
-> So audio reaches the database and an officer, never a model. This is **deferral, not rot**: the
-> feature is designed for and the recordings are being kept for it. DPG-14.3's signature fix
+> So audio reaches the database and an officer, never a model. This is **deferral, not rot** — and
+> it is bigger than transcription alone (Q-22, 2026-08-18): **four LLM paths are parked together as
+> this one flow** — ASR, contact extraction ×2 (which consume a *transcription of spoken contact
+> details*, not typed input), and grievance translation. `backend/task_queue/test_tasks.py` still
+> holds the chains. ⚠ **This spec is therefore the best surviving description of a parked feature,
+> and whoever unparks it will start here.** What it costs to unpark: a transcription budget (Q-19)
+> and DPG-22's Nepali WER baseline, which does not exist yet. DPG-14.3's signature fix
 > (`language`, not `language_code`) is what makes it correct on the day it is switched back on —
 > and until then, "voice transcription is not live" (Q-13.2) is true for a second reason nobody had
 > recorded: not just the budget, but that no code path calls it. The
