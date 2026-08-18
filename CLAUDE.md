@@ -78,7 +78,7 @@ backend/services/          → stable (shared service layer)
 backend/task_queue/        → stable (chatbot Celery: llm/default/file queues)
 channels/webchat/          → stable
 channels/REST_webchat/     → stable
-rasa_chatbot/              → stable
+channels/shared/           → stable (assets shared by both chat surfaces)
 scripts/                   → stable (ops/db scripts — add new under scripts/ops or scripts/database)
 deployment/                → stable (nginx/certbot/keycloak config)
 docker-compose.yml         → stable base stack (overlay new services in *.grm.yml / *.prod.yml where possible)

@@ -45,9 +45,11 @@ codebase.
 
 A generated, dated inventory of every dependency and its licence — Python
 (requirements.txt, requirements.grm.txt), npm (channels/ticketing-ui), and
-container images — will be published at docs/dpg/dependency-licenses.md. Until
-that report is generated the hand-written inventory in
-docs/dpg/01_consultant_briefing.md is indicative, not authoritative.
+container images — is published at docs/dpg/dependency-licenses.md: 153
+packages, scanned in-container from the resolved trees, with a disposition for
+every entry carrying conditions beyond attribution. It is the authoritative
+inventory and supersedes the hand-written ones. The ops container re-runs the
+scan nightly, so a licence change surfaces the way a CVE does.
 
 Two notices worth stating here because they are conditions of use rather than
 mere attribution:
