@@ -41,6 +41,7 @@ Spec: docs/sprints/2026-08-llm/02-llm-agnostic-spec.md §0.5a
 from __future__ import annotations
 
 import re
+import subprocess
 from collections import defaultdict
 from pathlib import Path
 
@@ -53,8 +54,12 @@ DOCS_ROOT = REPO_ROOT / "docs"
 # record. Live docs are the ones a reviewer reads and the ones this pin governs.
 SKIP_DIR_MARKER = "archive"
 
-# Directories with no source code to reference.
-SKIP_SCAN = {".git", "node_modules", "__pycache__", "uploads", ".pytest_cache", ".keras", "logs"}
+# Fallback skip list, used only when `git ls-files` is unavailable. ⚠ `.claude/` matters more than it
+# looks: agent worktrees there hold **whole gitignored copies of the repository at older commits**, so a
+# filesystem walk resolves a dangling reference against a ghost. That is not hypothetical — it is how this
+# test passed locally and failed in CI on the day it landed, over `tickets.py`, which H2-02 split into a
+# package months ago. Prefer git; it is the only index that matches what CI checks out.
+SKIP_SCAN = {".git", ".claude", "node_modules", "__pycache__", "uploads", ".pytest_cache", ".keras", "logs"}
 
 REF_RE = re.compile(r"`?([A-Za-z0-9_./-]+\.py):(\d+)")
 
@@ -68,6 +73,14 @@ KNOWN_ABSENT: dict[str, str] = {
         "lives in sprints/2026-07_schema_and_legacy_cleanup/AUDIT_FINDINGS.md, which is the "
         "document that *recommended deleting it*. The file being gone is that document being "
         "correct, not stale."
+    ),
+    "tickets.py": (
+        "Split into the package `ticketing/api/routers/tickets/` by H2-02 (July 2026) — the module was "
+        "2,100+ lines. The citations are in July sprint documents that describe the code as it was, and "
+        "one of them is the review that *recommended the split*. ⚠ This entry is also the reason this "
+        "test indexes from `git ls-files` rather than walking the filesystem: agent worktrees under "
+        "`.claude/` still hold pre-split copies, so a walk resolved these citations against a ghost and "
+        "the test passed locally while failing in CI."
     ),
     "gsheet_monitoring_api.py": (
         "Same retirement, same document, same reasoning — a Flask blueprint wired only into a dead "
@@ -108,14 +121,36 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
 )
 
 
+def _tracked_python_files() -> list[str]:
+    """Repo-relative .py paths, from git — the same set CI checks out.
+
+    A filesystem walk is the wrong index here: gitignored trees (agent worktrees under `.claude/`,
+    virtualenvs, stray clones) contain older copies of this repository, and resolving a citation
+    against one of those validates a file that no longer exists. Git is exact.
+    """
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "ls-files", "--", "*.py"],
+            capture_output=True, text=True, timeout=30, check=True,
+        ).stdout
+        files = [line for line in out.splitlines() if line.strip()]
+        if files:
+            return files
+    except (OSError, subprocess.SubprocessError):
+        pass
+    # Fallback: no git (a source tarball). Less exact, so the skip list has to carry the weight.
+    return [
+        p.relative_to(REPO_ROOT).as_posix()
+        for p in REPO_ROOT.rglob("*.py")
+        if not any(part in SKIP_SCAN for part in p.relative_to(REPO_ROOT).parts)
+    ]
+
+
 def _python_index() -> dict[str, list[str]]:
-    """{basename: [repo-relative paths]} for every tracked-ish .py file."""
+    """{basename: [repo-relative paths]} for every .py file git knows about."""
     index: dict[str, list[str]] = defaultdict(list)
-    for path in REPO_ROOT.rglob("*.py"):
-        rel = path.relative_to(REPO_ROOT)
-        if any(part in SKIP_SCAN for part in rel.parts):
-            continue
-        index[path.name].append(rel.as_posix())
+    for rel in _tracked_python_files():
+        index[Path(rel).name].append(rel)
     return index
 
 

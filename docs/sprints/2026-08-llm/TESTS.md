@@ -70,9 +70,16 @@ coverage lapses the first week someone adds a module and nobody learns until a r
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-03-a** ✅ | Every `file.py:NNN` citation in the **live** docs (`archive/` excluded) resolves to a file that exists. Deliberately-removed files need an entry in `KNOWN_ABSENT` **with the reason**, and a second test fails if one of those comes back | Add a citation to a nonexistent file → red *(checked)*; recreate `gsheet.py` → red *(checked)* |
+| **T-03-a** ✅ | Every `file.py:NNN` citation in the **live** docs (`archive/` excluded) resolves to a file **git knows about**. Deliberately-removed files need an entry in `KNOWN_ABSENT` **with the reason**, and a second test fails if one comes back | Add a citation to a nonexistent file → red *(checked)*; re-add and track a `KNOWN_ABSENT` file → red *(checked)* |
 | **T-03-b** ✅ | Every cited line is within the file it names — catches truncation | Cite line 99999 of `LLM_services.py` → red *(checked)* |
 | **T-03-c** ✅ | ⚠ **The one that catches a *shift*.** 20 load-bearing citations — the nine model call sites, the four duplicated-model sites, and the privacy assessment's encryption/hash/decrypt/SEAH anchors — must land on a line containing an expected token | Move any anchor by **one line** → red *(checked)* |
+
+⚠ **Index from git, not from the filesystem — this bit within a minute of landing.** The first version
+walked `rglob("*.py")`, which picked up **agent worktrees under `.claude/`**: whole gitignored copies of
+the repository at older commits. Four genuinely dangling `tickets.py` citations (H2-02 split it into a
+package) resolved against a ghost, so the test **passed locally and failed in CI** — the one environment
+difference that matters, found the only way it could be. It now reads `git ls-files`, which is exactly
+what CI checks out.
 
 **Why this exists, and what it does not do.** Sprint 0's SPDX pass shifted every source line by +2 and
 with it ~80 citations across the specs and the evidence pack. One stale number was then *copied into*
