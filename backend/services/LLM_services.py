@@ -5,7 +5,12 @@ from typing import Dict, Any, List, Tuple, Optional
 
 from openai import OpenAI
 
-from backend.config.llm_config import model_for, response_format_kwargs
+from backend.config.llm_config import (
+    get_llm_settings,
+    is_too_short_to_process,
+    model_for,
+    response_format_kwargs,
+)
 from backend.services.llm_client import get_asr_client, get_llm_client
 from backend.services.llm_schemas import (
     ContactExtractionAll,
@@ -242,6 +247,24 @@ def classify_and_summarize_grievance(
                 "error": "No grievance text provided"
             }
 
+        # DPG-19: too short to classify → do not call the model at all. This is not a failure and
+        # must not be reported as one: there is nothing to summarise, and the call would cost a
+        # request to be told so. `status` is deliberately absent — callers key failure on it.
+        if is_too_short_to_process(grievance_text):
+            logger.info(
+                "classify_and_summarize_grievance: below the minimum length, skipping the model "
+                "(chars=%d, minimum=%d)",
+                len((grievance_text or "").strip()),
+                get_llm_settings().min_classify_chars,
+            )
+            return {
+                "grievance_summary": "",
+                "grievance_categories": [],
+                "grievance_categories_alternative": [],
+                "follow_up_question": "",
+                "skipped": "too_short",
+            }
+
         # Use provided categories or default to CLASSIFICATION_DATA
         category_list = [f"{item.get('classification')} - {item.get('generic_grievance_name')}" for item in CLASSIFICATION_DATA.values()]
         result_dict = {}
@@ -301,7 +324,20 @@ def classify_and_summarize_grievance(
         # Parse, then validate through the schema (DPG-13). Validation is what makes a
         # schema-violating reply — `grievance_categories` as a string, say — a failure the caller
         # can see, rather than a dict that looks fine until something downstream iterates it.
-        result = parse_llm_response("grievance_response", response.choices[0].message.content.strip(), language_code)
+        raw = response.choices[0].message.content.strip()
+        if raw == "{}":
+            # The model looked at text long enough to summarise and said "not enough information".
+            # ⚠ That is an ANSWER, not an error: `parse_llm_response` turns it into the localized
+            # fallback and no `status` key is set, so `is_failed_classification()` stays False.
+            # Logged with the LENGTH so DPG-23 can count how often it happens — never the narrative.
+            logger.warning(
+                "classify_and_summarize_grievance: the model declined to classify %d chars "
+                "(above the %d-char minimum). Not a failure — the complainant sees the "
+                "'not enough information' response",
+                len((grievance_text or "").strip()),
+                get_llm_settings().min_classify_chars,
+            )
+        result = parse_llm_response("grievance_response", raw, language_code)
         validated = GrievanceClassification.model_validate(result)
         _warn_about_unlisted_categories(validated.grievance_categories, category_list)
         return validated.model_dump()
@@ -395,6 +431,25 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
     
     
 
+def _grievance_ref(input_data: Dict[str, Any]) -> str:
+    """
+    Enough to find the record in the logs, and no more.
+
+    ⚠ The messages this feeds used to interpolate the **whole `input_data`** — the narrative, its
+    summary, the district — into a `ValueError` that the Celery layer then logs. The owner's rule
+    (DPG-19.3): the id plus the first three words is enough to identify a grievance, and the id is
+    the half that actually identifies it.
+
+    Three words of a grievance is still narrative text and could read *"Er. Sharma refused"*. That
+    is a bounded, deliberate trade — and DPG-34's log redaction will see three words instead of a
+    paragraph.
+    """
+    gid = input_data.get("grievance_id") or "unknown grievance"
+    words = (input_data.get("grievance_description") or "").split()[:3]
+    excerpt = " ".join(words)[:60]
+    return f"{gid} (text starts: {excerpt!r})" if excerpt else str(gid)
+
+
 def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, Any]:
     """Translate a grievance to English using OpenAI API
     Args:
@@ -406,11 +461,25 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
     if not client:
         raise RuntimeError("OpenAI client not available for translation")
     task = model_for("translate")
+    # DPG-19.3 / D-29: the fix is that the handlers below no longer interpolate `result` at all.
+    # ⚠ A pre-binding `result = {}` was written here first and then removed: with the message
+    # bounded to `_grievance_ref()`, the binding protected nothing, and its mutation check proved
+    # it — deleting the binding left the test green. Dead defensive code that reads as the fix is
+    # worse than no code, because the next person maintains it believing it matters.
     grievance_description = input_data.get('grievance_description')
     grievance_summary = input_data.get('grievance_summary')
     language_code = input_data.get('language_code')
     if not grievance_description or not language_code:
         raise ValueError("grievance_description and language_code are required")
+    if is_too_short_to_process(grievance_description):
+        # DPG-19: same rule as classification. Translating four characters costs a call and
+        # returns nothing useful. (This path is parked with the voice flow — DPG-19b — but the
+        # rule is uniform so it does not need rediscovering on the day it is unparked.)
+        raise ValueError(
+            f"Too short to translate: {_grievance_ref(input_data)} "
+            f"({len(grievance_description.strip())} chars, minimum "
+            f"{get_llm_settings().min_classify_chars})"
+        )
     if not grievance_summary:
         raise Warning("grievance_summary is missing")
     try:
@@ -447,12 +516,13 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
             raise ValueError("Missing information, response from OpenAI is empty or invalid, check input data: {input_data}")
         
         # Parse the response
-        result = {}
         try:
             parsed = json.loads(response.choices[0].message.content.strip())
             result = GrievanceTranslation.model_validate(parsed).model_dump()
         except Exception as e:
-            raise ValueError(f"Error parsing LLM response: {str(e)} - input_data: {input_data} - result: {result}")
+            raise ValueError(
+                f"Error parsing the translation reply for {_grievance_ref(input_data)}: {e}"
+            )
         result["grievance_id"] = input_data["grievance_id"]
         result["source_language"] = input_data["language_code"]
         result["translation_method"] = "LLM"
@@ -460,7 +530,7 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
         return result
     
     except Exception as e:
-        raise ValueError(f"Error translating grievance to English: {str(e)} - input_data: {input_data} - result: {result}")
+        raise ValueError(f"Error translating grievance to English: {_grievance_ref(input_data)}: {e}")
 
 
 def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:

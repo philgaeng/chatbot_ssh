@@ -101,6 +101,11 @@ ALL_CONTACT_INPUT = {
     "contact_address": "Near the culvert",
 }
 
+# ⚠ Must clear MIN_CLASSIFY_CHARS (25). The old fixture, GRIEVANCE_TEXT, is 12 characters — below
+# the DPG-19 gate, so the model is never called for it. That the gate caught these tests when it
+# landed is the gate working.
+GRIEVANCE_TEXT = "सडकको धुलोले बच्चाहरू बिरामी भए, कृपया पानी छर्नुहोस्।"
+
 CLASSIFY_JSON = {
     "grievance_summary": "धुलोले बच्चाहरू बिरामी भए",
     "grievance_categories": ["Dust and air pollution"],
@@ -181,7 +186,7 @@ def test_classify_sends_gpt_5_nano_with_a_strict_schema(client):
     """
     client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
 
-    llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="ne")
 
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs["model"] == "gpt-5-nano"
@@ -200,12 +205,12 @@ def test_classify_keeps_its_own_deadline_as_a_per_request_timeout(client, monkey
     monkeypatch.delenv("OPENAI_CLASSIFICATION_TIMEOUT", raising=False)
     monkeypatch.delenv("TIMEOUT_CLASSIFY", raising=False)
 
-    llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
     assert client.chat.completions.create.call_args.kwargs["timeout"] == 120.0
 
     monkeypatch.setenv("OPENAI_CLASSIFICATION_TIMEOUT", "45")
     llm_config.get_llm_settings.cache_clear()
-    llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
     assert client.chat.completions.create.call_args.kwargs["timeout"] == 45.0
 
 
@@ -253,7 +258,7 @@ def test_extract_all_contact_info_returns_all_six_fields(client):
 
 def test_classify_returns_the_four_documented_keys(client):
     client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
-    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="ne")
     assert result == CLASSIFY_JSON
 
 
@@ -381,7 +386,7 @@ def test_extract_all_contact_info_reports_a_malformed_body_as_a_failure(client, 
 def test_classify_returns_a_status_error_dict_when_the_call_fails(client):
     client.chat.completions.create.side_effect = RuntimeError("model not found for this account")
 
-    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
     assert result["status"] == "error"
     assert "model not found" in result["error"]
@@ -405,22 +410,9 @@ def test_classify_short_circuits_on_empty_text_without_calling_the_model(client)
     }
 
 
-def test_translate_grievance_raises_unbound_local_error_when_the_call_fails(client):
-    """
-    ⚠ **D-28 — the same shape of defect as D-27, in the translation path.**
-
-    The handler interpolates `result` into its `ValueError` message, but `result` is bound *after*
-    the API call. A provider failure therefore raises `UnboundLocalError`, not the documented
-    `ValueError`. Callers catching `ValueError` do not catch this.
-
-    It also means the *documented* failure message — which interpolates the whole `input_data`,
-    grievance narrative included — is only reachable on the malformed-JSON path below. That
-    interpolation is a Sprint-3 concern (T-34-b); it is recorded here, not fixed here.
-    """
-    client.chat.completions.create.side_effect = RuntimeError("provider down")
-
-    with pytest.raises(UnboundLocalError):
-        llm.translate_grievance_to_english_LLM(dict(TRANSLATE_INPUT))
+# ✅ D-29's characterization test lived here and was deleted by DPG-19.3, which fixed the defect it
+# pinned: `result` is now bound before the `try`, so a pre-call failure raises the declared
+# `ValueError`. Its replacement is `test_a_pre_call_failure_now_raises_the_declared_value_error`.
 
 
 def test_translate_grievance_raises_value_error_on_a_malformed_body(client):
@@ -520,7 +512,7 @@ def test_classify_now_honours_the_missing_client_like_every_other_call_site(no_c
     the function's own documented contract, the `status="error"` dict, instead of a request that
     could not succeed.
     """
-    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
     assert result["status"] == "error"
     assert "client initialization failed" in result["error"]
@@ -615,10 +607,10 @@ def test_a_malformed_classification_is_distinguishable_from_an_empty_one(client)
     the product's primary AI path.
     """
     client.chat.completions.create.return_value = _chat("{}")
-    empty = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="en")
+    empty = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="en")
 
     client.chat.completions.create.return_value = _chat("{not json")
-    malformed = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="en")
+    malformed = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="en")
 
     assert empty["grievance_summary"] == "not enough information to proceed"
     assert "status" not in empty
@@ -799,7 +791,7 @@ def test_a_schema_violating_classification_is_rejected_not_silently_accepted(cli
         json.dumps({**CLASSIFY_JSON, "grievance_categories": "Dust and air pollution"})
     )
 
-    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
     assert result["status"] == "error"
     assert result["grievance_categories"] == []
@@ -807,7 +799,7 @@ def test_a_schema_violating_classification_is_rejected_not_silently_accepted(cli
 
 def test_a_valid_classification_survives_validation_unchanged(client):
     client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
-    assert llm.classify_and_summarize_grievance("सडकमा धुलो छ") == CLASSIFY_JSON
+    assert llm.classify_and_summarize_grievance(GRIEVANCE_TEXT) == CLASSIFY_JSON
 
 
 def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(client, caplog, monkeypatch):
@@ -827,7 +819,7 @@ def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(cli
     )
 
     with caplog.at_level("WARNING"):
-        result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+        result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
     assert result["grievance_categories"] == [invented], "logged, not discarded"
     assert any(invented in r.getMessage() for r in caplog.records)
@@ -843,7 +835,7 @@ def test_a_category_added_to_the_catalogue_needs_no_code_change(client, caplog, 
     )
 
     with caplog.at_level("WARNING"):
-        result = llm.classify_and_summarize_grievance("हात्तीले बाटो छेकेको छ")
+        result = llm.classify_and_summarize_grievance("हात्तीले बाटो छेकेको छ, यात्रु अलपत्र परे।")
 
     assert result["grievance_categories"] == [chosen]
     assert not [r for r in caplog.records if "outside the live catalogue" in r.getMessage()]
@@ -883,7 +875,7 @@ def test_a_dead_endpoint_produces_the_error_contract_rather_than_an_exception(mo
     factory.reset_clients()
 
     try:
-        result = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
+        result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="ne")
     finally:
         factory.reset_clients()
 
@@ -1037,3 +1029,126 @@ def test_the_contact_task_refuses_to_persist_an_empty_extraction():
         "extract_contact_info_task must refuse to write an all-empty extraction — otherwise a "
         "provider outage erases the complainant's stored contact details"
     )
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-19-a … T-19-e — meaningful input, honest empties, bounded error text
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_text_below_the_minimum_never_reaches_the_model(client):
+    """
+    **T-19-a.** A six-character grievance cannot be summarised. Sending it costs a request to be
+    told so, and — before this gate — the empty answer that came back was indistinguishable from
+    a model that had failed.
+    """
+    result = llm.classify_and_summarize_grievance("धुलो", language_code="ne")
+
+    client.chat.completions.create.assert_not_called()
+    assert result["skipped"] == "too_short"
+    assert result["grievance_summary"] == ""
+
+
+def test_a_skipped_short_input_is_not_a_failure(client):
+    """
+    **T-19-b, first half.** The gate must not be mistaken for an error by the task layer — that
+    would turn "the complainant wrote very little" into a retried, LLM_failed grievance.
+    """
+    from backend.config.classification_status import is_failed_classification
+
+    result = llm.classify_and_summarize_grievance("धुलो")
+
+    assert is_failed_classification(result) is False
+
+
+def test_an_empty_result_above_the_threshold_is_an_answer_not_a_failure(client, caplog):
+    """
+    ⭐ **T-19-b, and the regression this ticket could most easily have introduced.**
+
+    The model looked at text long enough to summarise and said *"not enough information"*. That is
+    the model being right, and it must stay distinguishable from the model failing. Pinned with the
+    guardrail in place, because the cheapest way to build a length gate is to start treating every
+    empty answer as an error on the way past.
+    """
+    from backend.config.classification_status import is_failed_classification
+
+    client.chat.completions.create.return_value = _chat("{}")
+
+    with caplog.at_level("WARNING"):
+        result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, language_code="en")
+
+    assert is_failed_classification(result) is False
+    assert "status" not in result
+    assert result["grievance_summary"] == "not enough information to proceed"
+    # Logged with the LENGTH, never the narrative — this line reaches the Celery log.
+    warnings = " ".join(r.getMessage() for r in caplog.records)
+    assert "declined" in warnings
+    assert "बिरामी" not in warnings
+
+
+def test_the_threshold_is_measured_on_stripped_length_and_is_configurable(client, monkeypatch, tmp_path):
+    """**T-19-c.** A wall of whitespace is not a grievance, and the number is a registry value."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("MIN_CLASSIFY_CHARS", raising=False)
+    llm_config.get_llm_settings.cache_clear()
+
+    assert llm.classify_and_summarize_grievance(" " * 40)["skipped"] == "too_short"
+
+    # Devanagari counts by character like anything else — 25 of them is a short sentence.
+    long_enough = "सडकको धुलोले बच्चाहरू बिरामी भए।"
+    assert len(long_enough.strip()) >= 25
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
+    assert "skipped" not in llm.classify_and_summarize_grievance(long_enough)
+
+    monkeypatch.setenv("MIN_CLASSIFY_CHARS", "500")
+    llm_config.get_llm_settings.cache_clear()
+    assert llm.classify_and_summarize_grievance(long_enough)["skipped"] == "too_short"
+
+
+def test_the_translation_error_names_the_grievance_and_at_most_three_words(client):
+    """
+    **T-19-d.** The message reaches the Celery error log. It used to interpolate the whole
+    `input_data`: the narrative, its summary, the district. The owner's rule is the id plus the
+    first three words — enough to find the record, small enough to stop being a transcript.
+    """
+    client.chat.completions.create.return_value = _chat("{not json")
+
+    with pytest.raises(ValueError) as exc:
+        llm.translate_grievance_to_english_LLM(dict(TRANSLATE_INPUT))
+
+    message = str(exc.value)
+    assert "GR-2026-0001" in message
+    assert "सडकको" in message, "the first words are deliberately included — they locate the record"
+    assert "बिरामी" not in message, "...but only the first three; this is the fourth word"
+    assert "grievance_summary" not in message
+    assert "input_data" not in message
+
+
+def test_a_pre_call_failure_now_raises_the_declared_value_error(client):
+    """
+    **T-19-e — D-29 closed.** A provider failure surfaces as the documented `ValueError` rather than
+    `UnboundLocalError`. Deferred to Sprint 3 originally because the obvious fix (binding `result`
+    early) made a PII-leaking message reachable; the owner's three-word trim removed that reason.
+
+    ⚠ **The fix is the message, not a binding** — and the mutation check is what established that.
+    A pre-binding `result = {}` was written first; deleting it left this test **green**, because the
+    handlers no longer read `result` at all. The binding was removed. The mutation that does turn
+    this red is restoring the old message — which is the honest one, since that message *is* the bug.
+    """
+    client.chat.completions.create.side_effect = RuntimeError("provider down")
+
+    with pytest.raises(ValueError) as exc:
+        llm.translate_grievance_to_english_LLM(dict(TRANSLATE_INPUT))
+
+    assert not isinstance(exc.value, UnboundLocalError)
+    assert "GR-2026-0001" in str(exc.value)
+    assert "provider down" in str(exc.value)
+
+
+def test_translation_refuses_text_that_is_too_short(client):
+    """The same rule as classification — uniform, so it needs no rediscovering when voice unparks."""
+    payload = dict(TRANSLATE_INPUT)
+    payload["grievance_description"] = "धुलो"
+
+    with pytest.raises(ValueError, match="Too short to translate"):
+        llm.translate_grievance_to_english_LLM(payload)
+
+    client.chat.completions.create.assert_not_called()

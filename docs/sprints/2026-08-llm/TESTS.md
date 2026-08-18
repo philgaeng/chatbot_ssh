@@ -194,11 +194,11 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-19-a** | Below `MIN_CLASSIFY_CHARS`, **no model call is made** and the status is `LLM_SKIPPED` — asserted on a mocked client that must not be touched | Call the model anyway → red |
-| **T-19-b** | ⭐ **The owner's point, pinned.** At or above the threshold, an empty-but-valid result (`"{}"`) is **not** a failure: the localized "not enough information" response, `is_failed_classification()` False, and a warning carrying the **length only** | Make an empty result count as a failure → red *(this is the regression the guardrail could introduce)* |
-| **T-19-c** | The threshold is measured on **whitespace-stripped** length and is a registry value — a 30-space "grievance" is below it, and Devanagari counts by character like anything else | Count raw `len()` → red |
-| **T-19-d** | The translation error message contains the `grievance_id`, **at most three words** of the description, and **never** the summary, the full description or `input_data` | Restore the `input_data` interpolation → red |
-| **T-19-e** | D-29's underlying bug: a pre-call failure now raises the declared `ValueError`, not `UnboundLocalError` | Move the `result` binding back inside the `try` → red |
+| **T-19-a** ✅ | Below `MIN_CLASSIFY_CHARS`, **no model call is made** — asserted on a mocked client that must not be touched, and the result carries `skipped: "too_short"` with no `status` key | ✅ **Checked** — bypassed the gate → red (2 tests) |
+| **T-19-b** ✅ | ⭐ **The owner's point, pinned.** At or above the threshold, an empty-but-valid result (`"{}"`) is **not** a failure: the localized response, `is_failed_classification()` False, and a warning carrying the **length only**, never the narrative | ✅ **Checked** — made an empty result count as a failure → red. *This is the regression the guardrail could have introduced, and the test was written before the guardrail* |
+| **T-19-c** ✅ | The threshold is measured on **whitespace-stripped** length and is a registry value — 40 spaces is below it, a 25-character Devanagari sentence is above it, and `MIN_CLASSIFY_CHARS=500` puts everything below | ✅ **Checked** — counted raw `len()` → red |
+| **T-19-d** ✅ | The translation error message contains the `grievance_id`, **at most three words** of the description (the fourth word is asserted absent), and **never** the summary or `input_data` | ✅ **Checked** — restored the `input_data` interpolation → red |
+| **T-19-e** ✅ | D-29's underlying bug: a pre-call failure raises the declared `ValueError`, not `UnboundLocalError`. ⚠ **The first version of this test could not go red** — see **D-42**. The fix is the bounded *message*, not a binding; the binding was dead code and was deleted | ✅ **Checked with the honest mutation** — restore the old message that interpolates `result` → red (2 tests). *The original mutation (delete the binding) left it green, which is how the dead code was found* |
 
 ### DPG-19b — the dead paths, deleted (second wave)
 

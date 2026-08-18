@@ -122,6 +122,14 @@ class LLMSettings(BaseSettings):
     )
     timeout_ticket: float = 30.0
 
+    # ── Meaningful input (DPG-19) ────────────────────────────────────────────
+    # Below this many non-whitespace characters, the model is not called at all: there is nothing
+    # to summarise, and a model asked to summarise two words returns either noise or nothing.
+    # ⚠ 25 characters is not the same amount of information in every script — in Devanagari it is a
+    # short sentence, in English roughly four words. It is a registry value precisely so it can
+    # differ by language later; today it is one number and this comment is the disclosure.
+    min_classify_chars: int = 25
+
     # ── Per-task structured-output capability (DPG-13) ───────────────────────
     # ⚠ **Capability is a property of the (endpoint, model) pair, not of the endpoint alone**,
     # and the spec's endpoint-only flag would have broken three call sites. Measured against the
@@ -352,6 +360,21 @@ def response_format_for(name: str, schema: dict | None, mode: str) -> dict | Non
         # No schema to send (a dynamic call site that could not build one) → the weaker rung.
         return {"type": "json_object"}
     return None
+
+
+def is_too_short_to_process(text: str | None) -> bool:
+    """
+    Is there too little here for a model to say anything useful?
+
+    ⚠ **An empty result is not a failure** — that distinction is the whole point of this function.
+    A three-word grievance *cannot* be summarised, and the model answering "not enough information"
+    is the model being right. What was missing was any way to tell that apart from a model that
+    failed, and the fact that the three words were sent at all.
+
+    So: below the threshold, do not call. At or above it, an empty answer is a legitimate answer
+    and is logged as such, never as an error.
+    """
+    return len((text or "").strip()) < get_llm_settings().min_classify_chars
 
 
 def findings_task(is_seah: bool) -> str:
