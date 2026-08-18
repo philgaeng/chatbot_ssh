@@ -8,9 +8,9 @@ engineering that closes the gaps, and sixteen questions for you — **four of wh
 > indicator-by-indicator assessment, with file-and-line evidence for every claim, is
 > [`00_compliance_status.md`](00_compliance_status.md) — read that if you want to check our working.
 >
-> **A note on timing.** §2 lists engineering that is **specced but not yet built**; our meeting falls after
-> it lands, so that list is forward-looking. **If any of it slips we will say so in the meeting rather than
-> let this page stand.** Nothing in §1 or §5 depends on it.
+> **A note on timing.** §2 separates what is already in place from what is specced and scheduled to land
+> before we meet. **If any of the scheduled work slips, we will say so in the meeting rather than let this
+> page stand.**
 >
 > **We have not written this as a compliance pitch.** Two of the nine indicators have real gaps, one cannot
 > be closed by anyone on the engineering team, and the AI-specific reading of indicator 4 is the substance
@@ -38,7 +38,7 @@ exploitation, abuse and harassment) intake stream, and anonymous submission end 
 | 4 | Platform independence | 🔴 **The main work** | Our AI layer calls one commercial provider, with model names hard-coded in nine places. §4 is entirely about this |
 | 5 | Documentation | ✅ **Compliant, strong** | A ~200-file spec tree, a Docker runbook, OpenAPI on both APIs, plus a portable engineering starter kit another country team could reuse |
 | 6 | Data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema, XLSX and PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
-| 7 | Privacy & applicable laws | 🟠 **Partial — and more honest than it was** | ✅ The **assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram are now written**, each leg verified against code rather than inferred. ⚠ Doing that surfaced **three storage-layer defects no spec had** (§5). Still missing: redaction of free text before it leaves the country (Sprint 3), and a lawyer's review — see Q17 |
+| 7 | Privacy & applicable laws | 🟠 **Partial** | The **assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram** are written, each leg verified against code rather than inferred — which is how the **three storage-layer defects in §5** came to light. Still missing: redaction of free text before it leaves the country, and a lawyer's review (Q17) |
 | 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE, migrated schema — and `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and PR templates have now landed. `SECURITY.md` routes disclosure privately rather than to a public issue, because this platform holds SEAH reports. Governance and release-versioning policy deferred pending Q10 |
 | 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake all built. Outstanding: retention/breach policy, third-party PII redaction, and **the three encryption/backup defects in §5** |
 
@@ -59,7 +59,7 @@ relationship with anyone. Full inventory in §6.
 Four sub-sprints, 27 tickets, specced in full at
 [`../sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md).
 
-### ✅ Landed since this briefing was first drafted — *indicators 2, 5, 7, 8*
+### ✅ Already in place — *indicators 2, 5, 7, 8*
 
 - **`LICENSE` (Apache-2.0), `NOTICE`, and an SPDX header on all 585 source files**, applied by a committed
   script and held in place by a test, so coverage cannot decay the first week someone adds a module.
@@ -137,13 +137,13 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish without it.
   multilingual models ship under bespoke community licences with use restrictions. We are filtering for
   Apache-2.0 or MIT to be safe, which narrows the field and **may cost us quality on Nepali specifically.**
   How much does that filter matter?
+- **Q5b — The "data" limb of the AI questionnaire.** We do no training or fine-tuning; every call is
+  zero-shot prompting against a taxonomy we author. Does that dispose of the data question, or do you expect
+  us to publish an evaluation set and prompt templates as artefacts?
 - **Q6 — How does the DPGA treat a *partial* open alternative?** If open-weights speech recognition works
   for Nepali but at a materially higher error rate, is "functional, with documented degradation" acceptable,
   or does the alternative need parity? This determines whether voice intake can exist in an open
   configuration at all.
-- **Q5b — The "data" limb of the AI questionnaire.** We do no training or fine-tuning; every call is
-  zero-shot prompting against a taxonomy we author. Does that dispose of the data question, or do you expect
-  us to publish an evaluation set and prompt templates as artefacts?
 - **Q7 — Two dependency-licence readings.** (a) We run Redis as a network service behind a process
   boundary, not as a linked library, and take Redis 8 under **AGPLv3** — the one OSI-approved option of its
   three. **Does AGPLv3 anywhere in the stack cause a problem** for you, for the assessment, or in ADB/DOR
@@ -162,19 +162,6 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish without it.
   to fine-tune our own on an openly-licensed corpus, **release it openly**, and run it as a standalone
   anonymiser service reusable by any country programme where in-country self-hosting is impossible.
   **Would the DPGA see that as a positive, and is there ADB appetite to fund it?**
-
-### The one ask that blocks work rather than paperwork
-
-- **Q15 🔴 — Can ADB fund a small *metered inference* budget?** We have none today — enough for a few
-  classification calls a day, which is why voice transcription is switched off. Three deliverables are made
-  of inference calls: the speech evaluation, the text benchmark, and the CI job that runs on every commit.
-  **The amounts are small** — a few hundred short synthetic texts across a handful of models on per-token
-  pricing is plausibly tens of dollars, and the CI job can be capped. **This is two orders of magnitude below
-  the GPU instance we just parked**, with a defined end point. Two parts: **can it be funded as part of the
-  DPG work itself**, and **how much benchmark evidence does the submission actually require?**
-- **Q10 — Which project-hygiene artefacts are actually required** versus merely liked? `CONTRIBUTING`,
-  `CODE_OF_CONDUCT`, `SECURITY`, issue templates, public roadmap, release tags, governance model. We would
-  rather build the required set once than guess and iterate.
 - **Q16 🔴 — The provider's terms, and whether a DPA is required.** Hugging Face's privacy policy carries no
   Inference-Providers-specific clause on retention or training use, the Terms reference no DPA, and the
   default routing policy picks a different third-party processor per request (§4). We intend to **pin a
@@ -187,8 +174,21 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish without it.
   numbering against the Nepal Law Commission text, and no lawyer has read it. **Does the DPGA expect a
   legally-reviewed assessment, or is a documented, honest engineering assessment sufficient?** If the former,
   we need to know who pays for that review and whether ADB has counsel who can do it.
+
+### Scope, funding and sequencing
+
+- **Q10 — Which project-hygiene artefacts are actually required** versus merely liked? `CONTRIBUTING`,
+  `CODE_OF_CONDUCT`, `SECURITY`, issue templates, public roadmap, release tags, governance model. We would
+  rather build the required set once than guess and iterate.
 - **Q14 — Is there anything in the current Standard revision, or the AI-systems guidance specifically, that
   we have missed** by reading the published Standard and questionnaire?
+- **Q15 🔴 — Can ADB fund a small *metered inference* budget?** We have none today — enough for a few
+  classification calls a day, which is why voice transcription is switched off. Three deliverables are made
+  of inference calls: the speech evaluation, the text benchmark, and the CI job that runs on every commit.
+  **The amounts are small** — a few hundred short synthetic texts across a handful of models on per-token
+  pricing is plausibly tens of dollars, and the CI job can be capped. **This is two orders of magnitude below
+  the GPU instance we just parked**, with a defined end point. Two parts: **can it be funded as part of the
+  DPG work itself**, and **how much benchmark evidence does the submission actually require?**
 
 > Two questions from the full document are not repeated here. **Q11** (hosting jurisdiction) is moot while
 > self-hosting is parked, though the *provider's* jurisdiction is now a permanent question rather than a
@@ -226,8 +226,8 @@ Redaction is imperfect by construction, so the honest question is *what happens 
 through*. With self-hosting parked (§5) that text goes to a third party permanently, so we read the
 provider's terms rather than assuming them. **What we found is worth your view (Q16):**
 
-**First, a correction to how this is usually framed — including by us.** Moving to open weights answered
-indicator 4. **It did nothing for indicator 7.** Openness is a *licensing* property, not a *privacy* one: an
+**Two framing points first, because both are easy to get wrong.** Moving to open weights answers
+indicator 4 and **does nothing for indicator 7**. Openness is a *licensing* property, not a *privacy* one: an
 open model served by a third party carries exactly the same data-flow risk as a commercial one served by its
 vendor. Nothing about open weights changes who receives the grievance text.
 
@@ -237,7 +237,7 @@ event is the transmission itself.** Whether the recipient stores it, learns from
 microsecond later does not change that a transfer occurred and needs a lawful basis. Non-retention is a
 *mitigation*, and a valuable one; it is not an answer to the question.
 
-With that said, Hugging Face's own commitments are better than we assumed and we will cite them
+**Hugging Face's own commitments are substantive, and we cite them**
 ([Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security)):
 
 - *"Hugging Face does not store any user data for training purposes."*
@@ -313,9 +313,7 @@ Recorded so they are not re-opened, and because two of them change what we are a
   would lead with it: the Standard asks for demonstrated replaceability; we intend to run the replacement.
 - **Redaction happens at transmission**, not before storage — see Q8.
 - **Person names are redacted, imperfectly, and we would rather quantify that than round it either way.**
-  An earlier draft of this briefing said names were deferred entirely to the anonymiser service in Q9.
-  That was wrong, and correcting it matters because it is the difference between "we do nothing about
-  names" and "we do most of it". What ships in the first pass:
+  What ships in the first pass:
   **honorific and role-title triggers** — `Er.`, Engineer, overseer, contractor, ward chairperson, `श्री`
   — which catch the *named official*, the sharpest exposure because that person never consented to
   anything; a **Nepali family-name (thar) gazetteer**, which is tractable because surnames are a
@@ -348,85 +346,103 @@ Recorded so they are not re-opened, and because two of them change what we are a
 
 ## 6. Dependency inventory
 
-Every library and image in the runtime stack.
+**There is no proprietary component anywhere in the runtime stack**, and no dependency in any tree carries
+an unknown, unparseable or non-OSI licence. The figures below come from a scan run inside the running
+containers against the resolved trees — 153 packages across four dependency sets — not from reading
+manifests. The full per-package listing, with a written disposition for every entry carrying conditions
+beyond attribution, is [`dependency-licenses.md`](dependency-licenses.md); the ops container re-runs the
+scan nightly so it cannot go stale.
 
-> ✅ **Superseded 2026-08-18 by the generated report:
-> [`dependency-licenses.md`](dependency-licenses.md)** — 153 packages scanned in-container from the
-> resolved trees, with a disposition for each entry carrying conditions. **Read that instead of this
-> section where they differ.** The tables below are kept as the readable summary; the scan found two
-> LGPL dependencies neither this list nor any manifest would have shown, and one licence contradiction
-> in our own package manifest.
+| Set | Packages | Unknown or non-OSI |
+|---|---|---|
+| Python — declared in the two manifests | 35 | 0 |
+| Python — transitive | 98 | 0 |
+| npm — production tree | 16 | 0 |
+| Container images | 4 | 0 |
 
 **Two points a reviewer usually asks about.** Identity is **self-hosted** (Keycloak 26, OIDC + PKCE) rather
-than federated to a vendor — an earlier plan used AWS Cognito and we migrated away during the build, removing
-what would have been a hard indicator-4 dependency at the authentication layer. And the conversational state
-machine is our own code, with `rasa-sdk` surviving only as a type shim: **there is no Rasa server and no
-TensorFlow anywhere.**
+than federated to a vendor — an earlier plan used AWS Cognito and we moved to Keycloak during the build,
+removing what would have been a hard indicator-4 dependency at the authentication layer. And the
+conversational state machine is our own code, with `rasa-sdk` surviving only as a type shim: **there is no
+Rasa server and no TensorFlow anywhere.**
 
-**Python — chatbot stack (`requirements.txt`)**
+### Python — chatbot stack (`requirements.txt`)
 
-| Package | Purpose | Licence |
+| Package | Version | Purpose | Licence |
+|---|---|---|---|
+| `fastapi` | 0.139.2 | Orchestrator + backend API | MIT |
+| `uvicorn` | 0.49.0 (pinned <0.50) | ASGI server | BSD-3-Clause |
+| `pydantic` | 2.13.4 | Validation | MIT |
+| `python-multipart` | 0.0.32 | Uploads | Apache-2.0 |
+| `pyyaml` | 6.0.3 | Config | MIT |
+| `email-validator` | 2.3.0 | Validation | The Unlicense |
+| `python-socketio` | 5.16.3 | WebSocket bridge | MIT |
+| `rasa-sdk` | 3.6.2 | `Tracker` / `CollectingDispatcher` types only | Apache-2.0 |
+| `psycopg2-binary` | 2.9.10 | PostgreSQL driver | ⚠ LGPL with linking exception — Q7(b) |
+| `SQLAlchemy` | 2.0.51 | ORM | MIT |
+| `alembic` | 1.18.5 | Migrations (three streams) | MIT |
+| `pytz` | 2026.2 | Timezones | MIT |
+| `redis` (client) | 4.6.0 | Broker client | MIT |
+| `celery` | 5.5.2 | Task queue | BSD |
+| `flower` | 2.0.1 | Queue monitor | BSD |
+| `boto3` | 1.37.28 | AWS SNS (SMS) + SES | Apache-2.0 |
+| **`openai`** | **1.70.0** | **The only ML dependency — client only; the service it calls is the subject of §4** | Apache-2.0 |
+| `requests` | 2.34.2 | HTTP client | Apache-2.0 |
+| `httpx` | 0.28.1 | HTTP client | BSD |
+| `pyvips` | 3.1.1 | Image compression | MIT |
+| `python-dotenv` | 1.1.1 | Config | BSD |
+| `rapidfuzz` | 3.13.0 | Fuzzy matching | MIT |
+| `langdetect` | 1.0.9 | Language detection | Apache-2.0 |
+| `icecream` | 2.2.0 | Debug | MIT |
+| `Flask` / `Werkzeug` | 3.1.3 | Legacy blueprints; production is FastAPI | BSD-3-Clause |
+
+### Python — GRM ticketing and ops (`requirements.grm.txt`)
+
+| Package | Version | Purpose | Licence |
+|---|---|---|---|
+| `pydantic-settings` | 2.14.2 | Config | MIT |
+| `openpyxl` | 3.1.5 | Quarterly XLSX reports (deliberately no pandas) | MIT |
+| `python-jose[cryptography]` | 3.5.0 | Keycloak JWT / JWKS verification | MIT |
+| `python-keycloak` | 7.1.1 | Keycloak Admin API | MIT |
+| `reportlab` | 5.0.0 | Case-closure PDFs | BSD |
+| `apscheduler` | 3.11.3 | Broker-independent ops scheduler | MIT |
+| `pip-audit` | — | Scheduled CVE scan | Apache-2.0 |
+| `pip-licenses` | — | Scheduled licence scan | MIT |
+| `pytest` | 9.1.1 | Tests | MIT |
+
+**The one transitive dependency worth naming**: `jwcrypto` 1.5.8 is **LGPL-3.0-or-later**, arriving through
+the Keycloak JWT path. It is nobody's declared dependency, which is precisely why a manifest-based audit
+would not have found it. Used unmodified and dynamically imported.
+
+### Frontend (`channels/ticketing-ui/package.json`)
+
+Four runtime dependencies. No component library, no state-management library, no charting library, no
+analytics SDK. The production tree resolves to 16 packages in total.
+
+| Package | Version | Licence |
 |---|---|---|
-| `fastapi` | Orchestrator + backend API | MIT |
-| `uvicorn` (<0.50, pinned) | ASGI server | BSD-3-Clause |
-| `pydantic` v2 | Validation | MIT |
-| `python-multipart` | Uploads | Apache-2.0 |
-| `pyyaml` | Config | MIT |
-| `email-validator` | Validation | CC0-1.0 |
-| `python-socketio` | WebSocket bridge | MIT |
-| `rasa-sdk` 3.6.2 | `Tracker` / `CollectingDispatcher` types only — **there is no Rasa server and no TensorFlow** | Apache-2.0 |
-| `psycopg2-binary` | PostgreSQL driver | ⚠ LGPL-3.0-with-exceptions — see Q7(b) |
-| `SQLAlchemy` 2 / `alembic` | ORM / migrations | MIT |
-| `pytz` | Timezones | MIT |
-| `redis` (client) | Broker client | MIT |
-| `celery` 5.5 / `flower` | Task queue / monitor | BSD-3-Clause |
-| `boto3` | AWS SNS (SMS) + SES | Apache-2.0 |
-| **`openai` 1.70.0** | **The only ML dependency — client only; the service it calls is the subject of §4** | Apache-2.0 |
-| `requests` / `httpx` | HTTP clients | Apache-2.0 / BSD-3-Clause |
-| `pyvips` | Image compression | MIT |
-| `python-dotenv` | Config | BSD-3-Clause |
-| `rapidfuzz` | Fuzzy matching | MIT |
-| `langdetect` | Language detection | Apache-2.0 |
-| `icecream` | Debug | MIT |
-| `Flask` / `Werkzeug` / `flask-socketio` | Legacy blueprints; production is FastAPI | BSD-3-Clause / MIT |
+| `next` | 16.2.6 | MIT |
+| `react` / `react-dom` | 19.2.4 | MIT |
+| `lucide-react` | — | ISC |
+| `tailwindcss` v4 | — | MIT |
+| `typescript` *(dev)* | — | Apache-2.0 |
+| `eslint` / `eslint-config-next` *(dev)* | — | MIT |
+| `vitest` *(dev)* | — | MIT |
+| `@img/sharp-libvips-linux*-x64` *(transitive)* | 1.2.4 | ⚠ **LGPL-3.0-or-later** — prebuilt libvips binaries pulled in by Next.js image optimisation, shipped unmodified and dynamically loaded |
 
-**Python — GRM ticketing and ops (`requirements.grm.txt`)**
-
-| Package | Purpose | Licence |
-|---|---|---|
-| `pydantic-settings` | Config (moving to the base requirements as shared config lands) | MIT |
-| `openpyxl` | Quarterly XLSX reports (deliberately no pandas) | MIT |
-| `python-jose[cryptography]` | Keycloak JWT / JWKS verification | MIT |
-| `python-keycloak` | Keycloak Admin API | MIT |
-| `reportlab` | Case-closure PDFs | BSD-3-Clause (open-source edition) |
-| `apscheduler` | Broker-independent ops scheduler | MIT |
-| `pip-audit` | Scheduled CVE scan | Apache-2.0 |
-| `pytest` | Tests | MIT |
-
-**Frontend (`channels/ticketing-ui/package.json`)** — only four runtime dependencies. No component library,
-no state-management library, no charting library, no analytics SDK.
-
-| Package | Licence |
-|---|---|
-| `next` 16.2.6 | MIT |
-| `react` / `react-dom` 19.2.4 | MIT |
-| `lucide-react` | ISC |
-| `tailwindcss` v4 + `@tailwindcss/postcss` | MIT |
-| `typescript` | Apache-2.0 |
-| `eslint` / `eslint-config-next` | MIT |
-| `vitest` | MIT |
-
-**Container images**
+### Container images
 
 | Image | Licence |
 |---|---|
 | `postgres:15` | PostgreSQL Licence (OSI) |
-| `redis:8.10` | **AGPLv3** at our election — see Q7(a) and §5 |
+| `redis:8.10` | **AGPLv3** at our election — Q7(a) and §5 |
 | `nginx:stable` | BSD-2-Clause |
 | `quay.io/keycloak/keycloak:26.0.7` | Apache-2.0 |
 
-**External services** — operational dependencies, not code dependencies. Each is replaceable by
-configuration and none constrains anyone's right to use or fork the code.
+### External services
+
+Operational dependencies, not code dependencies. Each is replaceable by configuration, and none constrains
+anyone's right to use or fork the code.
 
 | Service | Used for | Replaceability |
 |---|---|---|
