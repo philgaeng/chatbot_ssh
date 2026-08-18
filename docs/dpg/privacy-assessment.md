@@ -84,6 +84,42 @@ Consequences that run through this whole document:
   [`03-open-models-spec.md`](../sprints/2026-08-llm/03-open-models-spec.md#dpg-25) for when it unparks;
   it is not spent here.
 
+### 0.5 ⭐ No genuine grievance has been processed yet — and that is the most important fact in this document
+
+**Confirmed by the project owner, 2026-08-18.** Every grievance record in every environment is either
+**AI-generated seed data** (`ticketing/seed/mock_tickets.py` and the demo scenarios) or a **dummy
+complaint filed by a participant during a demo**. **No affected person has filed a real grievance
+through this platform.**
+
+That single fact reframes the whole assessment, and it cuts both ways:
+
+**What it means the assessment is *not*.** Every exposure described below — the unredacted narratives
+crossing a border (§3.7), the third-party names nobody consented to (§4), the plaintext narrative in
+backups (F-4), the grievance text in the broker and the logs (F-5, F-6) — is **prospective, not
+realised**. No real complainant's words have been sent to a model provider. No real engineer has been
+named to a third party. **Nothing in §6 describes harm that has already happened.** A reader who takes
+this document as an incident report has read it wrong.
+
+**What it means the assessment *is*.** A list of things that become true on the day the first real
+grievance arrives. Which turns the sequencing question into the important one:
+
+> **Sprint 3's redaction work is not remediation. It is a precondition for go-live.**
+> Every finding here is cheap to fix now and expensive to fix after real SEAH disclosures are in the
+> database, in the backups, and in a provider's 30-day retention window. The window in which these are
+> ordinary engineering tasks rather than a breach notification is open **now**, and it closes on first
+> production use.
+
+**Two honest caveats, so this is not read as a clean bill of health:**
+
+1. **"Not a real grievance" is not the same as "no real personal data."** A demo participant may have
+   entered their **own** genuine phone number, email or name into a dummy complaint — those are real
+   contact details of a real person, held under the same conditions as everything else. The
+   *narratives* are synthetic; some *contact fields* may not be.
+2. **This is a statement about today, and it expires.** It carries a date because it stops being true
+   the moment the platform goes live. **Any future version of this document that repeats this section
+   without re-confirming it is making a false claim** — and the same is true of the DPG submission if
+   the platform launches between writing and review.
+
 ---
 
 ## 1. What personal data this platform holds
@@ -250,10 +286,11 @@ Named so that the omission is deliberate rather than an oversight:
 - **The Celery result backend.** Task results land in Redis DB 2. Whether any result carries
   grievance text has **not** been exhaustively verified. `⚠ Not verified` — DPG-30's job.
 - **The staging environment.** AWS staging (`nepal-gms-chatbot.facets-ai.com`) runs on infrastructure
-  outside Nepal. Whether it holds real grievance data or only seeded demo data is a **deployment
-  practice question this document cannot answer from the code.** It must be answered before
-  submission: real complainant data on a staging box abroad is a different cross-border transfer from
-  the one analysed in §3.7.
+  outside Nepal. ✅ **Answered 2026-08-18 (§0.5): it holds no genuine grievance data** — seeded and demo
+  records only, as does every other environment. Had the answer gone the other way, real complainant
+  data on a staging box abroad would have been a cross-border transfer separate from the one analysed
+  in §3.7. **It is worth keeping this box on the diagram anyway**, because the answer expires at
+  go-live and the box is where it would then reappear.
 
 ---
 
@@ -631,7 +668,7 @@ privacy impact, not a legal characterisation.
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question with ADB OGC | — | 🟡 Low-medium | DPG-03 |
 | **F-12** | **SMS fallback routes a complainant's phone number and message through AWS SNS in Singapore.** Production Nepal uses the in-country DOIT gateway, so this is a fallback path — but it is a cross-border leg nobody had inventoried | `messaging.py:280,330`; `AWS_REGION=ap-southeast-1` | 🟡 Low | new |
 | **F-13** | **Intake does not disclose that grievance text is sent to an external AI provider.** Consent is genuinely collected (§3.1) but not for this | `required_slots.py:21,46` | 🟡 Low to fix, high in principle | new — cheap |
-| **F-14** | **Unknown whether AWS staging holds real complainant data.** If it does, that is a cross-border transfer this assessment has not analysed | §2.3 | ⚠ Unverified | **answer before submission** |
+| **F-14** | ~~Unknown whether AWS staging holds real complainant data~~ ✅ **ANSWERED 2026-08-18 by the project owner: it does not, and neither does any other environment.** All grievance records are AI-generated seed data or dummy complaints filed during demos (§0.5). ⚠ **Residual, and it is not nothing:** a demo participant may have entered their own genuine contact details, so the *narratives* are synthetic while some *contact fields* may be real. And the answer expires at go-live | §0.5, §2.3 | ✅ Closed, with a dated caveat | — |
 | **F-15** | *(Documentation)* `docs/deployment/09_privacy.md` still forbids cross-schema reads from `ticketing.*` into `public.*`. That rule was deliberately retired and replaced by an enumerated, test-pinned table in T3-07 | `09_privacy.md` §Implementation boundaries | 🟡 Low | logged, not fixed here |
 | **F-16** | **The model provider's own data terms are not recorded anywhere** — retention window, whether inputs are used for service improvement, and whether prompt caching applies. These are the mitigations any transfer analysis would cite, and citing an unverified mitigation is worse than citing none | commercial fact, not in the repo | ⚠ Unverified | **obtain and file before submission** |
 | **F-17** | **Jurisdiction of execution is not controlled and not currently knowable.** Pinning a provider does not pin the country the inference runs in. Any submission text naming a single destination country for the model calls would be a claim we cannot support | §3.7.1 | ⚠ Unverified | state as-is; do not overclaim |
@@ -658,7 +695,7 @@ an artefact. It must specifically confirm or refute:
 - [ ] That the model call sites are **9**, not more — a tenth would mean this inventory was written against a moving target
 - [ ] Whether the **Celery result backend** carries grievance text (`⚠ Not verified` in §2.3)
 - [ ] Every log line that can carry grievance text — F-6 lists three, found by reading; a systematic sweep will find more
-- [ ] Whether **AWS staging holds real data** (F-14)
+- [x] ~~Whether **AWS staging holds real data**~~ (F-14) — **answered: no.** DPG-30 should instead verify the *converse*: that nothing has changed, i.e. re-confirm at the time it runs, because §0.5 is a statement with an expiry date
 - [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code fact
 - [ ] Whether `grievance_summary`, which **is** cached into `ticketing.tickets`, carries self-disclosed PII in practice — the asymmetry with `grievance_description` is deliberate, and its cost should be measured rather than assumed
 - [ ] The chosen provider's **retention window, service-improvement terms and prompt-caching behaviour** (F-16) — and that they are filed as evidence rather than assumed
@@ -683,6 +720,12 @@ needs a lawful basis** (§3.7.1) — not the provider's retention, not whether i
 and emphatically not whether the model is open-weights, which is a licensing property and changes
 nothing here. Every other finding in §6 is smaller
 than that one, and several (F-2, F-3, F-4) are ordinary engineering fixes.
+
+**And the timing is the opportunity.** No genuine grievance has been processed yet (§0.5), so nothing
+in §6 describes harm that has happened — every item is a thing that becomes true on first production
+use. **That makes Sprint 3 a go-live precondition rather than remediation**, and it makes F-2, F-3 and
+F-4 cheap now and expensive later. It also puts a deadline on this document: §0.5 expires the day the
+platform launches.
 
 **Three things need a decision nobody in this repository can make:** a retention and deletion
 position (F-7), a lawful basis for third-party data and its transfer (F-9), and the identification of

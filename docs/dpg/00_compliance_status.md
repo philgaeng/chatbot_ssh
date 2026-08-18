@@ -320,6 +320,15 @@ commitments.
 > and backups are **unencrypted by default**. **This indicator stays 🟠, not 🟢** — the document is
 > written, the gaps it names are not closed.
 
+> ⭐ **And the timing, confirmed by the owner 2026-08-18: no genuine grievance has been processed yet.**
+> Every record in every environment is AI-generated seed data or a dummy complaint filed during a demo.
+> So every exposure below is **prospective, not realised** — no real complainant's words have reached a
+> model provider and no real third party has been named to one. **That makes the Sprint 3 redaction work
+> a go-live precondition rather than remediation**, and it puts these findings in the window where they
+> are ordinary engineering tasks rather than a breach notification. ⚠ Two caveats: a demo participant may
+> have entered their **own** genuine contact details, and **the statement expires on first production
+> use** — see [`privacy-assessment.md`](privacy-assessment.md) §0.5.
+
 Built: encryption at rest and in transit, single-boundary server-side decryption, an architecturally
 enforced PII boundary, scoped officer access, reveal-contact actions written to an audit log.
 
