@@ -147,6 +147,7 @@ Qualification of the platform as a [Digital Public Good](https://www.digitalpubl
 | Document | Description |
 |---|---|
 | [`00_compliance_status.md`](dpg/00_compliance_status.md) | **The full assessment.** Indicator by indicator with file-and-line evidence: what complies, what does not, the LLM platform-independence question, and the questions for ADB's DPG consultant |
+| [`dependency-licenses.md`](dpg/dependency-licenses.md) | **The generated licence audit** (DPG-02) — 153 packages across four dependency sets, scanned in-container from the resolved trees, with a disposition for every entry carrying conditions. Supersedes the hand-written inventories |
 | [`01_consultant_briefing.md`](dpg/01_consultant_briefing.md) | **The shareable summary** — what to send the consultant ahead of the meeting. The scorecard, what the sprint closes, the fourteen questions, and the full dependency inventory, in ~320 lines |
 
 The engineering that closes the gaps is specced in [`sprints/2026-08-llm/`](sprints/2026-08-llm/README.md).

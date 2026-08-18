@@ -71,6 +71,9 @@ def build_scheduler() -> BackgroundScheduler:
     # ── security monitoring ──
     sched.add_job(security.dependency_scan, CronTrigger(hour=1, minute=30), id="dependency_scan")
     sched.add_job(security.pg_security_check, CronTrigger(hour=1, minute=45), id="pg_security_check")
+    # DPG-02 / Q-06 — a licence check, not a CVE check. Indicator 2 is a claim that must stay true
+    # as dependencies change, so it is scheduled rather than run once before submission.
+    sched.add_job(security.licence_scan, CronTrigger(hour=1, minute=50), id="licence_scan")
 
     # ── maintenance ──
     sched.add_job(maintenance.prune_health_checks, CronTrigger(hour=3, minute=20), id="prune_health_checks")

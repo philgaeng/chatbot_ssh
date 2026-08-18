@@ -659,8 +659,11 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it
 
 ## Appendix A — Full dependency inventory
 
-⚠ Licences below are stated from the manifests and package knowledge, **pending the generated report**
-(`docs/dpg/dependency-licenses.md`, sprint ticket DPG-02). Items needing a decision are flagged.
+✅ **Superseded 2026-08-18 — see [`dependency-licenses.md`](dependency-licenses.md)** (DPG-02), the
+generated audit over 153 packages in four dependency sets, produced in-container from the resolved
+trees. The tables below are the readable summary and are kept for that; where they differ, the
+generated report is authoritative. It found two transitive LGPL dependencies this list does not
+mention, and a licence contradiction in our own npm manifest.
 
 ### Python — chatbot stack (`requirements.txt`)
 

@@ -30,6 +30,8 @@ is a quarantine with better branding.
 | `tests/backend/test_llm_services.py` | T-10-a…f, T-11-a…c, T-13, T-14, T-15 (chatbot surface) | `backend-tests` (mocked) |
 | `tests/ticketing/test_llm_client.py` | T-10 (ticketing surface), T-12 | `backend-tests` (mocked) |
 | `tests/repo/test_spdx_headers.py` | T-01 — the licence-header walker | `backend-tests` |
+| `tests/repo/test_licence_scan.py` | T-02-a…c — the licence classifier | `backend-tests` |
+| `tests/repo/test_image_pins.py` | T-02-d…e — container pin drift | `backend-tests` |
 | `tests/repo/` **(new dir)** | **Where repo-wide pins go.** ⚠ Added to `ci.yml`'s explicit pytest path list in the same commit — that step names its directories, so an unnamed one never runs. T-11-d and T-16-a belong here too, not under `tests/backend/` | `backend-tests` |
 | `tests/backend/test_llm_config.py` | T-17-a…d — the shared registry, both surfaces | `backend-tests` |
 | `tests/backend/test_llm_config_pins.py` | T-11-d, T-16-a, T-17-b…c — the grep/drift pins | `backend-tests` |
@@ -46,6 +48,20 @@ is a quarantine with better branding.
 | ID | Test | Mutation check |
 |---|---|---|
 | **T-01** ✅ | Every in-scope source file carries `SPDX-License-Identifier: Apache-2.0` — **583 files**. Scope is **imported from `scripts/ops/add_spdx_headers.py`**, not restated, so the pin and the fixer cannot disagree. Also pins: header below any shebang; migrations keep their `Safe to run` header (SPDX above it); `LICENSE` is the canonical 202-line text; `NOTICE` discloses an unresolved holder rather than leaving the template placeholder silent; both files are tracked | ✅ **Checked twice.** Delete a header → red, and `add_spdx_headers.py` restores it byte-identically. Append a newline to `LICENSE` → red |
+
+### DPG-02 — the licence scan stays true
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-02-a** | `classify_licence` puts permissive licences at `info`, weak copyleft (LGPL/MPL) at `warn`, and **anything unrecognised, absent or non-OSI at `high`** — strings taken from this repo's own resolved tree, not invented | Add `GPL` to the OSI allowlist → red |
+| **T-02-b** | ⚠ **The regression pin.** `"Proprietary Limited License"` must not classify as OSI-approved. It contains the substring `MIT`, and the first implementation used `token in text` | Revert `matches()` to substring matching → red *(checked)* |
+| **T-02-c** | `UNLICENSED` (npm: no licence declared) and `Unlicense` (public-domain grant) classify oppositely | Merge the two → red |
+| **T-02-d** | Every container image is pinned to ≥ MAJOR.MINOR, or carries a written licence-stability reason in `ACCEPTED_LOOSE_PINS` | Restore `redis:7` → red *(checked, 3 tests)* |
+| **T-02-e** | Compose and CI declare the **same** image for redis and postgres | Bump one and not the other → red |
+
+**Why T-02-b is the one that matters.** A licence scan that silently passes a proprietary dependency
+does not merely fail to help — it manufactures confidence, and the nightly job would report a clean
+tree forever. That is worse than having no scan.
 
 **Why the one test in Sprint 0 earns its place:** indicator-2 evidence decays silently. Without this,
 coverage lapses the first week someone adds a module and nobody learns until a reviewer greps.
@@ -216,7 +232,7 @@ underperform its published F1, and the report should say so before a reviewer do
 
 | Sprint | Test IDs | New files |
 |---|---|---|
-| 0 | T-01 (9 assertions, ✅ landed) | `tests/repo/test_spdx_headers.py` |
+| 0 | T-01 (9), T-02-a…e (29) — ✅ landed, 38 assertions | `tests/repo/test_spdx_headers.py`, `test_licence_scan.py`, `test_image_pins.py` |
 | 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
 | 2 | T-24-a…d | `@live_llm`-marked subset |
 | 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |

@@ -4,6 +4,10 @@
 Security monitoring (spec 12) — report-only, run by the ops scheduler.
 
 - dependency_scan: pip-audit (primary) → upsert into ops.dependency_findings.
+- licence_scan: pip-licenses → the same table. A *licence* check, not a vulnerability one
+  (DPG-02 / Q-06). Indicator 2 of the Digital Public Goods Standard is a claim that has to stay
+  true, and a one-off audit is stale the next time anybody adds a dependency — so it runs on the
+  schedule beside the CVE scan rather than being a pre-submission artefact somebody remembers.
 - pg_security_check: self-hosted substitute for Supabase Advisors.
 
 Never auto-upgrades or blocks deploys. npm/Dependabot/Trivy sources are optional
@@ -20,6 +24,7 @@ import subprocess
 from sqlalchemy import text
 
 from ops.checks import CRIT, OK, WARN, _emit
+from ops.licences import classify_licence
 from ops.db import session_scope
 from ops.models import DependencyFinding
 
@@ -169,6 +174,80 @@ def _ingest_npm_findings() -> dict:
         logger.warning("npm findings persist failed: %s", exc)
         return {}
     return {k: c for k, c in counts.items() if c}
+
+
+# ── licence scan (DPG-02) ────────────────────────────────────────────────────────────────────
+# The classification rules live in ops/licences.py — pure logic, no redis/SQLAlchemy imports, so
+# they stay unit-testable without the ops stack installed (tests/repo/test_licence_scan.py).
+
+
+def licence_scan() -> None:
+    """Flag dependencies whose licence is unknown, non-OSI, or copyleft (report-only).
+
+    Findings land in ops.dependency_findings with source='pip-licenses' and the licence string in
+    advisory_id, so the existing resolve-on-disappearance logic works unchanged: fix a licence (or
+    drop the package) and the row closes itself on the next run.
+    """
+    try:
+        proc = subprocess.run(
+            ["pip-licenses", "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        # pip-licenses prints pip's own upgrade notice to stdout on some versions; start at the
+        # first line that is exactly the opening bracket rather than at the first '[' character,
+        # which would match "[notice]".
+        lines = (proc.stdout or "").splitlines()
+        start = next((i for i, line in enumerate(lines) if line.strip() == "["), None)
+        payload = json.loads("\n".join(lines[start:])) if start is not None else []
+    except FileNotFoundError:
+        _emit("licence_scan", WARN, message="pip-licenses not installed")
+        return
+    except Exception as exc:
+        _emit("licence_scan", WARN, message=f"pip-licenses run failed: {exc}")
+        return
+
+    counts: dict[str, int] = {}
+    seen_keys: set[tuple[str, str, str]] = set()
+    try:
+        with session_scope() as db:
+            for pkg in payload:
+                name = pkg.get("Name") or "?"
+                licence = (pkg.get("License") or "").strip()
+                severity, is_finding = classify_licence(licence)
+                if not is_finding:
+                    continue
+                counts[severity] = counts.get(severity, 0) + 1
+                seen_keys.add(("pip-licenses", name, licence))
+                _upsert_finding(
+                    db,
+                    source="pip-licenses",
+                    package=name,
+                    installed_ver=pkg.get("Version") or "",
+                    advisory_id=licence,
+                    severity=severity,
+                    fixed_in=None,
+                )
+
+            now = dt.datetime.now(dt.timezone.utc)
+            open_rows = (
+                db.query(DependencyFinding)
+                .filter(
+                    DependencyFinding.source == "pip-licenses",
+                    DependencyFinding.resolved_at.is_(None),
+                )
+                .all()
+            )
+            for row in open_rows:
+                if ("pip-licenses", row.package, row.advisory_id) not in seen_keys:
+                    row.resolved_at = now
+    except Exception as exc:
+        _emit("licence_scan", WARN, message=f"persist failed: {exc}")
+        return
+
+    status = CRIT if counts.get("high") else (WARN if counts else OK)
+    _emit("licence_scan", status, {"scanned": len(payload), "flagged": counts})
 
 
 def pg_security_check() -> None:

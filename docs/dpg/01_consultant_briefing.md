@@ -231,9 +231,14 @@ Recorded so they are not re-opened, and because two of them change what we are a
 
 ## 6. Dependency inventory
 
-Every library and image in the runtime stack. ⚠ Licences below are stated from the manifests and package
-knowledge, **pending the generated report** the sprint produces — we would rather show you machine output
-than our assertion, and that is one day of work.
+Every library and image in the runtime stack.
+
+> ✅ **Superseded 2026-08-18 by the generated report:
+> [`dependency-licenses.md`](dependency-licenses.md)** — 153 packages scanned in-container from the
+> resolved trees, with a disposition for each entry carrying conditions. **Read that instead of this
+> section where they differ.** The tables below are kept as the readable summary; the scan found two
+> LGPL dependencies neither this list nor any manifest would have shown, and one licence contradiction
+> in our own package manifest.
 
 **Two points a reviewer usually asks about.** Identity is **self-hosted** (Keycloak 26, OIDC + PKCE) rather
 than federated to a vendor — an earlier plan used AWS Cognito and we migrated away during the build, removing

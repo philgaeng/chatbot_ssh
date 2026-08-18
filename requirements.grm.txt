@@ -14,3 +14,4 @@ pytest>=8.0                   # ticketing engine integration tests
 reportlab>=4.0                # complainant closure PDF download
 apscheduler>=3.10             # ops/ monitor scheduler (broker-independent)
 pip-audit>=2.7                # ops security dependency/CVE scan (report-only)
+pip-licenses>=5.0             # ops licence scan — DPG indicator 2 (report-only, see ops/security.py)
