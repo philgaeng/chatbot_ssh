@@ -251,6 +251,27 @@ scoped by it.
    data-sharing terms to measure against). Produce, explicitly: lawful basis, cross-border transfer
    position **for an indefinite third-party arrangement, not a transitional one**, retention schedule,
    deletion procedure, breach procedure, data-subject rights handling.
+
+   > ⚠ **Get the trigger right, because it is easy to assess the wrong event.** The transfer question is
+   > **not** "does the provider train on it" or "does the provider keep it". **Transmitting personal data
+   > to a third party is itself a disclosure and a cross-border transfer**, and needs a lawful basis
+   > whether the recipient stores it for a month or discards it in a microsecond. The provider's
+   > no-retention commitment is a **mitigation to be cited**, not an answer to be relied on.
+   >
+   > **And openness is a licensing property, not a privacy one.** Running open weights answers indicator 4
+   > and changes nothing here: an open model served by a third party has the same data flow as a
+   > commercial one.
+   >
+   > **Legs the diagram must carry that are easy to miss** — the provider's own retention (commonly ~30
+   > days for abuse monitoring and billing, some reserving service-improvement use absent an opt-out); the
+   > **jurisdiction of execution**, which is not controlled even with a pinned provider; **prompt
+   > caching**, which several providers use and which parks content somewhere briefly; and the
+   > **re-identification mapping**, which is personal data in its own right and whose in-country residency
+   > is what the "only pseudonymised text crosses the border" claim rests on
+   > ([`04` DPG-31](04-pii-redaction-spec.md#dpg-31)).
+   >
+   > ⚠ **Terminology.** The output is **pseudonymised, not anonymised** — we hold the key, so it remains
+   > personal data. Do not let the assessment or any briefing to the ministry say "anonymised".
 3. **The third-party PII question must be answered here, not deferred to Sprint 3.** A road-sector
    grievance names the site engineer, the contractor, the ward official. Those people never consented.
    The complainant consented to give *their* details; nobody asked the engineer whose conduct is
@@ -266,6 +287,10 @@ scoped by it.
 - [ ] Individual Privacy Act 2018 position stated, including cross-border transfer **as an indefinite
       arrangement** (T1 is the steady state; T2 is parked)
 - [ ] Third-party PII position stated explicitly — with T2 parked this is the **load-bearing** section
+- [ ] The transfer analysis is framed on **transmission**, not on provider retention or training use, with
+      the provider's commitments cited as mitigation
+- [ ] The word **"anonymised" appears nowhere** describing model-bound text; pseudonymisation, with the
+      reason, and the key's residency stated as the safeguard it is
 - [ ] Retention, deletion, and breach procedures written (or marked `⚠ Not built` where they are not)
 - [ ] Q-03 (jurisdiction) explicitly marked **moot while T2 is parked**, with the analysis kept for unparking
 - [ ] `docs/deployment/13_security.md` cross-links it

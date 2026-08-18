@@ -26,6 +26,7 @@
 | [Q-12b](#q-12b) | Redact when | **At transmission** — the mapping is PII | [`04` DPG-31](04-pii-redaction-spec.md#dpg-31) |
 | [Q-12c](#q-12c) | Where the ML dependency lives | Dedicated service, own initiative | [`04` DPG-32](04-pii-redaction-spec.md#dpg-32) |
 | [Q-12d](#q-12d) | Names: privacy-first, and the rule layer does them | **Recall over precision for names**; deterministic name detection ships in Sprint 3 | [`04` §31.2b](04-pii-redaction-spec.md#dpg-31) |
+| [Q-12e](#q-12e) | Provider terms, transfer trigger, pseudonymisation | Pin the provider in prod, route freely in CI; **transmission is the trigger**; never say "anonymised" | [`00` §4.3a](../../dpg/00_compliance_status.md), [`04` DPG-31](04-pii-redaction-spec.md#dpg-31) |
 | [Q-12](#q-12) | Nepali NER licence | Email the author; fine-tune as fallback | [`04` DPG-32](04-pii-redaction-spec.md#dpg-32) |
 | [Q-13](#q-13) | `gpt-5-nano` · voice live? | Deliberate cost choice · **voice not live** | [`02` DPG-14](02-llm-agnostic-spec.md#dpg-14) |
 | [Q-14](#q-14) | SEAH fail open/closed | **Fail-open stays** — pre-filter verified | [`02` DPG-15](02-llm-agnostic-spec.md#dpg-15) |
@@ -565,5 +566,56 @@ be done and that names will reach the provider — we need to say what we will d
 disclaiming that there may be a few names that still reach it. There we should reference to the privacy
 clauses of huggingface. For translation, we can replace the pseudomyzed items after translation — even if not
 100% correct that should do the trick."*
+
+---
+
+---
+
+## ✅ Q-12e — What do the provider's terms actually say, and what does redaction let us claim? {#q-12e}
+**Owns:** DPG-04, DPG-17, DPG-24, DPG-31 · **Reconciled from a parallel analysis, 2026-08-18**
+
+> **Four corrections, three of which changed a claim we were about to send to the consultant.**
+>
+> **1. Hugging Face's commitments are stronger than this repo said — I read the wrong page.** The general
+> privacy policy has no inference-specific clause, and an earlier draft concluded from that there were none.
+> They live at
+> [Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security):
+> *"Hugging Face does not store any user data for training purposes. We do not store the request body or
+> response when routing requests through Hugging Face. Logs are kept for debugging purposes for up to 30
+> days, but no user data or tokens are stored."* Plus TLS in transit and SOC 2 Type 2 on the Hub. **Citable,
+> and we understated them in the pessimistic direction — which is still an error.**
+>
+> **2. But the sentence that matters is theirs too:** *"External providers are responsible for their own
+> security measures."* The no-storage promise covers the **router**, not the company running the model. With
+> default routing the processor changes per request — *"we cannot name which company processed this
+> citizen's grievance" is a finding, not a footnote.* **Fix: pin `model:provider` in production; keep
+> automatic routing in CI, which sends only synthetic data.** The multi-provider evidence survives where it
+> is safe, and the privacy position is fixed where it is not.
+>
+> **3. Openness is a licensing property, not a privacy property — and the legal trigger was never
+> training.** Open weights answered indicator 4 and did nothing for indicator 7. Under the Individual
+> Privacy Act and GDPR-style regimes, **transmitting personal data to a third party is itself a disclosure
+> and a cross-border transfer**, whether or not the recipient retains it. Non-retention is a mitigation to
+> cite, not an answer. DPG-04 now says so explicitly, because assessing the wrong event is an easy and
+> expensive mistake.
+>
+> **4. ⚠ Pseudonymisation is not anonymisation, and the difference is a credibility risk.** We keep the
+> mapping, so the text remains personal data. **Nobody may tell the ministry the grievances are
+> "anonymised"** — the claim will not survive scrutiny and it would taint everything else in the
+> assessment. What *is* defensible, and strong: **only pseudonymised text crosses the border, and the
+> re-identification key never leaves Nepal.** That second clause is a deployment promise, easily voided by
+> serialising the mapping into the same Celery payload or log line as the text — so **storage separation
+> and in-country residency are now Sprint 3 acceptance criteria with a test**, not implementation notes.
+>
+> **Also folded in:** redaction stays valuable even if T2 is unparked — the logs are the real leak, it is
+> defence in depth against a stray debug flag, and a DPG that redacts by default is adoptable by country
+> programmes with stricter transfer rules. And the residual T1 risks that belong in the data-flow diagram:
+> downstream retention (~30 days typical, some reserving service-improvement use absent opt-out),
+> jurisdiction of execution, and prompt caching.
+
+**Source:** a parallel analysis the owner ran on the same question, reconciled here rather than left in two
+places disagreeing. Consultant-facing wording is in
+[`00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.3a and
+[`01_consultant_briefing.md`](../../dpg/01_consultant_briefing.md) §4.
 
 ---

@@ -212,25 +212,50 @@ Redaction is imperfect by construction, so the honest question is *what happens 
 through*. With self-hosting parked (§5) that text goes to a third party permanently, so we read the
 provider's terms rather than assuming them. **What we found is worth your view (Q16):**
 
-- **Hugging Face's published privacy policy has no Inference-Providers-specific clause.** It does not state
-  whether inference inputs are retained, for how long, or whether they may be used for training. The general
-  clauses are that data is kept *"for as long as necessary to deliver the Services"* and may be *"stored and
-  processed in the United States or any other country in which the Company or its affiliates, subsidiaries
-  or agents maintain facilities."*
-- **The Terms of Service say "You own the Content you create"**, alongside a broad licence to *"use, display,
-  publish, reproduce, distribute"* content in order to provide the service. The confidentiality commitment —
-  *"reasonable and appropriate measures designed to keep your Content confidential"* — is framed around
-  private repositories rather than inference traffic. **No DPA is referenced in the Terms.**
-- **⚠ The router is a proxy, and by default the processor is not fixed.** Inference Providers forwards
-  requests to third-party partners — Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate,
-  Scaleway, OVHcloud and others — and the default policy selects *the fastest available provider per
-  request*, failing over automatically. **Under the default configuration we could not tell you which company
-  processed a given grievance, or in which jurisdiction.** Each partner's own terms also apply.
+**First, a correction to how this is usually framed — including by us.** Moving to open weights answered
+indicator 4. **It did nothing for indicator 7.** Openness is a *licensing* property, not a *privacy* one: an
+open model served by a third party carries exactly the same data-flow risk as a commercial one served by its
+vendor. Nothing about open weights changes who receives the grievance text.
 
-**Our engineering response, which we would like sanity-checked:** pin the provider explicitly instead of
-using automatic routing — the API supports a `model:provider` suffix — so exactly one named processor handles
-grievance text and DPG-04's assessment can assess *that* company's terms and location. It costs the automatic
-failover, which for asynchronous classification is an acceptable trade.
+**And the legal trigger was never model training.** Under Nepal's Individual Privacy Act 2018 and GDPR-style
+regimes alike, sending personal data to a third party **is a disclosure and a cross-border transfer — the
+event is the transmission itself.** Whether the recipient stores it, learns from it, or discards it a
+microsecond later does not change that a transfer occurred and needs a lawful basis. Non-retention is a
+*mitigation*, and a valuable one; it is not an answer to the question.
+
+With that said, Hugging Face's own commitments are better than we assumed and we will cite them
+([Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security)):
+
+- *"Hugging Face does not store any user data for training purposes."*
+- *"We do not store the request body or response when routing requests through Hugging Face."*
+- *"Logs are kept for debugging purposes for up to 30 days, but no user data or tokens are stored."*
+- TLS/SSL in transit; the Hub, of which Inference Providers is a feature, is **SOC 2 Type 2 certified**.
+
+**⚠ Then the sentence that matters, and it is Hugging Face's own:** *"External providers are responsible for
+their own security measures, so please refer to their respective security policies."* The no-storage
+commitment covers the **router**, not the company that actually runs the model.
+
+- **By default the processor is not fixed.** Requests are proxied to third-party partners — Cerebras, Groq,
+  Together, Fireworks, Novita, DeepInfra, Replicate, Scaleway, OVHcloud and others — with the default policy
+  selecting *the fastest available per request* and failing over automatically. **For a government privacy
+  assessment, "we cannot name which company processed this citizen's grievance" is a finding, not a
+  footnote.**
+- **The Terms of Service reference no DPA**, and frame confidentiality around private repositories rather
+  than inference traffic. For a router architecture, obtaining a data-processing agreement is genuinely
+  awkward: you would need one from Hugging Face *and* from each downstream provider.
+
+**Our engineering response, which we would like sanity-checked:** **pin the provider** in the model path
+(`model:provider`) rather than use automatic routing, converting an unknowable sub-processor chain into one
+named company whose policy can be read, cited and made the subject of a DPA request. **Production pins; CI
+keeps automatic routing**, because CI sends only synthetic benchmark data and the multi-provider evidence is
+worth having there — different environments, different needs.
+
+**What remains even with a provider pinned**, and belongs in the data-flow diagram rather than being
+discovered later: the downstream provider's **own retention** (commonly ~30 days for abuse monitoring and
+billing, and some reserve service-improvement use unless you opt out — we will read the specific policy and
+ask for zero-retention in writing); the **jurisdiction of execution**, which we still do not control; and
+**prompt caching**, which several providers use for performance and which means cached content sits
+somewhere briefly.
 
 **And the thing we are least comfortable with:** there is **not a single automated test** covering either AI
 surface, so our statements about model behaviour rest on manual observation rather than evidence we could

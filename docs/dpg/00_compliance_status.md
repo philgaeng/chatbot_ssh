@@ -474,22 +474,47 @@ the very submission meant to remove it (**Q9**). We have therefore split the wor
 
 #### 4.3a Whose terms the residual lands under
 
-We read the provider's terms rather than assuming them, and the result is a question for you (Q16):
-Hugging Face's **privacy policy carries no Inference-Providers-specific clause** on whether inference
-inputs are retained or used for training — only that data is kept *"for as long as necessary to deliver
-the Services"* and may be *"stored and processed in the United States or any other country in which the
-Company or its affiliates, subsidiaries or agents maintain facilities."* The **Terms of Service** say
-*"You own the Content you create"* while taking a broad licence to *"use, display, publish, reproduce,
-distribute"* it to provide the service, frame confidentiality around private repositories rather than
-inference traffic, and **reference no DPA**.
+**Two framing corrections first, because we had them wrong too.**
 
-⚠ **And the router is a proxy whose downstream processor is not fixed by default:** requests are
-forwarded to third-party partners — Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate,
-Scaleway, OVHcloud among others — with the default policy choosing the fastest available per request and
-failing over automatically. Under that configuration **we could not say which company processed a given
-grievance, or in which jurisdiction.** Our intended fix is to pin one named provider (`model:provider`)
-so DPG-04 can assess a specific company's terms and location; whether ADB requires a signed DPA on top of
-that is Q16.
+**Openness is a licensing property, not a privacy property.** The open-weights migration answers
+indicator 4 and does nothing for indicator 7 — an open model served by a third party carries the same
+data-flow risk as a commercial one. The two problems share an eventual solution (self-hosting) but T1
+solves only the first.
+
+**The legal trigger was never model training.** Under Nepal's Individual Privacy Act 2018 and GDPR-style
+regimes, transmitting personal data to a third party **is itself a disclosure and a cross-border
+transfer**. Whether the recipient stores it, trains on it or discards it immediately does not change that
+a transfer occurred and requires a lawful basis. Non-retention mitigates; it does not answer.
+
+**Hugging Face's actual commitments** — from
+[Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security),
+and better than an earlier draft of this document assumed (it cited the general privacy policy, which has
+no inference-specific clause, and understated them):
+
+> *"Hugging Face does not store any user data for training purposes. We do not store the request body or
+> response when routing requests through Hugging Face. Logs are kept for debugging purposes for up to 30
+> days, but no user data or tokens are stored."*
+
+Plus TLS/SSL in transit, and the Hub — of which Inference Providers is a feature — is **SOC 2 Type 2
+certified**. Genuinely usable in the assessment.
+
+⚠ **Then the sentence that matters, and it is theirs:** *"External providers are responsible for their own
+security measures, so please refer to their respective security policies."* **The no-storage commitment
+covers the router, not the company that runs the model.** Requests are proxied to third-party partners —
+Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate, Scaleway, OVHcloud — with the default
+policy choosing the fastest available *per request*. For a government privacy assessment, **"we cannot name
+which company processed this citizen's grievance" is a finding, not a footnote.**
+
+The **Terms of Service** reference no DPA and frame confidentiality around private repositories rather than
+inference traffic. For a router architecture a DPA is awkward by construction: one would be needed from
+Hugging Face *and* from each downstream provider — which is an underrated practical argument for
+self-hosting, where there is one cloud contract and a standard DPA.
+
+**Our fix:** pin one named provider (`model:provider`) in production so DPG-04 can assess that company's
+terms and location, while CI keeps automatic routing because it sends only synthetic benchmark data.
+**What remains even then** — and belongs in the data-flow diagram: the provider's own retention (commonly
+~30 days, some reserving service-improvement use absent an opt-out), the jurisdiction of execution, and
+prompt caching. Whether ADB requires a signed DPA on top is **Q16**.
 
 We should also be honest that one of our own documents currently claims summaries are PII-scrubbed
 before storage, and nothing scrubs them. It is on our list to fix the document

@@ -6,7 +6,14 @@
 >
 > **⚠ Two owner decisions on 2026-08-17 changed this sprint's weight and its scope, in opposite directions.**
 >
-> **It matters more.** [T2 is parked](03-open-models-spec.md#dpg-25) (Q-03 + Q-05): there is no owner for GPU
+> **It matters more — and it would still matter if T2 were unparked tomorrow.** Three reasons redaction is
+> not merely a T1 stopgap: **the logs are the real leak** (Celery payloads in Redis, exception bodies,
+> backups shipped offsite — none of which changes with the model endpoint); **defence in depth** against a
+> misconfigured endpoint or a developer pasting a trace into a bug report; and **reusability**, since another
+> country programme will have stricter transfer rules than Nepal and a DPG that redacts by default is
+> adoptable where one that does not needs re-engineering.
+>
+> [T2 is parked](03-open-models-spec.md#dpg-25) (Q-03 + Q-05): there is no owner for GPU
 > run costs, so **T1 — a hosted third-party provider — is the steady state, not a transition.** Grievance text
 > leaves the country **indefinitely**, and production is moving to a hosted open-weights provider (Q-04)
 > rather than off-provider. Redaction was the control that made a temporary exposure acceptable; it is now
@@ -224,7 +231,24 @@ Three choices matter, and each has a reason:
   `11_llm_pipeline_policy.md` gets reconciled (DPG-36), not the design. The conflict is resolved in favour
   of the officer's ability to act on a case — a GRM officer needs to know which engineer was named.
 
-  > ### ⚠ The answer added a constraint this spec did not have: **the mapping is PII**
+  > ### ⚠ This is **pseudonymisation, not anonymisation** — and the distinction is load-bearing
+  >
+  > **Because we keep the mapping, the text remains personal data** under GDPR-style analysis and under
+  > Nepal's Individual Privacy Act. Redaction reduces the risk profile; it does not take the data out of
+  > scope. **Nobody should tell the ministry the grievances sent for inference are "anonymised"** — that
+  > claim will not survive scrutiny, and an overstatement there discredits every other claim in the
+  > assessment.
+  >
+  > **What can be said, accurately and strongly:** *only pseudonymised text crosses the border, and the
+  > re-identification key never leaves Nepal.* Pseudonymisation is an explicitly recognised safeguard.
+  >
+  > ⚠ **That second clause is a promise about deployment, not about code, and it is easy to void by
+  > accident.** Serialise the mapping into the same Celery payload, the same log line, the same cached
+  > context blob as the redacted text and the whole argument collapses silently — the key travelled with
+  > the ciphertext. **Storage separation and in-country residency are therefore acceptance criteria, not
+  > implementation notes.**
+  >
+  > ### And the mapping is itself PII
   >
   > The owner's answer notes that *"in practice we store both"* — transmission is near-real-time, so the
   > redacted derivative is persisted alongside the original (`TicketContextCache` and friends). That is
@@ -277,6 +301,12 @@ Per-document mapping scope. Never a process-global counter (two concurrent griev
       mapping is never persisted and the acceptance says so explicitly
 - [ ] **If the mapping is persisted:** not in `ticketing.*` (data rule 3, pinned by test); same encryption,
       access control, audit and retention as the record it dereferences; added to DPG-04's data-flow diagram
+- [ ] **The mapping never leaves the country, and never travels with the text it dereferences** — not in a
+      Celery payload, a log line, an exception body, a cached context blob or a backup that ships offsite.
+      **Pinned by a test**, because this is the clause the "only pseudonymised text crosses the border"
+      claim rests on, and it is voided by a single careless `json.dumps`
+- [ ] **No document produced by this sprint describes the output as "anonymised".** Pseudonymised, with the
+      reason. Pinned by the same grep that checks the egress inventory
 - [ ] `redact_for_model` / `restore` round-trip is lossless for non-PII text
 - [ ] LOCATION policy decided, with the reason recorded
 - [ ] **No new heavy dependency in this ticket** — it must ship without DPG-32
@@ -549,7 +579,11 @@ should say so explicitly, with the new reason.
 - [ ] Deterministic PERSON recall measured and published **as a rule-layer number**, with the ML tier's
       absence stated as the reason it is not higher
 - [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at storage
-- [ ] **The restore mapping is either never persisted, or protected as the PII it is** — and not in `ticketing.*`
+- [ ] **The restore mapping is either never persisted, or protected as the PII it is** — not in `ticketing.*`,
+      **never serialised alongside the text it dereferences, and never leaving Nepal**
+- [ ] **Nothing produced by this sprint calls the result "anonymised".** It is pseudonymisation: we hold the
+      key, so the data stays personal data. The defensible claim is *only pseudonymised text crosses the
+      border, and the re-identification key never leaves the country*
 - [ ] Audio's irreducibility documented. ⚠ It is **no longer a T2 argument** — T2 is parked (Q-03/Q-05), so
       it stands as an accepted, disclosed residual exposure instead
 - [ ] Data-flow diagram updated to reflect the redaction boundary

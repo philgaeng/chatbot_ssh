@@ -375,6 +375,14 @@ def declared_env_vars() -> tuple[str, ...]:    # what DPG-16's drift pin reads
 | `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-4o-mini` | llm | `llm_client.py:139` |
 | `ticket_findings_seah` | `MODEL_TICKET_FINDINGS_SEAH` | `gpt-4o` | llm | `llm_client.py:140` |
 
+> ⚠ **Model names carry the sub-processor choice, so the registry is where the privacy decision lands.**
+> Hugging Face's router accepts a `model:provider` suffix (`openai/gpt-oss-120b:groq`); without one it
+> selects the fastest available partner **per request** and fails over automatically, which means the
+> company processing a given grievance is not knowable in advance. **Production must pin a provider; CI may
+> route automatically because it sends only synthetic data** (DPG-24). Both are the same one-line registry
+> value in different environments — which is exactly the property this ticket exists to create. Reasoning:
+> [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.3a.
+
 `ticket_translate` defaulting to `translate`'s resolved value is deliberate: one knob moves translation
 everywhere, and a second knob exists for whoever needs the surfaces to differ. The
 `ticket_findings` / `ticket_findings_seah` split is the cost/quality decision documented at

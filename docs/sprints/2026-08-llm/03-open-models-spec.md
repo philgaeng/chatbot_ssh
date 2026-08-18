@@ -375,6 +375,21 @@ gate, explicit `env:` block with rationale comments, `timeout-minutes`).
       - run: pytest tests/backend/test_llm_services.py tests/ticketing/test_llm_client.py -v -m live_llm
 ```
 
+### ⚠ CI routes freely; production pins — and that is deliberate
+
+The privacy analysis concludes that **production must pin one named provider** (`model:provider`) instead
+of `:fastest`, so exactly one company processes grievance text and DPG-04 can assess it. Read naively that
+would gut this job's value: the multi-provider routing *is* the "independent of any single vendor"
+evidence.
+
+**The two needs separate cleanly, because the data differs.** This job sends **only DPG-20's synthetic
+benchmark data** — no complainant text ever — so automatic routing is safe here and the evidence stays
+strong. Production sends real grievances and pins. **Write that split into the job header**, or someone
+will later "fix" the inconsistency in the wrong direction.
+
+⚠ **The invariant that keeps it safe:** if this job ever gains access to production data, the routing
+policy must change with it. Put that sentence next to the reason.
+
 ### ⚠ Four design decisions this job must get right
 
 1. **It calls a live third-party API from CI.** That makes it *flaky by construction* — provider outages
@@ -407,6 +422,8 @@ gate, explicit `env:` block with rationale comments, `timeout-minutes`).
 - [ ] `live_llm` marker defined; `backend-tests` deselects it; this job selects it; **neither is a quarantine**
 - [ ] Job skips cleanly without secrets (fork PRs)
 - [ ] Branch-protection decision made and its reason written in the job header (Q-17)
+- [ ] The job header states **why CI may route automatically while production pins** — synthetic data only —
+      and that the policy changes if that ever stops being true
 - [ ] **Measured** CI inference spend recorded in the job header, and a hard token cap set on the HF account
 - [ ] If the cadence was reduced below per-commit for cost, the **badge and job header say so** (Q-19)
 - [ ] Badge in the repo `README.md` linking the job — this is the link that goes in the submission
