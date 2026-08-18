@@ -175,9 +175,9 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-15-a** | **The sprint's headline criterion.** With `LLM_BASE_URL` on a dead port, a full intake completes: the grievance row is durable, the classification status is terminal, no exception reaches the user | Make intake await the model call → red |
-| **T-15-b** | `/health/llm` reports reachability and the base-URL **host**; the response contains no API key | Include the key → red |
-| **T-15-c** | `/health` stays green while `/health/llm` is red — an LLM outage does not restart the container | Wire the probe into the container healthcheck → red |
+| **T-15-a** ◐ | **The sprint's headline criterion.** With `LLM_BASE_URL` on a dead port (127.0.0.1:9 — a **real** connection failure, not a mock) the classification path returns its error contract and the grievance row survives. Two more assertions came out of the in-container run: a failed classification is *recognised* as a failure by the task layer (D-32), and an empty extraction is never written over stored contact details (D-33). ⚠ **Honest limit:** the status is `pending`, not terminal — `LLM_failed` is unreachable until D-34 is fixed, and the ledger's word "terminal" is therefore not yet satisfied | ✅ **Checked** — made the failure dict count as success again → red |
+| **T-15-b** ✅ | `/health/llm` reports reachability and the base-URL **host**; the response contains no API key, and it returns **200 even when degraded** — a non-200 invites the healthcheck wiring T-15-c forbids | ✅ **Checked** — added the key to the response → red |
+| **T-15-c** ✅ | `/health` stays green while `/health/llm` is red — **and the compose files are read** to assert no container healthcheck probes the LLM. The rule is not "the probe returns 200", it is "nothing restarts the chatbot when the provider is down", and that lives in compose | ✅ **Checked** — pointed a healthcheck at `/health/llm` → red |
 
 ### DPG-16 — env drift
 

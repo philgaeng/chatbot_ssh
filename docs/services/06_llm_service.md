@@ -150,9 +150,34 @@ complainant's classification.
 
 ## 4) Error and Fallback Behavior
 
-- Missing client/config returns structured failure/fallback payloads in many functions.
-- Parse failures are logged and return defensive empty objects/default structures.
-- Callers should treat service outputs as best-effort and validate required fields before persistence.
+- Missing client/config returns structured failure/fallback payloads in many functions. **Three
+  different idioms** — raise, sentinel dict, `None` — one per function, pinned as they are by
+  `tests/backend/test_llm_services.py`. Unifying them is a behaviour change nobody has scheduled.
+- ⚠ **A failure payload is not a result.** Callers must check: the classification failure dict is
+  **truthy**, and a task that only guarded `if not values:` stored it as a success —
+  `grievance_classification_status = LLM_generated` with an empty summary (fixed 2026-08-18,
+  DPG-15/D-32). Use `is_failed_classification()` / `is_empty_extraction()` from
+  `backend/config/classification_status.py`.
+- ⚠ **Never write an empty extraction over stored data.** An outage once overwrote a complainant's
+  phone number with `""` (D-33). Losing the enrichment is recoverable; losing the number is not.
+- Parse failures now **raise** `LLMResponseParseError` rather than returning `{}` — a malformed
+  reply and an empty result were previously the same value (DPG-13).
+
+### Degraded mode
+
+Intake never waits on a model. The grievance row is written to Postgres first, classification is a
+Celery task, and the retrieve step polls with a 20-second deadline. Verified by pointing
+`LLM_BASE_URL` at a dead port and driving the real tasks against the real database.
+
+`GET /health/llm` (backend API) reports the configured endpoint **host** — never the key —
+reachability, and whether a key is configured. Reachability is a **network** property: a 401 counts
+as reachable, because a wrong key and a dead host are different problems.
+
+⚠ **It is deliberately not part of any container health check**, and a test reads the compose files
+to keep it that way. An LLM outage degrades classification; it must never restart the chatbot.
+
+⚠ Known gaps, logged not fixed: `LLM_failed` is unreachable because nothing retries (D-34), so a
+failed classification sits at `pending` and the retrieve step waits its full 20 seconds.
 
 ## 5) Typical Callers
 

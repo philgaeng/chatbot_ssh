@@ -44,7 +44,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from backend.api.routers import grievance, files, messaging
+from backend.api.routers import grievance, files, health_llm, messaging
 from backend.api.websocket_fastapi import emit_status_update_accessible, socketio_app
 
 
@@ -130,6 +130,9 @@ def health():
     return "OK"
 
 
+# LLM reachability probe (DPG-15). ⚠ Separate from /health, and NOT part of any container
+# healthcheck: an LLM outage must degrade classification, never restart the chatbot.
+app.include_router(health_llm.router)
 # Grievance API: paths already include /api/grievance, so no prefix
 app.include_router(grievance.router)
 # File server: same paths as Flask FileServerAPI (no prefix)

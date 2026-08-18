@@ -39,6 +39,7 @@ Spec: docs/sprints/2026-08-llm/02-llm-agnostic-spec.md §DPG-10 · Ledger: TESTS
 """
 from __future__ import annotations
 
+import inspect
 import json
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -855,3 +856,184 @@ def test_the_classification_schema_declares_no_category_enum():
     )
     assert "enum" not in schema
     assert "const" not in schema
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-15-a … T-15-c — degraded mode: a dead endpoint must not take intake with it
+# ═════════════════════════════════════════════════════════════════════════════
+
+DEAD_PORT_URL = "http://127.0.0.1:9/v1"   # the discard port: refused immediately, no waiting
+
+
+def test_a_dead_endpoint_produces_the_error_contract_rather_than_an_exception(monkeypatch, tmp_path):
+    """
+    **T-15-a, the service half — and this one makes a real network call**, to a port nothing
+    listens on. Mocking here would test the mock: the property under test is what an *actual*
+    connection failure does to the primary AI path.
+
+    A grievance mechanism that refuses intake because an API is down is worse than one with no AI
+    at all, and in Nepal that is not hypothetical.
+    """
+    from backend.services import llm_client as factory
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("LLM_BASE_URL", DEAD_PORT_URL)
+    monkeypatch.setenv("LLM_API_KEY", "unused-but-required-to-build-a-client")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "0")
+    llm_config.get_llm_settings.cache_clear()
+    factory.reset_clients()
+
+    try:
+        result = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
+    finally:
+        factory.reset_clients()
+
+    assert result["status"] == "error"
+    assert result["grievance_summary"] == ""
+    assert result["grievance_categories"] == []
+
+
+def test_a_failed_classification_is_recognised_as_a_failure_by_the_task_layer():
+    """
+    **T-15-a, the half that was broken.** ⚠ Measured against the real database on 2026-08-18
+    (grievance `DPG15-c2b3e821`): with the endpoint dead, the Celery task reported
+    `status: "SUCCESS"` and wrote `grievance_classification_status = LLM_generated` — a *success*
+    code — with an empty summary, `error: "Connection error."` sitting beside it, and the terminal
+    `LLM_failed` code unreachable.
+
+    The cause was that the task's only guard was `if not values:` and the documented failure dict
+    is **truthy**. This helper is the fix's seam, and the task raises on it so the existing retry
+    and the `LLM_failed` write both come back into play.
+    """
+    from backend.config.classification_status import is_failed_classification
+
+    failure = {
+        "grievance_summary": "",
+        "grievance_categories": [],
+        "grievance_categories_alternative": [],
+        "follow_up_question": "",
+        "status": "error",
+        "error": "Connection error.",
+    }
+    assert is_failed_classification(failure) is True
+    assert is_failed_classification(None) is True
+    assert is_failed_classification({}) is True
+    assert is_failed_classification({"error": "boom"}) is True
+
+    success = dict(CLASSIFY_JSON)
+    assert is_failed_classification(success) is False
+
+
+def test_the_classification_task_raises_on_a_failed_result_so_the_retry_fires(monkeypatch):
+    """
+    The pin on the wiring, not just on the helper: a task that recognises failure and then stores
+    it as success would pass the test above and still ship the bug.
+    """
+    import backend.task_queue.registered_tasks as tasks
+    from backend.config.classification_status import is_failed_classification
+
+    source = inspect.getsource(tasks.classify_and_summarize_grievance_task)
+    assert "is_failed_classification" in source, (
+        "the classification task must treat the service's failure dict as a failure — "
+        "`if not values` does not, because that dict is truthy"
+    )
+    assert is_failed_classification({"status": "error"}) is True
+
+
+# ── the probe ────────────────────────────────────────────────────────────────
+
+@pytest.fixture
+def probe_client(monkeypatch, tmp_path):
+    from fastapi.testclient import TestClient
+
+    from backend.api.fastapi_app import app
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("LLM_BASE_URL", DEAD_PORT_URL)
+    monkeypatch.setenv("LLM_API_KEY", "sk-secret-value-that-must-not-appear")
+    llm_config.get_llm_settings.cache_clear()
+    yield TestClient(app)
+    llm_config.get_llm_settings.cache_clear()
+
+
+def test_the_probe_reports_the_host_and_never_the_key(probe_client):
+    """**T-15-b.** The one thing a health endpoint must never do is help someone read the secret."""
+    response = probe_client.get("/health/llm")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["endpoints"][0]["host"] == "127.0.0.1:9"
+    assert body["endpoints"][0]["key_configured"] is True
+    assert "sk-secret-value-that-must-not-appear" not in response.text
+
+
+def test_the_probe_reports_an_unreachable_endpoint_as_degraded(probe_client):
+    response = probe_client.get("/health/llm")
+    body = response.json()
+
+    assert body["status"] == "degraded"
+    assert body["endpoints"][0]["reachable"] is False
+    assert body["last_success_at"] is None
+    # ⚠ 200 even when degraded: this is an observation, not a gate. A non-200 invites someone to
+    # wire it into a container healthcheck, which is precisely what must not happen.
+    assert response.status_code == 200
+
+
+def test_health_stays_green_while_the_llm_probe_is_red(probe_client):
+    """
+    **T-15-c.** The whole point: an LLM outage degrades classification and nothing else. `/health`
+    is what the container healthcheck calls, and it must not learn about the model at all.
+    """
+    assert probe_client.get("/health").status_code == 200
+    assert probe_client.get("/health").text == '"OK"' or probe_client.get("/health").text == "OK"
+    assert probe_client.get("/health/llm").json()["status"] == "degraded"
+
+
+def test_no_container_healthcheck_probes_the_llm():
+    """
+    **T-15-c, the half a unit test cannot fake.** The rule is not "the probe returns 200" — it is
+    "nothing restarts the chatbot when the provider is down". That lives in the compose files, so
+    that is where it is checked.
+    """
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    for compose in ("docker-compose.yml", "docker-compose.grm.yml"):
+        text = (repo_root / compose).read_text()
+        for line in text.splitlines():
+            if "healthcheck" in line.lower() or "urlopen" in line:
+                assert "/health/llm" not in line, (
+                    f"{compose} wires the LLM probe into a container healthcheck. An LLM outage "
+                    "would then restart the chatbot, which is the failure this probe exists to "
+                    "make visible without causing."
+                )
+
+def test_an_empty_contact_extraction_is_never_written_over_stored_details():
+    """
+    **T-15-a, the finding that cost the most.** ⚠ Verified against the real database with the
+    endpoint on a dead port: `extract_contact_info_task` reported `SUCCESS` and overwrote a stored
+    phone number (`+9779841234567`) with `""`. The complainant had typed it; the model was down;
+    the number was erased.
+
+    Note the shape of this one — it is *not* a bug the characterization net could have caught,
+    because the service function did exactly what its contract said. The contract itself was
+    harmful at the layer above, and only driving the degraded path against a real database showed
+    it. That is the argument for DPG-15 being an experiment rather than a code review.
+    """
+    from backend.config.classification_status import is_empty_extraction
+
+    assert is_empty_extraction({"complainant_phone": ""}) is True
+    assert is_empty_extraction({"complainant_phone": "   "}) is True
+    assert is_empty_extraction({}) is True
+    assert is_empty_extraction(None) is True
+    assert is_empty_extraction({"complainant_phone": "9841234567"}) is False
+
+
+def test_the_contact_task_refuses_to_persist_an_empty_extraction():
+    """The pin on the wiring: recognising the empty result and storing it anyway is still the bug."""
+    import backend.task_queue.registered_tasks as tasks
+
+    source = inspect.getsource(tasks.extract_contact_info_task)
+    assert "is_empty_extraction" in source, (
+        "extract_contact_info_task must refuse to write an all-empty extraction — otherwise a "
+        "provider outage erases the complainant's stored contact details"
+    )

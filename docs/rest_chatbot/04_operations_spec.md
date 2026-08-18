@@ -75,6 +75,17 @@ LLM provider, models and deadlines (DPG-16/DPG-17):
 > then takes its own documented fallback (raise, sentinel dict, or fail-open on the SEAH path)
 > instead of a client that 401s on every request, which on a Celery worker reads as an outage.
 
+### LLM reachability probe
+
+`GET /health/llm` on the backend API (:5001) — endpoint host, whether a key is configured,
+reachability, and the last successful **probe** (not the workers' last successful call; the field is
+labelled `scope: "probe-only"` for that reason). Always 200; `status` is `ok` or `degraded`.
+
+⚠ **Not part of any container health check, by design.** `/health` is what compose probes. An LLM
+outage degrades classification and translation — intake is unaffected, because the grievance is
+written to Postgres before any model call — and restarting the chatbot in response would turn a
+survivable outage into a restart loop.
+
 ## 5) Observability and Debugging
 
 Recommended checks:

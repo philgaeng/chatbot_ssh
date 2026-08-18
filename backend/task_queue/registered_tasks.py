@@ -653,8 +653,15 @@ def classify_and_summarize_grievance_task(self,
         complainant_district = input_data.get('complainant_district')
         complainant_province = input_data.get('complainant_province')
         values = classify_and_summarize_grievance(grievance_description, language_code, complainant_district, complainant_province) #values is a dict with keys: grievance_summary, grievance_categories
-        if not values:
-            raise ValueError(f"No result found in classify_and_summarize_grievance: {values}")
+        # DPG-15: `if not values` was the only guard, and the failure dict is TRUTHY — so a dead
+        # model endpoint took the SUCCESS path and stored LLM_generated with an empty summary.
+        # Raising here puts the retry below (and the terminal LLM_failed write) back in play.
+        from backend.config.classification_status import is_failed_classification
+        if is_failed_classification(values):
+            raise ValueError(
+                "classify_and_summarize_grievance returned a failure: "
+                f"{str(values.get('error') or 'no result')[:200]}"
+            )
 
         # Flatten the classification results into the main result for frontend
         from backend.config.classification_status import LLM_GENERATED
@@ -893,6 +900,18 @@ def extract_contact_info_task(self, input_data: Dict[str, Any],
         incorrect_fields = [k for k in values.keys() if k not in USER_FIELDS]
         if incorrect_fields:
             raise ValueError(f"Incorrect fields found in contact info: {incorrect_fields}")
+
+        # DPG-15: an all-empty extraction MUST NOT be written. Verified against the real database
+        # with the endpoint on a dead port: the task reported SUCCESS and overwrote a stored
+        # phone number (+9779841234567) with "". The complainant had typed it; the model was
+        # down; the number was erased. Raising here routes it to the failure branch below, which
+        # writes nothing — losing the enrichment, never the data.
+        from backend.config.classification_status import is_empty_extraction
+        if is_empty_extraction(values):
+            raise ValueError(
+                "contact extraction returned no values for "
+                f"{sorted(values.keys())} — refusing to overwrite stored contact details"
+            )
         
         result= {'status': SUCCESS,
                  'operation': 'contact_info',
