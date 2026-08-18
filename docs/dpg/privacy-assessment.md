@@ -279,8 +279,8 @@ Named so that the omission is deliberate rather than an oversight:
 
 - **Application logs.** Grievance text reaches log lines in at least two known places — translation
   error paths interpolate the whole input dict including `grievance_description`
-  (`LLM_services.py:337,345`), and `parse_llm_response` logs the raw model response on a JSON parse
-  error (`LLM_services.py:284`). Logs go to the Docker `json-file` driver (10 MB × 5 per service) and
+  (`LLM_services.py:351,345`), and `parse_llm_response` logs the raw model response on a JSON parse
+  error (`LLM_services.py:298`). Logs go to the Docker `json-file` driver (10 MB × 5 per service) and
   to a `logs/` directory. **This is a real, live PII sink that no diagram box captures.** Owned by
   [DPG-34](../sprints/2026-08-llm/04-pii-redaction-spec.md).
 - **The Celery result backend.** Task results land in Redis DB 2. Whether any result carries
@@ -381,7 +381,7 @@ by default (F-4), grievance text in the broker (F-5) and in logs (F-6).
 
 **⚠ The gap is severe and must not be softened:** a SEAH disclosure — potentially a survivor's
 account of a sexual assault, naming an accused person — **is transmitted verbatim to a commercial
-model provider outside Nepal** on both the intake path (`LLM_services.py:385`) and the case-summary
+model provider outside Nepal** on both the intake path (`LLM_services.py:399`) and the case-summary
 path (`llm_client.py:261`). The access isolation that protects it inside this platform does not
 follow it out. See §4.
 
@@ -660,7 +660,7 @@ privacy impact, not a legal characterisation.
 | **F-3** | **Unsalted SHA-256 of phone, email, name and address** stored as `*_hash` search tokens. Nepal's mobile number space is small enough to enumerate exhaustively in seconds; the hash of a phone number is therefore reversible, so these columns are personal data, not pseudonyms | `base_manager.py:502-511`, used at `complainant_manager.py:121` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
 | **F-4** | **Backups are unencrypted by default.** `pg_dump` of the whole database plus a tar of the uploads volume; GPG/passphrase encryption only if an env var is set; off-box destination unspecified in the repo. Contact columns stay ciphertext, but the narrative, all officer notes, and every voice recording and photograph are in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
 | **F-5** | **Grievance text, including potential SEAH disclosures, passes through the Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | DPG-34 |
-| **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:284,337,345` | 🟠 Medium | DPG-34 |
+| **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:298,337,345` | 🟠 Medium | DPG-34 |
 | **F-7** | **No deletion capability exists anywhere in the platform**, and no retention period has been chosen. Archiving is implemented and is not deletion | `ARCHIVING_AND_RETENTION.md` §5.3, §10 | 🟠 Medium | **needs a legal position** |
 | **F-8** | **No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed | — | 🟠 Medium | **needs an owner** |
 | **F-9** | **Third parties named in grievances have not consented and cannot exercise any right.** The redaction layer *does* reach names (§31.2b — title triggers, thar gazetteer, self-identification), tuned for recall, so this is a **measured residual rather than an untouched gap** — but the residual is real and unquantified until DPG-35 reports it, and no redaction addresses the fact that these people have no rights they can exercise over data already held | §4 | 🟠 Medium | **needs a legal position**; recall figure from DPG-35 |

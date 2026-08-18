@@ -22,10 +22,13 @@ What is pinned, per call site:
 ⚠ **Two functions do not do what their contract says**, and the tests below pin the *real* behaviour
 with the intended one named beside it:
 
-* `extract_contact_info` raises **`UnboundLocalError`** — not `{field_name: ""}` — when the failure
-  happens before `response` is bound (deviation **D-27**).
+* `extract_contact_info` raised **`UnboundLocalError`** — not `{field_name: ""}` — when the failure
+  happened before `response` was bound (deviation **D-28**). ✅ **Fixed in DPG-14**; the tests below
+  now pin the declared contract, and they are the tests that failed before the fix.
 * `translate_grievance_to_english_LLM` raises **`UnboundLocalError`** — not `ValueError` — when the
-  failure happens before `result` is bound (deviation **D-28**, found while writing this file).
+  failure happens before `result` is bound (deviation **D-29**, found while writing this file).
+  ⏸ **Deliberately not fixed here**: the one-line fix makes a `ValueError` reachable whose message
+  interpolates the grievance narrative into the Celery log. It lands with Sprint 3's T-34-b.
 
 ⚠ **The mock boundary is the `OpenAI` class, not the module-level `client`.**
 `classify_and_summarize_grievance` builds its **own** client, shadowing the module attribute; a test
@@ -142,7 +145,7 @@ TRANSLATE_JSON = {
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_transcribe_sends_whisper_1(client, tmp_path):
-    """Call site 1. ⚠ The language kwarg is `language_code` today — the defect DPG-14.3 fixes."""
+    """Call site 1. The language kwarg is `language` since DPG-14.3 — see T-14-c below."""
     audio = tmp_path / "note.ogg"
     audio.write_bytes(b"\x00\x01")
     client.audio.transcriptions.create.return_value = SimpleNamespace(text="धुलो")
@@ -151,7 +154,8 @@ def test_transcribe_sends_whisper_1(client, tmp_path):
 
     kwargs = client.audio.transcriptions.create.call_args.kwargs
     assert kwargs["model"] == "whisper-1"
-    assert kwargs["language_code"] == "ne"
+    assert kwargs["language"] == "ne"
+    assert "language_code" not in kwargs
 
 
 def test_extract_contact_info_sends_gpt_35_turbo_with_json_object(client):
@@ -294,19 +298,37 @@ def test_transcribe_re_raises_provider_errors(client, tmp_path):
         llm.transcribe_audio_file(str(audio), "ne")
 
 
-def test_extract_contact_info_raises_unbound_local_error_when_the_call_fails(client):
+def test_extract_contact_info_returns_the_empty_sentinel_when_the_call_fails(client):
     """
-    ⚠ **D-27 — the declared contract is not what callers get.**
-
-    The handler reads `if not response:` but `response` is only bound *after* the API call, so any
-    exception raised before that line — a provider failure, a missing field_name — surfaces as
-    `UnboundLocalError` from inside the `except`. The documented `{field_name: ""}` is unreachable
-    on this path. Pinned as-is; the fix and its own test belong to DPG-14.
+    **D-28, fixed in DPG-14.** This is the contract the module always declared and never had:
+    before the fix, `response` was bound only after the API call while the handler's first
+    statement read it, so a provider failure surfaced as `UnboundLocalError` from inside the
+    `except`. The sentinel carries the real field name because the caller
+    (`registered_tasks.extract_contact_info_task`) validates every returned key against
+    `USER_FIELDS`.
     """
     client.chat.completions.create.side_effect = RuntimeError("provider down")
 
-    with pytest.raises(UnboundLocalError):
-        llm.extract_contact_info({"complainant_phone": "9841234567"})
+    assert llm.extract_contact_info(
+        {"complainant_phone": "9841234567"}
+    ) == {"complainant_phone": ""}
+
+
+def test_extract_contact_info_rejects_input_with_no_contact_field_without_leaking_values(client):
+    """
+    The one case that is a caller error rather than a model failure: nothing in `contact_data`
+    is a `USER_FIELDS` key, so there is no field to extract and no sentinel key to return.
+    Previously `UnboundLocalError`; now a `ValueError` naming the **keys**.
+
+    ⚠ The message must never carry the *values* — this exception reaches the Celery error log,
+    and `contact_data` holds a name or a phone number (T-34-b).
+    """
+    with pytest.raises(ValueError) as exc:
+        llm.extract_contact_info({"unexpected_key": "Ram Bahadur, 9841234567"})
+
+    assert "unexpected_key" in str(exc.value)
+    assert "Ram Bahadur" not in str(exc.value)
+    assert "9841234567" not in str(exc.value)
 
 
 def test_extract_contact_info_returns_the_empty_sentinel_when_the_body_is_malformed(client):
@@ -457,10 +479,11 @@ def test_transcribe_raises_runtime_error_without_a_client(no_client, tmp_path):
         llm.transcribe_audio_file(str(audio), "ne")
 
 
-def test_extract_contact_info_raises_unbound_local_error_without_a_client(no_client):
-    """⚠ D-27 again: the guard raises `ValueError`, and the handler turns it into this."""
-    with pytest.raises(UnboundLocalError):
-        llm.extract_contact_info({"complainant_phone": "9841234567"})
+def test_extract_contact_info_returns_the_sentinel_without_a_client(no_client):
+    """D-28 again: the guard raises, and the handler now turns it into the declared sentinel."""
+    assert llm.extract_contact_info(
+        {"complainant_phone": "9841234567"}
+    ) == {"complainant_phone": ""}
 
 
 def test_extract_all_contact_info_returns_the_sentinel_without_a_client(no_client):
@@ -579,3 +602,39 @@ def test_detect_sensitive_content_coerces_a_non_string_message(client):
 
     assert result["message"] == "42"
     assert result["level"] == "medium"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-14-c — the ASR request is one the installed SDK actually accepts
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_transcribe_request_binds_against_the_real_openai_signature(client, tmp_path):
+    """
+    ⚠ **The regression test for DPG-14.3, and the one that would have caught it.**
+
+    Before the fix the call passed `language_code=…`. `Transcriptions.create` declares its
+    parameters explicitly and takes no `**kwargs`, so **every transcription raised `TypeError`**,
+    was logged, and re-raised — voice-note transcription had never worked on this path. Nothing
+    noticed, because nothing tested it and (Q-13.2) voice is not live: there is no budget for
+    transcription, so no field evidence exists or can exist.
+
+    A mock accepts any keyword, which is exactly why a mock-only assertion is not enough here.
+    This test binds the request the code actually sends against the **installed SDK's signature**
+    — the check that distinguishes "we send the argument we meant to" from "we send an argument
+    the provider will take".
+
+    ⚠ What this does **not** prove: that transcription *works*. It proves the signature is
+    correct and unit-tested. DPG-22's missing Nepali WER baseline is the other half.
+    """
+    import inspect
+
+    from openai.resources.audio.transcriptions import Transcriptions
+
+    audio = tmp_path / "note.ogg"
+    audio.write_bytes(b"\x00\x01")
+    client.audio.transcriptions.create.return_value = SimpleNamespace(text="धुलो")
+
+    llm.transcribe_audio_file(str(audio), "ne")
+
+    sent = dict(client.audio.transcriptions.create.call_args.kwargs)
+    sent["file"] = b"<closed file handle>"  # the real one is closed by the `with` block
+    inspect.signature(Transcriptions.create).bind(object(), **sent)

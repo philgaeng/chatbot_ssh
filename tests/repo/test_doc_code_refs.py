@@ -95,12 +95,19 @@ KNOWN_ABSENT: dict[str, str] = {
 # updates becomes noise, and noise is what the CI-red finding (D-26) is about.
 ANCHORS: tuple[tuple[str, int, str], ...] = (
     # The nine model call sites — the indicator-4 inventory, cited in four documents.
+    # ⚠ Moved +14 by DPG-14 (2026-08-18), which restructured `extract_contact_info`. The citing
+    # documents were re-pointed in the same commit — that is the discipline this pin exists for,
+    # and editing these numbers *alone* is the failure it is meant to prevent:
+    #   grep -rn "LLM_services.py:" docs/ --include=*.md | grep -v /archive/
     ("backend/services/LLM_services.py", 47, "whisper-1"),
-    ("backend/services/LLM_services.py", 79, "gpt-3.5-turbo"),
-    ("backend/services/LLM_services.py", 116, "gpt-3.5-turbo"),
-    ("backend/services/LLM_services.py", 232, "gpt-5-nano"),
-    ("backend/services/LLM_services.py", 324, "gpt-4"),
-    ("backend/services/LLM_services.py", 385, "gpt-3.5-turbo"),
+    ("backend/services/LLM_services.py", 93, "gpt-3.5-turbo"),
+    ("backend/services/LLM_services.py", 130, "gpt-3.5-turbo"),
+    ("backend/services/LLM_services.py", 246, "gpt-5-nano"),
+    ("backend/services/LLM_services.py", 338, "gpt-4"),
+    ("backend/services/LLM_services.py", 399, "gpt-3.5-turbo"),
+    # DPG-14.3: the ASR call now passes `language=`, not `language_code=`. The SDK declares its
+    # parameters explicitly, so the old kwarg raised TypeError on every transcription.
+    ("backend/services/LLM_services.py", 51, "language=language_code"),
     ("ticketing/clients/llm_client.py", 90, "gpt-4"),
     ("ticketing/clients/llm_client.py", 141, "_MODEL_STANDARD"),
     ("ticketing/clients/llm_client.py", 142, "_MODEL_SEAH"),

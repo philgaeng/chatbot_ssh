@@ -167,9 +167,9 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-14-a** | Classification returns a populated result on a valid response, **and** the `status="error"` contract on an exception — so a model-name failure is distinguishable from an empty classification | Swallow the exception → red |
-| **T-14-b** | Only **one** client is constructed on the classification path (no shadow) | Re-introduce the inner `OpenAI(...)` → red |
-| **T-14-c** | ⚠ **Write only if DPG-14.3 is confirmed in-container.** The ASR call passes the SDK's real language parameter; a call with a language code reaches the client without raising `TypeError` | Rename the kwarg back to `language_code` → red |
+| **T-14-a** ✅ | Classification returns a populated result on a valid response, **and** the `status="error"` contract on an exception — so a model-name failure is distinguishable from an empty classification. Covered by DPG-10's pair (`…returns_the_four_documented_keys` / `…returns_a_status_error_dict_when_the_call_fails`) | ✅ Covered — the error-dict test asserts on `status` and the exception text, so swallowing the exception is red |
+| **T-14-b** ⏳ **DPG-11** | Only **one** client is constructed on the classification path (no shadow). Cannot be written before the factory exists — today's code builds two by design, and DPG-10 pins that it does (`test_classify_ignores_the_module_client_entirely`) | Re-introduce the inner `OpenAI(...)` → red |
+| **T-14-c** ✅ | ⚠ **Confirmed in-container** (`openai==1.70.0`: `['self','file','model','include','language',…]`, no `**kwargs`) and written. The test binds the request the code actually sends against the **installed SDK signature** — a mock accepts any keyword, so a mock-only assertion could not catch this | ✅ **Checked** — renamed the kwarg back to `language_code` → red (2 tests) |
 
 ### DPG-15 — degraded mode
 

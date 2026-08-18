@@ -64,6 +64,17 @@ Behavior:
 
 ## 3) Processing Pipeline
 
+> ⚠ **Transcription reconciled with the code, 2026-08-18 (DPG-14.3).** Step 2 below describes a step
+> that **raised `TypeError` on every invocation** until that date: `transcribe_audio_file` passed
+> `language_code=…` to the OpenAI SDK, whose parameter is `language` and which accepts no `**kwargs`.
+> The failure was logged and re-raised, so it was absorbed by the task layer and looked like an
+> ordinary transcription failure. Verified against the pinned `openai==1.70.0` in-container.
+>
+> The signature is now correct and unit-tested (`tests/backend/test_llm_services.py`). **That is not
+> the same as "transcription works":** voice is not live for lack of an LLM budget (Q-13.2), so there
+> is no field evidence and no Nepali WER baseline — DPG-22 owns that. Read step 2 as
+> `⚠ Not verified end-to-end`.
+
 Typical voice path:
 
 1. save recording metadata

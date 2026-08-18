@@ -45,7 +45,10 @@ def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_
             response = client.audio.transcriptions.create(
                 file=audio_data,
                 model="whisper-1",
-                language_code=language_code
+                # DPG-14.3: the SDK parameter is `language`, not `language_code`, and
+                # `Transcriptions.create` declares its parameters explicitly — no **kwargs.
+                # Every call on this path raised TypeError before this line was corrected.
+                language=language_code
             )
         return response.text
     except Exception as e:
@@ -54,18 +57,29 @@ def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_
     
 def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
+    # DPG-14 / D-28: `field_name` and `response` are resolved BEFORE the try, because the
+    # handler below reads both. Previously `field_name` came from a list index and `response`
+    # was bound only after the API call, so every pre-call failure — no client, a provider
+    # error, an empty field value — raised UnboundLocalError from inside the `except` instead
+    # of the documented `{field_name: ""}`. The declared contract was unreachable.
+    # The caller (registered_tasks.extract_contact_info_task) checks every returned key against
+    # USER_FIELDS, so the sentinel has to carry the real field name.
+    field_name = next((i for i in contact_data.keys() if i in USER_FIELDS), None)
+    if not field_name:
+        # No contact field to extract: a caller error, not a model failure. Raise the field
+        # NAMES, never the values — this message reaches the Celery error log (T-34-b).
+        raise ValueError(
+            f"No valid contact field in contact_data; keys={sorted(contact_data.keys())}"
+        )
+    response = None
     try:
         # Use OpenAI to extract structured information
         if not client:
             raise ValueError("OpenAI client not available for contact info extraction")
-            
-        # Get the first key-value pair from contact_data
-        field_name = [i for i in contact_data.keys() if i in USER_FIELDS][0]
-        if not field_name:
-            raise ValueError(f"Missing valid field_name in contact_data: {contact_data}")
+
         field_value = contact_data.get(field_name)
         if not field_value:
-            raise ValueError(f"Missing {field_name} in contact_data: {contact_data}")
+            raise ValueError(f"Missing value for {field_name} in contact_data")
         
         message_input = f"""
             Extract the {field_name.replace("_", " ")} from {field_value}.

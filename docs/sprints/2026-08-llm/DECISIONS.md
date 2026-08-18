@@ -320,7 +320,7 @@ a compliance obstacle into a submission asset.
 
 Two facts only you have:
 
-1. `gpt-5-nano` (`LLM_services.py:230`) is the model on grievance classification — the product's most
+1. `gpt-5-nano` (`LLM_services.py:244`) is the model on grievance classification — the product's most
    quality-sensitive AI path. A nano-class model there is a real decision with real consequences, and it
    is undocumented. Deliberate cost choice, or drift? 
 2. `transcribe_audio_file` passes `language_code=` where the SDK takes `language=` (`:46`). If the SDK
