@@ -52,7 +52,7 @@ recovered by parsing each requirements file — not by image, which cannot disti
 |---|---|---|---|---|
 | Python — declared (both manifests) | 35 | 0 | 0 | 2 |
 | Python — transitive | 98 | 0 | 0 | 4 |
-| npm — production tree | 16 | 0 | 0 | 3 |
+| npm — production tree | 16 | 0 | 0 | 2 + 1 tool artefact |
 | Container images | 4 | 0 | 0 | 1 |
 | **Total** | **153** | **0** | **0** | **10** |
 
@@ -73,7 +73,7 @@ so a reviewer does not have to rediscover it.
 | `tqdm` | MPL-2.0 AND MIT | **Keep.** Same reasoning; the MPL portion is unmodified. |
 | `email-validator` | The Unlicense | **Keep.** Public-domain dedication, OSI-approved. ⚠ Not to be confused with npm's `UNLICENSED`, which means *no licence declared* — the opposite. |
 | `@img/sharp-libvips-linux-x64` · `-linuxmusl-x64` | LGPL-3.0-or-later | **Keep.** Prebuilt libvips binaries pulled in by `sharp`, which Next.js uses for image optimisation. Shipped unmodified as separate shared objects and dynamically loaded — the LGPL-compliant pattern. ⚠ Also absent from the hand-written inventory: `sharp` is nobody's declared dependency, it is a Next.js transitive. |
-| `ticketing-ui@0.1.0` | ~~UNLICENSED~~ → **Apache-2.0** | ✅ **Fixed in this ticket.** Our own package manifest declared no licence, so the tooling reported `UNLICENSED` — directly contradicting the Apache-2.0 `LICENSE` that DPG-01 had just added at the repo root. `channels/ticketing-ui/package.json` and `channels/REST_webchat/package.json` now both declare `"license": "Apache-2.0"`. **A DPG reviewer running `license-checker` would have found this before we did.** |
+| `ticketing-ui@0.1.0` | reported `UNLICENSED` | **Explained, and partly fixed — but the row will not change.** Our own manifest declared no licence at all, contradicting the Apache-2.0 `LICENSE` DPG-01 had just added; `channels/ticketing-ui/package.json` and `channels/REST_webchat/package.json` now both declare `"license": "Apache-2.0"`. ⚠ **`license-checker` still reports `UNLICENSED`, and always will:** it hard-codes that value for any package with `"private": true` and ignores the `license` field entirely. Verified after rebuilding the image — the record it emits is `{"licenses": "UNLICENSED", "private": true}`. So this row is a **tool artefact for an unpublished package, not a finding**: our own code's licence is `LICENSE` + the per-file SPDX headers, and the manifest now states it too for anyone reading the file. |
 | `redis:8.10` | RSALv2 / SSPLv1 / **AGPLv3** (tri-licensed) | **Keep, elected under AGPLv3** — the one OSI-approved option of the three. Runs as an unmodified upstream image behind a network boundary; no Redis source is conveyed, so AGPLv3 imposes nothing on this repository or a downstream fork. Consultant Q7(a) asks whether AGPL anywhere in the stack is a problem for ADB/DOR procurement; Valkey (BSD-3-Clause) is the costed fallback. |
 
 ## Open decision #3 — the Rasa licence question, closed
@@ -292,12 +292,17 @@ library, state-management library, charting library or analytics SDK.
 | `semver@7.7.4` | ISC |
 | `sharp@0.34.5` | Apache-2.0 |
 | `styled-jsx@5.1.6` | MIT |
-| **`ticketing-ui@0.1.0`** | **UNLICENSED** ⚠ *scan output, pre-fix* |
+| **`ticketing-ui@0.1.0`** | **UNLICENSED** ⚠ *our own package — see below* |
 
-⚠ **That last row is the scan as it ran, and it is why the scan was worth running.** The source
-manifest has since been corrected — `channels/ticketing-ui/package.json` and
-`channels/REST_webchat/package.json` now declare `"license": "Apache-2.0"` — but the `grm_ui`
-container still carries the package.json baked in at image build, so **this row will not change
-until the image is rebuilt**. Re-run the npm scan after the next `docker compose build grm_ui` and
-the row should read `Apache-2.0`. Recorded as-scanned rather than hand-corrected, because a
-generated report that quietly disagrees with the command that produced it is not evidence.
+⚠ **That last row is our own application, and it does not mean what it appears to mean.**
+`license-checker` emits `UNLICENSED` for any package marked `"private": true` **regardless of the
+`license` field** — the record is literally `{"licenses": "UNLICENSED", "private": true}`.
+
+The scan was still worth running, because the manifest genuinely declared no licence at the time:
+that has been fixed (`"license": "Apache-2.0"` in both npm manifests), and the fix is right on its
+own merits even though it does not move this row.
+
+**The prediction this file originally carried — that a rebuild would flip the row to `Apache-2.0` —
+was wrong, and was corrected after actually rebuilding `grm_ui` and re-running the scan.** Recorded
+here rather than quietly edited, because the point of a generated report is that it says what the
+command said.
