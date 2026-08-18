@@ -4,8 +4,14 @@
 > Sprint index: [`README.md`](README.md) · Test ledger: [`TESTS.md`](TESTS.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 > Status legend: ⬜ not started · 🟡 in progress · ✅ done · ⏸ blocked · ❌ dropped (log why)
 
-**Sprint status: 🟡 IN PROGRESS — Sprint 0 complete, Sprint 1 started** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
+**Sprint status: 🟡 IN PROGRESS — Sprints 0 and 1 complete** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
 
+> **Sprint 1 closed 2026-08-18.** All eight tickets ✅ on `dpg/sprint1-llm-agnostic`, eight commits,
+> DPG-10's net green at every one of them. See §Sprint 1 — definition of done below for what is
+> genuinely finished and the three things that are not. **Sprint 2 (`dpg/sprint2-open-models`) is
+> unblocked and starts at DPG-20**, which is free; DPG-22/23/24 spend inference and Q-19 (there is no
+> LLM budget) still gates them.
+>
 > **Sprint 0 closed 2026-08-18.** DPG-01, 02, 04, 05 and 06 are ✅ on `dpg/sprint0-licensing`.
 > **DPG-03 cannot be closed here** — it is a written determination from ADB's Office of the General
 > Counsel and nobody working on this repository can produce it. See its row and §DPG-03 below for the
@@ -315,6 +321,49 @@ one-line config fix awaiting the ops owner; the ⏸ row waits on someone else. O
 and D-02's qualification) — worth stating plainly rather than burying, because the rate at which a
 process catches itself is the only evidence that it does. **D-24 and D-26 were both found by doing the
 thing rather than reasoning about it**: pushing the branch and reading the result
+
+---
+
+## Sprint 1 — definition of done
+
+Against [`02-llm-agnostic-spec.md`](02-llm-agnostic-spec.md) §Sprint 1 acceptance criteria. Ticked
+means verified, not intended.
+
+- [x] **One config file.** Every model name, endpoint, timeout, retry count and capability flag is
+      declared exactly once, in `backend/config/llm_config.py`; both surfaces read it and neither
+      restates it — pinned by an AST parse, not a grep (T-17-c)
+- [x] **No `OpenAI(` outside the two factories** (T-11-d)
+- [x] **No hard-coded model name anywhere**, and a test enforces it — including the two forms
+      `grep "gpt-"` could not see: a reach into another module's privates, and an OpenAPI
+      endpoint description
+- [x] **One `LLM_BASE_URL` change moves both surfaces — proven by test** (T-17-d), not by inspection
+- [x] `.env.example`, `.env.open`, `.env.openai` present, documented, secret-free, and pinned against
+      the registry in both directions
+- [x] **All seven structured calls carry a schema *where the model supports one*, with Pydantic
+      validation and a configured degradation ladder.** ⚠ Stated precisely because the spec's version
+      — "all seven use `json_schema`" — is not achievable against today's models and would 400:
+      `gpt-3.5-turbo` rejects schemas and `gpt-4` rejects JSON mode entirely (**D-31**, measured)
+- [x] **Intake survives a dead endpoint, as an automated test** — and driving it for real found two
+      faults the test alone would not have (D-32, D-33)
+- [ ] **The full suite passes against both configurations.** ⏸ The second configuration is DPG-21
+      (Sprint 2). Everything here runs against mocks plus the current provider
+- [x] `docs/services/06_llm_service.md` and `docs/deployment/11_llm_pipeline_policy.md` reconciled
+      with the code — the second one had documented the wrong model for note translation since the
+      pipeline was written
+- [x] Every deferral logged in `followups/` **and** `TODO.md`, same commit — D-29, D-30, D-34, D-36
+- [x] **No increase in the failure baseline**, measured locally in-container at every commit:
+      16 failed / 1170 passed → 16 failed / 1316 passed. ⚠ **Not yet confirmed in CI** — this branch
+      has not been pushed, and D-26's lesson is that a local green is not a CI green
+- [x] Every new `.py` file carries an SPDX header (590/590)
+- [x] `privacy-assessment.md` legs L4 and L5 re-pointed — **three times**, as the call sites moved
+      under them — and `dependency-licenses.md` reconciled with the `pydantic-settings` move
+
+**What the sprint changed that nobody planned for.** Six of the eight tickets found something the
+spec did not know: a second `UnboundLocalError` (D-29), classification latency brushing the poll
+deadline (D-30), the capability flag on the wrong object (D-31), a failure stored as a success
+(D-32), a phone number erased by an outage (D-33), and three terminal states nothing reaches
+(D-34/35/36). Five of those six came from **running** something — a live call, a dead port, a real
+database — rather than from reading code. That is the transferable lesson for Sprints 2 and 3.
 
 ---
 

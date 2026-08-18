@@ -1101,6 +1101,13 @@ never seen the repo.
 
 ## Sprint 1 acceptance criteria
 
+> ✅ **Closed 2026-08-18** — eight commits on `dpg/sprint1-llm-agnostic`. The ticked state, with the
+> three exceptions spelled out, is in [`PROGRESS.md` §Sprint 1 — definition of done](PROGRESS.md).
+> One criterion below is **restated there**: "all seven structured calls use `json_schema`" is not
+> achievable against today's models — `gpt-3.5-turbo` rejects schemas and `gpt-4` rejects JSON mode
+> outright (measured, D-31). What shipped is the strongest format each model supports, plus the
+> ladder that lifts them all when the models change.
+
 The guide's list, corrected for the two-surface reality and made checkable:
 
 - [ ] **One config file.** Every model name, endpoint, timeout, retry count and capability flag is declared
