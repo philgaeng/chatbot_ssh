@@ -15,6 +15,11 @@ __pycache__/
 # secrets live in `env.local` / `.env.local` (never committed). Do not re-add the old
 # per-area templates (env.grm.example; channels/ticketing-ui/.env.local is covered by
 # that package's own .gitignore).
+# ⚠ Two deliberate additions, DPG-16 (2026-08-18): `.env.open` and `.env.openai` are tracked,
+# secret-free templates showing the SAME system pointed at two providers. They are not per-area
+# templates — they are the artefact a DPG reviewer diffs to see that switching provider is an
+# environment change (indicator 4). A test asserts both carry no key and declare identical
+# variables. `.env` (exact match, above) does not cover them; that was checked, not assumed.
 create_env.sh
 env.local
 env.local.example

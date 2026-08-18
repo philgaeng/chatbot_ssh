@@ -29,6 +29,8 @@ import ast
 import re
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LLM_CONFIG = REPO_ROOT / "backend" / "config" / "llm_config.py"
 
@@ -235,3 +237,89 @@ def test_the_seah_model_ternary_exists_in_exactly_one_place():
         "The SEAH model choice is findings_task(is_seah) in backend/config/llm_config.py, and "
         "nothing else. Found:\n  " + "\n  ".join(offenders)
     )
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-16-a — `.env.example` and the registry agree, in both directions
+# ═════════════════════════════════════════════════════════════════════════════
+
+ENV_EXAMPLE = REPO_ROOT / ".env.example"
+ENV_TEMPLATES = (REPO_ROOT / ".env.open", REPO_ROOT / ".env.openai")
+LLM_PREFIXES = ("LLM_", "ASR_", "MODEL_", "TIMEOUT_", "STRUCTURED_")
+
+
+def _declared_names(path: Path) -> set[str]:
+    """Assignments in an env file, ignoring comments and blanks."""
+    names = set()
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        names.add(line.split("=", 1)[0].strip())
+    return names
+
+
+def test_env_example_documents_every_variable_the_registry_reads():
+    """
+    **T-16-a, first direction.** The configuration surface *is* the indicator-4 evidence: it has
+    to be legible to a reviewer who has never seen this repository. A variable the code reads and
+    the template does not mention is invisible to that reader.
+    """
+    from backend.config import llm_config
+
+    documented = _declared_names(ENV_EXAMPLE)
+    missing = sorted(set(llm_config.declared_env_vars()) - documented)
+
+    assert not missing, (
+        f".env.example does not document {missing}. It is generated from "
+        "llm_config.declared_env_vars() — read the registry, do not hand-maintain the list."
+    )
+
+
+def test_env_example_declares_nothing_the_registry_stopped_reading():
+    """
+    **T-16-a, second direction — the one that catches rot.** A stale variable is worse than a
+    missing one: it reads as configuration, someone sets it, and nothing happens. Deprecated
+    aliases are exempt because they are still honoured, and documented as legacy.
+    """
+    from backend.config import llm_config
+
+    known = set(llm_config.declared_env_vars()) | set(llm_config.deprecated_env_vars())
+    documented_llm = {
+        name for name in _declared_names(ENV_EXAMPLE) if name.startswith(LLM_PREFIXES)
+    }
+    stale = sorted(documented_llm - known)
+
+    assert not stale, f".env.example declares {stale}, which nothing in the registry reads."
+
+
+@pytest.mark.parametrize("template", ENV_TEMPLATES, ids=lambda p: p.name)
+def test_the_two_configurations_differ_only_in_values(template):
+    """
+    `.env.open` and `.env.openai` are the artefact a DPG reviewer diffs. If they declare
+    different *variables*, the diff stops showing "same system, different provider" and starts
+    showing two systems.
+    """
+    assert template.exists(), f"{template.name} is the reviewer-facing evidence — it must exist"
+    open_names = _declared_names(ENV_TEMPLATES[0])
+    openai_names = _declared_names(ENV_TEMPLATES[1])
+    assert open_names == openai_names, (
+        "the two configurations must declare the same variables: "
+        f"{sorted(open_names ^ openai_names)}"
+    )
+
+
+@pytest.mark.parametrize("template", ENV_TEMPLATES, ids=lambda p: p.name)
+def test_the_committed_templates_carry_no_secret(template):
+    """
+    ⚠ These files are tracked. `env.local` holds a live key, and the whole sprint is one careless
+    copy-paste away from committing it. Anything that looks like a key must be empty.
+    """
+    secretish = {"LLM_API_KEY", "ASR_API_KEY", "OPENAI_API_KEY", "HF_TOKEN"}
+    for line in template.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, _, value = line.partition("=")
+        if name.strip() in secretish:
+            assert value.strip() == "", f"{template.name} carries a value for {name.strip()}"
+        assert not value.strip().startswith(("sk-", "hf_")), f"{template.name}: {name} looks like a key"

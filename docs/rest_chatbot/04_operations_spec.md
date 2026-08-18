@@ -55,6 +55,26 @@ Messaging and integration auth:
 - `TICKETING_SECRET_KEY`
 - ticketing dispatch endpoint settings in `ticketing_dispatch.py` (`TICKETING_API_URL`)
 
+LLM provider, models and deadlines (DPG-16/DPG-17):
+
+- `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES`, `LLM_STRUCTURED_OUTPUT`
+- `ASR_BASE_URL`, `ASR_API_KEY`, `ASR_TIMEOUT` — transcription runs on its own endpoint and its own
+  (much longer) deadline
+- `MODEL_CLASSIFY`, `MODEL_EXTRACT`, `MODEL_TRANSLATE`, `MODEL_DETECT`, `MODEL_ASR`
+- `TIMEOUT_CLASSIFY`, and the per-task `STRUCTURED_*` capability flags
+- deprecated but honoured, with one warning each: `OPENAI_API_KEY`, `OPENAI_CLASSIFICATION_TIMEOUT`
+
+> **All of them are declared in one place** — [`backend/config/llm_config.py`](../../backend/config/llm_config.py),
+> which the ticketing surface reads too. This list is a pointer for the operator, not a second
+> source: `.env.example` is generated from that registry and pinned against it in CI, so a variable
+> added to the code and not documented there fails the build. The two ready-made configurations are
+> `.env.openai` and `.env.open`; how to switch is
+> [`docs/dpg/open-model-configuration.md`](../dpg/open-model-configuration.md).
+>
+> ⚠ An empty `LLM_API_KEY` means **no client is built at all**. That is deliberate: every call site
+> then takes its own documented fallback (raise, sentinel dict, or fail-open on the SEAH path)
+> instead of a client that 401s on every request, which on a Celery worker reads as an outage.
+
 ## 5) Observability and Debugging
 
 Recommended checks:

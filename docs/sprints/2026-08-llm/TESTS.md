@@ -183,7 +183,7 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-16-a** | Every name in DPG-17's `declared_env_vars()` appears in `.env.example`, and `.env.example` declares nothing the registry does not read — compared programmatically, not eyeballed | Add a new env read without documenting it, **or** leave a stale variable in `.env.example` → red |
+| **T-16-a** ✅ | Every name in DPG-17's `declared_env_vars()` appears in `.env.example`, and `.env.example` declares nothing the registry does not read — compared programmatically, not eyeballed. **Plus two the ledger did not ask for**: `.env.open` and `.env.openai` declare **identical variables** (differ only in values, or the reviewer's diff stops meaning what it claims), and neither carries a secret — these files are *tracked*, and `env.local` holds a live key | ✅ **Checked** — added an undocumented read → red; left a stale variable in the template → red; pasted `hf_…` into `.env.open` → red |
 
 ---
 
