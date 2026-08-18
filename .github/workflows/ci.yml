@@ -18,6 +18,15 @@ on:
       - main
       - "integration/**"
       - "dev/**"
+      # `dpg/**` added 2026-08-18. DPG-01 wired tests/repo into the pytest step below —
+      # the SPDX walker and the licence-classifier pins, whose whole purpose is to fail
+      # when a commit breaks a compliance claim. But the DPG sprint works off `dpg/sprint*`
+      # branches, which matched none of the patterns above, so those pins ran on nobody's
+      # machine but the author's for nine commits. Same defect as the 27 test files CI never
+      # collected (docs/sprints/2026-08-llm/followups/ci-untested-root-test-files.md): a gate
+      # that does not run is decoration. Adding the sprint's own branch prefix is the fix;
+      # the general lesson is that wiring a test into CI is two edits, not one.
+      - "dpg/**"
 
 jobs:
   backend-tests:
