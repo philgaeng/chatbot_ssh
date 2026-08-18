@@ -36,7 +36,13 @@ from functools import lru_cache
 
 from openai import OpenAI
 
-from backend.config.llm_config import Endpoint, asr_endpoint, llm_endpoint
+from backend.config.llm_config import (
+    Endpoint,
+    asr_endpoint,
+    llm_endpoint,
+    parse_response,
+    request_for,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +75,42 @@ def get_llm_client() -> OpenAI:
 def get_asr_client() -> OpenAI:
     """The audio/transcriptions client — separate endpoint, separate deadline."""
     return _build(asr_endpoint(), "ASR")
+
+
+def call_llm(
+    task: str,
+    messages: list[dict],
+    *,
+    schema: type | None = None,
+    schema_name: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+):
+    """
+    One entry point for the chatbot surface: the layer picks the model and shapes the request.
+
+    The call site brings a prompt and, if it wants structure, a Pydantic model. Everything else —
+    which model, which deadline, whether this model accepts `temperature`, what its token-cap
+    parameter is called, how to ask for JSON and how to read it back — comes from
+    `backend/config/llm_config.py`, because all of it varies by provider and none of it varies by
+    call site.
+
+    Raises `LLMTruncatedError` / `LLMParseError` rather than returning something empty that a
+    caller could mistake for an empty answer.
+    """
+    # ⚠ Chat completions only. ASR is a different API surface (`audio.transcriptions.create`,
+    # multipart, no messages), so `transcribe_audio_file` keeps its own three lines and resolves
+    # its model through the same registry. Pretending one function covers both would mean a
+    # `messages` parameter that is meaningless for half its callers.
+    request = request_for(
+        task,
+        messages,
+        schema=schema.model_json_schema() if schema is not None else None,
+        schema_name=schema_name,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+    )
+    return parse_response(get_llm_client().chat.completions.create(**request), schema)
 
 
 def reset_clients() -> None:

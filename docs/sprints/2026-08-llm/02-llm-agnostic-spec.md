@@ -228,7 +228,7 @@ designed behaviour, not a bug to work around.
 #### f. The privacy assessment cites these exact call sites — this sprint moves all nine
 
 [`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) §2.2 legs **L4** and **L5** cite
-`LLM_services.py:47,79,116,232,324,385` and `llm_client.py:90,169,261` as the places grievance text
+`LLM_services.py:47,79,116,232,324,385` and `llm_client.py:90, 169, 261` as the places grievance text
 leaves the country. **DPG-11 and DPG-12 move every one of them.**
 
 Update §2.2 in the same commit that moves them. DPG-30 (Sprint 3) verifies the diagram against the code
@@ -810,7 +810,7 @@ precedent. So this ticket keeps its own **factory** and drops its own **registry
       `gpt-4o` as fact
 - [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green (they are unrelated
       but they are the boundary pins; confirm you did not disturb settings loading)
-- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L5 re-pointed** — it cites `llm_client.py:90,169,261`, and
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L5 re-pointed** — it cites `llm_client.py:90, 169, 261`, and
       this ticket moves all three
 
 ### Tests

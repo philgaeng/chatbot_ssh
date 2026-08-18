@@ -9,9 +9,8 @@ from backend.config.llm_config import (
     get_llm_settings,
     is_too_short_to_process,
     model_for,
-    response_format_kwargs,
 )
-from backend.services.llm_client import get_asr_client, get_llm_client
+from backend.services.llm_client import call_llm, get_asr_client, get_llm_client
 from backend.services.llm_schemas import (
     ContactExtractionAll,
     GrievanceClassification,
@@ -116,13 +115,10 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
             f"No valid contact field in contact_data; keys={sorted(contact_data.keys())}"
         )
     response = None
-    task = model_for("extract")
     try:
-        # Use the configured LLM endpoint to extract structured information
-        client = _llm_client()
-        if not client:
-            raise ValueError("OpenAI client not available for contact info extraction")
-
+        # ⚠ No client is built here any more: `call_llm` constructs it, and the factory refuses to
+        # build one without a key — so an unkeyed deployment still lands on the documented
+        # `{field_name: ""}` sentinel below, by the same route as a provider outage.
         field_value = contact_data.get(field_name)
         if not field_value:
             raise ValueError(f"Missing value for {field_name} in contact_data")
@@ -135,27 +131,19 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
             }}
         """
         
-        response = client.chat.completions.create(
-            model=task.model,
-            timeout=task.timeout,
-            **response_format_kwargs(
-                "contact_extraction",
-                single_field_contact_schema(field_name).model_json_schema(),
-                task.structured_output,
-            ),
-            messages=[
-                {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
-                {"role": "user", "content": message_input}
-            ],
-        )
-        
-        full_response = response.choices[0].message.content
-        # Validated through the per-call schema: the caller checks every returned key against
+        # Validated through a per-call schema: the caller checks every returned key against
         # USER_FIELDS and raises on a stray one, so dropping keys the schema does not declare is
-        # the difference between a task that succeeds and a task that fails on the model's
-        # enthusiasm.
-        parsed = json.loads(full_response)
-        return single_field_contact_schema(field_name).model_validate(parsed).model_dump()
+        # the difference between a task that succeeds and one that fails on the model's enthusiasm.
+        response = call_llm(
+            "extract",
+            [
+                {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
+                {"role": "user", "content": message_input},
+            ],
+            schema=single_field_contact_schema(field_name),
+            schema_name="contact_extraction",
+        )
+        return response.model_dump()
         
     except Exception as e:
         if not response:
@@ -176,21 +164,11 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
     ⏸ **PARKED — the voice-notes flow** (DPG-19b), and the more thoroughly parked of the pair:
     this one has no reference anywhere outside its own module and tests.
     """
-    task = model_for("extract")
     try:
-        # Use the configured LLM endpoint to extract structured information
-        client = _llm_client()
-        if not client:
-            raise ValueError("OpenAI client not available for contact info extraction")
-
-        response = client.chat.completions.create(
-            model=task.model,
-            timeout=task.timeout,
-            **response_format_kwargs(
-                "contact_extraction_all",
-                ContactExtractionAll.model_json_schema(),
-                task.structured_output,
-            ),
+        response = call_llm(
+            "extract",
+            schema=ContactExtractionAll,
+            schema_name="contact_extraction_all",
             messages=[
                 {"role": "system", "content": "Extract the person's contact and location information in the language of the text."},
                 {"role": "user", "content": f"""
@@ -211,9 +189,7 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
                     """}
             ],
         )
-
-        result = parse_llm_response("contact_response", response.choices[0].message.content)
-        return ContactExtractionAll.model_validate(result).model_dump()
+        return response.model_dump()
         
             
     except Exception as e:
@@ -296,13 +272,13 @@ def classify_and_summarize_grievance(
         # now, shared with every other call site; the classification deadline survives as a
         # per-request timeout from the registry (TIMEOUT_CLASSIFY, default 120s, with
         # OPENAI_CLASSIFICATION_TIMEOUT honoured as a deprecated alias).
-        task = model_for("classify")
-        client = _llm_client()
-        if not client:
-            raise ValueError("OpenAI client initialization failed")
-
-        # Make API call
-        response = client.chat.completions.create(
+        # DPG-14.2 removed a second client built here, shadowing the module one behind a guard that
+        # could never fire. DPG-18 removes the request construction too: model, deadline and
+        # structured-output rung all come from the registry.
+        validated = call_llm(
+            "classify",
+            schema=GrievanceClassification,
+            schema_name="grievance_classification",
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. You will be given a grievance text and you will need to categorize it into one or more categories as provided to you. You will also need to summarize the grievance text."},
                 {"role": "user", "content": f"""
@@ -328,20 +304,9 @@ def classify_and_summarize_grievance(
                     Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
                 """}
             ],
-            model=task.model,
-            timeout=task.timeout,
-            **response_format_kwargs(
-                "grievance_classification",
-                GrievanceClassification.model_json_schema(),
-                task.structured_output,
-            ),
         )
 
-        # Parse, then validate through the schema (DPG-13). Validation is what makes a
-        # schema-violating reply — `grievance_categories` as a string, say — a failure the caller
-        # can see, rather than a dict that looks fine until something downstream iterates it.
-        raw = response.choices[0].message.content.strip()
-        if raw == "{}":
+        if not (validated.grievance_summary or validated.grievance_categories):
             # The model looked at text long enough to summarise and said "not enough information".
             # ⚠ That is an ANSWER, not an error: `parse_llm_response` turns it into the localized
             # fallback and no `status` key is set, so `is_failed_classification()` stays False.
@@ -353,8 +318,10 @@ def classify_and_summarize_grievance(
                 len((grievance_text or "").strip()),
                 get_llm_settings().min_classify_chars,
             )
-        result = parse_llm_response("grievance_response", raw, language_code)
-        validated = GrievanceClassification.model_validate(result)
+            # The localized fallback still comes from `parse_llm_response`'s language table — the
+            # one place the four translations live, and exactly what its `"{}"` branch was for.
+            return parse_llm_response("grievance_response", "{}", language_code)
+
         _warn_about_unlisted_categories(validated.grievance_categories, category_list)
         return validated.model_dump()
 
@@ -505,7 +472,10 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
     if not grievance_summary:
         raise Warning("grievance_summary is missing")
     try:
-        response = client.chat.completions.create(
+        translated = call_llm(
+            "translate",
+            schema=GrievanceTranslation,
+            schema_name="grievance_translation",
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to translate grievances to English from {input_data['language_code']}. The grievance is related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {input_data['complainant_district']} in the province of {input_data['complainant_province']}."},
                 {"role": "user", "content": f"""
@@ -523,28 +493,11 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
                     }}
                 """}
             ],
-            model=task.model,
-            timeout=task.timeout,
-            **response_format_kwargs(
-                "grievance_translation",
-                GrievanceTranslation.model_json_schema(),
-                task.structured_output,
-            ),
         )
-        if not response:
-            raise ValueError("No response from OpenAI API")
-        
-        if response.choices[0].message.content == "{}":
-            raise ValueError("Missing information, response from OpenAI is empty or invalid, check input data: {input_data}")
-        
-        # Parse the response
-        try:
-            parsed = json.loads(response.choices[0].message.content.strip())
-            result = GrievanceTranslation.model_validate(parsed).model_dump()
-        except Exception as e:
-            raise ValueError(
-                f"Error parsing the translation reply for {_grievance_ref(input_data)}: {e}"
-            )
+        if not (translated.grievance_description_en or translated.grievance_summary_en):
+            raise ValueError(f"Empty translation for {_grievance_ref(input_data)}")
+
+        result = translated.model_dump()
         result["grievance_id"] = input_data["grievance_id"]
         result["source_language"] = input_data["language_code"]
         result["translation_method"] = "LLM"
@@ -579,7 +532,10 @@ def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAG
             language_code,
             text_len_for_log("input", text),
         )
-        response = client.chat.completions.create(
+        detection = call_llm(
+            "detect",
+            schema=SensitiveContentDetection,
+            schema_name="sensitive_content_detection",
             messages=[
                 {
                     "role": "system",
@@ -594,28 +550,13 @@ Text: "{text[:2000]}"
 Respond with a JSON object only: {{"detected": true or false, "level": "high" or "medium" or "low", "message": "short excerpt of the relevant part of the text, or empty string if not detected"}}""",
                 },
             ],
-            model=detect.model,
-            timeout=detect.timeout,
-            **response_format_kwargs(
-                "sensitive_content_detection",
-                SensitiveContentDetection.model_json_schema(),
-                detect.structured_output,
-            ),
         )
-        raw = response.choices[0].message.content.strip()
-        out = json.loads(raw)
-        detected = bool(out.get("detected", False))
-        level = out.get("level", "low")
-        if level not in ("high", "medium", "low"):
-            level = "low"
-        message = out.get("message") or ""
-        if not isinstance(message, str):
-            message = str(message)[:200]
-        # Clamp first, validate second. The clamp stays even though the schema makes `level`
-        # structural, because the schema is only enforced on the rungs where the provider honours
-        # it — and this is the SEAH path, which does not get to depend on a provider's goodwill.
-        validated = SensitiveContentDetection(detected=detected, level=level, message=message)
-        detected, level, message = validated.detected, validated.level, validated.message
+        # ⚠ The clamps live in the schema now (DPG-13/DPG-18): `SensitiveContentDetection`
+        # NORMALISES an out-of-range level and a non-string message rather than rejecting the
+        # reply. On this path that distinction is the whole point — a model that answers
+        # `level: "critical"` has still told us it detected something, and rejecting the reply
+        # would fail open to `detected: False`, turning a bad label into a missed report.
+        detected, level, message = detection.detected, detection.level, detection.message
         logger.info(
             "detect_sensitive_content_llm: result | detected=%s, level=%s, %s",
             detected,

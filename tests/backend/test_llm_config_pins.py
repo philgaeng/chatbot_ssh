@@ -431,3 +431,41 @@ def test_the_parked_tasks_are_the_voice_flow_and_nothing_else():
     # product has stopped classifying grievances and somebody should have noticed.
     assert "classify_and_summarize_grievance_task" not in PARKED_TASKS
     assert "detect_sensitive_content_task" not in PARKED_TASKS
+
+def test_only_the_call_layer_constructs_a_chat_request():
+    """
+    **T-18-a.** After DPG-18 no call site builds a request: `call_llm` on each surface does, and
+    `request_for()` decides its shape. A call site that goes around it is how the four
+    provider-specific decisions (model, deadline, JSON mode, parameter names) start being made in
+    nine places again — which is the state this sprint began in.
+
+    ⚠ ASR is exempt and named: `audio.transcriptions.create` is a different API surface — multipart,
+    no `messages` — so `transcribe_audio_file` keeps its own three lines and resolves its model
+    through the same registry. Pretending one function covers both would mean a `messages`
+    parameter that is meaningless for half its callers.
+    """
+    allowed = {
+        "backend/services/llm_client.py",       # call_llm, chatbot surface
+        "ticketing/clients/llm_client.py",      # call_llm, ticketing surface
+    }
+    asr_exemption = ("backend/services/LLM_services.py", "audio")
+
+    offenders: list[str] = []
+    for tree_name in PINNED_TREES:
+        for path in _python_files(tree_name):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if rel in allowed:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call) or getattr(node.func, "attr", None) != "create":
+                    continue
+                source = ast.unparse(node.func)
+                if rel == asr_exemption[0] and asr_exemption[1] in source:
+                    continue
+                offenders.append(f"{rel}:{node.lineno} → {source}")
+
+    assert not offenders, (
+        "Chat requests are built by call_llm() and shaped by request_for(). Found: "
+        f"{offenders}"
+    )

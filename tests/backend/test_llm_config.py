@@ -18,7 +18,10 @@ Spec: docs/sprints/2026-08-llm/02-llm-agnostic-spec.md §DPG-17 · Ledger: TESTS
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
+from pydantic import BaseModel, Field
 
 from backend.config import llm_config
 
@@ -384,3 +387,133 @@ def test_declared_env_vars_covers_every_setting_the_registry_reads():
     # Deprecated names are honoured but never advertised as configuration.
     assert "OPENAI_API_KEY" not in declared
     assert "OPENAI_API_KEY" in llm_config.deprecated_env_vars()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-18-b … T-18-f — the call layer: shaping, profiles, and truncation
+# ═════════════════════════════════════════════════════════════════════════════
+
+class _Schema(BaseModel):
+    summary: str = ""
+    findings: list[str] = Field(default_factory=list)
+
+
+def _reply(content, finish_reason="stop"):
+    return SimpleNamespace(
+        choices=[SimpleNamespace(
+            finish_reason=finish_reason,
+            message=SimpleNamespace(content=content),
+        )]
+    )
+
+
+def test_the_prompt_rung_states_the_shape_in_words_generated_from_the_schema(monkeypatch):
+    """
+    **T-18-b.** When the model has no JSON mode at all — `gpt-4` answers 400 to both kinds — the
+    requirement has to travel in the prompt. Generating that paragraph from the same schema the
+    `json_schema` rung would send is what stops the two descriptions drifting apart, which is what
+    nine hand-written "return strict JSON" paragraphs had already done.
+    """
+    monkeypatch.setenv("MODEL_TRANSLATE", "gpt-4")
+    llm_config.get_llm_settings.cache_clear()
+
+    request = llm_config.request_for(
+        "translate",
+        [{"role": "system", "content": "You translate."}, {"role": "user", "content": "text"}],
+        schema=_Schema.model_json_schema(),
+    )
+
+    assert "response_format" not in request, "gpt-4 rejects both JSON modes — measured"
+    system = request["messages"][0]["content"]
+    assert "You translate." in system, "the call site's own prompt survives"
+    for field in ("summary", "findings"):
+        assert field in system, "every declared field must be named in the generated instruction"
+
+
+def test_the_prompt_rung_adds_a_system_message_when_there_is_none():
+    request = llm_config.request_for(
+        "translate", [{"role": "user", "content": "text"}], schema=_Schema.model_json_schema(),
+    )
+    assert request["messages"][0]["role"] == "system"
+
+
+@pytest.mark.parametrize(
+    "model,expects_temperature,cap_param,overhead",
+    [
+        ("gpt-5-nano", False, "max_completion_tokens", 4000),
+        ("gpt-4o-mini", True, "max_tokens", 0),
+        ("gpt-3.5-turbo", True, "max_tokens", 0),
+        ("openai/gpt-oss-120b:groq", True, "max_tokens", 0),   # unknown → conservative default
+    ],
+)
+def test_the_request_is_shaped_to_what_the_model_accepts(
+    model, expects_temperature, cap_param, overhead, monkeypatch
+):
+    """
+    ⭐ **T-18-e — the profile pin (D-40).** The call site asks for the same thing every time; the
+    layer decides what the model can be *told*. Each row below is a 400 or an empty reply on some
+    model this product already calls:
+
+    * `gpt-5-nano` rejects any `temperature` but its default, and rejects `max_tokens` by name;
+    * a cap sized for the visible output returns **empty content**, because reasoning spends it first.
+    """
+    monkeypatch.setenv("MODEL_CLASSIFY", model)
+    llm_config.get_llm_settings.cache_clear()
+
+    request = llm_config.request_for(
+        "classify",
+        [{"role": "user", "content": "x"}],
+        schema=_Schema.model_json_schema(),
+        temperature=0.0,
+        max_output_tokens=400,
+    )
+
+    assert ("temperature" in request) is expects_temperature
+    assert request[cap_param] == 400 + overhead
+    assert cap_param == "max_completion_tokens" or "max_completion_tokens" not in request
+
+
+def test_a_truncated_reply_is_a_failure_not_an_empty_answer():
+    """
+    ⭐ **T-18-f.** `finish_reason: "length"` arrives as HTTP 200 with empty content. Every parse
+    path in this repository used to read that as *the model had nothing to say* — and on the
+    resolved-case-summary path that means `generation_status = "llm_failed"`, which nothing
+    retries, so a complainant is told their case is closed and never receives the document.
+    """
+    with pytest.raises(llm_config.LLMTruncatedError):
+        llm_config.parse_response(_reply("", finish_reason="length"), _Schema)
+
+    # …and it is refused even when the truncated body happens to be parseable.
+    with pytest.raises(llm_config.LLMTruncatedError):
+        llm_config.parse_response(_reply('{"summary": "half a th', finish_reason="length"), _Schema)
+
+
+def test_parse_response_reads_what_providers_actually_send():
+    """**T-18-c.** A bare object, and the fenced form that models without JSON mode produce."""
+    assert llm_config.parse_response(_reply('{"summary": "ok"}'), _Schema).summary == "ok"
+    assert llm_config.parse_response(_reply('```json\n{"summary": "ok"}\n```'), _Schema).summary == "ok"
+    assert llm_config.parse_response(_reply("plain text"), None) == "plain text"
+
+
+def test_an_unparseable_reply_raises_and_carries_no_content():
+    """
+    ⚠ The error names the **shape** of the failure, never the reply. Pydantic's ValidationError
+    embeds `input_value=…` — model output derived from the grievance narrative — and this message
+    travels into a `status="error"` payload and the Celery log.
+    """
+    with pytest.raises(llm_config.LLMParseError) as exc:
+        llm_config.parse_response(_reply('{"summary": ["a list where prose belongs"]}'), _Schema)
+
+    message = str(exc.value)
+    assert "_Schema" in message and "summary" in message
+    assert "a list where prose belongs" not in message
+
+
+def test_one_task_key_change_moves_every_call_site_that_uses_it(monkeypatch):
+    """**T-18-d.** The consolidation of §18.2 is a config edit, and this is why."""
+    monkeypatch.setenv("MODEL_CLASSIFY", "qwen/qwen3-32b")
+    llm_config.get_llm_settings.cache_clear()
+
+    first = llm_config.request_for("classify", [{"role": "user", "content": "a"}])
+    second = llm_config.request_for("classify", [{"role": "user", "content": "b"}])
+
+    assert first["model"] == second["model"] == "qwen/qwen3-32b"

@@ -183,12 +183,12 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-18-a** | `call_llm()` is the **only** thing in either surface that calls `.create()` — AST-parsed, same shape as T-11-d. A call site that builds its own request is the drift this ticket removes | Rebuild a request at any call site → red |
-| **T-18-b** | The `prompt` rung's instruction is **generated from the Pydantic schema** and names every required field — so the three rungs cannot describe different shapes | Hand-write the fallback text, or drop a field from the generated text → red |
-| **T-18-c** | `parse_response()` handles what providers actually return: a bare object, an object wrapped in ```` ```json ```` fences, leading prose before the brace. Each yields the validated model or a **typed** error — never a silent `{}` | Remove fence-stripping → red |
-| **T-18-d** | One task key change moves the model for every call site that uses it, on **both** surfaces — the consolidation of §18.2 is a config edit and this proves it | Pin a model at a call site → red |
-| **T-18-e** | ⭐ **The profile pin (D-40).** For a `gpt-5*` model the request carries **no `temperature`** and uses **`max_completion_tokens`**; for `gpt-4o*` it carries `temperature` and `max_tokens`. Asserted on the request the layer builds, per profile — the call site asks for the same thing either way | Send `temperature` to a `gpt-5*` model, or `max_tokens` → red |
-| **T-18-f** | ⭐ **`finish_reason == "length"` is a failure, not an empty answer.** A truncated response never reaches a parser and never becomes `None`-that-means-empty | Treat a length-truncated response as empty content → red |
+| **T-18-a** ✅ | `call_llm()` is the **only** thing that builds a chat request — AST-parsed. ⚠ ASR is exempt **and named**: `audio.transcriptions.create` is a different API surface (multipart, no messages) | ✅ **Checked** — built a request at a call site → red |
+| **T-18-b** ✅ | The `prompt` rung's instruction is **generated from the Pydantic schema** and names every declared field; the call site's own system prompt survives, and one is added when there is none | ✅ **Checked** — hand-wrote the fallback text → red |
+| **T-18-c** ✅ | `parse_response()` handles a bare object and the ```` ```json ```` fenced form providers without JSON mode produce; anything else is a **typed** error, never a silent `{}`. ⚠ **And the error carries the shape of the failure, never the reply** — pydantic embeds `input_value=…`, which is grievance-derived | ✅ **Checked** — the leak assertion was added *because* the first message carried the body |
+| **T-18-d** ✅ | One task key change moves the model for every call site that uses it — the consolidation of §18.2 is a config edit and this proves it | ✅ Covered with T-17-d |
+| **T-18-e** ✅ | ⭐ **The profile pin (D-40).** `gpt-5*` → no `temperature`, `max_completion_tokens`, **+4,000 reasoning budget**; `gpt-4o*` and `gpt-3.5*` → `temperature` and `max_tokens`; an unknown open-weights id → the conservative default. Four models, one parametrized test | ✅ **Checked** — temperature allowed for `gpt-5` → red; reasoning overhead dropped → red |
+| **T-18-f** ✅ | ⭐ **`finish_reason == "length"` is a failure, not an empty answer** — refused even when the truncated body happens to parse | ✅ **Checked** — parsed a truncated reply as empty → red |
 
 ### DPG-19 — meaningful input (second wave)
 

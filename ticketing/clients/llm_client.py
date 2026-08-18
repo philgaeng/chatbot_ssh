@@ -34,10 +34,12 @@ from openai import OpenAI
 from pydantic import ValidationError
 
 from backend.config.llm_config import (
+    LLMParseError,
+    LLMTruncatedError,
     findings_task,
     llm_endpoint,
-    model_for,
-    response_format_kwargs,
+    parse_response,
+    request_for,
 )
 from ticketing.clients.llm_schemas import CaseFindings, ResolvedCaseSummary
 
@@ -62,6 +64,35 @@ def _get_client() -> OpenAI:
             max_retries=endpoint.max_retries,
         )
     return _client
+
+
+def call_llm(
+    task: str,
+    messages: list[dict],
+    *,
+    schema: type | None = None,
+    schema_name: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+):
+    """
+    One entry point for the ticketing surface. Same contract as the chatbot surface's, and
+    deliberately a **separate function**: the service-layer boundary means this file keeps its own
+    client, and a client is the one thing the shared layer cannot hold.
+
+    What is shared is the *shaping* — `request_for()` and `parse_response()` in
+    `backend/config/llm_config.py` — so the two surfaces cannot ask the same provider for
+    different things. Two factories, one config; two callers, one contract.
+    """
+    request = request_for(
+        task,
+        messages,
+        schema=schema.model_json_schema() if schema is not None else None,
+        schema_name=schema_name,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+    )
+    return parse_response(_get_client().chat.completions.create(**request), schema)
 
 
 def reset_client() -> None:
@@ -115,21 +146,17 @@ def translate_to_english(text: str) -> Optional[str]:
         logger.debug("translate_to_english: text looks English, skipping API call")
         return text
 
-    task = model_for("ticket_translate")
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model=task.model,
-            timeout=task.timeout,
-            messages=[
+        translated = call_llm(
+            "ticket_translate",
+            [
                 {"role": "system", "content": _TRANSLATE_SYSTEM},
                 {"role": "user", "content": text},
             ],
             temperature=0.2,
-            max_tokens=1024,
+            max_output_tokens=1024,
         )
-        translated = response.choices[0].message.content or ""
-        return translated.strip() or None
+        return (translated or "").strip() or None
     except Exception as exc:
         logger.error("translate_to_english failed: %s", exc, exc_info=True)
         return None
@@ -193,61 +220,33 @@ def generate_case_findings(
     if not context:
         return None
 
-    task = model_for(findings_task(is_seah))
-    model = task.model
+    task_key = findings_task(is_seah)
     # Compact JSON — minimise tokens
     user_content = json.dumps(context, separators=(",", ":"), ensure_ascii=False)
 
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model=model,
-            timeout=task.timeout,
-            messages=[
+        findings = call_llm(
+            task_key,
+            [
                 {"role": "system", "content": _FINDINGS_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.0,   # deterministic output
-            max_tokens=400,
-            **response_format_kwargs(
-                "case_findings", CaseFindings.model_json_schema(), task.structured_output
-            ),
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if not raw:
-            logger.error("generate_case_findings: empty response from LLM (model=%s)", model)
-            return None
+            schema=CaseFindings,
+            schema_name="case_findings",
+            temperature=0.0,           # deterministic — dropped for models that refuse it
+            max_output_tokens=400,     # the reasoning budget is added by the model's profile
+        ).model_dump()
 
-        findings = json.loads(raw)
-
-        # Validate required keys are present
-        required = {"summary_en", "key_findings", "recommended_action", "urgency"}
-        missing = required - findings.keys()
-        if missing:
-            logger.warning(
-                "generate_case_findings: LLM response missing keys %s — filling defaults",
-                missing,
-            )
-            findings.setdefault("summary_en", "")
-            findings.setdefault("key_findings", [])
-            findings.setdefault("recommended_action", "")
-            findings.setdefault("urgency", "MEDIUM")
-        findings.setdefault("languages_detected", ["en"])
-
-        # DPG-13: the branch above is unreachable on the `json_schema` rung — strict mode requires
-        # every declared property — and is kept because the weaker rungs are real configurations,
-        # not hypotheticals (`gpt-4` rejects JSON mode outright; measured, not assumed). Validation
-        # is what makes a type violation visible: `key_findings` as a string used to travel all the
-        # way into `findings_json` and fail wherever something iterated it.
-        findings = CaseFindings.model_validate(findings).model_dump()
-
+        # ⚠ The "missing keys → fill defaults" branch this replaced is now the schema's own
+        # defaults: strict mode requires every declared property, and `CaseFindings` supplies a
+        # value for each on the weaker rungs. The behaviour is preserved; the branch is not.
         logger.info(
-            "generate_case_findings: ok model=%s urgency=%s keys=%d",
-            model, findings.get("urgency"), len(findings.get("key_findings", [])),
+            "generate_case_findings: ok task=%s urgency=%s keys=%d",
+            task_key, findings.get("urgency"), len(findings.get("key_findings", [])),
         )
         return findings
 
-    except (json.JSONDecodeError, ValidationError) as exc:
+    except (LLMTruncatedError, LLMParseError, ValidationError) as exc:
         logger.error("generate_case_findings: unusable reply from LLM: %s", exc)
         return None
     except Exception as exc:
@@ -296,44 +295,27 @@ def generate_resolved_case_summary_llm(
     if not bundle:
         return None
 
-    task = model_for(findings_task(is_seah))
     payload = {**bundle, "primary_language": primary_language}
     user_content = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model=task.model,
-            timeout=task.timeout,
-            messages=[
+        # ⚠ Complainant-facing: the two `*_public` fields are what a person reads at the end of
+        # their grievance. This is the path where a truncated reply used to arrive as an empty one
+        # and be recorded as `llm_failed`, which nothing retries (D-36/D-40) — so the complainant
+        # was told the case was resolved and never received the document. `parse_response` refuses
+        # a truncated reply instead of parsing it.
+        return call_llm(
+            findings_task(is_seah),
+            [
                 {"role": "system", "content": _RESOLVED_SUMMARY_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
+            schema=ResolvedCaseSummary,
+            schema_name="resolved_case_summary",
             temperature=0.0,
-            max_tokens=1200,
-            **response_format_kwargs(
-                "resolved_case_summary",
-                ResolvedCaseSummary.model_json_schema(),
-                task.structured_output,
-            ),
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if not raw:
-            return None
-        out = json.loads(raw)
-        for key in (
-            "field_reports_digest_en",
-            "other_notes_digest_en",
-            "combined_digest_en",
-            "resolution_text_public",
-            "findings_summary_public",
-        ):
-            out.setdefault(key, "")
-        # Complainant-facing output: the two `*_public` fields are what a person reads at the end
-        # of their grievance. Validated for the same reason the officer-facing one is, with more
-        # at stake if it is malformed.
-        return ResolvedCaseSummary.model_validate(out).model_dump()
-    except (json.JSONDecodeError, ValidationError) as exc:
+            max_output_tokens=1200,
+        ).model_dump()
+    except (LLMTruncatedError, LLMParseError, ValidationError) as exc:
         logger.error("generate_resolved_case_summary_llm: unusable reply: %s", exc)
         return None
     except Exception as exc:

@@ -95,36 +95,23 @@ KNOWN_ABSENT: dict[str, str] = {
 # updates becomes noise, and noise is what the CI-red finding (D-26) is about.
 ANCHORS: tuple[tuple[str, int, str], ...] = (
     # The nine model call sites — the indicator-4 inventory, cited in four documents.
-    # ⚠ **These moved twice in one day, on purpose.** DPG-14 shifted them +14; **DPG-11 then took
-    # the model names out of this file entirely** — the six chatbot call sites now resolve through
-    # `backend/config/llm_config.py`, so the anchor is the *call*, and the model name is anchored
-    # where it is now declared. Both times the citing documents were re-pointed in the same commit,
-    # which is the whole discipline this pin exists to enforce:
-    #   grep -rn "LLM_services.py:" docs/ --include=*.md | grep -v /archive/
-    # The six chatbot call sites — what the privacy assessment's leg L4 cites.
-    ("backend/services/LLM_services.py", 82, "audio.transcriptions.create"),
-    ("backend/services/LLM_services.py", 138, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 186, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 305, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 508, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 582, "chat.completions.create"),
-    # DPG-14.3: the ASR call passes `language=`, not `language_code=`. The SDK declares its
-    # parameters explicitly, so the old kwarg raised TypeError on every transcription.
-    ("backend/services/LLM_services.py", 89, "language=language_code"),
-    # Where every model name now lives — one file, one line each (DPG-17).
+    # The six chatbot call sites — what the privacy assessment's leg L4 cites. ⚠ **Five of them are
+    # now `call_llm(` rather than `.create(`**: DPG-18 moved request construction into the layer, so
+    # the anchor token changed as well as the line. The sixth is ASR, which is a different API
+    # surface (multipart audio, no messages) and keeps its own three lines.
+    ("backend/services/LLM_services.py", 81, "audio.transcriptions.create"),
+    ("backend/services/LLM_services.py", 88, "language=language_code"),
+    ("backend/services/LLM_services.py", 137, "call_llm"),
+    ("backend/services/LLM_services.py", 168, "call_llm"),
+    ("backend/services/LLM_services.py", 278, "call_llm"),
+    ("backend/services/LLM_services.py", 475, "call_llm"),
+    ("backend/services/LLM_services.py", 535, "call_llm"),
+    # Where every model name is declared — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 105, "gpt-5-nano"),
-    # The three ticketing call sites — what the privacy assessment's leg L5 cites.
-    ("ticketing/clients/llm_client.py", 121, "chat.completions.create"),
-    ("ticketing/clients/llm_client.py", 203, "chat.completions.create"),
-    ("ticketing/clients/llm_client.py", 305, "chat.completions.create"),
-    # ✅ The four duplicated copies of the SEAH ternary, collapsed by DPG-12 (2026-08-18). These
-    # anchors used to read `_MODEL_SEAH`; they now anchor the single resolution each site makes
-    # through the registry. Two of the four were invisible to `grep "gpt-"` — one reached into
-    # the client module's privates, one was an OpenAPI endpoint description — which is why the
-    # pin that replaces them (T-17-c) parses the AST instead of grepping.
-    ("ticketing/services/resolved_summary_builder.py", 306, "model_for(findings_task"),
-    ("ticketing/tasks/llm.py", 171, "model_for(findings_task"),
-    ("ticketing/tasks/llm.py", 260, "model_for(findings_task"),
+    # The three ticketing call sites — leg L5.
+    ("ticketing/clients/llm_client.py", 150, "call_llm"),
+    ("ticketing/clients/llm_client.py", 228, "call_llm"),
+    ("ticketing/clients/llm_client.py", 307, "call_llm"),
     ("ticketing/api/routers/tickets/summary.py", 113, "the configured LLM"),
     # The privacy assessment's load-bearing citations (indicators 7, 9a).
     ("backend/services/database_services/base_manager.py", 243, "_encrypt_field"),

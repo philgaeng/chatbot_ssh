@@ -71,6 +71,12 @@ def client(monkeypatch) -> MagicMock:
     everything and `built` is countable — which is what T-14-b asserts.
     """
     fake = MagicMock()
+    # Patched in **both** modules: `call_llm` (DPG-18) resolves `get_llm_client` as a module global
+    # in the factory, while `LLM_services._llm_client()` holds an imported reference. Patching one
+    # covers half the call sites, which is worse than patching neither because it looks like it works.
+    for module in (llm, llm_client_factory):
+        monkeypatch.setattr(module, "get_llm_client", lambda: fake, raising=False)
+        monkeypatch.setattr(module, "get_asr_client", lambda: fake, raising=False)
     monkeypatch.setattr(llm, "_llm_client", lambda: fake)
     monkeypatch.setattr(llm, "_asr_client", lambda: fake)
     return fake
@@ -365,6 +371,9 @@ def test_extract_all_contact_info_reports_a_malformed_body_as_a_failure(client, 
     sentinel. What distinguishes them is the log line, which names the parse failure and the
     response length. The call site where the distinction is visible in the return value is
     classification, below, and that is the one that mattered.
+
+    ⏳ **DPG-18 changed which layer raises**, not the contract: `parse_response()` now refuses the
+    malformed body with `LLMParseError` before this function ever sees it.
     """
     client.chat.completions.create.return_value = _chat("{not json")
 
@@ -379,8 +388,7 @@ def test_extract_all_contact_info_reports_a_malformed_body_as_a_failure(client, 
         "complainant_village": "",
         "complainant_address": "",
     }
-    assert any("not valid JSON" in r.getMessage() or "Error parsing LLM response" in r.getMessage()
-               for r in caplog.records)
+    assert any("Error extracting contact info" in r.getMessage() for r in caplog.records)
 
 
 def test_classify_returns_a_status_error_dict_when_the_call_fails(client):
@@ -473,7 +481,14 @@ def test_detect_sensitive_content_skips_the_call_on_empty_text(client):
 
 @pytest.fixture
 def no_client(monkeypatch):
-    """No API key configured → the factory raises → the helpers return None, as before DPG-11."""
+    """No API key configured → the factory raises → every path takes its documented fallback."""
+
+    def _refuse():
+        raise RuntimeError("No API key configured for the LLM endpoint (test)")
+
+    for module in (llm, llm_client_factory):
+        monkeypatch.setattr(module, "get_llm_client", _refuse, raising=False)
+        monkeypatch.setattr(module, "get_asr_client", _refuse, raising=False)
     monkeypatch.setattr(llm, "_llm_client", lambda: None)
     monkeypatch.setattr(llm, "_asr_client", lambda: None)
 
@@ -515,7 +530,9 @@ def test_classify_now_honours_the_missing_client_like_every_other_call_site(no_c
     result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
     assert result["status"] == "error"
-    assert "client initialization failed" in result["error"]
+    assert "No API key configured" in result["error"], (
+        "the message now comes from the factory, which names the actual problem"
+    )
 
 
 def test_translate_grievance_raises_runtime_error_without_a_client(no_client):
@@ -615,7 +632,11 @@ def test_a_malformed_classification_is_distinguishable_from_an_empty_one(client)
     assert empty["grievance_summary"] == "not enough information to proceed"
     assert "status" not in empty
     assert malformed["status"] == "error"
-    assert "not valid JSON" in malformed["error"]
+    assert "did not match GrievanceClassification" in malformed["error"]
+    # ⚠ And the error must carry the SHAPE of the failure, never the reply: pydantic's
+    # ValidationError embeds `input_value=...`, which is model output derived from the grievance.
+    # This assertion is here because the first version of the message leaked exactly that.
+    assert "not json" not in malformed["error"]
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field, create_model
+from pydantic import BaseModel, Field, create_model, field_validator
 
 
 class GrievanceClassification(BaseModel):
@@ -67,14 +67,31 @@ class SensitiveContentDetection(BaseModel):
     """
     `detect_sensitive_content_llm` — the SEAH path.
 
-    The `level` clamp becomes structural here: an out-of-range value is a schema violation rather
-    than something the call site has to remember to normalise. The call site keeps its clamp
-    anyway, because this schema is only enforced on the rungs where the provider honours it.
+    ⚠ **The clamps normalise; they must not reject.** This is the harassment-detection path, and
+    the difference matters: a model that answers `level: "critical"` has still told us it detected
+    something. Rejecting the whole reply would fail open to `detected: False` — turning an
+    out-of-range *label* into a missed report. So the validators below run **before** the type
+    check and coerce, which is what "the clamp becomes structural" (DPG-13) has to mean here.
+
+    The `Literal` stays so `model_json_schema()` still sends the enum to the provider — constrain
+    the generation, forgive the reply.
     """
 
     detected: bool = False
     level: Literal["high", "medium", "low"] = "low"
     message: str = ""
+
+    @field_validator("level", mode="before")
+    @classmethod
+    def _clamp_level(cls, value: object) -> str:
+        return value if value in ("high", "medium", "low") else "low"
+
+    @field_validator("message", mode="before")
+    @classmethod
+    def _coerce_message(cls, value: object) -> str:
+        if value is None:
+            return ""
+        return value if isinstance(value, str) else str(value)[:200]
 
 
 def single_field_contact_schema(field_name: str) -> type[BaseModel]:

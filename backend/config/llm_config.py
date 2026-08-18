@@ -144,11 +144,15 @@ class LLMSettings(BaseSettings):
     # So each task declares what **its** model can do; `llm_structured_output` is the endpoint's
     # ceiling, and the effective mode is the weaker of the two. Point the registry at models with
     # better support and one variable lifts every site at once — which is the point of the ladder.
-    structured_classify: Literal["json_schema", "json_object", "prompt"] = "json_schema"
-    structured_extract: Literal["json_schema", "json_object", "prompt"] = "json_object"
-    structured_translate: Literal["json_schema", "json_object", "prompt"] = "prompt"
-    structured_detect: Literal["json_schema", "json_object", "prompt"] = "json_object"
-    structured_ticket_findings: Literal["json_schema", "json_object", "prompt"] = "json_schema"
+    # ⚠ **Empty means "ask the model's profile"** (DPG-18 §18.3). These were per-task constants
+    # until the profile existed; now capability follows the model, so consolidating onto one model
+    # lifts every site at once instead of needing five edits. They remain as **escape hatches** —
+    # a provider whose profile we get wrong is corrected by an operator, not by a release.
+    structured_classify: Literal["", "json_schema", "json_object", "prompt"] = ""
+    structured_extract: Literal["", "json_schema", "json_object", "prompt"] = ""
+    structured_translate: Literal["", "json_schema", "json_object", "prompt"] = ""
+    structured_detect: Literal["", "json_schema", "json_object", "prompt"] = ""
+    structured_ticket_findings: Literal["", "json_schema", "json_object", "prompt"] = ""
 
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
@@ -172,6 +176,59 @@ class Endpoint:
         """Host only — safe to log or return from a health probe. Never the key."""
         without_scheme = self.base_url.split("://", 1)[-1]
         return without_scheme.split("/", 1)[0]
+
+
+@dataclass(frozen=True)
+class ModelProfile:
+    """
+    What a model can be *told*, as opposed to what it can be *asked for*.
+
+    ⚠ **Every field here was measured against the live provider on 2026-08-18, not read off a
+    docs page** — and each one would have broken a call site if assumed:
+
+    | Model | `json_schema` | `temperature` | token cap | reasoning |
+    |---|---|---|---|---|
+    | `gpt-5-nano` | ✅ | ❌ *"Only the default (1) value is supported"* | `max_completion_tokens` | **~4,000** |
+    | `gpt-4o-mini` | ✅ | ✅ | `max_tokens` | 0 |
+    | `gpt-3.5-turbo` | **400** | ✅ | `max_tokens` | 0 |
+    | `gpt-4` | **400** | ✅ | `max_tokens` — but **400 on `json_object` too** | 0 |
+
+    `reasoning_overhead` is the one that bites silently: a cap of 400 *or 2000* on `gpt-5-nano`
+    returns `finish_reason: length` with **empty content**, because the reasoning consumed the
+    budget before a single output token. The resolved-case summary needed 4,287 completion tokens,
+    3,904 of them reasoning, against a cap of 1,200. See D-40.
+    """
+
+    structured_output: str = "json_object"
+    supports_temperature: bool = True
+    token_cap_param: str = "max_tokens"
+    reasoning_overhead: int = 0
+
+
+# First match wins, so `gpt-4o` must precede `gpt-4`. A model id this does not recognise —
+# including every open-weights id, which carry provider prefixes and suffixes — falls through to
+# the conservative default: JSON mode but no schema, temperature allowed, the classic cap.
+_PROFILES: tuple[tuple[str, ModelProfile], ...] = (
+    ("gpt-5", ModelProfile("json_schema", False, "max_completion_tokens", 4000)),
+    ("o1", ModelProfile("json_schema", False, "max_completion_tokens", 4000)),
+    ("o3", ModelProfile("json_schema", False, "max_completion_tokens", 4000)),
+    ("gpt-4o", ModelProfile("json_schema", True, "max_tokens", 0)),
+    ("gpt-4.1", ModelProfile("json_schema", True, "max_tokens", 0)),
+    ("gpt-3.5", ModelProfile("json_object", True, "max_tokens", 0)),
+    ("gpt-4", ModelProfile("prompt", True, "max_tokens", 0)),
+    ("whisper", ModelProfile("prompt", True, "max_tokens", 0)),
+)
+
+DEFAULT_PROFILE = ModelProfile()
+
+
+def profile_for(model: str) -> ModelProfile:
+    """The capability profile for a model id, by prefix. Unknown ids get the safe default."""
+    bare = (model or "").split("/")[-1].split(":")[0]
+    for prefix, profile in _PROFILES:
+        if bare.startswith(prefix):
+            return profile
+    return DEFAULT_PROFILE
 
 
 @dataclass(frozen=True)
@@ -283,13 +340,17 @@ def model_for(task: str) -> TaskModel:
         model = s.model_translate  # documented fallback: one knob moves translation everywhere
 
     timeout = getattr(s, timeout_attr) if timeout_attr else 0.0
-    task_capability = getattr(s, structured_attr) if structured_attr else "prompt"
+    if not structured_attr:
+        capability = "prompt"          # free-text tasks: ASR, note translation
+    else:
+        override = getattr(s, structured_attr)
+        capability = override or profile_for(model).structured_output
     return TaskModel(
         task=task,
         model=model,
         endpoint=endpoint,
         timeout=timeout or endpoint.timeout,
-        structured_output=weaker_mode(endpoint.structured_output, task_capability),
+        structured_output=weaker_mode(endpoint.structured_output, capability),
     )
 
 
@@ -406,3 +467,158 @@ def declared_env_vars() -> tuple[str, ...]:
 def deprecated_env_vars() -> dict[str, str]:
     """Old name → what replaced it. Honoured, warned about once, and documented as legacy."""
     return dict(_DEPRECATED_ALIASES)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# The call layer's shared half (DPG-18)
+# ─────────────────────────────────────────────────────────────────────────────
+# A factory builds a client; a call site writes a prompt. Everything between those two — which
+# model, which deadline, how to ask for JSON, how to read it back — varies by PROVIDER and not by
+# call site, and that is the test for what belongs here.
+#
+# Only the *shaping* is shared. The *calling* stays on each surface, because the client does:
+# `backend/services/llm_client.py::call_llm` and `ticketing/clients/llm_client.py::call_llm` are
+# ~15 lines each. Two factories, one config; two callers, one contract.
+
+
+class LLMTruncatedError(ValueError):
+    """
+    The model stopped because it ran out of budget, not because it had finished.
+
+    ⚠ **This is a failure, not an empty answer**, and the distinction is not academic: on a
+    reasoning model a truncated reply arrives as HTTP 200 with `finish_reason: "length"` and
+    **empty content**. Every parse path in this repository treated empty content as an empty
+    *result*, so truncation disguised itself as "the model had nothing to say" — which on the
+    resolved-case-summary path means a complainant is told their case is closed and never receives
+    the closure document (D-40, D-36).
+    """
+
+
+class LLMParseError(ValueError):
+    """The model's reply was not the shape we asked for. Distinct from an empty reply."""
+
+
+def augment_prompt_for_schema(messages: list[dict], schema: dict) -> list[dict]:
+    """
+    The `prompt` rung: state the required shape **in words**, generated from the same schema the
+    `json_schema` rung would have sent.
+
+    ⚠ This exists because the alternative is what the repository had: nine hand-written "return
+    strict JSON" paragraphs that had already drifted into three different phrasings, one of them
+    carrying a hand-typed example that no longer matched its parser. A fallback nobody can keep in
+    step with the schema is a fallback that fails quietly on the provider that needs it most.
+    """
+    props = (schema or {}).get("properties") or {}
+    if not props:
+        return messages
+
+    fields = ", ".join(f"{name!r}" for name in props)
+    instruction = (
+        "Return ONLY a JSON object, with no prose, no markdown fences and no extra keys. "
+        f"It must contain exactly these keys: {fields}."
+    )
+    out = [dict(m) for m in messages]
+    for message in out:
+        if message.get("role") == "system":
+            message["content"] = f"{message['content']}\n\n{instruction}"
+            return out
+    return [{"role": "system", "content": instruction}, *out]
+
+
+def request_for(
+    task: str,
+    messages: list[dict],
+    *,
+    schema: dict | None = None,
+    schema_name: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+) -> dict:
+    """
+    Everything a call site needs to hand `chat.completions.create(**…)`, decided from the registry.
+
+    The call site says what it *wants*; this decides what the model can be *told*:
+
+    * the model, the endpoint's deadline, and the task's own if it has one;
+    * the strongest structured-output rung the model honours — schema, JSON mode, or words;
+    * `temperature` **dropped entirely** where the model refuses anything but its default;
+    * the token cap under **the name that model uses**, with the reasoning budget added.
+
+    Each of those four is a 400 or an empty response on some model this product already calls
+    (D-31, D-40).
+    """
+    resolved = model_for(task)
+    profile = profile_for(resolved.model)
+    mode = resolved.structured_output
+
+    if schema is not None and mode == "prompt":
+        messages = augment_prompt_for_schema(messages, schema)
+
+    request: dict = {
+        "model": resolved.model,
+        "timeout": resolved.timeout,
+        "messages": messages,
+        **response_format_kwargs(schema_name or task, schema, mode),
+    }
+
+    if temperature is not None and profile.supports_temperature:
+        request["temperature"] = temperature
+    elif temperature is not None:
+        logger.debug(
+            "%s: dropping temperature=%s — %s only accepts its default",
+            task, temperature, resolved.model,
+        )
+
+    if max_output_tokens:
+        # ⚠ The reasoning overhead is added, not assumed away: a cap sized for the visible output
+        # alone returns empty content on a reasoning model, which reads as a quality problem.
+        request[profile.token_cap_param] = max_output_tokens + profile.reasoning_overhead
+
+    return request
+
+
+def parse_response(response: object, schema_model: type | None = None) -> object:
+    """
+    Read a reply back: truncation refused, fences stripped, JSON parsed, schema validated.
+
+    Returns the validated model instance when `schema_model` is given, otherwise the raw text.
+    Raises `LLMTruncatedError` or `LLMParseError` — never returns an empty value that a caller
+    might mistake for an empty answer.
+    """
+    choice = response.choices[0]                                    # type: ignore[attr-defined]
+    if getattr(choice, "finish_reason", None) == "length":
+        raise LLMTruncatedError(
+            "The model stopped at its token budget before finishing. This is not an empty "
+            "answer: raise the cap (remember reasoning tokens) or remove it."
+        )
+
+    raw = (choice.message.content or "").strip()
+    if schema_model is None:
+        return raw
+
+    if raw.startswith("```"):
+        # Providers that cannot do JSON mode fence their output; the `prompt` rung asks them not
+        # to, and some do it anyway. Cheaper to strip than to fail.
+        raw = raw.strip("`")
+        if raw.lower().startswith("json"):
+            raw = raw[4:]
+        raw = raw.strip()
+
+    try:
+        return schema_model.model_validate_json(raw)                # type: ignore[attr-defined]
+    except Exception as exc:
+        # ⚠ **Report the shape of the failure, never the reply.** Pydantic's ValidationError
+        # embeds `input_value=...` — i.e. the model's output, which is derived from the grievance
+        # narrative — and this message travels into a `status="error"` payload and the Celery log.
+        # Caught by the test that asserted on the old message and found the narrative in it.
+        name = getattr(schema_model, "__name__", str(schema_model))
+        problems = getattr(exc, "errors", None)
+        if callable(problems):
+            summary = ", ".join(
+                f"{'.'.join(str(p) for p in err.get('loc', ())) or '<root>'}: {err.get('type')}"
+                for err in problems()[:5]
+            )
+        else:
+            summary = type(exc).__name__
+        raise LLMParseError(
+            f"The reply did not match {name} ({len(raw)} chars): {summary}"
+        ) from exc
