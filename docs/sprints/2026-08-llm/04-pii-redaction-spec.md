@@ -424,7 +424,7 @@ instead of nine call sites.
    mapping. Get this wrong in either direction and you either leak or you ship `<PERSON_1>` to a user.
 3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
    *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
-   descriptors"* (`llm_client.py:125-127`). **A prompt instruction is not a control** — it does nothing
+   descriptors"* (`llm_client.py:127-128`). **A prompt instruction is not a control** — it does nothing
    about what is *sent*, only about what comes back. Keep it (defence in depth) and add real redaction
    on the input.
 4. **Audio is not redactable.** `transcribe_audio_file` sends the raw waveform; a voice note carries the
@@ -432,7 +432,7 @@ instead of nine call sites.
    **State this explicitly in the inventory and the privacy assessment**, and note that it is the
    strongest single argument for T2: for voice, only moving the inference endpoint solves it. Redaction
    applies to the transcript, immediately after.
-5. Verify `parse_llm_response`'s error path (`LLM_services.py:282`) — it currently logs the **raw model
+5. Verify `parse_llm_response`'s error path (`LLM_services.py:284`) — it currently logs the **raw model
    response**. That is a log-side leak on the model-call path; DPG-34 owns the fix, but flag it here.
 
 ### Acceptance
@@ -456,8 +456,8 @@ instead of nine call sites.
    (`TaskLogger`) so it covers every service, rather than at individual call sites — one filter,
    installed once, cannot be forgotten by the next call site.
 2. **Fix the known raw-text log sites**, at minimum:
-   - `LLM_services.py:282` — logs the raw model response on a JSON parse error
-   - `LLM_services.py:335`, `:343` — the translation error paths interpolate the **entire `input_data`
+   - `LLM_services.py:284` — logs the raw model response on a JSON parse error
+   - `LLM_services.py:337`, `:345` — the translation error paths interpolate the **entire `input_data`
      dict**, which contains `grievance_description`, into a `ValueError` message. That string then
      propagates as an exception, gets logged, and may reach a Celery result backend in Redis
    - Audit the rest against DPG-30's inventory

@@ -344,7 +344,7 @@ Two facts only you have:
 > **DECIDED 2026-08-17 — fail-open stays, and the reason is sound.** The recommendation (a third `unknown` state) is **declined**, correctly, because the premise behind it was incomplete: the answer names a deterministic pre-filter as the backup, and **it exists.**
 >
 > ✅ **Verified in code — there are two independent detection paths, not one:**
-> - **Deterministic, synchronous, no LLM:** `backend/shared_functions/keyword_detector.py:257` `detect_sensitive_content()` with confidence scoring at `:342`, reached through `helpers_repo.py:58` → `actions/services/seah/sensitive_detection.py:25` → `base_mixins.py:170`, running as **slot validation inside the conversation**.
+> - **Deterministic, synchronous, no LLM:** `backend/shared_functions/keyword_detector.py:259` `detect_sensitive_content()` with confidence scoring at `:343`, reached through `helpers_repo.py:58` → `actions/services/seah/sensitive_detection.py:25` → `base_mixins.py:170`, running as **slot validation inside the conversation**.
 > - **LLM, asynchronous:** `trigger_detect_sensitive_content_task` (`forms/form_grievance.py:200`) → Celery → `detect_sensitive_content_llm`, which is the leg that fails open.
 >
 > So an LLM outage degrades a **second** pass; it does not remove detection. **This strengthens indicator 9b**, which the compliance briefing currently credits to the LLM path alone — corrected there. Propagated to [`02` DPG-15](02-llm-agnostic-spec.md#dpg-15), which now records the mitigation instead of surfacing an open risk.

@@ -6,7 +6,10 @@
 > **Why:** it is the DPG indicator-4 answer, it is what lets you move T1 → T2 without a code change, and
 > it insulates you from a market where model prices fall roughly an order of magnitude a year and
 > licences change without notice.
-> Line numbers are as of `integration/stage` @ 2026-08-17 — **re-locate before editing.**
+> Line numbers **corrected 2026-08-18** against `dpg/sprint0-licensing` — Sprint 0's SPDX pass shifted
+> every `.py` file by exactly **+2** and this spec's ~80 references with it. **Re-locate anyway.**
+> ⚠ **Read [§0.5](#05--what-sprint-0-changed-that-this-sprint-inherits) before the first commit** — six
+> of the changes below alter how this sprint is executed, not just what it says.
 
 ---
 
@@ -45,17 +48,26 @@ hard-coding is duplicated.
 
 | Surface | File | Client | Models hard-coded | Structured output |
 |---|---|---|---|---|
-| **Chatbot intake** | `backend/services/LLM_services.py` | module-level, `:30` | `whisper-1` `:45`, `gpt-3.5-turbo` `:77` `:114` `:383`, `gpt-5-nano` `:230`, `gpt-4` `:322` | `json_object` ×3, **none** ×2 |
-| **Ticketing case analysis** | `ticketing/clients/llm_client.py` | lazy cached, `:28-37` | `gpt-4` `:88`, `gpt-4o-mini` `:139`, `gpt-4o` `:140` | `json_object` ×2, **none** ×1 |
+| **Chatbot intake** | `backend/services/LLM_services.py` | module-level, `:32` | `whisper-1` `:47`, `gpt-3.5-turbo` `:79` `:116` `:385`, `gpt-5-nano` `:232`, `gpt-4` `:324` | `json_object` ×3, **none** ×2 |
+| **Ticketing case analysis** | `ticketing/clients/llm_client.py` | lazy cached, `:30-37` | `gpt-4` `:90`, `gpt-4o-mini` `:141`, `gpt-4o` `:142` | `json_object` ×2, **none** ×1 |
 
 The ticketing surface is not a side path. It produces `Ticket.ai_summary_en`, the officer-facing case
 findings, and the **complainant-facing** resolved-case summary. A migration that fixes only `backend/`
 leaves the indicator-4 claim false, and leaves the complainant-facing output on a closed model.
 
-**And it is four files, not two.** Two more modules hard-code the same model names the client does —
-`ticketing/services/resolved_summary_builder.py:26-27`, which writes its **own copy** into the resolved-case
-summary as `llm.model` (`:299`), and `ticketing/tasks/llm.py:163`, which re-derives it for a log line.
-Three copies of one ternary, in three modules, none aware of the others.
+**And it is five files, not two — re-counted 2026-08-18 and it grew.** Four more modules carry the same
+model names the client does:
+
+| File:line | What it is | Why it matters |
+|---|---|---|
+| `ticketing/services/resolved_summary_builder.py:28-29` | Its **own copy** of `_MODEL_STANDARD` / `_MODEL_SEAH`, written into the resolved-case summary as `llm.model` at **`:301`** | A **persisted provenance field** computed from a copy. Miss it and every resolved case records a model that never ran it |
+| `ticketing/tasks/llm.py:165` | The ternary re-derived as a **literal**, for a log line | The log can disagree with the call it is logging |
+| `ticketing/tasks/llm.py:251` | ⚠ **Found 2026-08-18, not in the original inventory.** `model = _llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD` — reaches into the **client module's privates** | Not a literal, so `grep "gpt-"` **does not find it**. DPG-12's own acceptance grep would have passed with this site untouched |
+| `ticketing/api/routers/tickets/summary.py:113` | ⚠ **Found 2026-08-18.** *"calls OpenAI gpt-4, and stores the result in `ai_summary_en`"* — an **endpoint description**, so it is published in the OpenAPI document | The model name is in the **public API surface**. It becomes false the moment DPG-12 lands, and indicator 5 (documentation) is graded on OpenAPI |
+
+**Four copies of one ternary across three modules, plus a fifth statement of it in the OpenAPI
+description** — none aware of the others. Two of the four were invisible to the `grep "gpt-"` that this
+spec's own acceptance criteria rely on.
 
 > **⚠ Two factories, one config — [DPG-17](#dpg-17).**
 > Two independent clients is the right answer for the service boundary. Two independent *model
@@ -68,7 +80,7 @@ Three copies of one ternary, in three modules, none aware of the others.
 
 ### 2. `gpt-5-nano` is not a stray reference — it is the live classification model
 
-`LLM_services.py:230`, in `classify_and_summarize_grievance`, the primary AI path in the product. The
+`LLM_services.py:232`, in `classify_and_summarize_grievance`, the primary AI path in the product. The
 guide's §1.4 (*"Confirm whether that reference is intentional. If it is a typo falling through to an
 exception handler, you may have a classification path that has been quietly failing."*) has the right
 instinct pointed at the wrong thing. The real questions are in DPG-14.
@@ -77,21 +89,21 @@ instinct pointed at the wrong thing. The real questions are in DPG-14.
 
 | # | Function | File:line | Model | `response_format` | Notes |
 |---|---|---|---|---|---|
-| 1 | `transcribe_audio_file` | `LLM_services.py:43-47` | `whisper-1` | — (audio) | ⚠ suspected live defect — DPG-14 |
-| 2 | `extract_contact_info` | `LLM_services.py:76-83` | `gpt-3.5-turbo` | `json_object` | |
-| 3 | `extract_all_contact_info` | `LLM_services.py:113-135` | `gpt-3.5-turbo` | `json_object` | |
-| 4 | `classify_and_summarize_grievance` | `LLM_services.py:204-231` | `gpt-5-nano` | **none** | Asks for "strict JSON" in the prompt only. Uses a **shadow client** built at `:199` |
-| 5 | `translate_grievance_to_english_LLM` | `LLM_services.py:304-323` | `gpt-4` | **none** | Same — JSON by prompt instruction only |
-| 6 | `detect_sensitive_content_llm` | `LLM_services.py:368-385` | `gpt-3.5-turbo` | `json_object` | SEAH detection path |
-| 7 | `translate_to_english` | `llm_client.py:87-95` | `gpt-4` | — (free text) | |
-| 8 | `generate_case_findings` | `llm_client.py:166-175` | `gpt-4o-mini` / `gpt-4o` | `json_object` | |
-| 9 | `generate_resolved_case_summary_llm` | `llm_client.py:258-267` | `gpt-4o-mini` / `gpt-4o` | `json_object` | Complainant-facing output |
+| 1 | `transcribe_audio_file` | `LLM_services.py` call `:45`, model `:47` | `whisper-1` | — (audio) | ⚠ suspected live defect — DPG-14 |
+| 2 | `extract_contact_info` | `LLM_services.py` call `:78`, model `:79` | `gpt-3.5-turbo` | `json_object` | |
+| 3 | `extract_all_contact_info` | `LLM_services.py` call `:115`, model `:116` | `gpt-3.5-turbo` | `json_object` | |
+| 4 | `classify_and_summarize_grievance` | `LLM_services.py` call `:206`, model `:232` | `gpt-5-nano` | **none** | Asks for "strict JSON" in the prompt only. Uses a **shadow client** built at `:201` |
+| 5 | `translate_grievance_to_english_LLM` | `LLM_services.py` call `:306`, model `:324` | `gpt-4` | **none** | Same — JSON by prompt instruction only |
+| 6 | `detect_sensitive_content_llm` | `LLM_services.py` call `:370`, model `:385` | `gpt-3.5-turbo` | `json_object` | SEAH detection path |
+| 7 | `translate_to_english` | `llm_client.py` call `:89`, model `:90` | `gpt-4` | — (free text) | |
+| 8 | `generate_case_findings` | `llm_client.py` call `:168`, model `:169` (ternary `:162`) | `gpt-4o-mini` / `gpt-4o` | `json_object` | |
+| 9 | `generate_resolved_case_summary_llm` | `llm_client.py` call `:260`, model `:261` (ternary `:254`) | `gpt-4o-mini` / `gpt-4o` | `json_object` | Complainant-facing output |
 
-Nine call sites — **six in `LLM_services.py`, three in `ticketing/clients/llm_client.py`**, confirmed by
-`grep -n "\.create(" ` on both files. Seven produce JSON (5 with `json_object`, **2 by prompt instruction
-alone**). ⚠ [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) says *eight* in four
-places — its table merges `generate_case_findings` and `generate_resolved_case_summary_llm` into one row.
-**Nine is right**; the audit doc is being corrected, not this one.
+Nine call sites — **six in `LLM_services.py`, three in `ticketing/clients/llm_client.py`**, re-confirmed by
+`grep -n "\.create(" ` on both files 2026-08-18. Seven produce JSON (5 with `json_object`, **2 by prompt
+instruction alone**). ✅ [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) said
+*eight* in four places; **it was corrected during Sprint 0** and now says nine, with a note explaining the
+merge. The two documents agree.
 
 ### 4. And there is no test net at all
 
@@ -101,6 +113,125 @@ not exist.
 
 This is the same shape as T3-04, and it gets the same treatment:
 [**the first commit of this sprint is a test, not a refactor**](#dpg-10).
+
+### 0.5 — What Sprint 0 changed that this sprint inherits
+
+Sprint 0 closed 2026-08-18 (branch `dpg/sprint0-licensing`, 11 commits). Six of its outcomes change how
+this sprint is **executed**, not just what it documents. Read them before the first commit.
+
+#### a. Every `.py` file gained a 2-line SPDX header — and every new file must too
+
+`# SPDX-License-Identifier: Apache-2.0` plus a blank line, on **585 files**. That is the +2 shift that
+invalidated this spec's line numbers (corrected above).
+
+**For this sprint:** `backend/config/llm_config.py`, `backend/services/llm_client.py`,
+`tests/backend/test_llm_services.py` and `tests/ticketing/test_llm_client.py` are all new files **in
+scope**. `tests/repo/test_spdx_headers.py` walks the tree and **fails the build** if one is missing.
+Do not hand-write the header — run the idempotent script, which knows about shebangs and
+`"use client"` directives:
+
+```bash
+python3 scripts/ops/add_spdx_headers.py          # add
+python3 scripts/ops/add_spdx_headers.py --check  # verify (CI runs the equivalent)
+```
+
+#### b. CI now runs on `dpg/**` — it did not before
+
+`ci.yml`'s push triggers were `main`, `integration/**`, `dev/**`. **`dpg/sprint0-licensing` matched none
+of them**, so nine commits — including the compliance pins DPG-01 added — ran on nobody's machine.
+Fixed (sprint-0 deviation **D-24**) by adding `dpg/**`.
+
+**For this sprint:** `dpg/sprint1-llm-agnostic` gets CI from its first push. That is new, and it is the
+only reason the invariant below is checkable.
+
+#### c. ⚠ CI is RED, and this is the baseline you measure against
+
+**Do not read "the tests pass" as "the build is green" — it has not been green since 2026-08-08.**
+Measured on the last two runs of `dpg/sprint0-licensing`, identical both times:
+
+| Job | Baseline |
+|---|---|
+| `docs-links` · `webchat-checks` | ✅ |
+| `backend-tests` → pytest | ❌ **18 failed, 1143 passed, 8 skipped** |
+| `ui-checks` → Lint | ❌ **166 problems (2 errors, 164 warnings)**; **Build is skipped as a result** |
+
+The failures are pre-existing, cluster in `test_donor_guardrail` / `test_grievance_sync` /
+`test_project_type_authoring` / `test_roles_crud`, and are **identical in shape on `integration/stage`**.
+They are nothing to do with LLMs.
+
+**So this sprint's invariant needs restating in measurable terms:**
+
+> **The invariant is not "CI is green". It is "the failure count does not increase, and DPG-10's tests
+> are green, at every commit."** Record `18 failed, 1143 passed` before the first commit. **19 is yours.**
+
+Tracked in [`followups/ci-has-been-red-for-ten-days.md`](followups/ci-has-been-red-for-ten-days.md)
+(**D-26**). ⚠ **It is not this sprint's job to fix** — but if you fix the 2 lint errors as a favour, the
+`ui-checks` **Build** step starts running again, which is the `next build` gate D-02b has been waiting on.
+
+#### d. Put the tests where CI actually looks
+
+`ci.yml` names its pytest paths **explicitly**:
+`tests/repo tests/ticketing tests/orchestrator tests/actions tests/backend`.
+
+✅ DPG-10's two files land in `tests/backend/` and `tests/ticketing/` — **both covered.** Good as specced.
+
+⚠ **Do not put anything in `tests/` root or `tests/shared/`.** 27 test files live there and have
+**never executed in CI** — a directory not named above never runs
+([`followups/ci-untested-root-test-files.md`](followups/ci-untested-root-test-files.md), **D-01**). A
+characterization net that CI does not run is not a net.
+
+#### e. The `pydantic-settings` move has a compliance side-effect
+
+DPG-17 moves `pydantic-settings>=2.0` from `requirements.grm.txt:7` to `requirements.txt` (next to
+`pydantic>=2.0` at `:17`). Sprint 0 published
+[`docs/dpg/dependency-licenses.md`](../../dpg/dependency-licenses.md) — **153 packages, dated and
+commit-stamped**, and a nightly `licence_scan()` that now genuinely runs (verified in-container:
+133 Python packages, 5 copyleft findings, all dispositioned).
+
+**For this sprint:** moving a package between manifests changes the **declared/transitive split** the
+report is built on (35 declared / 98 transitive). Update the report's counts in the DPG-17 commit, or the
+next reader finds a dated audit that disagrees with the manifests. **If you add any new dependency,
+check its licence before committing** — the scan will flag it as `high` if unrecognised, which is the
+designed behaviour, not a bug to work around.
+
+#### f. The privacy assessment cites these exact call sites — this sprint moves all nine
+
+[`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) §2.2 legs **L4** and **L5** cite
+`LLM_services.py:47,79,116,232,324,385` and `llm_client.py:90,169,261` as the places grievance text
+leaves the country. **DPG-11 and DPG-12 move every one of them.**
+
+Update §2.2 in the same commit that moves them. DPG-30 (Sprint 3) verifies the diagram against the code
+and will report the drift — but a data-flow diagram that has silently gone stale is a compliance artefact
+rather than a control, which is the assessment's own stated standard.
+
+Two more things from that document bear directly on **DPG-17's registry**:
+
+- **Pinning `model:provider` fixes the sub-processor. It does not fix the jurisdiction of execution**
+  (assessment **F-17**) — routed inference can run anywhere the provider chooses. The registry makes the
+  *choice* configurable; it does not make the *location* knowable. Do not let the registry's existence
+  imply otherwise in any submission text.
+- **The provider's retention and service-improvement terms are unrecorded** (**F-16**). They are the
+  mitigation any transfer analysis cites, and citing an unverified mitigation is worse than citing none.
+  Whoever picks the Sprint-2 provider should obtain them.
+
+#### g. DPG-11's blast-radius warning is softer than it reads — but not by much
+
+DPG-11 says *"The chatbot is live; a regression here is a production intake outage."* Sprint 0 established
+(assessment **§0.5**, owner-confirmed) that **no genuine grievance has ever been processed** — every
+record is AI-generated seed data or a demo dummy.
+
+**So an intake regression harms no real complainant today.** That is a real reduction in risk and it is
+worth knowing. It is **not** permission to be careless: the stack is deployed, demos run on it, and
+Sprints 2–3 assume intake works. Treat it as *"test thoroughly, you have room to be wrong once"* rather
+than *"you will take down production."* ⚠ And the statement expires at go-live.
+
+#### h. Deviation numbering continues at **D-27**
+
+Sprint 0's deviations run to **D-26**, and its two deviation tables were **merged into one namespace**
+(**D-23**) after a collision caused an already-corrected error to be reintroduced. `PROGRESS.md` now has a
+single Deviations table with a **Status** column. Add rows there; do not start a second table.
+
+---
 
 ---
 
@@ -134,6 +265,10 @@ This is the same shape as T3-04, and it gets the same treatment:
 **The invariant: DPG-10's tests are green at every commit.** If they go red, the behaviour changed and
 you stop.
 
+⚠ **Measured against a red baseline** — CI has 18 pre-existing pytest failures and 2 lint errors that are
+nothing to do with LLMs ([§0.5c](#05--what-sprint-0-changed-that-this-sprint-inherits)). The checkable
+form is: **`18 failed, 1143 passed` does not increase.** 19 is yours.
+
 ---
 
 ## DPG-10 — The test net (must land first) {#dpg-10}
@@ -154,37 +289,37 @@ For each of the nine call sites, with the OpenAI client mocked at the module bou
 
   | Function | On failure it… |
   |---|---|
-  | `transcribe_audio_file` | **raises** (`:51`) |
-  | `extract_contact_info` | returns `{field_name: ""}` (`:100`) — and see the bug below |
-  | `extract_all_contact_info` | returns a six-key dict of empty strings (`:143`) |
-  | `classify_and_summarize_grievance` | returns a dict with `status="error"` and the exception text (`:239`) |
-  | `translate_grievance_to_english_LLM` | **raises `ValueError`** (`:343`) |
-  | `detect_sensitive_content_llm` | returns `{detected: False, level: "low", message: ""}` (`:404`) — **fails open** |
-  | `translate_to_english` | returns `None` (`:100`) |
-  | `generate_case_findings` | returns `None` (`:205`, `:208`) |
-  | `generate_resolved_case_summary_llm` | returns `None` (`:283`, `:286`) |
+  | `transcribe_audio_file` | **raises** (`:53`) |
+  | `extract_contact_info` | returns `{field_name: ""}` (`:102`) — and see the bug below |
+  | `extract_all_contact_info` | returns a six-key dict of empty strings (`:145`) |
+  | `classify_and_summarize_grievance` | returns a dict with `status="error"` and the exception text (`:241`) |
+  | `translate_grievance_to_english_LLM` | **raises `ValueError`** (`:345`) |
+  | `detect_sensitive_content_llm` | returns `{detected: False, level: "low", message: ""}` (`:406`) — **fails open** |
+  | `translate_to_english` | returns `None` (`:102`) |
+  | `generate_case_findings` | returns `None` (`:207`, `:210`) |
+  | `generate_resolved_case_summary_llm` | returns `None` (`:285`, `:288`) |
 
   Three different failure idioms — raise, sentinel dict, `None` — across one product. Characterize them
   as they are; **do not unify them in this sprint** (that is a behaviour change outside scope; log it as
   a followup if you think it should be unified).
 
-- **`client is None`** — the module-level client is `None` when `OPENAI_API_KEY` is unset (`:29-34`).
+- **`client is None`** — the module-level client is `None` when `OPENAI_API_KEY` is unset (`:31-36`).
   Every function guards on it, differently. Pin each guard.
-- **`parse_llm_response`** (`:249-283`) — the shared parser. Cover: valid JSON, `"{}"` (the sentinel that
-  produces the localized "not enough information" response, `:269-276`), malformed JSON (returns `{}`,
-  `:281-283`), and each of the four language codes in `error_response_dict`.
-- **`detect_sensitive_content_llm` level clamping** (`:390-391`) — an out-of-range `level` becomes `low`.
+- **`parse_llm_response`** (`:251-285`) — the shared parser. Cover: valid JSON, `"{}"` (the sentinel that
+  produces the localized "not enough information" response, `:271-278`), malformed JSON (returns `{}`,
+  `:283-285`), and each of the four language codes in `error_response_dict`.
+- **`detect_sensitive_content_llm` level clamping** (`:392-393`) — an out-of-range `level` becomes `low`.
   This is a SEAH path; it deserves a pinned test regardless of this sprint.
 
 ### ⚠ Two traps
 
-1. **`extract_contact_info` has a latent `UnboundLocalError`.** At `:93` the handler reads `if not response:`
-   — but `response` is only bound at `:76`. Any exception raised *before* that line (a missing/invalid
-   `field_name` at `:61-66`, or a client failure) hits `:93` with `response` unbound, raising
+1. **`extract_contact_info` has a latent `UnboundLocalError`.** At `:95` the handler reads `if not response:`
+   — but `response` is only bound at `:78`. Any exception raised *before* that line (a missing/invalid
+   `field_name` at `:63-68`, or a client failure) hits `:95` with `response` unbound, raising
    `UnboundLocalError` from inside the `except`. The declared contract (`{field_name: ""}`) is not what
    callers get. **Characterize the real behaviour, not the intended one** — then log it as a deviation.
    Fixing it is DPG-14 scope only if it is trivial; otherwise it is a followup.
-2. **Mock at the right boundary.** `classify_and_summarize_grievance` builds its **own** client at `:199`,
+2. **Mock at the right boundary.** `classify_and_summarize_grievance` builds its **own** client at `:201`,
    shadowing the module-level one. A test that patches only the module-level `client` will not intercept
    it. Patch `backend.services.LLM_services.OpenAI` (the class) so both paths are covered — and note that
    DPG-11 collapses this asymmetry, which is precisely why the test must exist before then.
@@ -199,7 +334,14 @@ For each of the nine call sites, with the OpenAI client mocked at the module bou
 - [ ] No network access in any test (mocked client; CI has no LLM credentials at this stage)
 - [ ] **Mutation-checked**: changing a hard-coded model string turns a test red. If it does not, the test
       does not pin what this sprint needs pinned.
-- [ ] The `extract_contact_info` `UnboundLocalError` recorded in `PROGRESS.md` → Deviations
+- [ ] The `extract_contact_info` `UnboundLocalError` recorded in `PROGRESS.md` → Deviations (next free
+      number is **D-27** — one table, one namespace, see [§0.5h](#05--what-sprint-0-changed-that-this-sprint-inherits))
+- [ ] Both new test files carry an **SPDX header** (`scripts/ops/add_spdx_headers.py`), and
+      `python -m pytest tests/repo` stays green — the header walker fails the build without it
+- [ ] Both files live in `tests/backend/` and `tests/ticketing/`, which `ci.yml` names. **Nothing in
+      `tests/` root or `tests/shared/`** — 27 files there have never run in CI
+- [ ] Baseline recorded before the first commit: **`18 failed, 1143 passed, 8 skipped`**. The sprint's
+      real acceptance is that this number does not grow
 
 ### Tests
 
@@ -232,11 +374,11 @@ So the rule for this sprint:
 
 ### Why `backend/config/`, and why that does not breach the boundary
 
-The independence rule in `ticketing/clients/llm_client.py:5` names `backend/services/` — the **service
+The independence rule in `ticketing/clients/llm_client.py:7` names `backend/services/` — the **service
 layer**. `backend/config/` is a different thing, and the precedent is already load-bearing in production:
 
 - `backend/config/smtp_config.py` — a frozen-dataclass env resolver — is imported by
-  `ticketing/auth/keycloak_smtp.py:8`, which is reached from `ticketing/services/officer_admin.py:226`
+  `ticketing/auth/keycloak_smtp.py:10`, which is reached from `ticketing/services/officer_admin.py:226`
   and `:618` (the live officer-invite path in `ticketing_api`). **Same problem shape**: one external
   provider, two surfaces, one config.
 - The packaging cost is zero. One `Dockerfile`, `context: .`, `COPY . /app` — `backend`, `celery_llm`,
@@ -260,7 +402,7 @@ backend-owned one.
 `smtp_config.py` supplies the **location** precedent; it does not supply the pattern — it is the older
 `os.getenv` style, and DPG-11's own binding constraint (via
 [`02_python_services.md`](../../engineering/02_python_services.md) §config) rules that out. The repo's two
-newest config modules, `ticketing/config/settings.py:10` and `ops/config.py:17`, are both
+newest config modules, `ticketing/config/settings.py:12` and `ops/config.py:19`, are both
 `BaseSettings` + `@lru_cache`. Follow those:
 
 - env parsing, typing and `env_file=("env.local", ".env")` come free and match both surfaces' existing
@@ -279,7 +421,7 @@ build of the chatbot without the GRM file would fail at import of `LLM_services.
 
 **Decided (Q-18, 2026-08-17): move it.** Three edits, in DPG-17's commit:
 
-1. `requirements.txt` — add `pydantic-settings>=2.0` next to the existing `pydantic>=2.0` (`:17`), with a
+1. `requirements.txt` — add `pydantic-settings>=2.0` next to the existing `pydantic>=2.0` (`requirements.txt:17`), with a
    comment naming `backend/config/llm_config.py` as the base-surface consumer.
 2. `requirements.grm.txt:7` — remove the line. Its comment (`# ticketing/config/settings.py`) is now wrong
    in both directions: the dep is no longer GRM-only, and it has three consumers, not one.
@@ -366,14 +508,14 @@ def declared_env_vars() -> tuple[str, ...]:    # what DPG-16's drift pin reads
 
 | Task key | Env override | Value today | Endpoint | Call sites |
 |---|---|---|---|---|
-| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | llm | `LLM_services.py:230` |
-| `extract` | `MODEL_EXTRACT` | `gpt-3.5-turbo` | llm | `LLM_services.py:77`, `:114` |
-| `translate` | `MODEL_TRANSLATE` | `gpt-4` | llm | `LLM_services.py:322` |
-| `detect` | `MODEL_DETECT` | `gpt-3.5-turbo` | llm | `LLM_services.py:383` (SEAH path) |
-| `asr` | `MODEL_ASR` | `whisper-1` | **asr** | `LLM_services.py:45` |
-| `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `gpt-4` → falls back to `translate` | llm | `llm_client.py:88` |
-| `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-4o-mini` | llm | `llm_client.py:139` |
-| `ticket_findings_seah` | `MODEL_TICKET_FINDINGS_SEAH` | `gpt-4o` | llm | `llm_client.py:140` |
+| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | llm | `LLM_services.py:232` |
+| `extract` | `MODEL_EXTRACT` | `gpt-3.5-turbo` | llm | `LLM_services.py:79`, `:116` |
+| `translate` | `MODEL_TRANSLATE` | `gpt-4` | llm | `LLM_services.py:324` |
+| `detect` | `MODEL_DETECT` | `gpt-3.5-turbo` | llm | `LLM_services.py:385` (SEAH path) |
+| `asr` | `MODEL_ASR` | `whisper-1` | **asr** | `LLM_services.py:47` |
+| `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `gpt-4` → falls back to `translate` | llm | `llm_client.py:90` |
+| `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-4o-mini` | llm | `llm_client.py:141` |
+| `ticket_findings_seah` | `MODEL_TICKET_FINDINGS_SEAH` | `gpt-4o` | llm | `llm_client.py:142` |
 
 > ⚠ **Model names carry the sub-processor choice, so the registry is where the privacy decision lands.**
 > Hugging Face's router accepts a `model:provider` suffix (`openai/gpt-oss-120b:groq`); without one it
@@ -398,8 +540,8 @@ DPG-12's T-12-c pins it:
 | Old | New | Behaviour |
 |---|---|---|
 | `OPENAI_API_KEY` | `LLM_API_KEY`, `ASR_API_KEY` | used if the new name is unset; logs one warning |
-| `OPENAI_CLASSIFICATION_TIMEOUT` (`LLM_services.py:198`) | `classify` task timeout | same |
-| `ticketing` settings `openai_api_key` (`settings.py:85`) | `LLM_API_KEY` | same — satisfies DPG-12 step 1 |
+| `OPENAI_CLASSIFICATION_TIMEOUT` (`LLM_services.py:200`) | `classify` task timeout | same |
+| `ticketing` settings `openai_api_key` (`settings.py:87`) | `LLM_API_KEY` | same — satisfies DPG-12 step 1 |
 
 ### ⚠ The duplication is four files deep, not two — and one copy falsifies a stored record
 
@@ -408,8 +550,8 @@ never mention**:
 
 | File | What it does | Consequence |
 |---|---|---|
-| `ticketing/services/resolved_summary_builder.py:26-27` | A **second copy** of `_MODEL_STANDARD` / `_MODEL_SEAH`, written into the resolved-case summary as `llm.model` at `:299` | The archival record of *which model produced this case summary* is computed from a copy, in a different module from the one that made the call. Change the client's mapping and miss this file → **every resolved case records a model that did not run it.** A grievance mechanism publishing false provenance is an honesty failure a DPG reviewer would treat as exactly that. |
-| `ticketing/tasks/llm.py:163` | Re-derives `"gpt-4o" if ticket.is_seah else "gpt-4o-mini"` for a log line | The log can disagree with the call it is logging. |
+| `ticketing/services/resolved_summary_builder.py:28-29` | A **second copy** of `_MODEL_STANDARD` / `_MODEL_SEAH`, written into the resolved-case summary as `llm.model` at `:301` | The archival record of *which model produced this case summary* is computed from a copy, in a different module from the one that made the call. Change the client's mapping and miss this file → **every resolved case records a model that did not run it.** A grievance mechanism publishing false provenance is an honesty failure a DPG reviewer would treat as exactly that. |
+| `ticketing/tasks/llm.py:165` | Re-derives `"gpt-4o" if ticket.is_seah else "gpt-4o-mini"` for a log line | The log can disagree with the call it is logging. |
 
 Both are drift that has *already happened* — three copies of the same ternary, in three modules, none
 aware of the others. `findings_task()` + `model_for()` collapse all three, which is why this ticket is
@@ -439,12 +581,16 @@ corresponding test update — not a hunt across two surfaces and four modules. S
 - [ ] It imports nothing from `backend.*`, `ticketing.*` or `ops.*` (T-17-b)
 - [ ] All eight task keys resolve, each overridable by its documented env var
 - [ ] `findings_task()` is the only SEAH model ternary in the repository —
-      `ticketing/services/resolved_summary_builder.py:299` and `ticketing/tasks/llm.py:163` both call it
+      `ticketing/services/resolved_summary_builder.py:301`, `ticketing/tasks/llm.py:165` **and `:251`** all call it
 - [ ] Deprecated aliases resolve with exactly one warning each; no silently keyless client
 - [ ] Defaults reproduce today's models and today's endpoint — **DPG-10's tests pass unchanged**
 - [ ] `declared_env_vars()` exists and DPG-16's `.env.example` pin reads it rather than a second list
 - [ ] `pydantic-settings>=2.0` present in `requirements.txt`, **removed** from `requirements.grm.txt`, and
       the import verified in a rebuilt `celery_llm` container (not just in the file)
+- [ ] **`docs/dpg/dependency-licenses.md` updated** — the move changes its declared/transitive split
+      (35 / 98). A dated audit that disagrees with the manifests is worse than no audit
+      ([§0.5e](#05--what-sprint-0-changed-that-this-sprint-inherits))
+- [ ] The new file carries an **SPDX header**; `pytest tests/repo` green
 - [ ] `CLAUDE.md` §Folder structure and §Environment variables name the file (it is the file every future
       agent must find before adding a model call)
 - [ ] `docs/services/06_llm_service.md` and `docs/deployment/11_llm_pipeline_policy.md` both point at it
@@ -542,6 +688,8 @@ here is a production intake outage.
 - [ ] `load_dotenv('/home/ubuntu/...')` deleted
 - [ ] DPG-10's tests pass **unchanged** (they may gain parametrization, not rewrites)
 - [ ] `docs/services/06_llm_service.md` updated — it currently says "uses OpenAI Whisper transcription API"
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L4 re-pointed** — it cites `LLM_services.py:47,79,116,232,324,385`
+      as the places grievance text leaves the country, and this ticket moves all six
 
 ### Tests
 
@@ -562,7 +710,7 @@ new hard-coded model name is introduced. That pin is what stops the indicator-4 
 ## DPG-12 — The ticketing surface {#dpg-12}
 
 Same goal, different constraints. **Do not import `backend/services/llm_client.py` from `ticketing/`** —
-the independence rule in `llm_client.py:5` names the **service layer** and it is a real boundary this
+the independence rule in `llm_client.py:7` names the **service layer** and it is a real boundary this
 sprint does not relitigate. It does **not** extend to `backend/config/`: `ticketing/` already imports
 `backend/config/smtp_config.py` in the live officer-invite path, and [DPG-17](#dpg-17) takes that
 precedent. So this ticket keeps its own **factory** and drops its own **registry**.
@@ -576,10 +724,20 @@ precedent. So this ticket keeps its own **factory** and drops its own **registry
    `:135-138`, and SEAH cases genuinely warrant more careful reasoning. It becomes two registry keys
    ([DPG-17](#dpg-17)), not one, and not two literals here.
 2. **The two files the original inventory missed** — both hold their own copies:
-   - `ticketing/services/resolved_summary_builder.py:26-27` → delete; `:299` calls
+   - `ticketing/services/resolved_summary_builder.py:28-29` → delete; `:301` calls
      `model_for(findings_task(ticket.is_seah)).model`. ⚠ This is a **persisted provenance field** in the
      resolved-case summary. Miss it and every resolved case records a model that did not run it.
-   - `ticketing/tasks/llm.py:163` → same substitution for the log line; drop the duplicated ternary.
+   - `ticketing/tasks/llm.py:165` → same substitution for the log line; drop the duplicated ternary.
+   - ⚠ **`ticketing/tasks/llm.py:251` — found 2026-08-18, not in the original inventory.**
+     `model = _llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD` reaches into the **client
+     module's privates** rather than restating the literal. **`grep "gpt-"` does not find it**, so this
+     ticket's own acceptance grep would have passed with the site untouched — and it feeds the *same*
+     `llm.model` provenance path as `resolved_summary_builder.py:301`. Deleting `_MODEL_*` from the client
+     turns this into an `AttributeError`, which is the good outcome; resolve it via `model_for(...)`.
+   - ⚠ **`ticketing/api/routers/tickets/summary.py:113` — found 2026-08-18.** The endpoint description
+     says *"calls OpenAI gpt-4, and stores the result in `ai_summary_en`"*. It is **published in the
+     OpenAPI document**, so the model name is in the public API surface and indicator 5 is graded on it.
+     Rewrite it to describe the behaviour without naming a model.
 3. `ticketing/config/settings.py` — **do not add a parallel model registry.** `openai_api_key` (`:85`)
    becomes a deprecated alias handled inside `llm_config` so both surfaces warn identically
    ([DPG-17 §Deprecated aliases](#dpg-17)); ticketing-specific LLM knobs stay out of `TicketingSettings`
@@ -593,6 +751,11 @@ precedent. So this ticket keeps its own **factory** and drops its own **registry
 - [ ] `OpenAI(` appears exactly once in `ticketing/` — in `_get_client()`
 - [ ] `grep -rn "gpt-" ticketing/` returns nothing outside comments — **including
       `services/resolved_summary_builder.py` and `tasks/llm.py`**, which the first inventory missed
+- [ ] ⚠ **The grep is not sufficient on its own.** `tasks/llm.py:251` imports `_MODEL_SEAH` / `_MODEL_STANDARD`
+      from the client rather than restating the literal, so it is **invisible to `grep "gpt-"`**. Also assert
+      `grep -rn "_MODEL_SEAH\|_MODEL_STANDARD" ticketing/` is empty — that is the check that catches it
+- [ ] `ticketing/api/routers/tickets/summary.py:113` no longer names a model in its **endpoint description**;
+      the OpenAPI document does not advertise `gpt-4`
 - [ ] `ticketing/` declares no model name, endpoint or timeout of its own; all resolve through
       `backend/config/llm_config.py` ([DPG-17](#dpg-17))
 - [ ] The resolved-case summary's `llm.model` field is read from the registry, not a copy — the model it
@@ -603,6 +766,8 @@ precedent. So this ticket keeps its own **factory** and drops its own **registry
       `gpt-4o` as fact
 - [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green (they are unrelated
       but they are the boundary pins; confirm you did not disturb settings loading)
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L5 re-pointed** — it cites `llm_client.py:90,169,261`, and
+      this ticket moves all three
 
 ### Tests
 
@@ -713,7 +878,7 @@ Found during this sprint's planning. Land them **under DPG-10's net**, before th
 
 ### 14.1 — `gpt-5-nano` on the classification path
 
-`LLM_services.py:230`. Two things to establish, in-container, against the live key:
+`LLM_services.py:232`. Two things to establish, in-container, against the live key:
 
 1. **Does the call actually succeed?** If the model name is wrong for the account, the request raises,
    `:237-246` catches it, and the function returns `status="error"` with empty summary and categories.
@@ -824,8 +989,8 @@ intake because an API is down is worse than one with no AI at all — and in Nep
      open risk.** It returns `detected: False` when the model is unreachable (`:404`), and that is
      acceptable because **it is the second of two independent detection paths**, which this spec did not
      know when it raised the question. Verified in code:
-     - **Deterministic, synchronous, no LLM:** `backend/shared_functions/keyword_detector.py:257`
-       `detect_sensitive_content()`, with confidence scoring at `:342` — reached via `helpers_repo.py:58` →
+     - **Deterministic, synchronous, no LLM:** `backend/shared_functions/keyword_detector.py:259`
+       `detect_sensitive_content()`, with confidence scoring at `:343` — reached via `helpers_repo.py:58` →
        `actions/services/seah/sensitive_detection.py:25` → `base_mixins.py:170`, running as **slot
        validation inside the conversation**.
      - **LLM, asynchronous:** `trigger_detect_sensitive_content_task` (`forms/form_grievance.py:200`) →
@@ -928,4 +1093,8 @@ The guide's list, corrected for the two-surface reality and made checkable:
 - [ ] Intake completes successfully with `LLM_BASE_URL` pointing at a dead port — **as an automated test**
 - [ ] The full test suite passes against both configurations *(the second configuration is DPG-21; until then, against mocks + the current provider)*
 - [ ] `docs/services/06_llm_service.md` and `docs/deployment/11_llm_pipeline_policy.md` reconciled with the code
-- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit
+- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit — deviations continue at **D-27**
+- [ ] **No increase in the CI failure baseline** (`18 failed, 1143 passed`); `tests/repo` green throughout
+- [ ] Every new `.py` file carries an SPDX header, verified by `scripts/ops/add_spdx_headers.py --check`
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 legs L4 and L5 re-pointed** at the moved call sites, and
+      `docs/dpg/dependency-licenses.md` reconciled with the `pydantic-settings` move

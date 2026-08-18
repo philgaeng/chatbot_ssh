@@ -190,7 +190,7 @@ the consultant the machine output than our assertion.
 | Requirement | What is built |
 |---|---|
 | **9a — Data privacy & security** | PII encrypted at rest with pgcrypto, decrypted only server-side at a single boundary; the ticketing subsystem holds **no** encryption key and has no accessor for one (pinned by test); TLS in transit; Keycloak-authenticated officer access with a jurisdiction gate |
-| **9b — Inappropriate content** | **Two independent detection paths, not one** — corrected 2026-08-17 after verifying the code. (i) A **deterministic, scored keyword detector** (`backend/shared_functions/keyword_detector.py:257`, scoring at `:342`) runs **synchronously as slot validation inside the conversation**, with no LLM involved; (ii) `detect_sensitive_content_llm` runs asynchronously on Celery as a second pass. So a model outage **degrades the second pass rather than removing detection** — which is also why the LLM leg's fail-open default is acceptable rather than a gap. An earlier draft credited only the LLM path and **understated this control** |
+| **9b — Inappropriate content** | **Two independent detection paths, not one** — corrected 2026-08-17 after verifying the code. (i) A **deterministic, scored keyword detector** (`backend/shared_functions/keyword_detector.py:259`, scoring at `:343`) runs **synchronously as slot validation inside the conversation**, with no LLM involved; (ii) `detect_sensitive_content_llm` runs asynchronously on Celery as a second pass. So a model outage **degrades the second pass rather than removing detection** — which is also why the LLM leg's fail-open default is acceptable rather than a gap. An earlier draft credited only the LLM path and **understated this control** |
 | **9c — Protection from harassment** | Anonymous grievance submission is supported end-to-end; the **SEAH workflow is access-isolated** — configurable by administrators who cannot themselves read the cases; four-tier admin ladder with scoped permissions; full `admin_audit_log` + per-ticket event timeline |
 
 Outstanding for indicator 9: a written **retention and deletion policy** and a **breach procedure**
@@ -279,7 +279,7 @@ blocks **no code work**, which is why we are proceeding with the engineering in 
 Documentation is strong; *reproducibility by a stranger* has rough edges we should fix before a
 reviewer clones the repo:
 
-- `backend/services/LLM_services.py:25` calls `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` — a
+- `backend/services/LLM_services.py:27` calls `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` — a
   hard-coded absolute path from the original AWS host. Harmless in Docker, but it reads as
   machine-specific to anyone evaluating portability.
 - **Correction (2026-08-17):** an earlier draft of this section said *"No `.env.example`"*. **It exists**
@@ -381,14 +381,14 @@ eight: the table below merges the two ticketing findings/summary calls into row 
 
 | # | Subsystem | Function | Model (hard-coded) | What data is sent to the provider |
 |---|---|---|---|---|
-| 1 | chatbot | `transcribe_audio_file` — `LLM_services.py:45` | `whisper-1` | **Raw complainant voice recording.** ⚠ **This path is not live** — voice transcription is switched off for lack of inference budget, so no audio is currently sent. It also means we have **no baseline** to benchmark open ASR against, and a suspected SDK-argument bug on this path has never been exercised in the field |
-| 2 | chatbot | `extract_contact_info` — `:77` | `gpt-3.5-turbo` | **Complainant name and phone number**, free text |
-| 3 | chatbot | `extract_all_contact_info` — `:114` | `gpt-3.5-turbo` | As above |
-| 4 | chatbot | `classify_and_summarize_grievance` — `:230` | `gpt-5-nano` | **Full grievance narrative** + district + province |
-| 5 | chatbot | `translate_grievance_to_english_LLM` — `:322` | `gpt-4` | Full grievance narrative |
-| 6 | chatbot | `detect_sensitive_content_llm` — `:383` | `gpt-3.5-turbo` | Grievance text, including potential SEAH disclosures |
-| 7 | ticketing | `translate_to_english` — `llm_client.py:88` | `gpt-4` | **Officer case notes**, verbatim |
-| 8 | ticketing | `generate_case_findings`, `generate_resolved_case_summary_llm` — `llm_client.py:167, 259` | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | **Whole case timeline**, including SEAH cases |
+| 1 | chatbot | `transcribe_audio_file` — `LLM_services.py:47` | `whisper-1` | **Raw complainant voice recording.** ⚠ **This path is not live** — voice transcription is switched off for lack of inference budget, so no audio is currently sent. It also means we have **no baseline** to benchmark open ASR against, and a suspected SDK-argument bug on this path has never been exercised in the field |
+| 2 | chatbot | `extract_contact_info` — `:79` | `gpt-3.5-turbo` | **Complainant name and phone number**, free text |
+| 3 | chatbot | `extract_all_contact_info` — `:116` | `gpt-3.5-turbo` | As above |
+| 4 | chatbot | `classify_and_summarize_grievance` — `:232` | `gpt-5-nano` | **Full grievance narrative** + district + province |
+| 5 | chatbot | `translate_grievance_to_english_LLM` — `:324` | `gpt-4` | Full grievance narrative |
+| 6 | chatbot | `detect_sensitive_content_llm` — `:385` | `gpt-3.5-turbo` | Grievance text, including potential SEAH disclosures |
+| 7 | ticketing | `translate_to_english` — `llm_client.py:90` | `gpt-4` | **Officer case notes**, verbatim |
+| 8 | ticketing | `generate_case_findings`, `generate_resolved_case_summary_llm` — `llm_client.py:169, 261` | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | **Whole case timeline**, including SEAH cases |
 
 Four things follow from this table that we should be candid about:
 
@@ -397,7 +397,7 @@ Four things follow from this table that we should be candid about:
    about platform independence is a claim about the whole product — a reviewer who redirects one and finds
    the other still calling `api.openai.com` has found a false statement in our submission.
    **And two further modules keep their own copies of the model names**, which is worse than untidy:
-   `ticketing/services/resolved_summary_builder.py:299` writes a model name into the **stored** resolved-case
+   `ticketing/services/resolved_summary_builder.py:301` writes a model name into the **stored** resolved-case
    summary as `llm.model`, computed from a duplicated constant in a different module from the one that made
    the call. Change the client and miss that file and every resolved case records a model that never ran it —
    a grievance mechanism publishing false provenance. Our answer is **two client factories but one config

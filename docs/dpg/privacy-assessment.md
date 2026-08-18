@@ -262,7 +262,7 @@ personal data is exposed beyond what a reader would assume.
 | **L1** | Complainant → webchat | Free-text narrative, voice recordings, attachments, contact fields, map-pin location | `channels/REST_webchat/` | TLS in transit at the nginx edge. Anonymous submission is supported end-to-end |
 | **L2** | Webchat → orchestrator → `public.grievances` / `public.complainants` | As above | `base_manager.py:243` (encrypt), `:255` (decrypt) | Four contact fields encrypted with pgcrypto. **⚠ The narrative is not** — `grievance_description` is stored in plaintext and is the field most likely to contain third-party names |
 | **L3** | Orchestrator → Celery → **Redis** | ⚠ Task payloads containing `grievance_description` verbatim, and the raw text of a sensitive-content check | `classification.py:140,153`; `sensitive.py:35-41` | The broker holds unredacted grievance text, including potential SEAH disclosures. Mitigating: the `redis` service declares **no persistence volume**, so payloads are not written to durable storage. They are still in memory and in any process dump |
-| **L4** | Celery → **model provider** | ⚠ **Raw narrative, complainant name and phone, audio files** — unredacted | `LLM_services.py:45,79,116,232,324,385` | **Six call sites. Leaves Nepal on every classification.** No `base_url` is set anywhere, so this is `api.openai.com`. See §4 |
+| **L4** | Celery → **model provider** | ⚠ **Raw narrative, complainant name and phone, audio files** — unredacted | `LLM_services.py:47,79,116,232,324,385` | **Six call sites. Leaves Nepal on every classification.** No `base_url` is set anywhere, so this is `api.openai.com`. See §4 |
 | **L5** | Ticketing Celery → **model provider** | ⚠ Officer case notes verbatim; **the whole case timeline, including SEAH cases** | `llm_client.py:90,169,261` | **Three call sites.** Same destination, second independent client. A reviewer who redirects one and finds the other is entitled to distrust the rest of the submission |
 | **L6** | Chatbot → ticketing webhook | Grievance reference, summary, categories, location, priority | `backend/actions/utils/ticketing_dispatch.py` | Internal, non-PII by design. `grievance_summary` is free text and **can** carry self-disclosed PII — cached deliberately; the raw description is not |
 | **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:188`; `routers/grievance.py` | Server-side decryption at a single boundary; authenticated with an API key; the read is audited. This is the platform's strongest privacy control |
@@ -279,8 +279,8 @@ Named so that the omission is deliberate rather than an oversight:
 
 - **Application logs.** Grievance text reaches log lines in at least two known places — translation
   error paths interpolate the whole input dict including `grievance_description`
-  (`LLM_services.py:335,343`), and `parse_llm_response` logs the raw model response on a JSON parse
-  error (`LLM_services.py:282`). Logs go to the Docker `json-file` driver (10 MB × 5 per service) and
+  (`LLM_services.py:337,345`), and `parse_llm_response` logs the raw model response on a JSON parse
+  error (`LLM_services.py:284`). Logs go to the Docker `json-file` driver (10 MB × 5 per service) and
   to a `logs/` directory. **This is a real, live PII sink that no diagram box captures.** Owned by
   [DPG-34](../sprints/2026-08-llm/04-pii-redaction-spec.md).
 - **The Celery result backend.** Task results land in Redis DB 2. Whether any result carries
@@ -375,7 +375,7 @@ by default (F-4), grievance text in the broker (F-5) and in logs (F-6).
 - **Anonymous submission is supported end-to-end**, including an explicit `seah_anonymous_route`.
 - **Two independent sensitive-content detection paths**, not one: a deterministic scored keyword
   detector running synchronously as slot validation inside the conversation
-  (`backend/shared_functions/keyword_detector.py:257`, scored at `:342`), and an LLM check running
+  (`backend/shared_functions/keyword_detector.py:259`, scored at `:343`), and an LLM check running
   asynchronously as a second pass. A model outage therefore degrades the second pass rather than
   removing detection.
 
@@ -660,7 +660,7 @@ privacy impact, not a legal characterisation.
 | **F-3** | **Unsalted SHA-256 of phone, email, name and address** stored as `*_hash` search tokens. Nepal's mobile number space is small enough to enumerate exhaustively in seconds; the hash of a phone number is therefore reversible, so these columns are personal data, not pseudonyms | `base_manager.py:502-511`, used at `complainant_manager.py:121` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
 | **F-4** | **Backups are unencrypted by default.** `pg_dump` of the whole database plus a tar of the uploads volume; GPG/passphrase encryption only if an env var is set; off-box destination unspecified in the repo. Contact columns stay ciphertext, but the narrative, all officer notes, and every voice recording and photograph are in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
 | **F-5** | **Grievance text, including potential SEAH disclosures, passes through the Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | DPG-34 |
-| **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:282,335,343` | 🟠 Medium | DPG-34 |
+| **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:284,337,345` | 🟠 Medium | DPG-34 |
 | **F-7** | **No deletion capability exists anywhere in the platform**, and no retention period has been chosen. Archiving is implemented and is not deletion | `ARCHIVING_AND_RETENTION.md` §5.3, §10 | 🟠 Medium | **needs a legal position** |
 | **F-8** | **No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed | — | 🟠 Medium | **needs an owner** |
 | **F-9** | **Third parties named in grievances have not consented and cannot exercise any right.** The redaction layer *does* reach names (§31.2b — title triggers, thar gazetteer, self-identification), tuned for recall, so this is a **measured residual rather than an untouched gap** — but the residual is real and unquantified until DPG-35 reports it, and no redaction addresses the fact that these people have no rights they can exercise over data already held | §4 | 🟠 Medium | **needs a legal position**; recall figure from DPG-35 |
