@@ -388,8 +388,8 @@ eight: the table below merges the two ticketing findings/summary calls into row 
 | 4 | chatbot | `classify_and_summarize_grievance` — `:232` | `gpt-5-nano` | **Full grievance narrative** + district + province |
 | 5 | chatbot | `translate_grievance_to_english_LLM` — `:324` | `gpt-4` | Full grievance narrative |
 | 6 | chatbot | `detect_sensitive_content_llm` — `:385` | `gpt-3.5-turbo` | Grievance text, including potential SEAH disclosures |
-| 7 | ticketing | `translate_to_english` — `llm_client.py:90` | `gpt-4` | **Officer case notes**, verbatim |
-| 8 | ticketing | `generate_case_findings`, `generate_resolved_case_summary_llm` — `llm_client.py:169, 261` | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | **Whole case timeline**, including SEAH cases |
+| 7 | ticketing | `translate_to_english` — `llm_client.py:121` | `gpt-4` | **Officer case notes**, verbatim |
+| 8 | ticketing | `generate_case_findings`, `generate_resolved_case_summary_llm` — `llm_client.py:203, 305` | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | **Whole case timeline**, including SEAH cases |
 
 Four things follow from this table that we should be candid about:
 

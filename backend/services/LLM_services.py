@@ -5,8 +5,15 @@ from typing import Dict, Any, List, Tuple, Optional
 
 from openai import OpenAI
 
-from backend.config.llm_config import model_for
+from backend.config.llm_config import model_for, response_format_kwargs
 from backend.services.llm_client import get_asr_client, get_llm_client
+from backend.services.llm_schemas import (
+    ContactExtractionAll,
+    GrievanceClassification,
+    GrievanceTranslation,
+    SensitiveContentDetection,
+    single_field_contact_schema,
+)
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
@@ -114,19 +121,24 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
         response = client.chat.completions.create(
             model=task.model,
             timeout=task.timeout,
+            **response_format_kwargs(
+                "contact_extraction",
+                single_field_contact_schema(field_name).model_json_schema(),
+                task.structured_output,
+            ),
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
                 {"role": "user", "content": message_input}
             ],
-            response_format={"type": "json_object"}
         )
         
-        # Get the full ChatGPT response content
         full_response = response.choices[0].message.content
-        result = json.loads(full_response)
-         # FIXED: Use full ChatGPT response instead of just extracted field
-        
-        return result  # FIXED: Return result instead of result_dict
+        # Validated through the per-call schema: the caller checks every returned key against
+        # USER_FIELDS and raises on a stray one, so dropping keys the schema does not declare is
+        # the difference between a task that succeeds and a task that fails on the model's
+        # enthusiasm.
+        parsed = json.loads(full_response)
+        return single_field_contact_schema(field_name).model_validate(parsed).model_dump()
         
     except Exception as e:
         if not response:
@@ -153,6 +165,11 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
         response = client.chat.completions.create(
             model=task.model,
             timeout=task.timeout,
+            **response_format_kwargs(
+                "contact_extraction_all",
+                ContactExtractionAll.model_json_schema(),
+                task.structured_output,
+            ),
             messages=[
                 {"role": "system", "content": "Extract the person's contact and location information in the language of the text."},
                 {"role": "user", "content": f"""
@@ -172,11 +189,10 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
                 }}
                     """}
             ],
-            response_format={"type": "json_object"}
         )
-        
+
         result = parse_llm_response("contact_response", response.choices[0].message.content)
-        return result
+        return ContactExtractionAll.model_validate(result).model_dump()
         
             
     except Exception as e:
@@ -275,11 +291,20 @@ def classify_and_summarize_grievance(
             ],
             model=task.model,
             timeout=task.timeout,
+            **response_format_kwargs(
+                "grievance_classification",
+                GrievanceClassification.model_json_schema(),
+                task.structured_output,
+            ),
         )
 
-        # Parse the response
+        # Parse, then validate through the schema (DPG-13). Validation is what makes a
+        # schema-violating reply — `grievance_categories` as a string, say — a failure the caller
+        # can see, rather than a dict that looks fine until something downstream iterates it.
         result = parse_llm_response("grievance_response", response.choices[0].message.content.strip(), language_code)
-        return result
+        validated = GrievanceClassification.model_validate(result)
+        _warn_about_unlisted_categories(validated.grievance_categories, category_list)
+        return validated.model_dump()
 
     except Exception as e:
         logger.error(f"Error in classify_and_summarize_grievance: {str(e)}")
@@ -293,6 +318,35 @@ def classify_and_summarize_grievance(
         }
         
         
+class LLMResponseParseError(ValueError):
+    """
+    The model's reply was not JSON.
+
+    A distinct type because the alternative — returning `{}` — is the bug: a parse failure and a
+    legitimately empty result then look identical to every caller, and this codebase was
+    absorbing the difference on its primary AI path. Subclasses `ValueError` so existing
+    `except ValueError` handlers keep working.
+    """
+
+
+def _warn_about_unlisted_categories(chosen: List[str], catalogue: List[str]) -> None:
+    """
+    Log — never reject — categories the model invented.
+
+    ⚠ The catalogue is passed in, derived from `CLASSIFICATION_DATA` at call time, because it is
+    **admin-configurable** and resynced into `public.grievance_classification_taxonomy`. Freezing
+    today's values into a `Literal[...]` in the schema would mean a code change every time an
+    administrator adds a category, and would break the resync path. And a complainant's
+    classification is not worth discarding because the model named a category slightly wrong.
+    """
+    unlisted = [c for c in chosen if c and c not in catalogue]
+    if unlisted:
+        logger.warning(
+            "classify_and_summarize_grievance: %d category value(s) outside the live catalogue: %s",
+            len(unlisted), unlisted,
+        )
+
+
 def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:
     """
     Parse the LLM response into a structured format.
@@ -326,8 +380,18 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
             result_dict[field] = result_dict.get(field, "")
         return result_dict
     except json.JSONDecodeError as e:
-        logger.error(f"Error parsing LLM response: {str(e)} - raw response from LLM: {response}")
-        return {}
+        # ⚠ This used to `return {}`, which made a malformed reply **indistinguishable from a
+        # successful empty classification** — the silent failure DPG-13 exists to remove. It now
+        # raises, so each caller's own error contract fires and the difference is visible.
+        # The log carries the response **length, not its content**: the raw body is grievance
+        # narrative (T-34-c, Sprint 3).
+        logger.error(
+            "Error parsing LLM response (%s): %s - response length %d chars",
+            type, str(e), len(response or ""),
+        )
+        raise LLMResponseParseError(
+            f"The model's {type} reply was not valid JSON ({len(response or '')} chars)"
+        ) from e
     
     
 
@@ -370,6 +434,11 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
             ],
             model=task.model,
             timeout=task.timeout,
+            **response_format_kwargs(
+                "grievance_translation",
+                GrievanceTranslation.model_json_schema(),
+                task.structured_output,
+            ),
         )
         if not response:
             raise ValueError("No response from OpenAI API")
@@ -380,7 +449,8 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
         # Parse the response
         result = {}
         try:
-            result = json.loads(response.choices[0].message.content.strip())
+            parsed = json.loads(response.choices[0].message.content.strip())
+            result = GrievanceTranslation.model_validate(parsed).model_dump()
         except Exception as e:
             raise ValueError(f"Error parsing LLM response: {str(e)} - input_data: {input_data} - result: {result}")
         result["grievance_id"] = input_data["grievance_id"]
@@ -434,7 +504,11 @@ Respond with a JSON object only: {{"detected": true or false, "level": "high" or
             ],
             model=detect.model,
             timeout=detect.timeout,
-            response_format={"type": "json_object"},
+            **response_format_kwargs(
+                "sensitive_content_detection",
+                SensitiveContentDetection.model_json_schema(),
+                detect.structured_output,
+            ),
         )
         raw = response.choices[0].message.content.strip()
         out = json.loads(raw)
@@ -445,6 +519,11 @@ Respond with a JSON object only: {{"detected": true or false, "level": "high" or
         message = out.get("message") or ""
         if not isinstance(message, str):
             message = str(message)[:200]
+        # Clamp first, validate second. The clamp stays even though the schema makes `level`
+        # structural, because the schema is only enforced on the rungs where the provider honours
+        # it — and this is the SEAH path, which does not get to depend on a provider's goodwill.
+        validated = SensitiveContentDetection(detected=detected, level=level, message=message)
+        detected, level, message = validated.detected, validated.level, validated.message
         logger.info(
             "detect_sensitive_content_llm: result | detected=%s, level=%s, %s",
             detected,

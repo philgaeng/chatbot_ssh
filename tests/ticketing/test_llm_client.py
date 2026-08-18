@@ -212,7 +212,13 @@ def test_generate_case_findings_sends_gpt_4o_mini_for_a_standard_case(openai_cla
 
     request = openai_class.last_request
     assert request["model"] == "gpt-4o-mini"
-    assert request["response_format"] == {"type": "json_object"}
+    # DPG-13: `json_object` → a strict `json_schema`, which is what makes the "missing keys →
+    # fill defaults" branch below unreachable on this rung rather than merely unlikely.
+    assert request["response_format"]["type"] == "json_schema"
+    assert request["response_format"]["json_schema"]["strict"] is True
+    assert set(request["response_format"]["json_schema"]["schema"]["required"]) == {
+        "summary_en", "key_findings", "recommended_action", "urgency", "languages_detected",
+    }
     assert request["temperature"] == 0.0
     assert request["max_tokens"] == 400
 
@@ -273,7 +279,8 @@ def test_generate_resolved_case_summary_sends_gpt_4o_mini_for_a_standard_case(op
 
     request = openai_class.last_request
     assert request["model"] == "gpt-4o-mini"
-    assert request["response_format"] == {"type": "json_object"}
+    assert request["response_format"]["type"] == "json_schema"
+    assert request["response_format"]["json_schema"]["strict"] is True
     assert request["temperature"] == 0.0
     assert request["max_tokens"] == 1200
 
@@ -328,4 +335,33 @@ def test_generate_resolved_case_summary_returns_none_on_malformed_json(openai_cl
 
 def test_generate_resolved_case_summary_returns_none_on_provider_error(openai_class):
     openai_class.error = RuntimeError("provider down")
+    assert llm_client.generate_resolved_case_summary_llm(BUNDLE) is None
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-13-b — validation on the ticketing surface
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_findings_with_an_invalid_urgency_are_rejected_not_stored(openai_class):
+    """
+    **T-13-b.** `urgency` drives the officer queue's ordering. "URGENT" is not one of the three
+    values the system understands, parses as JSON perfectly well, and used to be written straight
+    into `findings_json` — where nothing would notice until a queue sorted oddly.
+    """
+    openai_class.response = _chat(json.dumps({**FINDINGS_JSON, "urgency": "URGENT"}))
+
+    assert llm_client.generate_case_findings(CONTEXT) is None
+
+
+def test_findings_with_a_non_list_key_findings_are_rejected(openai_class):
+    openai_class.response = _chat(json.dumps({**FINDINGS_JSON, "key_findings": "just the one"}))
+
+    assert llm_client.generate_case_findings(CONTEXT) is None
+
+
+def test_a_resolved_summary_with_a_wrong_typed_public_field_is_rejected(openai_class):
+    """The `*_public` fields are complainant-facing; a list where prose belongs must not ship."""
+    openai_class.response = _chat(
+        json.dumps({**RESOLVED_JSON, "resolution_text_public": ["a", "list"]})
+    )
+
     assert llm_client.generate_resolved_case_summary_llm(BUNDLE) is None

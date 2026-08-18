@@ -28,6 +28,8 @@ ENV_VARS = (
     "MODEL_CLASSIFY", "MODEL_EXTRACT", "MODEL_TRANSLATE", "MODEL_DETECT", "MODEL_ASR",
     "MODEL_TICKET_TRANSLATE", "MODEL_TICKET_FINDINGS", "MODEL_TICKET_FINDINGS_SEAH",
     "TIMEOUT_CLASSIFY", "TIMEOUT_TICKET",
+    "STRUCTURED_CLASSIFY", "STRUCTURED_EXTRACT", "STRUCTURED_TRANSLATE", "STRUCTURED_DETECT",
+    "STRUCTURED_TICKET_FINDINGS",
     "OPENAI_API_KEY", "OPENAI_CLASSIFICATION_TIMEOUT",
 )
 
@@ -179,16 +181,126 @@ def test_task_timeouts_preserve_todays_behaviour(monkeypatch):
     assert llm_config.model_for("classify").timeout == 45.0
 
 
-def test_retries_and_structured_output_mode_are_configuration(monkeypatch):
+def test_retries_and_the_endpoint_structured_output_ceiling_are_configuration(monkeypatch):
     assert llm_config.llm_endpoint().max_retries == 2
-    assert llm_config.llm_endpoint().structured_output == "json_object"
+    assert llm_config.llm_endpoint().structured_output == "json_schema"
 
     monkeypatch.setenv("LLM_MAX_RETRIES", "5")
-    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "json_schema")
+    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "json_object")
     llm_config.get_llm_settings.cache_clear()
 
     assert llm_config.llm_endpoint().max_retries == 5
-    assert llm_config.llm_endpoint().structured_output == "json_schema"
+    assert llm_config.llm_endpoint().structured_output == "json_object"
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-13-a / T-13-c — the structured-output ladder
+# ═════════════════════════════════════════════════════════════════════════════
+
+MEASURED_CAPABILITY = {
+    # task                    mode          why (measured against the live provider, 2026-08-18)
+    "classify": "json_schema",           # gpt-5-nano     ✅ schema
+    "extract": "json_object",            # gpt-3.5-turbo  400 on schema, ✅ object
+    "detect": "json_object",             # gpt-3.5-turbo  400 on schema, ✅ object
+    "translate": "prompt",               # gpt-4          400 on BOTH — no JSON mode at all
+    "ticket_findings": "json_schema",    # gpt-4o-mini    ✅ schema
+    "ticket_findings_seah": "json_schema",
+}
+
+
+@pytest.mark.parametrize("task,mode", sorted(MEASURED_CAPABILITY.items()))
+def test_each_task_declares_what_its_model_can_actually_do(task, mode):
+    """
+    **T-13-a.** ⚠ Capability is a property of the **(endpoint, model) pair**, not of the endpoint
+    — the spec assumed otherwise, and an endpoint-only flag would have sent `json_schema` to
+    `gpt-3.5-turbo` and `json_object` to `gpt-4`, both of which answer 400. Each row above was
+    measured with one request per cell before this default was written.
+    """
+    assert llm_config.model_for(task).structured_output == mode
+
+
+def test_the_endpoint_ceiling_clamps_every_task_down_at_once(monkeypatch):
+    """
+    **T-13-c.** The ladder degrades; it never guesses upward. Pointing at an endpoint that only
+    does `json_object` must not leave the classification path asking for a schema — this is the
+    one knob that moves every site, which is why DPG-24's CI job can run against providers with
+    weaker support instead of the test being weakened to suit them.
+    """
+    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "json_object")
+    llm_config.get_llm_settings.cache_clear()
+    assert llm_config.model_for("classify").structured_output == "json_object"
+    assert llm_config.model_for("extract").structured_output == "json_object"
+
+    monkeypatch.setenv("LLM_STRUCTURED_OUTPUT", "prompt")
+    llm_config.get_llm_settings.cache_clear()
+    assert llm_config.model_for("classify").structured_output == "prompt"
+    assert llm_config.model_for("ticket_findings").structured_output == "prompt"
+
+
+def test_a_task_capability_is_overridable_without_touching_the_endpoint(monkeypatch):
+    """Point one task at a better model and lift only that task — the per-task half of the ladder."""
+    monkeypatch.setenv("MODEL_TRANSLATE", "gpt-4o")
+    monkeypatch.setenv("STRUCTURED_TRANSLATE", "json_schema")
+    llm_config.get_llm_settings.cache_clear()
+
+    assert llm_config.model_for("translate").structured_output == "json_schema"
+    assert llm_config.model_for("extract").structured_output == "json_object"
+
+
+def test_free_text_tasks_never_ask_for_json():
+    """ASR and note translation return prose. A `response_format` on either is a bug."""
+    assert llm_config.model_for("asr").structured_output == "prompt"
+    assert llm_config.model_for("ticket_translate").structured_output == "prompt"
+    assert llm_config.response_format_kwargs("asr", None, "prompt") == {}
+
+
+def test_the_prompt_rung_sends_no_response_format_key_at_all():
+    """
+    Not `response_format=None`: the SDK serialises an explicit None into the body, and a provider
+    that has never heard of the parameter is entitled to reject it. The weakest rung must produce
+    the request this code sent before the ladder existed.
+    """
+    assert llm_config.response_format_kwargs("x", {"type": "object"}, "prompt") == {}
+    assert llm_config.response_format_kwargs("x", {"type": "object"}, "json_object") == {
+        "response_format": {"type": "json_object"}
+    }
+
+
+def test_a_schema_is_made_strict_before_it_is_sent():
+    """
+    Strict mode requires `additionalProperties: false` and every property listed as required, at
+    every level — Pydantic emits neither, because they are not what JSON Schema means by
+    "required". Providers reject a schema that claims `strict: true` without them.
+    """
+    schema = {
+        "type": "object",
+        "properties": {
+            "a": {"type": "string"},
+            "nested": {"type": "object", "properties": {"b": {"type": "string"}}},
+        },
+        "required": ["a"],
+    }
+
+    out = llm_config.response_format_kwargs("t", schema, "json_schema")["response_format"]
+
+    assert out["json_schema"]["strict"] is True
+    body = out["json_schema"]["schema"]
+    assert body["additionalProperties"] is False
+    assert sorted(body["required"]) == ["a", "nested"]
+    assert body["properties"]["nested"]["additionalProperties"] is False
+    assert body["properties"]["nested"]["required"] == ["b"]
+    assert schema["required"] == ["a"], "the caller's schema must not be mutated"
+
+
+def test_the_mode_used_is_logged(caplog):
+    """A provider that silently ignores json_schema and one that never received it look the same."""
+    with caplog.at_level("DEBUG", logger="backend.config.llm_config"):
+        llm_config.response_format_kwargs("case_findings", {"type": "object"}, "json_object")
+
+    assert any(
+        "case_findings" in r.getMessage() and "json_object" in r.getMessage()
+        for r in caplog.records
+    )
 
 
 def test_an_unsupported_structured_output_mode_is_rejected_at_load(monkeypatch):

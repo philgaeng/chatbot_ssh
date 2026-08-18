@@ -115,6 +115,39 @@ The same registry is read by the ticketing surface (`ticketing/clients/llm_clien
 `LLM_BASE_URL` change moves both. That is the DPG indicator-4 property, and it is pinned by a test
 rather than asserted here — `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py`.
 
+### Structured output — schemas, and the ladder that degrades them
+
+Seven of the nine call sites produce JSON. Each declares a Pydantic model
+(`backend/services/llm_schemas.py`, `ticketing/clients/llm_schemas.py`), and the request carries a
+**strict `json_schema`** wherever the model supports it — generation is then constrained to the
+grammar, so the reply is *guaranteed* parseable rather than probably parseable.
+
+⚠ **Support is a property of the (endpoint, model) pair, not of the endpoint.** Measured against the
+live provider, 2026-08-18, one request per cell:
+
+| Model | `json_schema` | `json_object` |
+|---|---|---|
+| `gpt-5-nano` | ✅ | ✅ |
+| `gpt-4o-mini` | ✅ | ✅ |
+| `gpt-3.5-turbo` | **400** | ✅ |
+| `gpt-4` | **400** | **400** — no JSON mode at all |
+
+So each task declares its own capability in the registry, `LLM_STRUCTURED_OUTPUT` is the endpoint's
+ceiling, and the effective mode is the weaker of the two. The ladder degrades — `json_schema` →
+`json_object` → `prompt` — and never guesses upward; the rung used is logged per call.
+
+**What this closed.** Two call sites — classification and translation, the primary AI path and the
+English record — sent *no* `response_format` and asked for "strict JSON" in the prompt. A malformed
+reply was absorbed by `parse_llm_response` into `{}`, which is exactly what a successful *empty*
+classification looks like. It now raises `LLMResponseParseError`, the caller's own error contract
+fires, and the log records the response **length, not its content**.
+
+⚠ **Categories are validated against the live catalogue, not a frozen enum.** The taxonomy is
+admin-configurable and resynced into `public.grievance_classification_taxonomy`; a `Literal[...]` of
+today's categories would require a code change per category and break the resync. A value outside the
+catalogue is **logged, not rejected** — a mis-named category is not a reason to discard a
+complainant's classification.
+
 ## 4) Error and Fallback Behavior
 
 - Missing client/config returns structured failure/fallback payloads in many functions.

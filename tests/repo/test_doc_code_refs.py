@@ -102,21 +102,21 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     # which is the whole discipline this pin exists to enforce:
     #   grep -rn "LLM_services.py:" docs/ --include=*.md | grep -v /archive/
     # The six chatbot call sites — what the privacy assessment's leg L4 cites.
-    ("backend/services/LLM_services.py", 64, "audio.transcriptions.create"),
-    ("backend/services/LLM_services.py", 114, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 153, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 250, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 353, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 420, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 71, "audio.transcriptions.create"),
+    ("backend/services/LLM_services.py", 121, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 165, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 266, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 417, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 490, "chat.completions.create"),
     # DPG-14.3: the ASR call passes `language=`, not `language_code=`. The SDK declares its
     # parameters explicitly, so the old kwarg raised TypeError on every transcription.
-    ("backend/services/LLM_services.py", 71, "language=language_code"),
+    ("backend/services/LLM_services.py", 78, "language=language_code"),
     # Where every model name now lives — one file, one line each (DPG-17).
-    ("backend/config/llm_config.py", 103, "gpt-5-nano"),
+    ("backend/config/llm_config.py", 105, "gpt-5-nano"),
     # The three ticketing call sites — what the privacy assessment's leg L5 cites.
-    ("ticketing/clients/llm_client.py", 114, "chat.completions.create"),
-    ("ticketing/clients/llm_client.py", 196, "chat.completions.create"),
-    ("ticketing/clients/llm_client.py", 289, "chat.completions.create"),
+    ("ticketing/clients/llm_client.py", 121, "chat.completions.create"),
+    ("ticketing/clients/llm_client.py", 203, "chat.completions.create"),
+    ("ticketing/clients/llm_client.py", 305, "chat.completions.create"),
     # ✅ The four duplicated copies of the SEAH ternary, collapsed by DPG-12 (2026-08-18). These
     # anchors used to read `_MODEL_SEAH`; they now anchor the single resolution each site makes
     # through the registry. Two of the four were invisible to `grep "gpt-"` — one reached into

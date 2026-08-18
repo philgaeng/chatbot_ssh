@@ -424,7 +424,7 @@ instead of nine call sites.
    mapping. Get this wrong in either direction and you either leak or you ship `<PERSON_1>` to a user.
 3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
    *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
-   descriptors"* (`llm_client.py:127-128`). **A prompt instruction is not a control** — it does nothing
+   descriptors"* (`llm_client.py:160-161`). **A prompt instruction is not a control** — it does nothing
    about what is *sent*, only about what comes back. Keep it (defence in depth) and add real redaction
    on the input.
 4. **Audio is not redactable.** `transcribe_audio_file` sends the raw waveform; a voice note carries the

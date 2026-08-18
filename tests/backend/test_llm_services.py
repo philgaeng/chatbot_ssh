@@ -168,13 +168,15 @@ def test_extract_all_contact_info_sends_gpt_35_turbo_with_json_object(client):
     assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
-def test_classify_sends_gpt_5_nano_with_no_response_format(client):
+def test_classify_sends_gpt_5_nano_with_a_strict_schema(client):
     """
-    Call site 4 — the product's primary AI path.
+    Call site 4 — the product's primary AI path, and DPG-13's biggest win.
 
-    Two things pinned here and nowhere else: the model is `gpt-5-nano` (a deliberate cost choice,
-    Q-13.1), and the request carries **no `response_format`** — it asks for "strict JSON" in the
-    prompt and hopes. DPG-13 closes that.
+    Until 2026-08-18 this request carried **no `response_format` at all**: it asked for "strict
+    JSON" in the prompt and hoped, and a malformed reply was absorbed into `{}` by
+    `parse_llm_response`, where it was indistinguishable from a successful empty classification.
+    It now sends a strict `json_schema` — verified against the live provider before the default
+    was set, because `gpt-3.5-turbo` and `gpt-4` reject that parameter with a 400.
     """
     client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
 
@@ -182,7 +184,8 @@ def test_classify_sends_gpt_5_nano_with_no_response_format(client):
 
     kwargs = client.chat.completions.create.call_args.kwargs
     assert kwargs["model"] == "gpt-5-nano"
-    assert "response_format" not in kwargs
+    assert kwargs["response_format"]["type"] == "json_schema"
+    assert kwargs["response_format"]["json_schema"]["strict"] is True
     assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
@@ -345,15 +348,33 @@ def test_extract_all_contact_info_returns_six_empty_strings_on_failure(client):
     }
 
 
-def test_extract_all_contact_info_returns_an_empty_dict_on_a_malformed_body(client):
+def test_extract_all_contact_info_reports_a_malformed_body_as_a_failure(client, caplog):
     """
-    Not the same as the failure contract above: a malformed body reaches `parse_llm_response`,
-    which swallows the `JSONDecodeError` and returns `{}` — so the caller cannot tell a parse
-    failure from an empty extraction. DPG-13 is the ticket that removes this ambiguity.
+    **Changed by DPG-13, deliberately.** This used to return a bare `{}`, because
+    `parse_llm_response` swallowed the `JSONDecodeError` — so a parse failure and an empty
+    extraction were the same value. The parse now raises, this function's own failure contract
+    fires, and the log says which of the two happened.
+
+    ⚠ Honest limit: the *return value* here is the same as for a provider outage — the six-key
+    sentinel. What distinguishes them is the log line, which names the parse failure and the
+    response length. The call site where the distinction is visible in the return value is
+    classification, below, and that is the one that mattered.
     """
     client.chat.completions.create.return_value = _chat("{not json")
 
-    assert llm.extract_all_contact_info(ALL_CONTACT_INPUT) == {}
+    with caplog.at_level("ERROR"):
+        result = llm.extract_all_contact_info(ALL_CONTACT_INPUT)
+
+    assert result == {
+        "complainant_phone": "",
+        "complainant_full_name": "",
+        "complainant_district": "",
+        "complainant_municipality": "",
+        "complainant_village": "",
+        "complainant_address": "",
+    }
+    assert any("not valid JSON" in r.getMessage() or "Error parsing LLM response" in r.getMessage()
+               for r in caplog.records)
 
 
 def test_classify_returns_a_status_error_dict_when_the_call_fails(client):
@@ -564,12 +585,44 @@ def test_parse_llm_response_does_not_localize_the_sentinel_for_contact_responses
     }
 
 
-def test_parse_llm_response_returns_an_empty_dict_on_malformed_json():
+def test_parse_llm_response_raises_on_malformed_json_and_logs_a_length_not_the_body(caplog):
     """
-    ⚠ The silent failure this sprint is aimed at: a malformed body and a legitimately empty result
-    are indistinguishable to every caller. DPG-13 makes them distinguishable.
+    **T-13-d.** The silent failure this sprint was aimed at: a malformed body used to `return {}`,
+    which is what a legitimately empty result looks like. It now raises.
+
+    The log carries the response **length, not its content** — the raw body is grievance
+    narrative, and this line is one of the log-surface leaks Sprint 3 (T-34-c) is about. Fixing it
+    here costs nothing and removes one item from that list.
     """
-    assert llm.parse_llm_response("grievance_response", "{not json") == {}
+    with caplog.at_level("ERROR"):
+        with pytest.raises(llm.LLMResponseParseError):
+            llm.parse_llm_response("grievance_response", "{not json but with a narrative in it")
+
+    message = " ".join(r.getMessage() for r in caplog.records)
+    assert "response length" in message
+    assert "narrative" not in message, "the raw body must not reach the log"
+
+
+def test_a_malformed_classification_is_distinguishable_from_an_empty_one(client):
+    """
+    **T-13-d, the case that mattered.** Two replies, two outcomes that used to be identical:
+
+    * `"{}"` — the model saying *not enough information*: the localized fallback text, no error.
+    * `"{not json"` — the model failing: `status="error"`, with the reason.
+
+    Before this ticket both produced a dict with empty content and nothing to tell them apart, on
+    the product's primary AI path.
+    """
+    client.chat.completions.create.return_value = _chat("{}")
+    empty = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="en")
+
+    client.chat.completions.create.return_value = _chat("{not json")
+    malformed = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="en")
+
+    assert empty["grievance_summary"] == "not enough information to proceed"
+    assert "status" not in empty
+    assert malformed["status"] == "error"
+    assert "not valid JSON" in malformed["error"]
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -730,3 +783,75 @@ def test_the_factory_error_names_the_host_but_never_the_key(clean_llm_env, monke
 
     assert "router.huggingface.co" in str(exc.value)
     assert "LLM_API_KEY" in str(exc.value)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-13-b / T-13-e — validation, and why the categories are not an enum
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_a_schema_violating_classification_is_rejected_not_silently_accepted(client):
+    """
+    **T-13-b.** `grievance_categories` as a bare string parses as JSON perfectly well. Before
+    validation it travelled onward as a string where every downstream reader expects a list —
+    the kind of defect that surfaces three services later as something iterating characters.
+    """
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({**CLASSIFY_JSON, "grievance_categories": "Dust and air pollution"})
+    )
+
+    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+
+    assert result["status"] == "error"
+    assert result["grievance_categories"] == []
+
+
+def test_a_valid_classification_survives_validation_unchanged(client):
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
+    assert llm.classify_and_summarize_grievance("सडकमा धुलो छ") == CLASSIFY_JSON
+
+
+def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(client, caplog, monkeypatch):
+    """
+    **T-13-e.** The taxonomy is **admin-configurable** and resynced into
+    `public.grievance_classification_taxonomy`. A `Literal[...]` of today's categories in the
+    schema would mean a code change every time an administrator adds one — and would make the
+    resync path a lie. So the schema says `list[str]`, and membership is checked afterwards,
+    against the catalogue as it is at call time.
+
+    Checked, not enforced: a model naming a category slightly wrong is a prompt problem, and it is
+    not worth discarding a complainant's classification over.
+    """
+    invented = "Category That Nobody Configured"
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({**CLASSIFY_JSON, "grievance_categories": [invented]})
+    )
+
+    with caplog.at_level("WARNING"):
+        result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
+
+    assert result["grievance_categories"] == [invented], "logged, not discarded"
+    assert any(invented in r.getMessage() for r in caplog.records)
+
+
+def test_a_category_added_to_the_catalogue_needs_no_code_change(client, caplog, monkeypatch):
+    """The other half of T-13-e: add one to the catalogue and it stops being 'unlisted'."""
+    new_category = {"classification": "Wildlife", "generic_grievance_name": "Elephant corridor blocked"}
+    monkeypatch.setitem(llm.CLASSIFICATION_DATA, "wildlife_corridor", new_category)
+    chosen = "Wildlife - Elephant corridor blocked"
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({**CLASSIFY_JSON, "grievance_categories": [chosen]})
+    )
+
+    with caplog.at_level("WARNING"):
+        result = llm.classify_and_summarize_grievance("हात्तीले बाटो छेकेको छ")
+
+    assert result["grievance_categories"] == [chosen]
+    assert not [r for r in caplog.records if "outside the live catalogue" in r.getMessage()]
+
+
+def test_the_classification_schema_declares_no_category_enum():
+    """Mutation target for T-13-e: freezing a Literal[...] of categories turns this red."""
+    schema = json.dumps(
+        llm.GrievanceClassification.model_json_schema()["properties"]["grievance_categories"]
+    )
+    assert "enum" not in schema
+    assert "const" not in schema

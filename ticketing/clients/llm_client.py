@@ -31,8 +31,15 @@ import re
 from typing import Optional
 
 from openai import OpenAI
+from pydantic import ValidationError
 
-from backend.config.llm_config import findings_task, llm_endpoint, model_for
+from backend.config.llm_config import (
+    findings_task,
+    llm_endpoint,
+    model_for,
+    response_format_kwargs,
+)
+from ticketing.clients.llm_schemas import CaseFindings, ResolvedCaseSummary
 
 logger = logging.getLogger(__name__)
 
@@ -202,7 +209,9 @@ def generate_case_findings(
             ],
             temperature=0.0,   # deterministic output
             max_tokens=400,
-            response_format={"type": "json_object"},
+            **response_format_kwargs(
+                "case_findings", CaseFindings.model_json_schema(), task.structured_output
+            ),
         )
         raw = (response.choices[0].message.content or "").strip()
         if not raw:
@@ -225,14 +234,21 @@ def generate_case_findings(
             findings.setdefault("urgency", "MEDIUM")
         findings.setdefault("languages_detected", ["en"])
 
+        # DPG-13: the branch above is unreachable on the `json_schema` rung — strict mode requires
+        # every declared property — and is kept because the weaker rungs are real configurations,
+        # not hypotheticals (`gpt-4` rejects JSON mode outright; measured, not assumed). Validation
+        # is what makes a type violation visible: `key_findings` as a string used to travel all the
+        # way into `findings_json` and fail wherever something iterated it.
+        findings = CaseFindings.model_validate(findings).model_dump()
+
         logger.info(
             "generate_case_findings: ok model=%s urgency=%s keys=%d",
             model, findings.get("urgency"), len(findings.get("key_findings", [])),
         )
         return findings
 
-    except json.JSONDecodeError as exc:
-        logger.error("generate_case_findings: invalid JSON from LLM: %s", exc)
+    except (json.JSONDecodeError, ValidationError) as exc:
+        logger.error("generate_case_findings: unusable reply from LLM: %s", exc)
         return None
     except Exception as exc:
         logger.error("generate_case_findings failed: %s", exc, exc_info=True)
@@ -295,7 +311,11 @@ def generate_resolved_case_summary_llm(
             ],
             temperature=0.0,
             max_tokens=1200,
-            response_format={"type": "json_object"},
+            **response_format_kwargs(
+                "resolved_case_summary",
+                ResolvedCaseSummary.model_json_schema(),
+                task.structured_output,
+            ),
         )
         raw = (response.choices[0].message.content or "").strip()
         if not raw:
@@ -309,9 +329,12 @@ def generate_resolved_case_summary_llm(
             "findings_summary_public",
         ):
             out.setdefault(key, "")
-        return out
-    except json.JSONDecodeError as exc:
-        logger.error("generate_resolved_case_summary_llm: invalid JSON: %s", exc)
+        # Complainant-facing output: the two `*_public` fields are what a person reads at the end
+        # of their grievance. Validated for the same reason the officer-facing one is, with more
+        # at stake if it is malformed.
+        return ResolvedCaseSummary.model_validate(out).model_dump()
+    except (json.JSONDecodeError, ValidationError) as exc:
+        logger.error("generate_resolved_case_summary_llm: unusable reply: %s", exc)
         return None
     except Exception as exc:
         logger.error("generate_resolved_case_summary_llm failed: %s", exc, exc_info=True)

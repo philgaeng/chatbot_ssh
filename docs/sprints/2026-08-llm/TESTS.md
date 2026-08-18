@@ -157,11 +157,11 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-13-a** | Each of the 7 JSON call sites sends `json_schema` when the configured mode allows it | Revert one site to `json_object` → red |
-| **T-13-b** | The response is validated through its Pydantic model; a schema-violating response is rejected, not silently accepted | Replace `model_validate_json` with `json.loads` → red |
-| **T-13-c** | The degradation ladder: `LLM_STRUCTURED_OUTPUT=json_object` and `=prompt` each produce the right request shape, and the mode used is logged | Skip a rung → red |
-| **T-13-d** | **The silent-failure fix**: a malformed model response is distinguishable from a legitimately empty result at the call site | Restore the bare `except JSONDecodeError: return {}` → red |
-| **T-13-e** | Category values validate against the **live catalogue**, not a frozen enum — adding a category to `CLASSIFICATION_DATA` does not require a code change | Freeze a `Literal[...]` of categories → red |
+| **T-13-a** ✅ | Each of the 7 JSON call sites sends the strongest format **its model actually supports** — pinned as a measured table (`gpt-3.5-turbo` 400s on schema; `gpt-4` 400s on both), not as an assumption | ✅ **Checked** — reverted the findings site to `json_object` → red (2 tests) |
+| **T-13-b** ✅ | Validated through its Pydantic model on both surfaces; a schema-violating reply is rejected, not silently accepted — `grievance_categories` as a string, `urgency: "URGENT"`, a list where complainant-facing prose belongs | ✅ **Checked** — swapped `model_validate` for `json.loads` → red, and the warning log printed `['D','u','s','t',…]`, which is the defect itself |
+| **T-13-c** ✅ | The ladder: the endpoint ceiling clamps every task down at once; a task capability can be lifted alone; the `prompt` rung sends **no `response_format` key at all** (not `None` — the SDK serialises that into the body); the schema is made strict before sending; the rung is logged | ✅ **Checked** — made `model_for` ignore the task capability → red (3 tests) |
+| **T-13-d** ✅ | **The silent-failure fix**: `"{}"` (the model saying *not enough information*) and `"{not json"` (the model failing) now produce different results on the classification path — the localized fallback vs `status="error"`. The log carries a **length, not the narrative**. ⚠ Honest limit, stated in the test: on `extract_all_contact_info` the *return value* is the same as an outage; only the log distinguishes them | ✅ **Checked** — restored `except JSONDecodeError: return {}` → red (3 tests) |
+| **T-13-e** ✅ | Category values are checked against the catalogue built from `CLASSIFICATION_DATA` **at call time**; adding one to the catalogue needs no code change; unlisted values are **logged, not discarded**; and the schema declares no enum | ✅ **Checked** — froze a `Literal[...]` of two categories → red (3 tests) |
 
 ### DPG-14 — the defects
 
