@@ -20,7 +20,7 @@
 | **DPG-01** | LICENSE + NOTICE + SPDX | ✅ | `dpg/sprint0-licensing` | | ✅ T-01 (9) | Apache-2.0 landed **provisionally** (owner: proceed, revisit if the consultant advises — Q-02). 583 files stamped; `NOTICE` holder is an explicit `⚠ PENDING` per DPG-03 |
 | **DPG-02** | Dependency licence audit | ✅ | `dpg/sprint0-licensing` | | ✅ T-02 (16) | 153 pkgs, 4 sets, 0 unknown/non-OSI. Rasa closed. Scan **scheduled** (Q-06). Found 2 transitive LGPL + our own npm manifest declaring `UNLICENSED` |
 | **DPG-03** | IP ownership (ADB OGC) | ⏸ | non-code | | n/a | **BLOCKED — external, and it is the only Sprint 0 item nobody here can move.** Owner is writing to the **DPG consultant** (Q-01, in flight). ⚠ That is **not** the ADB OGC channel an IP determination requires. **Date raised with consultant: ______** · **Date sent to ADB OGC: ______** — fill both in; this is a clock and it should be visible |
-| **DPG-04** | Privacy assessment + data-flow | ✅ | `dpg/sprint0-licensing` | | n/a | `docs/dpg/privacy-assessment.md` — 13 legs verified against code, Individual Privacy Act 2018 assessment, **15 findings** incl. 3 new high/medium ones nobody had found. Honesty marker per Q-07. Q-03 marked **moot while T2 parked** |
+| **DPG-04** | Privacy assessment + data-flow | ✅ | `dpg/sprint0-licensing` | | n/a | `docs/dpg/privacy-assessment.md` — 13 legs verified against code, Individual Privacy Act 2018 assessment, **17 findings** incl. 3 new high/medium ones nobody had found. Honesty marker per Q-07. Q-03 marked **moot while T2 parked** |
 | **DPG-05** | Project hygiene (indicator 8) | ✅ | `dpg/sprint0-licensing` | | n/a | `SECURITY.md` (private channel, SEAH-aware in/out-of-scope, response targets), `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` (Covenant 2.1 + grievance-confidentiality clause), `.github/ISSUE_TEMPLATE/` (`blank_issues_enabled: false`, security **redirect**) + PR template. Governance/versioning **deferred** per the spec's scope gate — logged |
 | **DPG-06** | Root `README.md` vs reality | ✅ | `dpg/sprint0-licensing` | | n/a | Rewritten from the compose files. Rasa service + Action Server rows gone; **13 services, verified against `docker compose config --services`**; folder tree matched to disk; branch corrected; `rasa_chatbot/` removed from CLAUDE.md too. **Found a 5th fiction the spec missed** — see D-10 |
 | **DPG-10** | **Test net (must land first)** | ⬜ | `dpg/sprint1-llm-agnostic` | | | Nothing in Sprint 1 starts before this |
@@ -72,9 +72,31 @@ Answers verbatim + reasoning: [`DECISIONS.md`](DECISIONS.md). Still live: [`QUES
 | Q-08 | Assess against what | DPG-04 | ✅ Nepal Individual Privacy Act 2018; no existing agreement | [`01` DPG-04](01-licensing-and-governance-spec.md#dpg-04) |
 | Q-09 | Translation: specialist? | DPG-23 | ✅ LLM first; dedicated service only if better | [`03` DPG-23](03-open-models-spec.md#dpg-23) |
 | Q-17 | Provider outage blocks merges? | DPG-24 | ✅ Every commit, never a required check | [`03` DPG-24](03-open-models-spec.md#dpg-24) |
-| Q-01 | Who opens the OGC request | DPG-03 | 🔶 **In flight** — writing to the consultant. ⚠ Not the same channel as ADB OGC | [`01` DPG-03](01-licensing-and-governance-spec.md#dpg-03) · **date sent: ______** |
+| Q-01 | Who opens the OGC request | DPG-03 | 🔶 **In flight** — writing to the consultant. ⚠ Not the same channel as ADB OGC. **Sprint 0 closed 2026-08-18 with this still open** — `NOTICE` names no holder and says so | [`01` DPG-03](01-licensing-and-governance-spec.md#dpg-03) · **date raised with consultant: ______** · **date sent to ADB OGC: ______** |
 | Q-02 | Apache-2.0 over MIT | DPG-01 | 🔴 **OPEN** — delegated to the consultant. **DPG-01 gated** | [`01` DPG-01](01-licensing-and-governance-spec.md#dpg-01) |
 | Q-19 | **LLM budget** (new) | DPG-22/23/24 | 🔴 **OPEN** — gates most of Sprint 2 | [`QUESTIONS.md`](QUESTIONS.md#q-19) |
+
+## ⏸ Sprint 0's two external blockers — named, with their clocks
+
+> Required by [DPG-01](01-licensing-and-governance-spec.md#dpg-01)'s acceptance criteria: *"If either
+> external answer is still outstanding when the sprint closes, **the blocker is named in
+> `PROGRESS.md` with the date it was raised** — not left as an unticked box."* Sprint 0 closed
+> 2026-08-18 with both still outstanding.
+
+| Blocker | Question | Who can answer it | Status | Date raised | What is blocked |
+|---|---|---|---|---|---|
+| **Copyright holder** | Q-01 / **DPG-03** | **ADB's Office of the General Counsel** — in writing. ⚠ **The DPG consultant cannot issue an IP determination**; if the consultant is the route *to* OGC, record it that way | 🔶 Owner is writing to the consultant | **______** *(consultant)* · **______** *(ADB OGC)* | `NOTICE`'s copyright line — currently an explicit `⚠ PENDING`, deliberately not guessed. `docs/dpg/ip-ownership.md` cannot be written. Evidence-pack row 3 has no file. Also blocks naming a **data controller** (privacy assessment F-11) |
+| **Which licence** | Q-02 / **DPG-01** | The **DPG consultant** | 🔴 Open — Apache-2.0 landed **provisionally** on the owner's decision to proceed | 2026-08-17 | Nothing, operationally. If the answer changes the licence, `LICENSE`, `NOTICE` and **585 SPDX headers** change together via `scripts/ops/add_spdx_headers.py` |
+
+**Fill in the dates.** They are the only thing that makes an external dependency visible as a clock
+rather than an excuse — and DPG-03 is the longest lead time on the whole programme.
+
+**What Sprint 0 did instead of waiting:** landed everything that does not depend on the answers.
+Indicator 2 fails outright with *no* licence, so a provisional Apache-2.0 with an honest
+pending-holder disclosure in `NOTICE` is strictly better than an empty repository root — and it is
+reversible before publication. That reasoning is recorded in `NOTICE` itself, not just here.
+
+---
 
 ## Deviations
 
@@ -165,12 +187,29 @@ user see when it fails?
 
 | Date | Ticket | Commit | What landed |
 |---|---|---|---|
+| 2026-08-18 | **DPG-04** | _(this branch)_ | `docs/dpg/privacy-assessment.md` — **13 data-flow legs verified against the code**, assessed against Nepal's Individual Privacy Act 2018 · mandatory honesty marker (AI author, no legal review — Q-07) · **17-item findings register**, 3 of them new and previously unknown (F-2 encryption-at-rest fails open, F-3 unsalted phone hashes, F-4 unencrypted-by-default backups) · third-party PII position stated as the load-bearing section (T2 parked ⇒ egress is permanent) · retention/deletion/breach written as `⚠ Not built` where they are · cross-linked from `13_security.md`; evidence-pack rows 5/7/8/9a now point at real files |
+| 2026-08-18 | **DPG-05** | _(this branch)_ | `SECURITY.md` (private channel, named recipient, 3/10-working-day targets, SEAH-aware in/out-of-scope, known-and-accepted list) · `CONTRIBUTING.md` (points at the rules, does not restate them) · `CODE_OF_CONDUCT.md` (Covenant 2.1 + a grievance-confidentiality clause) · `.github/ISSUE_TEMPLATE/` with `blank_issues_enabled: false` and a security **redirect** contact link · `PULL_REQUEST_TEMPLATE.md` with a sensitive-path section · governance/versioning deferred + logged (D-08) |
+| 2026-08-18 | **DPG-06** | _(this branch)_ | Root `README.md` **rewritten from the compose files** — Rasa service (:5005) and Action Server (:5055) rows gone, `rasa-sdk`'s real type-shim role stated in one line, **13-service table verified against `docker compose config --services`**, folder tree matched to disk, branch corrected to `integration/stage`, **three dead environment URLs replaced with the two real hostnames** (D-10), Contributing/Security/Roadmap section added · `rasa_chatbot/` removed from CLAUDE.md §Service boundaries (P-13 closed) · `NOTICE` stale-claim fix (D-13) |
 | 2026-08-18 | **DPG-02** | _(this branch)_ | `docs/dpg/dependency-licenses.md` — 153 packages, in-container scans · `ops/licences.py` + `licence_scan()` scheduled nightly at 01:50 (Q-06) · `pip-licenses` declared · pin-drift + classifier tests (`tests/repo/`, 16 assertions) · **`redis:8.10` pin verified live** — the caveat on commit `800aa803` is closed · npm manifests now declare Apache-2.0 |
 | 2026-08-17 | **DPG-01** | _(this branch)_ | `LICENSE` (canonical Apache-2.0, 202 lines, md5 `3b83ef96…`) · `NOTICE` with an explicit pending-holder disclosure · `scripts/ops/add_spdx_headers.py` (idempotent, `--check` mode) · **583 files stamped** (408 `.py`, 175 `.ts`/`.tsx`) · `tests/repo/test_spdx_headers.py` (T-01, 9 assertions) · `tests/repo` wired into `ci.yml` |
 
 | Date | Ticket | Commit | Summary |
 |---|---|---|---|
 | | | | |
+
+---
+
+## Sprint 0 — definition of done
+
+Against [`01-licensing-and-governance-spec.md`](01-licensing-and-governance-spec.md) §Definition of done:
+
+- [x] **DPG-01, DPG-02, DPG-05, DPG-06 landed** — green in CI pending the first run of this branch (see D-02b: `ui-checks` is the confirming gate for the `"use client"` header placement; ✅ already confirmed locally by a successful `next build` in Docker)
+- [ ] **DPG-03 request sent** — ⏸ **not sent to ADB OGC.** Named as a blocker with its clock above. The sprint is not blocked on the response, but this box stays unticked until the letter goes
+- [x] **DPG-04 written** — `docs/dpg/privacy-assessment.md`, with a named author and date, and an explicit statement that no legal review was performed
+- [x] **`README.md` and CLAUDE.md make the same claim about Rasa as the compliance briefing** — verified by grep: zero occurrences of `rasa` in CLAUDE.md, and the only `5005` in `README.md` is the sentence explaining that the row was removed
+- [x] **`docs/dpg/` exists and is indexed from `docs/README.md`** — four files, each with its own row
+- [x] **Evidence-pack rows 2, 3, 7, 9a point at real files** — 2 ✅ (`LICENSE`, `NOTICE`, `dependency-licenses.md`), 7 and 9a ✅ (`privacy-assessment.md`), **3 ⏸ still has no file and cannot until ADB OGC responds** — rows 5 and 8 were updated too
+- [x] **Every deferral logged in `followups/` + `TODO.md`, same commit** — two followups created (`ci-untested-root-test-files.md`, `governance-and-versioning-policy.md`), both with `TODO.md` rows. ⚠ **One exception, stated:** D-12's three new privacy findings live in the assessment's findings register with owners, **not** in `followups/` — they are findings awaiting a ticket, not deferrals of work this sprint scoped
 
 ---
 

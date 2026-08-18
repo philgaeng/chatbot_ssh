@@ -148,9 +148,16 @@ Qualification of the platform as a [Digital Public Good](https://www.digitalpubl
 |---|---|
 | [`00_compliance_status.md`](dpg/00_compliance_status.md) | **The full assessment.** Indicator by indicator with file-and-line evidence: what complies, what does not, the LLM platform-independence question, and the questions for ADB's DPG consultant |
 | [`dependency-licenses.md`](dpg/dependency-licenses.md) | **The generated licence audit** (DPG-02) — 153 packages across four dependency sets, scanned in-container from the resolved trees, with a disposition for every entry carrying conditions. Supersedes the hand-written inventories |
+| [`privacy-assessment.md`](dpg/privacy-assessment.md) | **The privacy assessment and data-flow inventory** (DPG-04) — indicators 7, 9 and 9a. Thirteen data-flow legs verified against the code, assessed against Nepal's Individual Privacy Act 2018, with a 17-item findings register. ⚠ Drafted by an AI agent, **no legal review** — see its §0.1 |
 | [`01_consultant_briefing.md`](dpg/01_consultant_briefing.md) | **The shareable summary** — what to send the consultant ahead of the meeting. The scorecard, what the sprint closes, the fourteen questions, and the full dependency inventory, in ~320 lines |
 
 The engineering that closes the gaps is specced in [`sprints/2026-08-llm/`](sprints/2026-08-llm/README.md).
+
+**Open-source project hygiene** (indicator 8) lives at the repository root, not under `docs/`:
+[`SECURITY.md`](../SECURITY.md) (private disclosure — this platform holds SEAH reports),
+[`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md), and the
+issue/PR templates under `.github/`. A governance model and a release/versioning policy are
+deliberately deferred — [`sprints/2026-08-llm/followups/governance-and-versioning-policy.md`](sprints/2026-08-llm/followups/governance-and-versioning-policy.md).
 
 ---
 

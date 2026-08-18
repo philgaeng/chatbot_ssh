@@ -77,7 +77,7 @@ flattering one.
 | 5 | Documentation | ✅ **Compliant, strong** | A ~200-file spec tree, Docker runbook, OpenAPI on both APIs. Deployability warts (§3.3) — the root `README.md` still advertises a Rasa service that does not exist, which works against §2.2. Sprint ticket **DPG-06** |
 | 6 | Mechanism for data extraction | ✅ **Compliant** | PostgreSQL, documented schema in 3 migration streams, XLSX + PDF exports, REST APIs |
 | 7 | Privacy & applicable laws | 🟠 **Partial** | Encryption and access control are built. **Missing:** legal assessment, data-flow diagram, and free-text PII leaves the country on every model call — ⚠ and with T2 parked that egress is now **permanent, not transitional** (§4.5) |
-| 8 | Standards & best practices | 🟢 **Mostly compliant** | OpenAPI, OIDC/Keycloak, Alembic-migrated schema. Missing the open-source *project* hygiene files (§3.4) — sprint ticket **DPG-05** |
+| 8 | Standards & best practices | ✅ **Compliant** *(2026-08-18)* | OpenAPI, OIDC/Keycloak, Alembic-migrated schema — **and the project hygiene files now exist**: `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/` + PR template (DPG-05). Governance model + release/versioning deliberately deferred pending **Q10** ([followup](../sprints/2026-08-llm/followups/governance-and-versioning-policy.md)) |
 | 9 | Do no harm by design | 🟢 **Mostly compliant** | RBAC, audit log, SEAH isolation, anonymous intake are built. Retention/breach policy and third-party-PII redaction outstanding |
 
 **Two blockers, one of them ours:** indicator 3 is a signature we have to ask for; indicator 4 is
@@ -310,16 +310,30 @@ commitments.
 
 ### 3.5 Indicator 7 — Privacy 🟠
 
+> ✅ **UPDATED 2026-08-18 — the assessment and the diagram now exist**:
+> [`privacy-assessment.md`](privacy-assessment.md) (DPG-04). Thirteen data-flow legs verified at file
+> and line, an Individual Privacy Act 2018 assessment, and a **17-item findings register**.
+> ⚠ It carries a mandatory honesty marker — drafted by an AI agent, **no legal review** — and three of
+> its findings were **previously unknown**: encryption at rest **fails open** when `DB_ENCRYPTION_KEY`
+> is unset or pgcrypto raises; the `*_hash` search tokens are **unsalted SHA-256** of phone/email/name/
+> address, so the phone hash is reversible and those columns are personal data rather than pseudonyms;
+> and backups are **unencrypted by default**. **This indicator stays 🟠, not 🟢** — the document is
+> written, the gaps it names are not closed.
+
 Built: encryption at rest and in transit, single-boundary server-side decryption, an architecturally
 enforced PII boundary, scoped officer access, reveal-contact actions written to an audit log.
 
-Missing, and all of it documentation gated on a legal read:
+Still missing after the assessment — and now specific rather than general:
 
-- **A formal assessment against Nepal's Individual Privacy Act 2018** — lawful basis, consent at
-  intake, data-subject rights, cross-border transfer.
-- **A data-flow diagram** naming every place personal data crosses a boundary. We know the inventory
-  is incomplete until §4.3's audit runs.
-- **Retention and deletion policy**, and a **breach procedure**.
+- ~~A formal assessment against Nepal's Individual Privacy Act 2018~~ ✅ **written**; **a legal review
+  of it is not**, and the document says so at the top.
+- ~~A data-flow diagram~~ ✅ **written**, and DPG-30 will verify it against the code.
+- **Retention and deletion policy** — ⚠ sharper than we thought: archiving is implemented and is **not**
+  deletion. [`ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) §5.3/§10 put hard delete out of
+  scope for v1, so **no code path deletes personal data anywhere in this platform**. That needs a legal
+  position, not a document.
+- **A breach procedure** — ⚠ and `SECURITY.md` now promises reporters that one will be followed, so it
+  is a promise made against a procedure that does not exist yet.
 - **The live gap: grievance narratives leave Nepal on every model call**, unredacted, to a third-party
   provider. See §4.3 — the same finding as indicator 4, seen from the privacy side. ⚠ **And it is now
   permanent rather than transitional:** with self-hosting parked (§4.5), the provider changes and the

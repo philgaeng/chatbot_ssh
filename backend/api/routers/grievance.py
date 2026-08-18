@@ -99,8 +99,15 @@ class GrievanceRecord(BaseModel):
 
     # --- public.complainants (LEFT JOIN via grievance_parties) ---
     # NOTE: the four ENCRYPTED_FIELDS below (full_name/phone/email/address) are served
-    # as pgcrypto hex ciphertext today — get_grievance_by_id never decrypts. That is
-    # the T3-04 defect; this model documents the shape as-built, it does not fix it.
+    # as PLAINTEXT. T3-04 landed the server-side decrypt in grievance_manager.py:188
+    # (`_decrypt_sensitive_data` on the JOIN result), which is what let ticketing drop its
+    # client-side decrypt and its DB_ENCRYPTION_KEY. This comment said the opposite until
+    # 2026-08-18 — it described the pre-T3-04 defect and was never updated when the fix
+    # landed. Corrected while writing docs/dpg/privacy-assessment.md, which cites this
+    # boundary. Caveat that survives: _encrypt_field/_decrypt_field return the value
+    # UNCHANGED when DB_ENCRYPTION_KEY is unset or the pgcrypto call raises
+    # (base_manager.py:243, :255), so "plaintext here" is guaranteed, but "ciphertext at
+    # rest" is conditional on the key being present.
     complainant_full_name: Any = None
     complainant_phone: Any = None
     complainant_email: Any = None

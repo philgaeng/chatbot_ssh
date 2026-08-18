@@ -222,8 +222,18 @@ Use before staging/production promotion:
 
 ## 15. Related specifications
 
+> **Privacy assessment (2026-08-18).** This document inventories the *controls*.
+> [`../dpg/privacy-assessment.md`](../dpg/privacy-assessment.md) inventories the **data flows** —
+> every leg where personal data crosses a boundary, verified against the code — and assesses them
+> against Nepal's Individual Privacy Act 2018. It also carries a findings register (§6) with items
+> this document does **not** cover: encryption at rest failing open when the key is unset,
+> unsalted search hashes, unencrypted-by-default backups, and the permanent unredacted egress of
+> grievance text to a model provider outside Nepal. ⚠ It was drafted by an AI agent and **has had no
+> legal review** — read its §0.1 before citing it.
+
 | Topic | Document |
 |---|---|
+| **Privacy assessment + data-flow inventory (indicators 7, 9, 9a)** | [`../dpg/privacy-assessment.md`](../dpg/privacy-assessment.md) |
 | Privacy architecture and reveal policy | [09_privacy.md](09_privacy.md) |
 | LLM safety and processing policy | [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md) |
 | Ticketing security decisions | [../ticketing_system/00_ticketing_decisions.md](../ticketing_system/00_ticketing_decisions.md) |

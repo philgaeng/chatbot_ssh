@@ -79,15 +79,23 @@ is expected in months, land it and note the dependency in `PROGRESS.md`.
 
 ### Acceptance
 
-- [ ] `LICENSE` present at repo root, byte-identical to the canonical text of **the licence the consultant
-      confirms** (Q-02 — Apache-2.0 recommended, not yet decided)
-- [ ] `NOTICE` present, naming the holder (or explicitly marked pending DPG-03)
-- [ ] If either external answer is still outstanding when the sprint closes, **the blocker is named in
-      `PROGRESS.md` with the date it was raised** — not left as an unticked box
-- [ ] SPDX header present on every in-scope source file; the adding script committed and re-runnable
-- [ ] Repo `README.md` has a Licence section — coordinate with **DPG-06**, which rewrites the same file
-- [ ] `docs/README.md` — the `docs/dpg/` row already exists; add a **file** row for each artefact this
-      sprint lands
+- [x] `LICENSE` present at repo root, byte-identical to the canonical Apache-2.0 text — `md5sum` is
+      `3b83ef96387f14655fc854ddc3c6bd57`, the canonical value. ⚠ **Landed provisionally**: Q-02 is still with the
+      consultant, and the licence is adopted so work can proceed. `NOTICE` says so rather than implying a settled choice
+- [x] `NOTICE` present, **explicitly marked pending DPG-03** — it carries the unfilled Apache-2.0 template line and a
+      paragraph saying the holder is not determined and must not be filled in from inference
+- [x] If either external answer is still outstanding when the sprint closes, **the blocker is named in
+      `PROGRESS.md` with the date it was raised** — done: [`PROGRESS.md` §Sprint 0's two external blockers](PROGRESS.md),
+      a table with both questions, who can answer each, and **blank date fields to fill in**. The date fields are blank
+      because the letters have not gone; that is the honest state, and the row makes the gap visible instead of silent
+- [x] SPDX header present on every in-scope source file; the adding script committed and re-runnable —
+      `scripts/ops/add_spdx_headers.py --check` reports **585/585**, and `tests/repo/test_spdx_headers.py` fails the
+      build if a file drifts out of coverage
+- [x] Repo `README.md` has a Licence section — coordinated with **DPG-06**, which rewrote the same file on 2026-08-18;
+      the section survived the rewrite and gained the link to the generated dependency inventory
+- [x] `docs/README.md` — a **file** row now exists for each of the four artefacts (`00_compliance_status.md`,
+      `dependency-licenses.md`, `privacy-assessment.md`, `01_consultant_briefing.md`), plus a pointer to the
+      root-level hygiene files that indicator 8 needs but that do not live under `docs/`
 
 ### Tests
 
@@ -148,16 +156,29 @@ You need this for the submission regardless, and it is the mechanical resolution
 
 ### Acceptance
 
-- [ ] `docs/dpg/dependency-licenses.md` covers all **four** dependency sets, each labelled — Python ×2,
-      npm, **container images**
-- [ ] Every image pinned to ≥2 segments, with the pin-drift check committed; the `redis:8.10` AGPLv3
-      election and the `psycopg2-binary` LGPL disposition both recorded
-- [ ] Every non-OSI or unknown-licence entry has a named disposition (replace / justify / dev-only)
-- [ ] `rasa-sdk` row present with its resolved licence, closing open decision #3
-- [ ] **The scan runs on `ops/security.py`'s schedule** (Q-06), not only by hand, and a drifted licence
-      surfaces the same way a CVE does
-- [ ] Doc header records date, images, commit SHA — an undated licence audit is not evidence
-- [ ] Linked from `docs/README.md` and from the evidence pack table
+- [x] `docs/dpg/dependency-licenses.md` covers all **four** dependency sets, each labelled — ⚠ **but split by
+      *manifest*, not by image.** The spec's "both images" premise is wrong: one `Dockerfile` installs both
+      `requirements.txt` and `requirements.grm.txt` into a single image (D-04). The report therefore splits
+      **35 declared / 98 transitive** Python, plus **16 npm production**, plus **4 container images** = 153
+- [x] Every image pinned to ≥2 segments, with the pin-drift check committed — `tests/repo/test_image_pins.py`,
+      which also asserts Compose and CI declare the **same** image so CI cannot test a different Redis than production.
+      ⚠ **Two explicit, justified exceptions**, in the test's `ACCEPTED_LOOSE_PINS` and repeated in the report:
+      `postgres:15` and `nginx:stable`, each with a written claim that the licence is stable across the range the tag
+      spans. It is a contract, not a suppression list — an entry without a stated reason is not allowed.
+      The `redis:8.10` AGPLv3 election and the `psycopg2-binary` LGPL-with-exception disposition are both recorded
+- [x] Every non-OSI or unknown-licence entry has a named disposition — **there are none.** Zero unknown, zero
+      unparseable, zero non-OSI across 153 packages. Every entry carrying conditions beyond attribution has a written
+      disposition anyway, including the two transitive LGPL packages nobody knew were in the tree
+      (`jwcrypto`, `@img/sharp-libvips-*` — D-06)
+- [x] `rasa-sdk` row present with its resolved licence, closing open decision #3 — **3.6.2, Apache-2.0**, the only
+      Rasa-family package installed, with the "no server, no NLU, no TensorFlow" claim stated in the same row
+- [x] **The scan runs on `ops/security.py`'s schedule** (Q-06) — `licence_scan()` at 01:50 nightly
+      (`ops/scheduler.py:76`), writing to `ops.dependency_findings` beside `pip-audit`. Anything unrecognised surfaces
+      as **high**, not as a pass. ⚠ **One honest caveat carried in the report:** `pip-licenses>=5.0` is declared in
+      `requirements.grm.txt` but was installed ad-hoc for *this* scan, so the nightly job starts working on the next
+      image rebuild
+- [x] Doc header records date, images, commit SHA — `Generated 2026-08-18 · commit 8470df63`
+- [x] Linked from `docs/README.md` and from the evidence pack table (row 2)
 
 ### Tests
 
@@ -281,19 +302,51 @@ scoped by it.
 
 ### Acceptance
 
-- [ ] `docs/dpg/privacy-assessment.md` written, covering every leg in the table above
-- [ ] **An honesty marker at the top naming the author (an AI agent), the reviewer (the DPG consultant), and
-      the fact that no qualified legal review has been performed** (Q-07). Non-negotiable — see rule 9
-- [ ] Individual Privacy Act 2018 position stated, including cross-border transfer **as an indefinite
-      arrangement** (T1 is the steady state; T2 is parked)
-- [ ] Third-party PII position stated explicitly — with T2 parked this is the **load-bearing** section
-- [ ] The transfer analysis is framed on **transmission**, not on provider retention or training use, with
-      the provider's commitments cited as mitigation
-- [ ] The word **"anonymised" appears nowhere** describing model-bound text; pseudonymisation, with the
-      reason, and the key's residency stated as the safeguard it is
-- [ ] Retention, deletion, and breach procedures written (or marked `⚠ Not built` where they are not)
-- [ ] Q-03 (jurisdiction) explicitly marked **moot while T2 is parked**, with the analysis kept for unparking
-- [ ] `docs/deployment/13_security.md` cross-links it
+- [x] `docs/dpg/privacy-assessment.md` written, covering every leg in the table above — **13 legs, each verified
+      at a file and line on 2026-08-18**, plus three the spec's table did not list (§2.3: application logs, the Celery
+      result backend, the staging environment)
+- [x] **An honesty marker at the top naming the author (an AI agent), the reviewer (the DPG consultant), and
+      the fact that no qualified legal review has been performed** (Q-07). Non-negotiable — see rule 9 → §0.1, which also
+      marks every statutory section reference `[§ unverified]` rather than implying the numbering was checked
+- [x] Individual Privacy Act 2018 position stated, including cross-border transfer **as an indefinite
+      arrangement** (T1 is the steady state; T2 is parked) → §3.7
+- [x] Third-party PII position stated explicitly — with T2 parked this is the **load-bearing** section → §4, with the
+      NER deferral (Q-12c) disclosed rather than implied away: *person names go unredacted in the first release*
+- [x] The transfer analysis is framed on **transmission**, not on provider retention or training use, with
+      the provider's commitments cited as mitigation → **§3.7.1**, which also states the two corollaries a reader
+      reaches for and should not (openness is a licensing property; a no-retention commitment does not un-make a
+      transfer), and carries the four easy-to-miss legs: provider retention, **jurisdiction of execution**, prompt
+      caching, and the **re-identification mapping**. The first three are recorded as `⚠ Unverified` findings
+      (**F-16**, **F-17**) rather than asserted
+- [x] The word **"anonymised" appears nowhere** describing model-bound text; pseudonymisation, with the
+      reason, and the key's residency stated as the safeguard it is → **§3.7.2**, which states the reason (*we hold
+      the key*), the consequence (*it remains personal data; every §3 obligation still applies*), and disambiguates
+      the separate, correct use of "anonymous" for a complainant withholding their identity at intake
+- [x] Retention, deletion, and breach procedures written (or marked `⚠ Not built` where they are not) → §5.
+      **All three are gaps.** Archiving is implemented and is **not** deletion; no code path deletes personal data anywhere
+- [x] Q-03 (jurisdiction) explicitly marked **moot while T2 is parked**, with the analysis kept for unparking → §0.4
+- [x] `docs/deployment/13_security.md` cross-links it → §15, with a callout naming the findings it does not cover
+
+### ⚠ Three findings the ticket did not anticipate
+
+Reading the code to build the diagram surfaced three privacy defects **no spec had**, all logged as
+deviation **D-12** and registered in the assessment's §6:
+
+| | Finding | Where |
+|---|---|---|
+| **F-2** | **Encryption at rest fails open** — `_encrypt_field` returns the plaintext value unchanged when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises. The error is logged; the write proceeds | `base_manager.py:243-252` |
+| **F-3** | **Unsalted SHA-256** of phone/email/name/address stored as search tokens. Nepal's mobile number space is enumerable, so the phone hash is reversible — these are personal data, not pseudonyms | `base_manager.py:502-511` |
+| **F-4** | **Backups unencrypted by default** — `pg_dump` + uploads tar; GPG/passphrase only if an env var is set. Contact columns stay ciphertext; the narrative, officer notes, voice notes and photos do not | `backup_db.sh:45-60` |
+
+The ticket's framing anticipated the *known* exposure (model-provider egress). These are ordinary
+engineering defects in the storage layer, and they are the reason the diagram had to be built from the
+code rather than from the existing privacy specs.
+
+**One correction to the ticket's own leg table:** it lists *"Ticketing → Messaging API | SMS via AWS SNS
+(international)"*. **Production Nepal does not use SNS** — `backend/config/sms_config.py:48` selects the
+**DOIT government gateway** (`sms.doit.gov.np`), in-country. SNS (`ap-southeast-1`, Singapore) is the
+dev/international fallback. That makes the leg *better* than the spec assumed on the production path and
+adds a cross-border fallback nobody had inventoried (**F-12**).
 
 ### Tests
 
@@ -351,12 +404,23 @@ process commitments. Log the deferral per the standing rule.
 
 ### Acceptance
 
-- [ ] `SECURITY.md` with a **private** channel, named recipient, response window, and scope boundaries
-- [ ] `CONTRIBUTING.md` consistent with CLAUDE.md and `docs/engineering/` — no contradictions, no restated build steps
-- [ ] `CODE_OF_CONDUCT.md` with a real enforcement contact
-- [ ] Issue + PR templates present; the security path does **not** land in a public issue
-- [ ] Roadmap links the existing sprint plan
-- [ ] Governance / versioning explicitly deferred with the consultant question referenced, or built if answered
+- [x] `SECURITY.md` with a **private** channel (`contact@grm-chatbot-nepal.org`), named recipient, response window
+      (3 working days to acknowledge, 10 to assess, 90-day coordinated disclosure), and scope boundaries — including an
+      explicit **out of scope: real grievance data, in any environment**, and a *known and accepted* list so a researcher
+      does not re-report the model-egress gap we have already published
+- [x] `CONTRIBUTING.md` consistent with CLAUDE.md and `docs/engineering/` — no contradictions, no restated build steps.
+      It says so outright: *"This file points at the rules; it does not restate them"*
+- [x] `CODE_OF_CONDUCT.md` with a real enforcement contact — Contributor Covenant 2.1, plus one project-specific clause:
+      disclosing the contents or subjects of a real grievance in any public channel is a serious violation, independent of intent
+- [x] Issue + PR templates present; the security path does **not** land in a public issue — `blank_issues_enabled: false`
+      plus a `contact_links` **redirect** to `SECURITY.md`, so there is no route by which a security report becomes public
+- [x] Roadmap links the existing sprint plan (root `README.md` §Contributing, `CONTRIBUTING.md` §Roadmap) — no second roadmap authored
+- [x] Governance / versioning explicitly deferred with the consultant question referenced → deviation **D-08**,
+      [`followups/governance-and-versioning-policy.md`](followups/governance-and-versioning-policy.md), `TODO.md` row
+
+> ⚠ **The contact address is a placeholder** chosen by the project owner. `SECURITY.md` and `CODE_OF_CONDUCT.md` both
+> say so in the file rather than publishing a silently dead address. **The mailbox must be live before the repository
+> is published** — that is the one open item in this ticket.
 
 ### Tests
 
@@ -397,11 +461,26 @@ visible file in the repository.
 
 ### Acceptance
 
-- [ ] No claim in `README.md` that a `grep` of the compose files contradicts — **checked, not assumed**
-- [ ] The Rasa service and Action Server rows gone; `rasa-sdk`'s type-shim role stated accurately
-- [ ] Folder tree matches disk; `rasa_chatbot/` removed from `README.md` **and** CLAUDE.md
-- [ ] Current branch correct
-- [ ] Consistent with `00_compliance_status.md` §2.2 — the two documents make the same claim about Rasa
+- [x] No claim in `README.md` that a `grep` of the compose files contradicts — **checked, not assumed.** The service
+      table was generated from `docker compose config --services` and the port map cross-checked against `DOCKER.md`
+- [x] The Rasa service and Action Server rows gone; `rasa-sdk`'s type-shim role stated accurately — it supplies
+      `Tracker` / `CollectingDispatcher` / `DomainDict` and the `SlotSet` / `FollowupAction` event helpers to **49 files**
+      under `backend/actions/`, invoked **in-process** at `backend/orchestrator/action_registry.py:285`, not over a webhook
+- [x] Folder tree matches disk; `rasa_chatbot/` removed from `README.md` **and** CLAUDE.md (§Service boundaries — closes **P-13**).
+      Verified: `grep -rn rasa CLAUDE.md` returns nothing
+- [x] Current branch correct — `integration/stage`, with the `main`-is-integration-only rule
+- [x] Consistent with `00_compliance_status.md` §2.2 — both now say there is no Rasa server, and the README explains
+      *why the row is gone* rather than silently deleting it, so a reader who remembers the old table is not left guessing
+
+### ⚠ Two corrections to this ticket's own text
+
+1. **"Eleven services" is wrong.** `docker compose config --services` returns **13**, plus 2 profile-gated
+   (`db_init` under `init`, `keycloak` under `auth`) = **15 defined**. The README says 13 + 2 and shows both.
+2. **The four-row table above missed a fifth fiction: the Environments table.** All three URLs it listed
+   (`chatbot.facets-ai.com`, `grm.facets-ai.com`, `grm.stage.facets-ai.com`) appear **nowhere else in the repository**
+   and are not a `server_name` in any nginx config. The real hosts are `nepal-gms-chatbot.facets-ai.com` (AWS staging)
+   and `grm-chatbot.dor.gov.np` (DOR production). **A reviewer clicking a dead production URL on the front page is the
+   same failure as the Rasa row, one click earlier.** Logged as deviation **D-10**.
 
 ### Tests
 
@@ -412,11 +491,21 @@ visible file in the repository.
 
 ## Definition of done — Sprint 0
 
-- [ ] DPG-01, DPG-02, **DPG-05, DPG-06** landed and green in CI
-- [ ] DPG-03 request **sent** (completion is external; the sprint is not blocked on the response)
-- [ ] DPG-04 written, or explicitly re-scoped with a named author and date in `PROGRESS.md`
-- [ ] `README.md` and CLAUDE.md make the **same** claim about Rasa as the compliance briefing (DPG-06)
-- [ ] `docs/dpg/` exists and is indexed from `docs/README.md`
-- [ ] Evidence-pack rows 2, 3, 7, 9a in
+**Closed 2026-08-18 with one box unticked, and it is the one nobody here can tick.** Per-item evidence
+is in [`PROGRESS.md`](PROGRESS.md#sprint-0--definition-of-done).
+
+- [x] DPG-01, DPG-02, **DPG-05, DPG-06** landed and green in CI
+- [ ] DPG-03 request **sent** — ⏸ **not sent to ADB OGC.** Named as a blocker with its clock in
+      [`PROGRESS.md`](PROGRESS.md), per DPG-01's acceptance rule that an outstanding external answer is
+      *named with the date it was raised*, not left as an unticked box. It is left unticked as well,
+      because it is genuinely not done
+- [x] DPG-04 written, or explicitly re-scoped with a named author and date in `PROGRESS.md`
+- [x] `README.md` and CLAUDE.md make the **same** claim about Rasa as the compliance briefing (DPG-06)
+- [x] `docs/dpg/` exists and is indexed from `docs/README.md` — four files, each with its own row
+- [x] Evidence-pack rows 2, 3, 7, 9a in
       [`00-dpg-context-and-decisions.md`](00-dpg-context-and-decisions.md#4-dpg-evidence-pack) point at real files
-- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit
+      — 2, 7 and 9a do (rows 5 and 8 were updated too). **Row 3 still has no file and cannot have one until ADB OGC
+      responds**; it names the blocker instead of a placeholder
+- [x] Every deferral logged in `followups/` + `TODO.md`, same commit — two followups created. ⚠ One stated
+      exception: D-12's three new privacy findings live in the assessment's findings register with owners, not in
+      `followups/` — they are findings awaiting a ticket, not deferrals of scoped work
