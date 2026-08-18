@@ -1,0 +1,78 @@
+name: 🐛 Bug report
+description: Something behaves differently from what the documentation says it should
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Stop if this is a security issue.** If the bug exposes data, bypasses an
+        authorization check, or reveals a sensitive-workflow (SEAH) ticket to someone who
+        should not see it, do **not** file it here. Use the private channel in
+        [SECURITY.md](../../SECURITY.md).
+
+        **Never paste real data.** No complainant narratives, contact details, attachments,
+        grievance IDs, or production credentials — in the description, in logs, or in
+        screenshots. Invent an example or redact before pasting.
+
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Before filing
+      options:
+        - label: This is not a security or data-exposure issue (those go to SECURITY.md)
+          required: true
+        - label: I have redacted all real complainant data, contact details and credentials
+          required: true
+        - label: I checked `docs/TODO.md` and the current sprint tracker; this is not already known
+          required: false
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you observed, and what you expected instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: How to reproduce
+      description: >-
+        Steps against a local Docker stack (see docs/deployment/DOCKER.md). Include the
+        exact commands or the UI path taken.
+      placeholder: |
+        1. make wsl-up
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: component
+    attributes:
+      label: Where
+      description: Service, file, or endpoint — e.g. `ticketing_api` / `POST /api/v1/tickets`
+    validations:
+      required: false
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local Docker stack (WSL)
+        - AWS staging
+        - Nepal DOR production
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error output
+      description: Redacted. This is automatically rendered as code, no backticks needed.
+      render: shell
+    validations:
+      required: false
