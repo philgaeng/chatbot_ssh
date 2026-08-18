@@ -45,7 +45,9 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from backend.config import llm_config
 from backend.services import LLM_services as llm
+from backend.services import llm_client as llm_client_factory
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────
@@ -59,44 +61,26 @@ def _chat(content: str) -> SimpleNamespace:
 
 @pytest.fixture
 def client(monkeypatch) -> MagicMock:
-    """Replace the module-level client. Covers every call site except classification."""
+    """
+    Replace the clients at the factory boundary — **one fake for all nine call sites**.
+
+    Before DPG-11 this fixture patched a module-level `client` attribute and a second fixture
+    patched the `OpenAI` class, because classification built its own shadow client. There is now
+    one client per surface, built lazily by `backend/services/llm_client.py`, so one fake covers
+    everything and `built` is countable — which is what T-14-b asserts.
+    """
     fake = MagicMock()
-    monkeypatch.setattr(llm, "client", fake)
+    monkeypatch.setattr(llm, "_llm_client", lambda: fake)
+    monkeypatch.setattr(llm, "_asr_client", lambda: fake)
     return fake
 
 
-class _OpenAIFactory:
-    """
-    Stands in for the `OpenAI` class so the client built *inside*
-    `classify_and_summarize_grievance` is intercepted. Set `.response` (or `.error`) before
-    calling the function; read `.built` afterwards for the construction kwargs.
-    """
-
-    def __init__(self) -> None:
-        self.built: list[MagicMock] = []
-        self.response: SimpleNamespace = _chat("{}")
-        self.error: Exception | None = None
-
-    def __call__(self, **kwargs) -> MagicMock:
-        inst = MagicMock()
-        inst.build_kwargs = kwargs
-        if self.error is not None:
-            inst.chat.completions.create.side_effect = self.error
-        else:
-            inst.chat.completions.create.return_value = self.response
-        self.built.append(inst)
-        return inst
-
-    @property
-    def last_request(self) -> dict:
-        return self.built[-1].chat.completions.create.call_args.kwargs
-
-
-@pytest.fixture
-def openai_class(monkeypatch) -> _OpenAIFactory:
-    factory = _OpenAIFactory()
-    monkeypatch.setattr(llm, "OpenAI", factory)
-    return factory
+@pytest.fixture(autouse=True)
+def fresh_registry():
+    """The registry caches its settings; tests that patch env must not leak into each other."""
+    llm_config.get_llm_settings.cache_clear()
+    yield
+    llm_config.get_llm_settings.cache_clear()
 
 
 CONTACT_JSON = {
@@ -184,7 +168,7 @@ def test_extract_all_contact_info_sends_gpt_35_turbo_with_json_object(client):
     assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
-def test_classify_sends_gpt_5_nano_with_no_response_format(openai_class):
+def test_classify_sends_gpt_5_nano_with_no_response_format(client):
     """
     Call site 4 — the product's primary AI path.
 
@@ -192,25 +176,33 @@ def test_classify_sends_gpt_5_nano_with_no_response_format(openai_class):
     Q-13.1), and the request carries **no `response_format`** — it asks for "strict JSON" in the
     prompt and hopes. DPG-13 closes that.
     """
-    openai_class.response = _chat(json.dumps(CLASSIFY_JSON))
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
 
     llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
 
-    assert len(openai_class.built) == 1, "classification builds its own client — the shadow client"
-    assert openai_class.last_request["model"] == "gpt-5-nano"
-    assert "response_format" not in openai_class.last_request
-    assert [m["role"] for m in openai_class.last_request["messages"]] == ["system", "user"]
+    kwargs = client.chat.completions.create.call_args.kwargs
+    assert kwargs["model"] == "gpt-5-nano"
+    assert "response_format" not in kwargs
+    assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
-def test_classify_builds_its_own_client_with_the_classification_timeout(openai_class, monkeypatch):
-    """The shadow client's timeout is OPENAI_CLASSIFICATION_TIMEOUT, defaulting to 120s."""
+def test_classify_keeps_its_own_deadline_as_a_per_request_timeout(client, monkeypatch):
+    """
+    **T-14-b.** Classification used to build a second client purely to carry its own timeout.
+    The deadline survives — as a per-request value from the registry — and the second client
+    does not. `OPENAI_CLASSIFICATION_TIMEOUT` is still honoured, as a deprecated alias.
+    """
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
     monkeypatch.delenv("OPENAI_CLASSIFICATION_TIMEOUT", raising=False)
+    monkeypatch.delenv("TIMEOUT_CLASSIFY", raising=False)
+
     llm.classify_and_summarize_grievance("सडकमा धुलो छ")
-    assert openai_class.built[-1].build_kwargs["timeout"] == 120.0
+    assert client.chat.completions.create.call_args.kwargs["timeout"] == 120.0
 
     monkeypatch.setenv("OPENAI_CLASSIFICATION_TIMEOUT", "45")
+    llm_config.get_llm_settings.cache_clear()
     llm.classify_and_summarize_grievance("सडकमा धुलो छ")
-    assert openai_class.built[-1].build_kwargs["timeout"] == 45.0
+    assert client.chat.completions.create.call_args.kwargs["timeout"] == 45.0
 
 
 def test_translate_grievance_sends_gpt_4_with_no_response_format(client):
@@ -255,8 +247,8 @@ def test_extract_all_contact_info_returns_all_six_fields(client):
     assert llm.extract_all_contact_info(ALL_CONTACT_INPUT) == CONTACT_JSON
 
 
-def test_classify_returns_the_four_documented_keys(openai_class):
-    openai_class.response = _chat(json.dumps(CLASSIFY_JSON))
+def test_classify_returns_the_four_documented_keys(client):
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
     result = llm.classify_and_summarize_grievance("सडकमा धुलो छ", language_code="ne")
     assert result == CLASSIFY_JSON
 
@@ -364,8 +356,8 @@ def test_extract_all_contact_info_returns_an_empty_dict_on_a_malformed_body(clie
     assert llm.extract_all_contact_info(ALL_CONTACT_INPUT) == {}
 
 
-def test_classify_returns_a_status_error_dict_when_the_call_fails(openai_class):
-    openai_class.error = RuntimeError("model not found for this account")
+def test_classify_returns_a_status_error_dict_when_the_call_fails(client):
+    client.chat.completions.create.side_effect = RuntimeError("model not found for this account")
 
     result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
 
@@ -377,11 +369,11 @@ def test_classify_returns_a_status_error_dict_when_the_call_fails(openai_class):
     assert result["follow_up_question"] == ""
 
 
-def test_classify_short_circuits_on_empty_text_without_calling_the_model(openai_class):
+def test_classify_short_circuits_on_empty_text_without_calling_the_model(client):
     """The empty-text guard returns *five* keys — no `follow_up_question`, unlike the error path."""
     result = llm.classify_and_summarize_grievance("")
 
-    assert openai_class.built == []
+    client.chat.completions.create.assert_not_called()
     assert result == {
         "grievance_summary": "",
         "grievance_categories": [],
@@ -467,8 +459,9 @@ def test_detect_sensitive_content_skips_the_call_on_empty_text(client):
 
 @pytest.fixture
 def no_client(monkeypatch):
-    """`OPENAI_API_KEY` unset → the module-level client is None (LLM_services.py lines 31-36)."""
-    monkeypatch.setattr(llm, "client", None)
+    """No API key configured → the factory raises → the helpers return None, as before DPG-11."""
+    monkeypatch.setattr(llm, "_llm_client", lambda: None)
+    monkeypatch.setattr(llm, "_asr_client", lambda: None)
 
 
 def test_transcribe_raises_runtime_error_without_a_client(no_client, tmp_path):
@@ -497,16 +490,18 @@ def test_extract_all_contact_info_returns_the_sentinel_without_a_client(no_clien
     }
 
 
-def test_classify_ignores_the_module_client_entirely(no_client, openai_class):
+def test_classify_now_honours_the_missing_client_like_every_other_call_site(no_client):
     """
-    ⚠ The reason the mock boundary is the class. Classification builds its own client, so the
-    module-level `None` never reaches it: with no key configured this path still constructs a
-    client and calls the provider. DPG-11 removes the shadow.
+    **T-14-b, the other half.** Before DPG-11 this test asserted the opposite: classification
+    built its own client, so an unkeyed deployment still constructed one and called the provider,
+    and the module-level `None` never reached it. One client now — so a missing client produces
+    the function's own documented contract, the `status="error"` dict, instead of a request that
+    could not succeed.
     """
-    openai_class.response = _chat(json.dumps(CLASSIFY_JSON))
+    result = llm.classify_and_summarize_grievance("सडकमा धुलो छ")
 
-    assert llm.classify_and_summarize_grievance("सडकमा धुलो छ") == CLASSIFY_JSON
-    assert len(openai_class.built) == 1
+    assert result["status"] == "error"
+    assert "client initialization failed" in result["error"]
 
 
 def test_translate_grievance_raises_runtime_error_without_a_client(no_client):
@@ -638,3 +633,100 @@ def test_transcribe_request_binds_against_the_real_openai_signature(client, tmp_
     sent = dict(client.audio.transcriptions.create.call_args.kwargs)
     sent["file"] = b"<closed file handle>"  # the real one is closed by the `with` block
     inspect.signature(Transcriptions.create).bind(object(), **sent)
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-11-a / T-11-b — the factory: what it builds, and from what
+# ═════════════════════════════════════════════════════════════════════════════
+
+@pytest.fixture
+def clean_llm_env(monkeypatch, tmp_path):
+    """No inherited env, no `env.local` underfoot, no cached clients or settings."""
+    for name in (
+        "LLM_BASE_URL", "LLM_API_KEY", "LLM_TIMEOUT", "LLM_MAX_RETRIES",
+        "ASR_BASE_URL", "ASR_API_KEY", "ASR_TIMEOUT", "OPENAI_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+    llm_config.get_llm_settings.cache_clear()
+    llm_client_factory.reset_clients()
+    yield
+    llm_config.get_llm_settings.cache_clear()
+    llm_client_factory.reset_clients()
+
+
+def test_the_llm_client_is_built_entirely_from_configuration(clean_llm_env, monkeypatch):
+    """
+    **T-11-a.** The factory names no endpoint of its own. This is the test behind the DPG
+    indicator-4 claim: moving the product to a different provider is an environment change.
+    """
+    monkeypatch.setenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
+    monkeypatch.setenv("LLM_API_KEY", "hf_token")
+    monkeypatch.setenv("LLM_TIMEOUT", "42")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "7")
+    llm_config.get_llm_settings.cache_clear()
+
+    built = llm_client_factory.get_llm_client()
+
+    assert str(built.base_url).rstrip("/") == "https://router.huggingface.co/v1"
+    assert built.api_key == "hf_token"
+    assert built.timeout == 42.0
+    assert built.max_retries == 7
+
+
+def test_the_llm_client_is_built_once_and_cached(clean_llm_env, monkeypatch):
+    """Lazy, not import-time — and built once. Import-time construction froze configuration."""
+    monkeypatch.setenv("LLM_API_KEY", "hf_token")
+    llm_config.get_llm_settings.cache_clear()
+
+    assert llm_client_factory.get_llm_client() is llm_client_factory.get_llm_client()
+
+    llm_client_factory.reset_clients()
+    assert llm_client_factory.get_llm_client() is not None
+
+
+def test_the_asr_client_is_independent_of_the_chat_client(clean_llm_env, monkeypatch):
+    """
+    **T-11-b.** ASR routinely runs on a different provider, port or machine, with a much longer
+    deadline. Pointing one at a self-hosted Whisper must not move the other.
+    """
+    monkeypatch.setenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
+    monkeypatch.setenv("LLM_API_KEY", "hf_token")
+    monkeypatch.setenv("ASR_BASE_URL", "http://vllm-whisper:8000/v1")
+    monkeypatch.setenv("ASR_API_KEY", "local-token")
+    monkeypatch.setenv("ASR_TIMEOUT", "900")
+    llm_config.get_llm_settings.cache_clear()
+
+    chat = llm_client_factory.get_llm_client()
+    asr = llm_client_factory.get_asr_client()
+
+    assert chat is not asr
+    assert str(asr.base_url).rstrip("/") == "http://vllm-whisper:8000/v1"
+    assert asr.api_key == "local-token"
+    assert asr.timeout == 900.0
+    assert str(chat.base_url).rstrip("/") == "https://router.huggingface.co/v1"
+
+
+def test_no_key_means_no_client_rather_than_a_client_that_401s(clean_llm_env):
+    """
+    The contract the module-level `client = None` used to provide, kept deliberately.
+
+    A keyless client is worse than none: it turns a configuration mistake into a provider error
+    at request time, on a Celery worker, where it reads as an outage. The call sites' guards —
+    raise, sentinel dict, fail-open — depend on this.
+    """
+    with pytest.raises(RuntimeError, match="No API key configured"):
+        llm_client_factory.get_llm_client()
+
+    assert llm._llm_client() is None
+    assert llm._asr_client() is None
+
+
+def test_the_factory_error_names_the_host_but_never_the_key(clean_llm_env, monkeypatch):
+    monkeypatch.setenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
+    llm_config.get_llm_settings.cache_clear()
+
+    with pytest.raises(RuntimeError) as exc:
+        llm_client_factory.get_llm_client()
+
+    assert "router.huggingface.co" in str(exc.value)
+    assert "LLM_API_KEY" in str(exc.value)

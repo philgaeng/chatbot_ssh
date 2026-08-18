@@ -26,6 +26,7 @@ Spec: docs/sprints/2026-08-llm/02-llm-agnostic-spec.md §DPG-17 · Ledger: TESTS
 from __future__ import annotations
 
 import ast
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -100,3 +101,98 @@ def test_the_registry_is_importable_without_any_first_party_package_on_the_path(
 
     assert module.findings_task(is_seah=True) == "ticket_findings_seah"
     assert "MODEL_CLASSIFY" in module.declared_env_vars()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-11-d — no client construction and no model literal outside the registry
+# ═════════════════════════════════════════════════════════════════════════════
+
+MODEL_LITERAL = re.compile(r"\b(gpt-[\w.]+|whisper-[\w.]+|o[13]-mini|text-embedding-\w+)")
+
+# The two files allowed to say these things, and what each is allowed to say.
+CLIENT_FACTORIES = {
+    "backend/services/llm_client.py",       # DPG-11 — the chatbot surface's only constructor
+    "ticketing/clients/llm_client.py",      # DPG-12 — the ticketing surface's only constructor
+}
+MODEL_REGISTRY = "backend/config/llm_config.py"
+
+# ⚠ Scope note. This pin walks `backend/` today. **DPG-12 widens it to `ticketing/`** in the
+# commit that removes that surface's literals — deliberately not before, because a pin that is
+# red on arrival teaches the next reader that red is normal here.
+PINNED_TREES = ("backend",)
+
+
+def _python_files(tree: str) -> list[Path]:
+    return sorted(
+        p for p in (REPO_ROOT / tree).rglob("*.py")
+        if "__pycache__" not in p.parts and "migrations" not in p.parts
+    )
+
+
+def _docstring_nodes(tree: ast.AST) -> set[int]:
+    """id() of every string node that is a module/class/function docstring — documentation."""
+    out = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            body = getattr(node, "body", [])
+            if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant):
+                if isinstance(body[0].value.value, str):
+                    out.add(id(body[0].value))
+    return out
+
+
+def test_no_model_name_is_written_outside_the_registry():
+    """
+    **T-11-d / T-17-c (backend half).** A model name in a call site is how the indicator-4 claim
+    decays: the next feature adds one, nothing fails, and nobody learns until a DPG reviewer
+    greps. It is also how the same product ended up with four copies of one ternary.
+
+    Comments and docstrings are exempt — they are documentation, and documentation that names the
+    current default is useful. Executable string literals are not.
+    """
+    offenders: list[str] = []
+    for tree_name in PINNED_TREES:
+        for path in _python_files(tree_name):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if rel == MODEL_REGISTRY:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            docstrings = _docstring_nodes(tree)
+            for node in ast.walk(tree):
+                if (
+                    isinstance(node, ast.Constant)
+                    and isinstance(node.value, str)
+                    and id(node) not in docstrings
+                    and MODEL_LITERAL.search(node.value)
+                ):
+                    offenders.append(f"{rel}:{node.lineno} → {node.value[:60]!r}")
+
+    assert not offenders, (
+        "Model names must be declared once, in backend/config/llm_config.py, and resolved with "
+        "model_for(\"<task>\"). Found:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_the_openai_client_is_constructed_in_one_place_per_surface():
+    """
+    **T-11-d.** Two factories is the design (two surfaces, two lifecycles). Three is drift, and
+    the third one always carries its own timeout and its own key handling — which is precisely
+    what the classification shadow client did until DPG-11 deleted it.
+    """
+    offenders: list[str] = []
+    for tree_name in PINNED_TREES:
+        for path in _python_files(tree_name):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            if rel in CLIENT_FACTORIES:
+                continue
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.Call):
+                    func = node.func
+                    name = getattr(func, "id", None) or getattr(func, "attr", None)
+                    if name in ("OpenAI", "AsyncOpenAI"):
+                        offenders.append(f"{rel}:{node.lineno}")
+
+    assert not offenders, (
+        "OpenAI clients are constructed only by the two factories "
+        f"({', '.join(sorted(CLIENT_FACTORIES))}). Found: {offenders}"
+    )

@@ -142,10 +142,10 @@ its copy into a **persisted** provenance field.
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-11-a** | `get_llm_client()` honours `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES` | Hard-code the base URL → red |
-| **T-11-b** | `get_asr_client()` is independent — a different `ASR_BASE_URL` produces a different client | Point ASR at the chat client → red |
-| **T-11-c** | The model registry resolves per task (`classify`/`extract`/`translate`/`detect`/`asr`) and each is overridable by env | Ignore one `MODEL_*` override → red |
-| **T-11-d** | **The pin.** No `OpenAI(` outside the two client modules; no `gpt-`/`whisper-1` literal in `backend/` or `ticketing/` outside comments | Add `model="gpt-4o"` anywhere in `backend/` → red |
+| **T-11-a** ✅ | `get_llm_client()` honours `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES`; is built **lazily and once**; and **refuses to build a keyless client** — no key means no client, which is what keeps each call site's documented fallback reachable | ✅ **Checked** — hard-coded the base URL → red (2 tests) |
+| **T-11-b** ✅ | `get_asr_client()` is independent — a different `ASR_BASE_URL`, key and timeout produce a different client, and moving one does not move the other | ✅ **Checked** — pointed ASR at the chat endpoint → red |
+| **T-11-c** ✅ | The model registry resolves per task and each is overridable by env — **landed with DPG-17** as `tests/backend/test_llm_config.py` (T-17-a, 16 of its 30 assertions), because the registry is where that behaviour now lives. Restating it against the factory would test the same code twice | ✅ **Checked** — see T-17-a |
+| **T-11-d** ◐ | **The pin.** No `OpenAI(` outside the two client modules; no `gpt-`/`whisper-1` literal outside the registry — **AST-parsed, with docstrings exempt** (documentation naming the current default is useful; an executable literal is not). ⚠ Scoped to `backend/` on arrival and **widened to `ticketing/` by DPG-12**, in the commit that removes that surface's literals: a pin that is red on the day it lands teaches the next reader that red is normal here | ✅ **Checked** — `model="gpt-4o"` re-introduced → red; shadow client re-introduced → red |
 | **T-12-a** | `TicketingSettings` exposes base URL + model registry; `_get_client()` reads them | Hard-code `base_url` → red |
 | **T-12-b** | The standard/SEAH model split survives as **two config keys** | Collapse them to one → red |
 | **T-12-c** ✅ | A config with only the deprecated `OPENAI_API_KEY` set **warns and still authenticates — on both endpoints**, because a key that authenticates chat but not ASR fails as what looks like a model problem. Warns **once per alias, not once per resolution**, and never logs the key's value. Landed with DPG-17, where the alias handling lives | ✅ **Checked** — removed the warning call → red |

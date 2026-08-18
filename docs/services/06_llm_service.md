@@ -6,7 +6,17 @@ Shared LLM utility/service layer used by async task pipelines and chatbot workfl
 
 Implementation:
 
-- `backend/services/LLM_services.py`
+- `backend/services/LLM_services.py` — the capabilities below
+- `backend/services/llm_client.py` — **the only place this surface constructs a client** (DPG-11).
+  Lazy, cached, built from the shared registry. It names no model and no endpoint.
+- `backend/config/llm_config.py` — **the only place any model name or endpoint is declared**, for
+  this surface *and* the ticketing one (DPG-17)
+
+⚠ **Do not construct an `OpenAI(...)` here or anywhere else in `backend/`.** Until 2026-08-18 this
+module built one at import (swallowing the failure into `client = None`, which is why five
+functions carry five different guards) *and* a second one inside `classify_and_summarize_grievance`
+that shadowed it. Both are gone; a test fails if a third appears
+(`tests/backend/test_llm_config_pins.py`).
 
 ## 2) Capabilities
 

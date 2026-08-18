@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
-import os
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
+
 from openai import OpenAI
-from dotenv import load_dotenv
+
+from backend.config.llm_config import model_for
+from backend.services.llm_client import get_asr_client, get_llm_client
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
@@ -23,28 +25,46 @@ FAILED = status_codes['FAILED']
 STARTED = status_codes['STARTED']
 RETRYING = status_codes['RETRYING']
 
-# Load environment variables
-load_dotenv('/home/ubuntu/nepal_chatbot/.env')
-open_ai_key = os.getenv("OPENAI_API_KEY")
+# ── Clients (DPG-11) ─────────────────────────────────────────────────────────
+# Built on first use by backend/services/llm_client.py from the shared registry, never at
+# import. `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` lived here and was deleted: an
+# absolute path to a host directory that exists in no container.
+#
+# These two helpers return None when no client can be built — reproducing exactly the contract
+# the module-level `client = None` had, so that every call site keeps its own documented
+# fallback (raise / sentinel dict / fail-open). Those three idioms differ per function and are
+# pinned as they are by tests/backend/test_llm_services.py; unifying them is a behaviour change
+# and belongs to its own ticket, not to this migration.
 
-# Initialize OpenAI client
-try:
-    client = OpenAI(api_key=open_ai_key)
-    logger.info("OpenAI client initialized")
-except Exception as e:
-    logger.error(f"Error initializing OpenAI client: {str(e)}")
-    client = None
+
+def _llm_client() -> Optional[OpenAI]:
+    try:
+        return get_llm_client()
+    except Exception as e:
+        logger.error(f"Error initializing OpenAI client: {str(e)}")
+        return None
+
+
+def _asr_client() -> Optional[OpenAI]:
+    try:
+        return get_asr_client()
+    except Exception as e:
+        logger.error(f"Error initializing ASR client: {str(e)}")
+        return None
 
 def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> str:
-    """Transcribe an audio file using OpenAI Whisper API"""
+    """Transcribe an audio file using the configured ASR endpoint"""
+    client = _asr_client()
     if not client:
         raise RuntimeError("OpenAI client not available for transcription")
-    
+
+    asr = model_for("asr")
     try:
         with open(file_path, "rb") as audio_data:
             response = client.audio.transcriptions.create(
                 file=audio_data,
-                model="whisper-1",
+                model=asr.model,
+                timeout=asr.timeout,
                 # DPG-14.3: the SDK parameter is `language`, not `language_code`, and
                 # `Transcriptions.create` declares its parameters explicitly — no **kwargs.
                 # Every call on this path raised TypeError before this line was corrected.
@@ -72,8 +92,10 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
             f"No valid contact field in contact_data; keys={sorted(contact_data.keys())}"
         )
     response = None
+    task = model_for("extract")
     try:
-        # Use OpenAI to extract structured information
+        # Use the configured LLM endpoint to extract structured information
+        client = _llm_client()
         if not client:
             raise ValueError("OpenAI client not available for contact info extraction")
 
@@ -90,7 +112,8 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
         """
         
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=task.model,
+            timeout=task.timeout,
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
                 {"role": "user", "content": message_input}
@@ -120,14 +143,16 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
 
 def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
     """Extract name and phone number from contact information text"""
+    task = model_for("extract")
     try:
-        # Use OpenAI to extract structured information
+        # Use the configured LLM endpoint to extract structured information
+        client = _llm_client()
         if not client:
             raise ValueError("OpenAI client not available for contact info extraction")
-        
-        
+
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model=task.model,
+            timeout=task.timeout,
             messages=[
                 {"role": "system", "content": "Extract the person's contact and location information in the language of the text."},
                 {"role": "user", "content": f"""
@@ -210,9 +235,14 @@ def classify_and_summarize_grievance(
         category_list_str = json.dumps(category_list)
         result_dict_str = json.dumps(result_dict)
         
-        # Initialize OpenAI client with explicit timeout for classification (avoids "Request timed out." when API is slow)
-        classification_timeout = float(os.getenv("OPENAI_CLASSIFICATION_TIMEOUT", "120"))
-        client = OpenAI(api_key=open_ai_key, timeout=classification_timeout)
+        # DPG-14.2: this used to build a SECOND client here, shadowing the module-level one,
+        # with its own OPENAI_CLASSIFICATION_TIMEOUT — then guard it with `if not client`, which
+        # could never fire because OpenAI(...) either returns an object or raises. One client
+        # now, shared with every other call site; the classification deadline survives as a
+        # per-request timeout from the registry (TIMEOUT_CLASSIFY, default 120s, with
+        # OPENAI_CLASSIFICATION_TIMEOUT honoured as a deprecated alias).
+        task = model_for("classify")
+        client = _llm_client()
         if not client:
             raise ValueError("OpenAI client initialization failed")
 
@@ -243,7 +273,8 @@ def classify_and_summarize_grievance(
                     Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
                 """}
             ],
-            model="gpt-5-nano",
+            model=task.model,
+            timeout=task.timeout,
         )
 
         # Parse the response
@@ -307,8 +338,10 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
     Returns:
         Dict containing translated grievance data: {grievance_id, source_language, translation_method, confidence_score, grievance_description_en, grievance_summary_en, grievance_categories_en}
     """
+    client = _llm_client()
     if not client:
         raise RuntimeError("OpenAI client not available for translation")
+    task = model_for("translate")
     grievance_description = input_data.get('grievance_description')
     grievance_summary = input_data.get('grievance_summary')
     language_code = input_data.get('language_code')
@@ -335,7 +368,8 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
                     }}
                 """}
             ],
-            model="gpt-4",
+            model=task.model,
+            timeout=task.timeout,
         )
         if not response:
             raise ValueError("No response from OpenAI API")
@@ -368,12 +402,14 @@ def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAG
         Dict with: detected (bool), level ("high"|"medium"|"low"), message (str excerpt or "").
         On parse/LLM failure returns detected=False, level="low", message="".
     """
+    client = _llm_client()
     if not client:
         logger.warning("detect_sensitive_content_llm: OpenAI client not available")
         return {"detected": False, "level": "low", "message": ""}
     if not text or not text.strip():
         logger.debug("detect_sensitive_content_llm: empty text, skipping detection")
         return {"detected": False, "level": "low", "message": ""}
+    detect = model_for("detect")
     try:
         lang_label = "Nepali" if language_code == "ne" else "English"
         logger.debug(
@@ -396,7 +432,8 @@ Text: "{text[:2000]}"
 Respond with a JSON object only: {{"detected": true or false, "level": "high" or "medium" or "low", "message": "short excerpt of the relevant part of the text, or empty string if not detected"}}""",
                 },
             ],
-            model="gpt-3.5-turbo",
+            model=detect.model,
+            timeout=detect.timeout,
             response_format={"type": "json_object"},
         )
         raw = response.choices[0].message.content.strip()

@@ -279,9 +279,10 @@ blocks **no code work**, which is why we are proceeding with the engineering in 
 Documentation is strong; *reproducibility by a stranger* has rough edges we should fix before a
 reviewer clones the repo:
 
-- `backend/services/LLM_services.py:27` calls `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` — a
-  hard-coded absolute path from the original AWS host. Harmless in Docker, but it reads as
-  machine-specific to anyone evaluating portability.
+- ~~`backend/services/LLM_services.py` calls `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` — a
+  hard-coded absolute path from the original AWS host.~~ ✅ **Deleted 2026-08-18 (DPG-11).** It was
+  harmless in Docker but read as machine-specific to anyone evaluating portability, which for an
+  indicator-4 reviewer is the point. Configuration now arrives through compose `env_file:` only.
 - **Correction (2026-08-17):** an earlier draft of this section said *"No `.env.example`"*. **It exists**
   — 5,982 bytes, tracked, with `OPENAI_API_KEY=` at `:61`. The real gap is narrower and still worth fixing:
   it documents the **key** and nothing about the endpoint or the model names, so a stranger cannot tell from

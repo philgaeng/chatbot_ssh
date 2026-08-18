@@ -95,19 +95,24 @@ KNOWN_ABSENT: dict[str, str] = {
 # updates becomes noise, and noise is what the CI-red finding (D-26) is about.
 ANCHORS: tuple[tuple[str, int, str], ...] = (
     # The nine model call sites — the indicator-4 inventory, cited in four documents.
-    # ⚠ Moved +14 by DPG-14 (2026-08-18), which restructured `extract_contact_info`. The citing
-    # documents were re-pointed in the same commit — that is the discipline this pin exists for,
-    # and editing these numbers *alone* is the failure it is meant to prevent:
+    # ⚠ **These moved twice in one day, on purpose.** DPG-14 shifted them +14; **DPG-11 then took
+    # the model names out of this file entirely** — the six chatbot call sites now resolve through
+    # `backend/config/llm_config.py`, so the anchor is the *call*, and the model name is anchored
+    # where it is now declared. Both times the citing documents were re-pointed in the same commit,
+    # which is the whole discipline this pin exists to enforce:
     #   grep -rn "LLM_services.py:" docs/ --include=*.md | grep -v /archive/
-    ("backend/services/LLM_services.py", 47, "whisper-1"),
-    ("backend/services/LLM_services.py", 93, "gpt-3.5-turbo"),
-    ("backend/services/LLM_services.py", 130, "gpt-3.5-turbo"),
-    ("backend/services/LLM_services.py", 246, "gpt-5-nano"),
-    ("backend/services/LLM_services.py", 338, "gpt-4"),
-    ("backend/services/LLM_services.py", 399, "gpt-3.5-turbo"),
-    # DPG-14.3: the ASR call now passes `language=`, not `language_code=`. The SDK declares its
+    # The six chatbot call sites — what the privacy assessment's leg L4 cites.
+    ("backend/services/LLM_services.py", 64, "audio.transcriptions.create"),
+    ("backend/services/LLM_services.py", 114, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 153, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 250, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 353, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 420, "chat.completions.create"),
+    # DPG-14.3: the ASR call passes `language=`, not `language_code=`. The SDK declares its
     # parameters explicitly, so the old kwarg raised TypeError on every transcription.
-    ("backend/services/LLM_services.py", 51, "language=language_code"),
+    ("backend/services/LLM_services.py", 71, "language=language_code"),
+    # Where every model name now lives — one file, one line each (DPG-17).
+    ("backend/config/llm_config.py", 103, "gpt-5-nano"),
     ("ticketing/clients/llm_client.py", 90, "gpt-4"),
     ("ticketing/clients/llm_client.py", 141, "_MODEL_STANDARD"),
     ("ticketing/clients/llm_client.py", 142, "_MODEL_SEAH"),
@@ -123,8 +128,10 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     ("backend/services/database_services/grievance_manager.py", 190, "_decrypt_sensitive_data"),
     ("backend/shared_functions/keyword_detector.py", 259, "detect_sensitive_content"),
     ("ticketing/api/routers/public_closure.py", 19, "public/closure"),
-    # Dead code that reads as live config — DPG-11 deletes it, and the docs say so.
-    ("backend/services/LLM_services.py", 27, "load_dotenv"),
+    # ✅ Removed by DPG-11 (2026-08-18): the `load_dotenv('/home/ubuntu/...')` anchor is gone
+    # because the line is gone, and the two documents that cited it now say so rather than
+    # pointing at whatever moved into line 27. An anchor for deleted code is not a stale anchor
+    # to fix; it is an anchor to retire, with the citing prose retired alongside it.
 )
 
 
