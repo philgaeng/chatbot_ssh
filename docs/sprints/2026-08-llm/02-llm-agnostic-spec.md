@@ -168,7 +168,7 @@ Measured on the last two runs of `dpg/sprint0-licensing`, identical both times:
 | Job | Baseline |
 |---|---|
 | `docs-links` · `webchat-checks` | ✅ |
-| `backend-tests` → pytest | ❌ **18 failed, 1143 passed, 8 skipped** |
+| `backend-tests` → pytest | ❌ **18 failed, 1166 passed, 8 skipped** — measured on `dpg/sprint0-licensing` @ `e488317c` |
 | `ui-checks` → Lint | ❌ **166 problems (2 errors, 164 warnings)**; **Build is skipped as a result** |
 
 The failures are pre-existing, cluster in `test_donor_guardrail` / `test_grievance_sync` /
@@ -178,7 +178,12 @@ They are nothing to do with LLMs.
 **So this sprint's invariant needs restating in measurable terms:**
 
 > **The invariant is not "CI is green". It is "the failure count does not increase, and DPG-10's tests
-> are green, at every commit."** Record `18 failed, 1143 passed` before the first commit. **19 is yours.**
+> are green, at every commit."** Record `18 failed, 1166 passed` before the first commit. **19 is yours.**
+
+⚠ **Re-measure it yourself on your first push.** The passing count moves whenever anyone adds a test —
+it went 1143 → 1166 during Sprint 0 alone. **The failure count is the invariant; the passing count is a
+timestamp.** And the rule has already caught its author once: the reference pin (T-03) landed at 19 and
+had to be fixed, which is exactly the signal it is there to give.
 
 Tracked in [`followups/ci-has-been-red-for-ten-days.md`](followups/ci-has-been-red-for-ten-days.md)
 (**D-26**). ⚠ **It is not this sprint's job to fix** — but if you fix the 2 lint errors as a favour, the
@@ -283,7 +288,7 @@ you stop.
 
 ⚠ **Measured against a red baseline** — CI has 18 pre-existing pytest failures and 2 lint errors that are
 nothing to do with LLMs ([§0.5c](#05--what-sprint-0-changed-that-this-sprint-inherits)). The checkable
-form is: **`18 failed, 1143 passed` does not increase.** 19 is yours.
+form is: **`18 failed, 1166 passed` does not increase.** 19 is yours.
 
 ---
 
@@ -356,7 +361,7 @@ For each of the nine call sites, with the OpenAI client mocked at the module bou
       `python -m pytest tests/repo` stays green — the header walker fails the build without it
 - [ ] Both files live in `tests/backend/` and `tests/ticketing/`, which `ci.yml` names. **Nothing in
       `tests/` root or `tests/shared/`** — 27 files there have never run in CI
-- [ ] Baseline recorded before the first commit: **`18 failed, 1143 passed, 8 skipped`**. The sprint's
+- [ ] Baseline recorded before the first commit: **`18 failed, 1166 passed, 8 skipped`**. The sprint's
       real acceptance is that this number does not grow
 
 ### Tests
@@ -1110,7 +1115,7 @@ The guide's list, corrected for the two-surface reality and made checkable:
 - [ ] The full test suite passes against both configurations *(the second configuration is DPG-21; until then, against mocks + the current provider)*
 - [ ] `docs/services/06_llm_service.md` and `docs/deployment/11_llm_pipeline_policy.md` reconciled with the code
 - [ ] Every deferral logged in `followups/` + `TODO.md`, same commit — deviations continue at **D-27**
-- [ ] **No increase in the CI failure baseline** (`18 failed, 1143 passed`); `tests/repo` green throughout
+- [ ] **No increase in the CI failure baseline** (`18 failed, 1166 passed`); `tests/repo` green throughout
 - [ ] Every new `.py` file carries an SPDX header, verified by `scripts/ops/add_spdx_headers.py --check`
 - [ ] **`docs/dpg/privacy-assessment.md` §2.2 legs L4 and L5 re-pointed** at the moved call sites, and
       `docs/dpg/dependency-licenses.md` reconciled with the `pydantic-settings` move

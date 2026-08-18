@@ -69,7 +69,7 @@ unlimited warnings, so **the 2 errors are what fails it.** Both are
   2026-08-18 (D-02) — but the CI gate specifically named in the deviation is unavailable, and the
   tracker now says so instead of implying otherwise.
 
-### 2. `backend-tests` → pytest — **18 failed, 1143 passed, 8 skipped**
+### 2. `backend-tests` → pytest — **18 failed, 1166 passed, 8 skipped**
 
 The failures cluster in four files, and they are about project types, the back-fill migration and the
 grievance-sync watermark — nothing to do with this sprint:
@@ -86,7 +86,7 @@ Road's intake"* and *"the 10 pre-existing `test_grievance_sync` / `test_ticket_u
 unrelated and fail on a clean tree too"*. **There are 18, not 10.** Whether the extra 8 are the same
 root cause or a second one is exactly the diagnosis this followup exists to fund.
 
-✅ **`tests/repo` passes** — the DPG pins are among the 1143. They were added to the pytest step by
+✅ **`tests/repo` passes** — the DPG pins are among the 1166. They were added to the pytest step by
 DPG-01 (the step name changed from `(ticketing, orchestrator, actions, backend)` to
 `(repo, ticketing, …)`, visible in the run diff) and they are green.
 
