@@ -135,6 +135,22 @@ python3 scripts/ops/add_spdx_headers.py          # add
 python3 scripts/ops/add_spdx_headers.py --check  # verify (CI runs the equivalent)
 ```
 
+#### a-bis. ⚠ A pin now guards documentation line numbers — **and this sprint will turn it red on purpose**
+
+`tests/repo/test_doc_code_refs.py` (**T-03**) parses every `file.py:NNN` citation out of the live docs and
+checks three things: the file exists, the line is in range, and — for **20 load-bearing citations** — the
+line still contains an expected token.
+
+Twelve of those twenty are yours: the **nine model call sites**, plus
+`resolved_summary_builder.py:301`, `tasks/llm.py:251` and `summary.py:113`. **DPG-11 and DPG-12 move all
+of them, so T-03-c goes red.** That is the design.
+
+> **The red means: re-point the documents, then update `ANCHORS` — in the same commit.**
+> `grep -rn "LLM_services.py:" docs/` finds them; the assertion message prints the grep for you.
+> **Updating `ANCHORS` alone, leaving the docs stale, is the exact failure this pin exists to prevent** —
+> and it would silently break `docs/dpg/privacy-assessment.md` §2.2, whose entire claim is that each leg
+> was verified at the line cited.
+
 #### b. CI now runs on `dpg/**` — it did not before
 
 `ci.yml`'s push triggers were `main`, `integration/**`, `dev/**`. **`dpg/sprint0-licensing` matched none

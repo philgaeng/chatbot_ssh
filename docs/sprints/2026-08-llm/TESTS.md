@@ -47,7 +47,7 @@ is a quarantine with better branding.
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-01** ✅ | Every in-scope source file carries `SPDX-License-Identifier: Apache-2.0` — **583 files**. Scope is **imported from `scripts/ops/add_spdx_headers.py`**, not restated, so the pin and the fixer cannot disagree. Also pins: header below any shebang; migrations keep their `Safe to run` header (SPDX above it); `LICENSE` is the canonical 202-line text; `NOTICE` discloses an unresolved holder rather than leaving the template placeholder silent; both files are tracked | ✅ **Checked twice.** Delete a header → red, and `add_spdx_headers.py` restores it byte-identically. Append a newline to `LICENSE` → red |
+| **T-01** ✅ | Every in-scope source file carries `SPDX-License-Identifier: Apache-2.0` — **585 files** (583 at DPG-01; +2 from DPG-02 and the reference pin). Scope is **imported from `scripts/ops/add_spdx_headers.py`**, not restated, so the pin and the fixer cannot disagree. Also pins: header below any shebang; migrations keep their `Safe to run` header (SPDX above it); `LICENSE` is the canonical 202-line text; `NOTICE` discloses an unresolved holder rather than leaving the template placeholder silent; both files are tracked | ✅ **Checked twice.** Delete a header → red, and `add_spdx_headers.py` restores it byte-identically. Append a newline to `LICENSE` → red |
 
 ### DPG-02 — the licence scan stays true
 
@@ -65,6 +65,29 @@ tree forever. That is worse than having no scan.
 
 **Why the one test in Sprint 0 earns its place:** indicator-2 evidence decays silently. Without this,
 coverage lapses the first week someone adds a module and nobody learns until a reviewer greps.
+
+### Cross-cutting — the documentation reference pin
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-03-a** ✅ | Every `file.py:NNN` citation in the **live** docs (`archive/` excluded) resolves to a file that exists. Deliberately-removed files need an entry in `KNOWN_ABSENT` **with the reason**, and a second test fails if one of those comes back | Add a citation to a nonexistent file → red *(checked)*; recreate `gsheet.py` → red *(checked)* |
+| **T-03-b** ✅ | Every cited line is within the file it names — catches truncation | Cite line 99999 of `LLM_services.py` → red *(checked)* |
+| **T-03-c** ✅ | ⚠ **The one that catches a *shift*.** 20 load-bearing citations — the nine model call sites, the four duplicated-model sites, and the privacy assessment's encryption/hash/decrypt/SEAH anchors — must land on a line containing an expected token | Move any anchor by **one line** → red *(checked)* |
+
+**Why this exists, and what it does not do.** Sprint 0's SPDX pass shifted every source line by +2 and
+with it ~80 citations across the specs and the evidence pack. One stale number was then *copied into*
+`docs/dpg/privacy-assessment.md` — the document whose entire claim is that each leg was verified at the
+line cited. **A citation that names a line is a claim about that line.**
+
+⚠ **T-03-a and T-03-b are a floor, not a guarantee**: a reference that moved but stayed in range and is
+not in `ANCHORS` still passes silently. Only T-03-c catches drift, and only for the 20 it names. Widening
+`ANCHORS` is cheap — do it when a citation becomes load-bearing.
+
+⚠ **Sprint 1 will turn T-03-c red on purpose.** DPG-11/12 move all nine call sites out of
+`LLM_services.py`. That red is the reminder that the citing documents move in the same commit —
+the discipline `privacy-assessment.md` §2.2 needs, and would otherwise only get from DPG-30 months later.
+**Fixing `ANCHORS` alone, without re-pointing the docs, is the failure this test exists to prevent**; the
+assertion message says so and gives the grep.
 
 ⚠ **The other Sprint 0 tickets have no tests, deliberately.** DPG-02/03/04 are documents; DPG-05 (hygiene
 files) and DPG-06 (the root README) are documents too. DPG-06's real check — *no claim in `README.md` that a

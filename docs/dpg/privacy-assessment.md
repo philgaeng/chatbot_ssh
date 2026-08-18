@@ -182,7 +182,7 @@ document is more critical.
 
 Complainant PII reaches an officer's screen by exactly one route: `GET /api/grievance/{id}`, which
 is authenticated, audited, and decrypts server-side
-(`backend/services/database_services/grievance_manager.py:188`). Revealing a phone number is an
+(`backend/services/database_services/grievance_manager.py:190`). Revealing a phone number is an
 explicit, logged action.
 
 ---
@@ -265,7 +265,7 @@ personal data is exposed beyond what a reader would assume.
 | **L4** | Celery → **model provider** | ⚠ **Raw narrative, complainant name and phone, audio files** — unredacted | `LLM_services.py:47,79,116,232,324,385` | **Six call sites. Leaves Nepal on every classification.** No `base_url` is set anywhere, so this is `api.openai.com`. See §4 |
 | **L5** | Ticketing Celery → **model provider** | ⚠ Officer case notes verbatim; **the whole case timeline, including SEAH cases** | `llm_client.py:90,169,261` | **Three call sites.** Same destination, second independent client. A reviewer who redirects one and finds the other is entitled to distrust the rest of the submission |
 | **L6** | Chatbot → ticketing webhook | Grievance reference, summary, categories, location, priority | `backend/actions/utils/ticketing_dispatch.py` | Internal, non-PII by design. `grievance_summary` is free text and **can** carry self-disclosed PII — cached deliberately; the raw description is not |
-| **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:188`; `routers/grievance.py` | Server-side decryption at a single boundary; authenticated with an API key; the read is audited. This is the platform's strongest privacy control |
+| **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:190`; `routers/grievance.py` | Server-side decryption at a single boundary; authenticated with an API key; the read is audited. This is the platform's strongest privacy control |
 | **L8** | Ticketing → orchestrator `POST /message` | Officer's reply text to the complainant | `ticketing/clients/orchestrator.py` | Internal. Officer-authored content |
 | **L9** | Ticketing → Messaging API → SMS / email | Complainant phone number and message body | `messaging.py:145-148`, `:280`, `:330` | **Production Nepal uses the DOIT government gateway** (`sms.doit.gov.np`) — in-country. ⚠ **The fallback is AWS SNS in `ap-southeast-1` (Singapore)** — a second, quieter cross-border leg carrying a phone number and a message about a grievance. Email goes to an SMTP relay whose destination depends on configuration |
 | **L10** | Reports and closure documents | XLSX exports of case data; a closure PDF | `report_export.py`, `closure_pdf.py`, `report_shares.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a UUID4 token in the URL, with **no expiry** (`public_closure.py:19,39`). Report shares use `secrets.token_urlsafe(24)` — adequate entropy — but also do not expire |
@@ -677,7 +677,7 @@ privacy impact, not a legal characterisation.
 
 - A comment in `backend/api/routers/grievance.py` asserted that `GET /api/grievance/{id}` **never
   decrypts** and called it "the T3-04 defect". T3-04 landed; the endpoint decrypts server-side
-  (`grievance_manager.py:188`). The comment described the pre-fix state and was never updated —
+  (`grievance_manager.py:190`). The comment described the pre-fix state and was never updated —
   in the file a privacy reviewer reads first, about the control this assessment calls the platform's
   strongest. Corrected, with the correction dated in place.
 - `NOTICE` claimed the generated dependency-licence inventory "will be published". It was published
