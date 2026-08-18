@@ -1282,17 +1282,80 @@ deterministic keyword pre-filter still runs underneath (Q-14), so the detection 
 but the LLM leg's sensitivity is unmeasured on nano, and this is the harassment path. **Land it as its
 own commit**, and say so in `docs/services/06_llm_service.md`.
 
-#### ⚠ Confirm before the ticketing row lands
+#### ✅ Confirmed 2026-08-18 — and measuring it found the trap
 
-The ticketing findings split (`gpt-4o-mini` standard / `gpt-4o` SEAH) is a **deliberate cost-quality
-decision**, documented at the constants and pinned by T-12-b, and its outputs are officer-facing and
-**complainant-facing**. "One text model" collapses it.
+> *"Move to nano as well. Nano is very strong for classification especially when we just need to fill
+> json."*
 
-**Recommendation: keep two keys, point both defaults at the text model.** The split then survives as
-*configuration* — one env var re-opens it — and DPG-23 can re-decide it with measurements instead of
-by assumption. T-12-b's assertion changes from *"the two keys resolve to different models"* to *"the
-two keys are independently overridable"*, which is the honest pin for this decision rather than the
-previous one.
+Two keys survive for the standard/SEAH split, both pointing at the text model, so the split stays a
+**configuration** decision that DPG-23 can re-open with measurements. T-12-b's assertion moves from
+*"they resolve to different models"* to *"they are independently overridable"*.
+
+⚠ **But the migration is not a defaults edit, and this is the most important finding of the second
+wave.** Measured against the live provider, 2026-08-18:
+
+| What the ticketing calls send today | On `gpt-5-nano` |
+|---|---|
+| `temperature=0.0` (findings, resolved summary) / `0.2` (note translation) | **400 Bad Request** — *"does not support 0.0 with this model. Only the default (1) value is supported"* |
+| `max_tokens=400` / `1200` | **400 Bad Request** — *"'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead"* |
+| the same cap, renamed to `max_completion_tokens=400` | **200 OK, `finish_reason: length`, content EMPTY** — all 400 tokens went to reasoning |
+| renamed and raised to `2000` | **200 OK, `finish_reason: length`, content STILL EMPTY** — 2000 tokens, all reasoning |
+
+**And the budget the largest ticketing prompt actually needs:** the resolved-case summary consumed
+**4,287 completion tokens, of which 3,904 were reasoning** — against a current cap of 1,200.
+
+**So a naive "point the ticketing keys at nano" would have failed in three ways, and the third is
+the dangerous one:** two hard 400s (loud, found immediately) and then, once someone "fixed" the
+parameter name, a **200 OK with empty content**. Empty content on that path returns `None` →
+`generation_status = "llm_failed"` → and per **D-36** nothing ever retries it. **The complainant is
+told their case is resolved and never receives the closure document.** Silent, complainant-facing,
+and it would have looked like a model-quality problem rather than a parameter one.
+
+### 18.3 — Parameter compatibility belongs in the layer, for the same reason structured output does
+
+D-31 established that structured-output support is a property of the **(endpoint, model)** pair. The
+measurements above show `temperature` and the token cap are too — including the *name* of the
+parameter. That is three properties following the model, and it is the concrete case for the layer
+the owner asked for: *"a parser function that makes sure we feed the model what is required."*
+
+So the registry gains a **model profile**, and the per-task `STRUCTURED_*` flags fold into it —
+capability follows the model, not the task:
+
+```python
+@dataclass(frozen=True)
+class ModelProfile:
+    structured_output: str        # best rung the model honours
+    supports_temperature: bool    # gpt-5 family: default only
+    token_cap_param: str          # "max_tokens" | "max_completion_tokens"
+    reasoning_overhead: int       # measured tokens to add on top of expected output
+```
+
+| Model family | `structured_output` | `temperature` | cap parameter | reasoning overhead |
+|---|---|---|---|---|
+| `gpt-5*` | `json_schema` | ❌ default only | `max_completion_tokens` | **~4,000 measured** |
+| `gpt-4o*` | `json_schema` | ✅ | `max_tokens` | 0 |
+| `gpt-3.5*` | `json_object` | ✅ | `max_tokens` | 0 |
+| `gpt-4` | **`prompt`** | ✅ | `max_tokens` | 0 |
+| unknown / open-weights | `json_object` (conservative) | ✅ | `max_tokens` | 0 |
+
+`request_for()` then **drops** an unsupported `temperature`, **renames** the cap, and **budgets** it —
+so a call site keeps asking for what it wants and the layer decides what the model can be told. That
+is the same shape as the structured-output ladder, and it is what makes *"works whether we call one
+model or another"* true rather than aspirational.
+
+⚠ **Three rules that come out of the measurements and must be in the code, not only here:**
+
+1. **`finish_reason == "length"` is a failure.** Not "an empty result" — a failure, logged as one.
+   Every parse path currently treats empty content as an empty *answer*; on a reasoning model that
+   is how a truncated call disguises itself.
+2. **A cap is optional; a wrong cap is worse than none.** Default to sending no cap. If one is set
+   for cost control, it must be ≥ the profile's reasoning overhead plus the expected output, and the
+   rule above catches the day it is not.
+3. **Cost moves from per-token to per-call.** Nano is cheap per token and spends 2,000–4,000 of them
+   thinking on every call. The ticketing findings call goes from ~400 completion tokens on
+   `gpt-4o-mini` to ~2,300 on nano. **DPG-23 must price per call**, not per thousand tokens, or the
+   benchmark will recommend the wrong model. ⚠ This is also a **Q-19** input: the cost of the
+   consolidation is not obviously lower, and it should be measured before it is assumed.
 
 ### Acceptance
 

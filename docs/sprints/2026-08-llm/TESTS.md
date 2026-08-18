@@ -187,6 +187,8 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 | **T-18-b** | The `prompt` rung's instruction is **generated from the Pydantic schema** and names every required field — so the three rungs cannot describe different shapes | Hand-write the fallback text, or drop a field from the generated text → red |
 | **T-18-c** | `parse_response()` handles what providers actually return: a bare object, an object wrapped in ```` ```json ```` fences, leading prose before the brace. Each yields the validated model or a **typed** error — never a silent `{}` | Remove fence-stripping → red |
 | **T-18-d** | One task key change moves the model for every call site that uses it, on **both** surfaces — the consolidation of §18.2 is a config edit and this proves it | Pin a model at a call site → red |
+| **T-18-e** | ⭐ **The profile pin (D-40).** For a `gpt-5*` model the request carries **no `temperature`** and uses **`max_completion_tokens`**; for `gpt-4o*` it carries `temperature` and `max_tokens`. Asserted on the request the layer builds, per profile — the call site asks for the same thing either way | Send `temperature` to a `gpt-5*` model, or `max_tokens` → red |
+| **T-18-f** | ⭐ **`finish_reason == "length"` is a failure, not an empty answer.** A truncated response never reaches a parser and never becomes `None`-that-means-empty | Treat a length-truncated response as empty content → red |
 
 ### DPG-19 — meaningful input (second wave)
 
@@ -308,7 +310,7 @@ underperform its published F1, and the report should say so before a reviewer do
 | Sprint | Test IDs | New files |
 |---|---|---|
 | 0 | T-01 (9), T-02-a…e (29) — ✅ landed, 38 assertions | `tests/repo/test_spdx_headers.py`, `test_licence_scan.py`, `test_image_pins.py` |
-| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…d, T-19-a…e, T-19b-a…b, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
+| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…f, T-19-a…e, T-19b-a…b, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
 | 2 | T-24-a…d | `@live_llm`-marked subset |
 | 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |
 

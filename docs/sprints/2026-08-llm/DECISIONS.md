@@ -210,11 +210,19 @@ and a text model (DPG-23) — so `.env.open` and `.env.openai` differ in two mod
 That is a materially easier thing to benchmark on no budget (Q-19), and a materially easier thing for
 a reviewer to check.
 
-⚠ **One consequence needs the owner's confirmation** — see [DPG-18 §18.2](02-llm-agnostic-spec.md#dpg-18):
-the ticketing surface's standard/SEAH findings split (`gpt-4o-mini` / `gpt-4o`) is a *deliberate*
-cost-quality decision, and "one text model" collapses it. Recommendation: keep **two keys** so the
-split stays configurable, point both defaults at the single text model, and let DPG-23 re-open it
-with measurements rather than by assumption. That keeps the decision reversible without a code change.
+✅ **Confirmed the same day, for the ticketing surface too:** *"Move to nano as well. Nano is very
+strong for classification especially when we just need to fill json."* The standard/SEAH split keeps
+**two keys** pointing at one model, so it survives as configuration and DPG-23 can re-open it with
+measurements rather than by assumption.
+
+⚠ **And measuring the migration found the trap — D-40, now [DPG-18 §18.3](02-llm-agnostic-spec.md#dpg-18).**
+It is not a defaults edit. All three ticketing calls send `temperature` and two send `max_tokens`;
+`gpt-5-nano` rejects both with a 400, and once the parameter is renamed, a cap of 400 **or 2000**
+returns `finish_reason: length` with **empty content** — the reasoning eats the budget. The resolved
+summary needs **4,287 completion tokens (3,904 reasoning)** against a cap of 1,200 today. Empty
+content there means the complainant never receives their closure document, silently. Hence the model
+profile: capability, temperature support and the cap parameter's *name* all follow the model, exactly
+as structured-output support does (D-31).
 
 ## Q-22 — What happens to the four unreachable LLM paths? {#q-22}
 
