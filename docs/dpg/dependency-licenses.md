@@ -120,8 +120,42 @@ artefact:
 * Classification lives in `ops/licences.py` — pure logic, unit-tested by
   `tests/repo/test_licence_scan.py`. Anything unrecognised surfaces as a **high** finding rather
   than passing silently, which is the only failure direction that is safe.
-* `pip-licenses>=5.0` is declared in `requirements.grm.txt`. ⚠ It was installed ad-hoc in the
-  container for *this* scan, so the nightly job starts working on the next image rebuild.
+* `pip-licenses>=5.0` is declared in `requirements.grm.txt`. ~~⚠ It was installed ad-hoc in the
+  container for *this* scan, so the nightly job starts working on the next image rebuild.~~
+  ✅ **CLOSED 2026-08-18 — the image was rebuilt and the scheduled job was run for real.**
+  `pip-licenses 5.5.5` is in the `ops` image; `licence_scan()` scanned **133 packages** and wrote
+  **5 findings** to `ops.dependency_findings`, with a `licence_scan` row in `ops.system_health_checks`
+  reading `warn · {"flagged": {"warn": 5}, "scanned": 133}`.
+
+  **The five it flagged are exactly the five this report dispositions**, and all are OSI-approved weak
+  copyleft — `psycopg2-binary` (LGPL w/ linking exception), `jwcrypto` (LGPL-3.0-or-later), `certifi`
+  and `bidict` (MPL-2.0), `tqdm` (MPL-2.0 AND MIT). **Zero unknown, zero non-OSI**, which is the
+  hand-written claim above reproduced mechanically by the job that will keep making it. `warn` is the
+  designed severity for copyleft: flag for review, do not fail the build.
+
+  ⚠ **One operational precondition surfaced by running it** — see the deviation below.
+
+### ⚠ The scan writes nothing if `OPS_DB_PASSWORD` is unset
+
+Found while verifying the above, and it is not specific to the licence scan: **it disables every ops
+finding, including the `pip-audit` CVE scan.**
+
+`ops/config.py:104-111` builds the connection as `user = ops_db_user or postgres_user`. `ops_db_user`
+**defaults to the non-empty string `"ops_app"`**, so that fallback can never fire — while
+`ops_db_password or postgres_password` *does* fall back, to the admin password. The result is a login
+attempt as `ops_app` using the **admin's** password. Meanwhile `ops001_init.py:54-64` creates the role
+**without a password at all** when `OPS_DB_PASSWORD` is unset, so no password can authenticate it.
+
+The failure mode is the problem: `licence_scan()` **returns normally**. It logs
+`Failed to record check licence_scan`, tries to raise an alert, and — if `HEALTH_ALERT_EMAIL` is also
+unset — cannot send that either. A deployment missing one env var records nothing and says nothing.
+**A scan that manufactures confidence is worse than no scan**, which is the same lesson as the
+classifier bug in "How this was produced", one layer down.
+
+`env.local` does not set `OPS_DB_PASSWORD`. The migration comment documents it as an operator step, so
+this is a **configuration precondition, not a code defect** — but it is one whose omission is silent.
+Logged as sprint deviation **D-25**; the claim "the scan runs on the schedule" is true **given a
+correctly configured ops container**, and that caveat belongs with the claim.
 
 ## Python — declared dependencies (35)
 
