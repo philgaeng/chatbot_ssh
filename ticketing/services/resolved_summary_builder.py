@@ -13,6 +13,7 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from backend.config.llm_config import findings_task, model_for
 from ticketing.clients.grievance_api import get_grievance_detail
 from ticketing.config.settings import get_settings
 from ticketing.constants.resolution import resolution_category_label
@@ -25,8 +26,6 @@ from ticketing.services.overdue_episodes import load_episodes_for_tickets, overd
 from ticketing.services.pii_vault import grievance_pii_masked
 from ticketing.services.report_rows import _fetch_auxiliary_maps, build_report_row, normalize_complaint_category
 
-_MODEL_STANDARD = "gpt-4o-mini"
-_MODEL_SEAH = "gpt-4o"
 _PHONE_NOTE_RE = re.compile(r"\b(call|calls|called|phone|voic(?:e|ing))\b", re.IGNORECASE)
 
 
@@ -298,7 +297,13 @@ def build_summary_json(
             "is_seah": ticket.is_seah,
         },
         "llm": {
-            "model": _MODEL_SEAH if ticket.is_seah else _MODEL_STANDARD,
+            # ⚠ A **persisted provenance field**: this is the archival record of which model
+            # produced this case summary. It used to be computed from a private copy of the
+            # model names living in this module — a different module from the one that made the
+            # call. Change the client's mapping, miss this file, and every resolved case records
+            # a model that did not run it. A grievance mechanism publishing false provenance is
+            # an honesty failure, so it resolves through the same registry as the call itself.
+            "model": model_for(findings_task(ticket.is_seah)).model,
             "generated_at": _now().isoformat(),
         },
     }

@@ -115,10 +115,10 @@ CLIENT_FACTORIES = {
 }
 MODEL_REGISTRY = "backend/config/llm_config.py"
 
-# ⚠ Scope note. This pin walks `backend/` today. **DPG-12 widens it to `ticketing/`** in the
-# commit that removes that surface's literals — deliberately not before, because a pin that is
-# red on arrival teaches the next reader that red is normal here.
-PINNED_TREES = ("backend",)
+# Widened to `ticketing/` by DPG-12, in the commit that removed that surface's literals — not
+# before, because a pin that is red on the day it lands teaches the next reader that red is normal
+# here. `ops/` carries no model call and is not walked; add it the day it does.
+PINNED_TREES = ("backend", "ticketing")
 
 
 def _python_files(tree: str) -> list[Path]:
@@ -195,4 +195,43 @@ def test_the_openai_client_is_constructed_in_one_place_per_surface():
     assert not offenders, (
         "OpenAI clients are constructed only by the two factories "
         f"({', '.join(sorted(CLIENT_FACTORIES))}). Found: {offenders}"
+    )
+
+def test_the_seah_model_ternary_exists_in_exactly_one_place():
+    """
+    **T-17-c.** `findings_task(is_seah)` is the only SEAH model selection in the repository.
+
+    ⚠ This is the pin with the most history behind it. That ternary had been written out **four**
+    times before DPG-17: in the ticketing client, in a log line, in `resolved_summary_builder` —
+    whose copy was written into a **persisted provenance field**, so drift there publishes a model
+    name that never ran — and once as `_llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD`,
+    reaching into the client module's privates. That last one is why this test does not stop at
+    grepping for `gpt-`: **the fourth copy contained no model name at all.**
+    """
+    offenders: list[str] = []
+    for tree_name in PINNED_TREES:
+        for path in _python_files(tree_name):
+            rel = path.relative_to(REPO_ROOT).as_posix()
+            tree = ast.parse(path.read_text(), filename=str(path))
+            for node in ast.walk(tree):
+                # a) any reference to the retired private model constants, however it is reached
+                if isinstance(node, ast.Name) and node.id in ("_MODEL_SEAH", "_MODEL_STANDARD"):
+                    offenders.append(f"{rel}:{node.lineno} → {node.id}")
+                elif isinstance(node, ast.Attribute) and node.attr in ("_MODEL_SEAH", "_MODEL_STANDARD"):
+                    offenders.append(f"{rel}:{node.lineno} → .{node.attr}")
+                # b) an is_seah ternary picking between two **model-looking** literals.
+                #    ⚠ Deliberately narrow: `is_seah` ternaries are ordinary in this codebase —
+                #    workflow keys, labels, queue names — and flagging all of them would make this
+                #    pin noise, which is how a pin gets deleted. Only a model name is the concern.
+                elif isinstance(node, ast.IfExp) and rel != MODEL_REGISTRY:
+                    if "is_seah" in ast.dump(node.test).lower() or "seah" in ast.dump(node.test).lower():
+                        branches = [node.body, node.orelse]
+                        if all(
+                            isinstance(b, ast.Constant) and isinstance(b.value, str) for b in branches
+                        ) and any(MODEL_LITERAL.search(b.value) for b in branches):
+                            offenders.append(f"{rel}:{node.lineno} → is_seah ternary picking a model")
+
+    assert not offenders, (
+        "The SEAH model choice is findings_task(is_seah) in backend/config/llm_config.py, and "
+        "nothing else. Found:\n  " + "\n  ".join(offenders)
     )

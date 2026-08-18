@@ -3,11 +3,26 @@
 """
 LLM client for the ticketing service.
 
-Uses OpenAI gpt-4 — same provider as the chatbot backend (backend/services/LLM_services.py).
-DO NOT import from backend/services/ — keep ticketing independent. Replicate the pattern here.
+**This module constructs a client. It chooses no model and no endpoint.** Both come from
+`backend/config/llm_config.py` — the one registry both LLM surfaces read (DPG-17) — via
+`model_for()` and `findings_task()`.
 
-API key: OPENAI_API_KEY in env.local (already present, used by chatbot).
-Init: get_settings().openai_api_key
+⚠ **The instruction this docstring used to give produced the problem it was warning about.** It
+said: *"Uses OpenAI gpt-4 … DO NOT import from backend/services/ — keep ticketing independent.
+Replicate the pattern here."* The boundary is real and stays: ticketing does not import the
+chatbot's **service layer**, and it keeps its own client, its own lifecycle, its own deployment
+unit. But *"replicate the pattern"* was read as *"replicate the model names"*, and they were then
+replicated four more times — into `resolved_summary_builder` (which writes one into a **persisted
+provenance field**), into a log line, and once by reaching into this module's privates from
+`tasks/llm.py`, which made it invisible to `grep "gpt-"`.
+
+So the rule is now precise: **two factories, one config.** `backend/config/` is not the service
+layer — ticketing already imports `backend/config/smtp_config.py` on the live officer-invite path,
+and the registry imports nothing first-party, so it stays copy-portable if ticketing is ever
+extracted (pinned: `tests/backend/test_llm_config_pins.py`).
+
+Auth: `LLM_API_KEY`, with `OPENAI_API_KEY` honoured as a deprecated alias (one warning), resolved
+in the registry so **both** surfaces treat a stale `env.local` identically.
 """
 
 import json
@@ -17,7 +32,7 @@ from typing import Optional
 
 from openai import OpenAI
 
-from ticketing.config.settings import get_settings
+from backend.config.llm_config import findings_task, llm_endpoint, model_for
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +43,24 @@ _client: Optional[OpenAI] = None
 
 
 def _get_client() -> OpenAI:
-    """Return a cached OpenAI client, initialising on first call."""
+    """Return a cached OpenAI-compatible client, built from the shared registry on first call."""
     global _client
     if _client is None:
-        settings = get_settings()
+        endpoint = llm_endpoint()
+        logger.info("Building ticketing LLM client for %s", endpoint.host)
         _client = OpenAI(
-            api_key=settings.openai_api_key,
-            timeout=30.0,
+            base_url=endpoint.base_url,
+            api_key=endpoint.api_key,
+            timeout=endpoint.timeout,
+            max_retries=endpoint.max_retries,
         )
     return _client
+
+
+def reset_client() -> None:
+    """Drop the cached client so the next call re-reads configuration (tests, config reload)."""
+    global _client
+    _client = None
 
 
 # ---------------------------------------------------------------------------
@@ -72,7 +96,7 @@ def _looks_non_english(text: str) -> bool:
 
 def translate_to_english(text: str) -> Optional[str]:
     """
-    Translate *text* to English using gpt-4.
+    Translate *text* to English using the configured translation model.
 
     Returns the translated string, or None on error (caller logs and skips).
     If the text already looks like English, returns it unchanged without an API call.
@@ -84,10 +108,12 @@ def translate_to_english(text: str) -> Optional[str]:
         logger.debug("translate_to_english: text looks English, skipping API call")
         return text
 
+    task = model_for("ticket_translate")
     client = _get_client()
     try:
         response = client.chat.completions.create(
-            model="gpt-4",
+            model=task.model,
+            timeout=task.timeout,
             messages=[
                 {"role": "system", "content": _TRANSLATE_SYSTEM},
                 {"role": "user", "content": text},
@@ -134,12 +160,13 @@ Rules:
 - key_findings: minimum 1, maximum 5 items.
 """
 
-# Model selection: cost vs. quality tradeoff
-# Standard cases: gpt-4o-mini — indistinguishable quality for structured extraction,
-#   ~15x cheaper than gpt-4o.
-# SEAH cases: gpt-4o — more careful reasoning for sensitive investigations.
-_MODEL_STANDARD = "gpt-4o-mini"
-_MODEL_SEAH = "gpt-4o"
+# Model selection: a cost vs. quality tradeoff, and it survives — as two registry keys.
+#   ticket_findings       standard cases: quality indistinguishable for structured extraction,
+#                         at roughly a fifteenth of the cost
+#   ticket_findings_seah  SEAH cases: more careful reasoning for sensitive investigations
+# The keys are resolved by findings_task(is_seah); the models behind them are declared in
+# backend/config/llm_config.py and nowhere else. The two module constants that used to live here
+# were copied into three other modules — see this module's docstring.
 
 
 def generate_case_findings(
@@ -159,7 +186,8 @@ def generate_case_findings(
     if not context:
         return None
 
-    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
+    task = model_for(findings_task(is_seah))
+    model = task.model
     # Compact JSON — minimise tokens
     user_content = json.dumps(context, separators=(",", ":"), ensure_ascii=False)
 
@@ -167,6 +195,7 @@ def generate_case_findings(
     try:
         response = client.chat.completions.create(
             model=model,
+            timeout=task.timeout,
             messages=[
                 {"role": "system", "content": _FINDINGS_SYSTEM},
                 {"role": "user", "content": user_content},
@@ -251,14 +280,15 @@ def generate_resolved_case_summary_llm(
     if not bundle:
         return None
 
-    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
+    task = model_for(findings_task(is_seah))
     payload = {**bundle, "primary_language": primary_language}
     user_content = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
     client = _get_client()
     try:
         response = client.chat.completions.create(
-            model=model,
+            model=task.model,
+            timeout=task.timeout,
             messages=[
                 {"role": "system", "content": _RESOLVED_SUMMARY_SYSTEM},
                 {"role": "user", "content": user_content},

@@ -36,6 +36,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from backend.config import llm_config
 from ticketing.clients import llm_client
 
 
@@ -73,7 +74,9 @@ def openai_class(monkeypatch) -> _OpenAIFactory:
     factory = _OpenAIFactory()
     monkeypatch.setattr(llm_client, "OpenAI", factory)
     monkeypatch.setattr(llm_client, "_client", None)  # defeat the cached client
-    return factory
+    llm_config.get_llm_settings.cache_clear()
+    yield factory
+    llm_config.get_llm_settings.cache_clear()
 
 
 NEPALI_NOTE = "स्थलगत निरीक्षण गरियो, सडकमा धुलो धेरै छ।"
@@ -102,21 +105,60 @@ BUNDLE = {"ticket_id": "TCK-1", "field_reports": ["visit 1"]}
 # The client factory itself
 # ═════════════════════════════════════════════════════════════════════════════
 
-def test_the_client_is_built_from_settings_and_cached(openai_class, monkeypatch):
+def test_the_client_is_built_from_the_shared_registry_and_cached(openai_class, monkeypatch, tmp_path):
     """
-    Today: the key comes from `TicketingSettings.openai_api_key` and the timeout is the literal
-    30.0 declared in `_get_client()`. DPG-12 moves both into the shared registry; T-12-a then
-    pins the replacement.
+    **T-12-a.** The ticketing surface keeps its own factory — two surfaces, two lifecycles — and
+    reads the **same** configuration as the chatbot surface. Before DPG-12 the key came from
+    `TicketingSettings.openai_api_key` and the timeout was a literal `30.0` in this module, which
+    is exactly how two surfaces drift apart while both look configured.
     """
-    settings = SimpleNamespace(openai_api_key="sk-test-key")
-    monkeypatch.setattr(llm_client, "get_settings", lambda: settings)
+    monkeypatch.chdir(tmp_path)  # no env.local underfoot
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "https://router.huggingface.co/v1")
+    monkeypatch.setenv("LLM_API_KEY", "hf_token")
+    monkeypatch.setenv("LLM_MAX_RETRIES", "4")
+    llm_config.get_llm_settings.cache_clear()
 
     first = llm_client._get_client()
     second = llm_client._get_client()
 
     assert first is second, "the client is memoised in a module global"
     assert len(openai_class.built) == 1
-    assert openai_class.built[0].build_kwargs == {"api_key": "sk-test-key", "timeout": 30.0}
+    assert openai_class.built[0].build_kwargs == {
+        "base_url": "https://router.huggingface.co/v1",
+        "api_key": "hf_token",
+        "timeout": llm_config.DEFAULT_SDK_TIMEOUT,
+        "max_retries": 4,
+    }
+
+
+def test_one_env_change_moves_both_surfaces(openai_class, monkeypatch, tmp_path):
+    """
+    **T-17-d — the drift pin, and the test that makes "two factories, one config" enforceable.**
+
+    T-11-d stops a *new* hard-coded model. This stops the subtler failure: two registries that
+    both read the environment, drift apart, and leave the complainant-facing resolved-case summary
+    on a closed model while the repository advertises an open one. Both factories are constructed
+    here, from one environment change, and both must land on the same endpoint.
+    """
+    from backend.services import llm_client as backend_factory
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("LLM_BASE_URL", "http://vllm-internal:8000/v1")
+    monkeypatch.setenv("LLM_API_KEY", "shared-token")
+    llm_config.get_llm_settings.cache_clear()
+    backend_factory.reset_clients()
+
+    chatbot_client = backend_factory.get_llm_client()
+    llm_client._get_client()
+    ticketing_kwargs = openai_class.built[0].build_kwargs
+
+    assert str(chatbot_client.base_url).rstrip("/") == "http://vllm-internal:8000/v1"
+    assert ticketing_kwargs["base_url"] == "http://vllm-internal:8000/v1"
+    assert chatbot_client.api_key == ticketing_kwargs["api_key"] == "shared-token"
+
+    backend_factory.reset_clients()
 
 
 # ═════════════════════════════════════════════════════════════════════════════

@@ -113,14 +113,19 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     ("backend/services/LLM_services.py", 71, "language=language_code"),
     # Where every model name now lives — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 103, "gpt-5-nano"),
-    ("ticketing/clients/llm_client.py", 90, "gpt-4"),
-    ("ticketing/clients/llm_client.py", 141, "_MODEL_STANDARD"),
-    ("ticketing/clients/llm_client.py", 142, "_MODEL_SEAH"),
-    # The duplicated model names DPG-17 collapses. The last two are invisible to `grep "gpt-"` —
-    # one imports the client's privates, one is an OpenAPI endpoint description.
-    ("ticketing/services/resolved_summary_builder.py", 301, "_MODEL_SEAH"),
-    ("ticketing/tasks/llm.py", 251, "_MODEL_SEAH"),
-    ("ticketing/api/routers/tickets/summary.py", 113, "gpt-4"),
+    # The three ticketing call sites — what the privacy assessment's leg L5 cites.
+    ("ticketing/clients/llm_client.py", 114, "chat.completions.create"),
+    ("ticketing/clients/llm_client.py", 196, "chat.completions.create"),
+    ("ticketing/clients/llm_client.py", 289, "chat.completions.create"),
+    # ✅ The four duplicated copies of the SEAH ternary, collapsed by DPG-12 (2026-08-18). These
+    # anchors used to read `_MODEL_SEAH`; they now anchor the single resolution each site makes
+    # through the registry. Two of the four were invisible to `grep "gpt-"` — one reached into
+    # the client module's privates, one was an OpenAPI endpoint description — which is why the
+    # pin that replaces them (T-17-c) parses the AST instead of grepping.
+    ("ticketing/services/resolved_summary_builder.py", 306, "model_for(findings_task"),
+    ("ticketing/tasks/llm.py", 171, "model_for(findings_task"),
+    ("ticketing/tasks/llm.py", 260, "model_for(findings_task"),
+    ("ticketing/api/routers/tickets/summary.py", 113, "the configured LLM"),
     # The privacy assessment's load-bearing citations (indicators 7, 9a).
     ("backend/services/database_services/base_manager.py", 243, "_encrypt_field"),
     ("backend/services/database_services/base_manager.py", 255, "_decrypt_field"),

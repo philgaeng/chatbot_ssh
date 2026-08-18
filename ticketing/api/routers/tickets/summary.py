@@ -110,7 +110,7 @@ def trigger_resolved_summary(
     summary="Trigger (re)generation of the AI case-findings summary (admin/supervisor only)",
     description=(
         "Queues a Celery task that reads all key events for the ticket, "
-        "calls OpenAI gpt-4, and stores the result in `ai_summary_en`. "
+        "calls the configured LLM, and stores the result in `ai_summary_en`. "
         "Returns 202 Accepted immediately; poll `GET /tickets/{id}` for the updated field. "
         "Restricted to: grc_chair, adb_*, super_admin, local_admin."
     ),

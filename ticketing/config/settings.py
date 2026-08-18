@@ -83,8 +83,16 @@ class TicketingSettings(BaseSettings):
     # Set in prod, e.g. https://grm-chatbot.dor.gov.np — see 12_security_monitoring_service.md §3.2
     cors_allowed_origins: str = ""
 
-    # ── LLM (OpenAI — same key used by chatbot backend) ──
-    openai_api_key: str = ""
+    # ── LLM ──
+    # ⚠ Nothing here. Deliberately.
+    # Every LLM setting — endpoint, key, timeouts, retries, structured-output mode and **every
+    # model name** — is declared once in `backend/config/llm_config.py`, which both LLM surfaces
+    # read and neither owns (DPG-17). A ticketing-side `openai_api_key` lived here until
+    # 2026-08-18; keeping it would mean two places to look and two places to drift, and the
+    # drift is not hypothetical — the standard/SEAH model pair had already been copied into four
+    # modules. The legacy `OPENAI_API_KEY` env var is still honoured, as a deprecated alias
+    # resolved in the registry, so a stale `env.local` cannot authenticate one surface and
+    # silently break the other.
 
     # ── Archiving (docs/ARCHIVING_AND_RETENTION.md §7) ──
     archiving_dry_run: bool = False

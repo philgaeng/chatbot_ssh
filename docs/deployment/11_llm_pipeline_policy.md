@@ -9,10 +9,16 @@
 
 ## Overview — two pipelines
 
-| Pipeline | Trigger | Model | Output | Owner |
+| Pipeline | Trigger | Model — registry key (default) | Output | Owner |
 |---|---|---|---|---|
-| **Note translation** | Every `NOTE_ADDED` or `COMPLAINANT_MESSAGE` event | `gpt-4o-mini` | `payload.translation_en` on the event | Ticketing Celery task |
-| **Case findings** | Ticket RESOLVED, or manual trigger (admin) | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | `Ticket.ai_summary_en` + `ticket_context_cache.findings_json` | Ticketing Celery task |
+| **Note translation** | Every `NOTE_ADDED` or `COMPLAINANT_MESSAGE` event | `ticket_translate` (falls back to `translate`: `gpt-4`) | `payload.translation_en` on the event | Ticketing Celery task |
+| **Case findings** | Ticket RESOLVED, or manual trigger (admin) | `ticket_findings` (`gpt-4o-mini`) / `ticket_findings_seah` (`gpt-4o`) | `Ticket.ai_summary_en` + `ticket_context_cache.findings_json` | Ticketing Celery task |
+
+> ⚠ **Corrected 2026-08-18 (DPG-12).** This table said note translation used `gpt-4o-mini`. The code
+> called `gpt-4`, and had since the pipeline was written — nobody had reason to notice, because the
+> model name lived in the call site and the table lived here. The row now names the **registry key**,
+> which is what the code actually resolves; the parenthesised default is a convenience for the reader
+> and is the only part that can go stale.
 
 Both pipelines are implemented in `ticketing/tasks/llm.py` and `ticketing/clients/llm_client.py`.
 Neither pipeline is called inline — they are always Celery async tasks so API latency is unaffected.
@@ -185,10 +191,16 @@ The full structured output is stored in `ticket_context_cache.findings_json`.
 
 ### Model selection
 
-| Case type | Model | Rationale |
-|---|---|---|
-| Standard grievance | `gpt-4o-mini` | Structured extraction task; quality indistinguishable from gpt-4o at ~15× lower cost |
-| SEAH | `gpt-4o` | Sensitive investigation; extra reasoning capacity warranted |
+| Case type | Registry key | Default today | Rationale |
+|---|---|---|---|
+| Standard grievance | `ticket_findings` | `gpt-4o-mini` | Structured extraction task; quality indistinguishable at ~15× lower cost |
+| SEAH | `ticket_findings_seah` | `gpt-4o` | Sensitive investigation; extra reasoning capacity warranted |
+
+**The split is two registry keys, not a ternary in the code** — and that distinction is load-bearing.
+It had been written out as a ternary in four modules, one of which (`resolved_summary_builder`) writes
+its answer into the **persisted** `llm.model` provenance field of every resolved case. Selecting it in
+one place (`findings_task(is_seah)`) is what makes that record provably the model that ran. Pinned by
+`tests/backend/test_llm_config_pins.py`.
 
 Both use `temperature=0.0` for deterministic output and `response_format={"type":"json_object"}`
 to guarantee parseable JSON.
