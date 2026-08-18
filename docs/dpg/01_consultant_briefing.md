@@ -1,8 +1,8 @@
 # Nepal GRM platform — DPG qualification briefing
 
-**For:** ADB's Digital Public Goods consultant · **From:** the project team · **Date:** 2026-08-17
+**For:** ADB's Digital Public Goods consultant · **From:** the project team · **Date:** 2026-08-18
 **Subject:** self-assessment against the [DPG Standard](https://www.digitalpublicgoods.net/standard), the
-engineering that closes the gaps, and fifteen questions for you — **four of which block us** (Q1, Q4, Q15, Q16).
+engineering that closes the gaps, and sixteen questions for you — **four of which block us** (Q1, Q4, Q15, Q16).
 
 > **What this document is.** A summary, written to be read before a meeting. The full
 > indicator-by-indicator assessment, with file-and-line evidence for every claim, is
@@ -33,17 +33,19 @@ exploitation, abuse and harassment) intake stream, and anonymous submission end 
 | # | Indicator | Status | The gap, if any |
 |---|---|---|---|
 | 1 | Relevance to SDGs | ✅ **Compliant** | None. SDG 16.6, 16.10, 9.1. Needs writing up, not building |
-| 2 | Approved open licence | 🟠 **Trivial — but waiting on two answers** | The repo is public with **no `LICENSE` file**, which means all rights reserved. We need to know **which licence** (your view — we recommend Apache-2.0) and **who holds copyright** (indicator 3) |
+| 2 | Approved open licence | 🟢 **Closed, provisionally** | ✅ `LICENSE` (Apache-2.0), `NOTICE`, and an SPDX header on **all 585 source files**, maintained by a script with a test so coverage cannot decay. Plus a **generated** licence audit over 153 packages. Two things stay provisional: the **licence choice** is ours to revisit on your advice, and the **copyright holder** is blank pending indicator 3 — `NOTICE` says so rather than guessing |
 | 3 | Clear ownership | 🔴 **Blocked, external** | A written IP determination from ADB. **Nobody on this project can resolve it** |
 | 4 | Platform independence | 🔴 **The main work** | Our AI layer calls one commercial provider, with model names hard-coded in nine places. §4 is entirely about this |
 | 5 | Documentation | ✅ **Compliant, strong** | A ~200-file spec tree, a Docker runbook, OpenAPI on both APIs, plus a portable engineering starter kit another country team could reuse |
 | 6 | Data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema, XLSX and PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
-| 7 | Privacy & applicable laws | 🟠 **Partial** | Encryption and access control are built. Missing: the legal assessment, a data-flow diagram, and redaction of free text before it leaves the country |
-| 8 | Standards & best practices | 🟢 **Mostly** | OpenAPI, OIDC/PKCE, migrated schema. Missing the open-source *project* files — `CONTRIBUTING`, `CODE_OF_CONDUCT`, `SECURITY` |
-| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake all built. Outstanding: retention/breach policy, and third-party PII redaction |
+| 7 | Privacy & applicable laws | 🟠 **Partial — and more honest than it was** | ✅ The **assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram are now written**, each leg verified against code rather than inferred. ⚠ Doing that surfaced **three storage-layer defects no spec had** (§5). Still missing: redaction of free text before it leaves the country (Sprint 3), and a lawyer's review — see Q17 |
+| 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE, migrated schema — and `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and PR templates have now landed. `SECURITY.md` routes disclosure privately rather than to a public issue, because this platform holds SEAH reports. Governance and release-versioning policy deferred pending Q10 |
+| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake all built. Outstanding: retention/breach policy, third-party PII redaction, and **the three encryption/backup defects in §5** |
 
-**Two blockers, one of them ours.** Indicator 3 is a signature we have to ask for. Indicator 4 is
-engineering we have specced and are about to build.
+**One blocker left that is genuinely ours to close, and one that is not.** Indicator 4 is engineering we have
+specced and are about to build. **Indicator 3 is a signature we have to ask you for**, and it is now the only
+thing standing between us and a complete licensing story — `LICENSE` and `NOTICE` are in place but cannot
+name a copyright holder until ADB rules.
 
 **Our strongest card is indicator 2: there is no proprietary component anywhere in the runtime stack.** No
 closed database, no closed identity provider, no closed framework, no vendored SDK we could not replace —
@@ -52,23 +54,30 @@ relationship with anyone. Full inventory in §6.
 
 ---
 
-## 2. What the engineering sprint closes before we meet
+## 2. What has landed, and what is still ahead
 
 Four sub-sprints, 27 tickets, specced in full at
 [`../sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md).
 
-**Licensing and governance** — *indicators 2, 3, 5, 7, 8*
-- `LICENSE`, `NOTICE` and SPDX headers, with a re-runnable script and a test so coverage cannot decay —
-  *gated on your licence answer and ADB's ownership determination*.
-- A **generated** dependency-licence report over four dependency sets (two Python, npm, container images),
-  wired into an existing scheduled scan so it cannot go stale. Machine output, not our assertion.
-- `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue templates — the security file written with
-  real care rather than templated, since this platform holds SEAH disclosures and "open a public issue" is
-  the wrong disclosure route.
-- The privacy assessment against Nepal's Individual Privacy Act 2018, with a data-flow diagram naming every
-  boundary personal data crosses.
+### ✅ Landed since this briefing was first drafted — *indicators 2, 5, 7, 8*
 
-**Platform independence** — *indicator 4, the main work*
+- **`LICENSE` (Apache-2.0), `NOTICE`, and an SPDX header on all 585 source files**, applied by a committed
+  script and held in place by a test, so coverage cannot decay the first week someone adds a module.
+- **A generated dependency-licence audit** over four dependency sets — two Python, npm, container images —
+  now re-run nightly by the ops container so it cannot go stale. Machine output, not our assertion. It found
+  two LGPL dependencies no manifest would have shown, and a licence contradiction in our own npm package.
+- **`SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and PR templates.**
+- **The privacy assessment and a 13-leg data-flow diagram**, each leg verified against code at a file and
+  line. ⚠ It carries an unsoftened honesty marker — drafted by an AI agent, reviewed by no lawyer, statutory
+  section numbers marked unverified — and it is the reason we can show you §5's three defects rather than
+  still not knowing about them.
+- **A corrected root `README`**, which until yesterday advertised a Rasa NLU service on port 5005 that has
+  never existed in this codebase — directly contradicting our own indicator-2 argument on the most-read page
+  in the repository.
+
+### Still ahead — *indicator 4 and the privacy egress*
+
+**Platform independence** — *the main work*
 - **One configuration file** declaring every model endpoint and model name for the whole product, read by
   both AI subsystems. Switching providers becomes an environment-variable change, **with a test proving a
   single change moves both subsystems.**
@@ -173,6 +182,11 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish without it.
   a signed data-processing agreement** with that provider before complainant narratives are routed through
   it? If the answer is yes and no provider will sign one, that reopens self-hosting (§5) — the most
   expensive consequence on this list.
+- **Q17 — Who should review the privacy assessment?** It is drafted, thorough on the *system* and explicitly
+  a lay reading of the *law* — every statutory reference is marked unverified because we did not check the
+  numbering against the Nepal Law Commission text, and no lawyer has read it. **Does the DPGA expect a
+  legally-reviewed assessment, or is a documented, honest engineering assessment sufficient?** If the former,
+  we need to know who pays for that review and whether ADB has counsel who can do it.
 - **Q14 — Is there anything in the current Standard revision, or the AI-systems guidance specifically, that
   we have missed** by reading the published Standard and questionnaire?
 
@@ -257,6 +271,26 @@ ask for zero-retention in writing); the **jurisdiction of execution**, which we 
 **prompt caching**, which several providers use for performance and which means cached content sits
 somewhere briefly.
 
+### ⚠ One precision we want to get right before anyone briefs the ministry
+
+**What Sprint 3 produces is pseudonymised text, not anonymised text**, and the difference is not pedantry.
+Because we keep the mapping that turns `<PERSON_1>` back into a name, the text **remains personal data**
+under the Individual Privacy Act and under GDPR-style analysis. Redaction lowers the risk profile; it does
+not take the data out of scope.
+
+**We will not let anyone tell the agency the grievances are "anonymised."** That claim would not survive
+scrutiny, and an overstatement there would discredit every other claim we make.
+
+**What we can say, accurately and strongly:** *only pseudonymised text crosses the border, and the
+re-identification key never leaves Nepal.* Pseudonymisation is an explicitly recognised safeguard, and that
+is a genuinely strong position.
+
+⚠ **The second clause is a promise about deployment, not about code, and it is quietly easy to void** — one
+careless serialisation putting the mapping into the same task payload or log line as the text and the key
+has travelled with the ciphertext. So in-country residency and storage separation are **acceptance criteria
+with a test**, not implementation notes. The mapping is arguably the most concentrated personal data in the
+system: identifiers with nothing else attached.
+
 **And the thing we are least comfortable with:** there is **not a single automated test** covering either AI
 surface, so our statements about model behaviour rest on manual observation rather than evidence we could
 hand you. That is why the sprint starts with tests.
@@ -292,6 +326,18 @@ Recorded so they are not re-opened, and because two of them change what we are a
   gazetteer does not carry. **We will publish the measured residual rather than describe it** (see the
   privacy section below). Higher recall needs the ML model in Q9; the rule layer is not a placeholder for
   it, it is the part that works without an unlicensed dependency.
+- **⚠ Three storage-layer defects the privacy assessment found, which we are telling you about rather than
+  quietly fixing first.** Writing the data-flow diagram against the code — instead of against our own
+  existing privacy specs — surfaced all three, and none appeared in any spec:
+  **(a) encryption at rest fails open** — when the key is absent, or the encryption call raises, the error
+  is logged and the write proceeds in plaintext, so a degraded deployment silently stores complainant PII in
+  the clear and nothing downstream can tell; **(b) the search-token hashes are unsalted SHA-256** of phone,
+  email, name and address — Nepal's mobile number space is enumerable in seconds, so the phone hash is
+  reversible and those columns are personal data, not pseudonyms; **(c) backups are unencrypted by default**
+  — contact columns stay ciphertext inside the dump, but the narrative, every officer note and every voice
+  recording do not. Each is logged with its file and line and each is a code change with real blast radius,
+  so they are scheduled rather than hot-fixed. **We would rather you saw the method that finds this class of
+  thing than a document that never had any.**
 - **A licence-drift finding we surfaced ourselves and fixed.** Our Redis image tag pinned only the major
   version, so it silently followed upstream onto a non-OSI licence line — nobody edited the file; the licence
   moved underneath it. Now pinned to a minor and taken under AGPLv3. **The class of problem is more
@@ -397,6 +443,8 @@ configuration and none constrains anyone's right to use or fork the code.
 | | |
 |---|---|
 | The full assessment, with file-and-line evidence | [`00_compliance_status.md`](00_compliance_status.md) |
+| The privacy assessment + 13-leg data-flow diagram | [`privacy-assessment.md`](privacy-assessment.md) |
+| The generated dependency-licence audit | [`dependency-licenses.md`](dependency-licenses.md) |
 | The engineering plan — 27 tickets, four sub-sprints | [`../sprints/2026-08-llm/README.md`](../sprints/2026-08-llm/README.md) |
 | Decisions taken, with the reasoning | [`../sprints/2026-08-llm/DECISIONS.md`](../sprints/2026-08-llm/DECISIONS.md) |
 | The documentation tree | [`../README.md`](../README.md) |
