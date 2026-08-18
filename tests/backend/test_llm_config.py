@@ -54,15 +54,19 @@ def clean_env(monkeypatch, tmp_path):
 # T-17-a — every task key resolves, and every one is overridable
 # ═════════════════════════════════════════════════════════════════════════════
 
+# ✅ **Two models (Q-21).** Eight keys, two values: one for transcription, one for everything else.
+# ⚠ What this replaced was not a decision but an accident — the Sept-2025 nano migration moved one
+# call site of five, and the rest kept July-2025 models for eleven months because each name lived
+# at its own call site. The keys stay so a task can be moved back without touching code.
 TODAYS_MODELS = {
     "classify": "gpt-5-nano",
-    "extract": "gpt-3.5-turbo",
-    "translate": "gpt-4",
-    "detect": "gpt-3.5-turbo",
+    "extract": "gpt-5-nano",
+    "translate": "gpt-5-nano",
+    "detect": "gpt-5-nano",
     "asr": "whisper-1",
-    "ticket_translate": "gpt-4",           # falls back to `translate`
-    "ticket_findings": "gpt-4o-mini",
-    "ticket_findings_seah": "gpt-4o",
+    "ticket_translate": "gpt-5-nano",      # falls back to `translate`
+    "ticket_findings": "gpt-5-nano",
+    "ticket_findings_seah": "gpt-5-nano",
 }
 
 
@@ -119,13 +123,25 @@ def test_an_unknown_task_key_names_the_known_ones_and_says_where_to_add_it():
     assert "llm_config.py" in message
 
 
-def test_findings_task_is_the_seah_ternary_and_it_maps_to_two_distinct_models():
+def test_findings_task_is_the_seah_ternary_and_the_split_stays_configurable(monkeypatch):
+    """
+    **T-12-b, restated by Q-21.** The split was `gpt-4o-mini` / `gpt-4o` — a deliberate
+    cost/quality decision. Consolidating points both at one model, so the assertion moves from
+    *"they resolve to different models"* to *"they are independently overridable"*: the split
+    survives as **configuration**, and DPG-23 can re-open it with measurements instead of a
+    code change.
+    """
     assert llm_config.findings_task(is_seah=False) == "ticket_findings"
     assert llm_config.findings_task(is_seah=True) == "ticket_findings_seah"
 
+    monkeypatch.setenv("MODEL_TICKET_FINDINGS_SEAH", "gpt-4o")
+    llm_config.get_llm_settings.cache_clear()
+
     standard = llm_config.model_for(llm_config.findings_task(False)).model
     seah = llm_config.model_for(llm_config.findings_task(True)).model
-    assert standard != seah, "the standard/SEAH split is a cost/quality decision — keep both keys"
+    assert seah == "gpt-4o" and standard == "gpt-5-nano", (
+        "one env var must re-open the split without touching code"
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -200,13 +216,17 @@ def test_retries_and_the_endpoint_structured_output_ceiling_are_configuration(mo
 # T-13-a / T-13-c — the structured-output ladder
 # ═════════════════════════════════════════════════════════════════════════════
 
+# ✅ **Every text task is on gpt-5-nano now (Q-21), so every one gets `json_schema`.** That is the
+# second dividend of consolidating: three of the four sites on a weaker rung were there because of
+# the MODEL, not the endpoint, and the ladder goes back to being what it was designed as — a
+# provider fallback for the open configuration rather than a workaround for four OpenAI vintages.
+# The per-model measurements that produced these rungs are pinned in `test_the_profile_...` below.
 MEASURED_CAPABILITY = {
-    # task                    mode          why (measured against the live provider, 2026-08-18)
-    "classify": "json_schema",           # gpt-5-nano     ✅ schema
-    "extract": "json_object",            # gpt-3.5-turbo  400 on schema, ✅ object
-    "detect": "json_object",             # gpt-3.5-turbo  400 on schema, ✅ object
-    "translate": "prompt",               # gpt-4          400 on BOTH — no JSON mode at all
-    "ticket_findings": "json_schema",    # gpt-4o-mini    ✅ schema
+    "classify": "json_schema",
+    "extract": "json_schema",
+    "detect": "json_schema",
+    "translate": "json_schema",
+    "ticket_findings": "json_schema",
     "ticket_findings_seah": "json_schema",
 }
 
@@ -240,14 +260,20 @@ def test_the_endpoint_ceiling_clamps_every_task_down_at_once(monkeypatch):
     assert llm_config.model_for("ticket_findings").structured_output == "prompt"
 
 
-def test_a_task_capability_is_overridable_without_touching_the_endpoint(monkeypatch):
-    """Point one task at a better model and lift only that task — the per-task half of the ladder."""
-    monkeypatch.setenv("MODEL_TRANSLATE", "gpt-4o")
-    monkeypatch.setenv("STRUCTURED_TRANSLATE", "json_schema")
+def test_a_task_capability_follows_its_model_and_can_still_be_overridden(monkeypatch):
+    """
+    Capability derives from the model (DPG-18's profile), so moving one task to a weaker model
+    lowers only that task — and an explicit `STRUCTURED_*` remains as the escape hatch for a
+    provider whose profile we have wrong.
+    """
+    monkeypatch.setenv("MODEL_TRANSLATE", "gpt-3.5-turbo")
     llm_config.get_llm_settings.cache_clear()
+    assert llm_config.model_for("translate").structured_output == "json_object"
+    assert llm_config.model_for("extract").structured_output == "json_schema"
 
-    assert llm_config.model_for("translate").structured_output == "json_schema"
-    assert llm_config.model_for("extract").structured_output == "json_object"
+    monkeypatch.setenv("STRUCTURED_TRANSLATE", "prompt")
+    llm_config.get_llm_settings.cache_clear()
+    assert llm_config.model_for("translate").structured_output == "prompt"
 
 
 def test_free_text_tasks_never_ask_for_json():
@@ -429,7 +455,10 @@ def test_the_prompt_rung_states_the_shape_in_words_generated_from_the_schema(mon
         assert field in system, "every declared field must be named in the generated instruction"
 
 
-def test_the_prompt_rung_adds_a_system_message_when_there_is_none():
+def test_the_prompt_rung_adds_a_system_message_when_there_is_none(monkeypatch):
+    monkeypatch.setenv("MODEL_TRANSLATE", "gpt-4")   # the one model with no JSON mode at all
+    llm_config.get_llm_settings.cache_clear()
+
     request = llm_config.request_for(
         "translate", [{"role": "user", "content": "text"}], schema=_Schema.model_json_schema(),
     )

@@ -165,16 +165,18 @@ def test_one_env_change_moves_both_surfaces(openai_class, monkeypatch, tmp_path)
 # T-10-a / T-10-b — translate_to_english (call site 7)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def test_translate_to_english_sends_gpt_4(openai_class):
+def test_translate_to_english_sends_the_text_model(openai_class):
     openai_class.response = _chat("A site inspection was carried out; there is a lot of dust.")
 
     result = llm_client.translate_to_english(NEPALI_NOTE)
 
     assert result == "A site inspection was carried out; there is a lot of dust."
     request = openai_class.last_request
-    assert request["model"] == "gpt-4"
-    assert request["temperature"] == 0.2
-    assert request["max_tokens"] == 1024
+    assert request["model"] == "gpt-5-nano"      # ⏳ was gpt-4 until Q-21
+    # ⚠ nano refuses any temperature but its default, so the layer DROPS it (D-40). The call site
+    # still asks for 0.2 — what changed is that the layer no longer passes on a 400.
+    assert "temperature" not in request
+    assert request["max_completion_tokens"] == 1024 + 4000   # the cap, renamed and budgeted
     assert [m["role"] for m in request["messages"]] == ["system", "user"]
     assert request["messages"][1]["content"] == NEPALI_NOTE
     assert "response_format" not in request, "free text out — no JSON mode on this call site"
@@ -205,13 +207,13 @@ def test_translate_to_english_returns_none_when_the_body_is_empty(openai_class):
 # T-10-a / T-10-b — generate_case_findings (call site 8)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def test_generate_case_findings_sends_gpt_4o_mini_for_a_standard_case(openai_class):
+def test_generate_case_findings_sends_the_text_model_for_a_standard_case(openai_class):
     openai_class.response = _chat(json.dumps(FINDINGS_JSON))
 
     assert llm_client.generate_case_findings(CONTEXT) == FINDINGS_JSON
 
     request = openai_class.last_request
-    assert request["model"] == "gpt-4o-mini"
+    assert request["model"] == "gpt-5-nano"
     # DPG-13: `json_object` → a strict `json_schema`, which is what makes the "missing keys →
     # fill defaults" branch below unreachable on this rung rather than merely unlikely.
     assert request["response_format"]["type"] == "json_schema"
@@ -219,13 +221,22 @@ def test_generate_case_findings_sends_gpt_4o_mini_for_a_standard_case(openai_cla
     assert set(request["response_format"]["json_schema"]["schema"]["required"]) == {
         "summary_en", "key_findings", "recommended_action", "urgency", "languages_detected",
     }
-    assert request["temperature"] == 0.0
-    assert request["max_tokens"] == 400
+    # ⚠ nano refuses temperature and refuses `max_tokens` by name; the layer drops the first and
+    # renames the second, adding the measured reasoning budget (D-40).
+    assert "temperature" not in request
+    assert request["max_completion_tokens"] == 400 + 4000
 
 
-def test_generate_case_findings_sends_gpt_4o_for_a_seah_case(openai_class):
-    """⚠ The split is deliberate: SEAH investigations get the more careful model."""
+def test_generate_case_findings_resolves_the_seah_key_separately(openai_class, monkeypatch):
+    """
+    ⚠ **The split is now configuration, not two literals** (Q-21). Both keys point at one model by
+    default; one env var re-opens the cost/quality decision that `gpt-4o` used to encode.
+    """
+    from backend.config import llm_config
+
     openai_class.response = _chat(json.dumps(FINDINGS_JSON))
+    monkeypatch.setenv("MODEL_TICKET_FINDINGS_SEAH", "gpt-4o")
+    llm_config.get_llm_settings.cache_clear()
 
     llm_client.generate_case_findings(CONTEXT, is_seah=True)
 
@@ -271,22 +282,26 @@ def test_generate_case_findings_returns_none_on_provider_error(openai_class):
 # T-10-a / T-10-b — generate_resolved_case_summary_llm (call site 9)
 # ═════════════════════════════════════════════════════════════════════════════
 
-def test_generate_resolved_case_summary_sends_gpt_4o_mini_for_a_standard_case(openai_class):
+def test_generate_resolved_case_summary_sends_the_text_model_for_a_standard_case(openai_class):
     """⚠ Complainant-facing output — the text a person reads at the end of their grievance."""
     openai_class.response = _chat(json.dumps(RESOLVED_JSON))
 
     assert llm_client.generate_resolved_case_summary_llm(BUNDLE, primary_language="ne") == RESOLVED_JSON
 
     request = openai_class.last_request
-    assert request["model"] == "gpt-4o-mini"
+    assert request["model"] == "gpt-5-nano"
     assert request["response_format"]["type"] == "json_schema"
     assert request["response_format"]["json_schema"]["strict"] is True
-    assert request["temperature"] == 0.0
-    assert request["max_tokens"] == 1200
+    assert "temperature" not in request
+    assert request["max_completion_tokens"] == 1200 + 4000
 
 
-def test_generate_resolved_case_summary_sends_gpt_4o_for_a_seah_case(openai_class):
+def test_generate_resolved_case_summary_resolves_the_seah_key_separately(openai_class, monkeypatch):
+    from backend.config import llm_config
+
     openai_class.response = _chat(json.dumps(RESOLVED_JSON))
+    monkeypatch.setenv("MODEL_TICKET_FINDINGS_SEAH", "gpt-4o")
+    llm_config.get_llm_settings.cache_clear()
 
     llm_client.generate_resolved_case_summary_llm(BUNDLE, is_seah=True)
 

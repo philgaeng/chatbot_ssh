@@ -102,18 +102,28 @@ class LLMSettings(BaseSettings):
 
     # ── The models ───────────────────────────────────────────────────────────
     # Every model name in the product. Nothing else may declare one (T-17-c).
+    # ── Two models (Q-21, 2026-08-18) ────────────────────────────────────────
+    # One model for transcription, one for everything else. Eight keys, two values: the KEYS stay
+    # because they are the seam that lets a task be moved later without touching code — Q-11's
+    # "one text model first, then downsize" depends on that seam existing.
+    #
+    # ⚠ What this replaced was not a decision but an accident: the September 2025 migration to
+    # gpt-5-nano moved ONE call site of five, and the other four kept gpt-3.5-turbo (from July
+    # 2025) and gpt-4 for eleven months, because a model name lived at each call site and nobody
+    # could see them together. That is what DPG-17 was written from.
     model_classify: str = "gpt-5-nano"
-    model_extract: str = "gpt-3.5-turbo"
-    model_translate: str = "gpt-4"
-    model_detect: str = "gpt-3.5-turbo"
+    model_extract: str = "gpt-5-nano"
+    model_translate: str = "gpt-5-nano"
+    model_detect: str = "gpt-5-nano"
     model_asr: str = "whisper-1"
     # "" → resolves to model_translate. One knob moves translation everywhere; a second exists
     # for whoever needs the two surfaces to differ.
     model_ticket_translate: str = ""
-    # The standard/SEAH split is a deliberate cost/quality decision — SEAH investigations get
-    # the more careful model. It survives as two keys, never as two literals in a call site.
-    model_ticket_findings: str = "gpt-4o-mini"
-    model_ticket_findings_seah: str = "gpt-4o"
+    # ⚠ **The standard/SEAH split survives as two KEYS pointing at one model.** It was a deliberate
+    # cost/quality decision (gpt-4o-mini / gpt-4o) and it stays *configurable* — one env var
+    # re-opens it — so DPG-23 can re-decide it with measurements rather than by assumption.
+    model_ticket_findings: str = "gpt-5-nano"
+    model_ticket_findings_seah: str = "gpt-5-nano"
 
     # ── Per-task timeouts (0.0 → the endpoint's) ─────────────────────────────
     timeout_classify: float = Field(

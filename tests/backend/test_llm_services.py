@@ -154,8 +154,8 @@ def test_transcribe_sends_whisper_1(client, tmp_path):
     assert "language_code" not in kwargs
 
 
-def test_extract_contact_info_sends_gpt_35_turbo_with_json_object(client):
-    """Call site 2."""
+def test_extract_contact_info_sends_the_text_model_with_a_strict_schema(client):
+    """Call site 2. ⏳ Was `gpt-3.5-turbo` + `json_object` until Q-21 consolidated onto one model."""
     client.chat.completions.create.return_value = _chat(
         json.dumps({"complainant_phone": "9841234567"})
     )
@@ -163,20 +163,20 @@ def test_extract_contact_info_sends_gpt_35_turbo_with_json_object(client):
     llm.extract_contact_info({"complainant_phone": "my number is 9841234567"})
 
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "gpt-3.5-turbo"
-    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["model"] == "gpt-5-nano"
+    assert kwargs["response_format"]["type"] == "json_schema"
     assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
-def test_extract_all_contact_info_sends_gpt_35_turbo_with_json_object(client):
-    """Call site 3."""
+def test_extract_all_contact_info_sends_the_text_model_with_a_strict_schema(client):
+    """Call site 3 (⏸ parked with the voice flow — DPG-19b — and still pinned)."""
     client.chat.completions.create.return_value = _chat(json.dumps(CONTACT_JSON))
 
     llm.extract_all_contact_info(ALL_CONTACT_INPUT)
 
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "gpt-3.5-turbo"
-    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["model"] == "gpt-5-nano"
+    assert kwargs["response_format"]["type"] == "json_schema"
     assert [m["role"] for m in kwargs["messages"]] == ["system", "user"]
 
 
@@ -220,19 +220,22 @@ def test_classify_keeps_its_own_deadline_as_a_per_request_timeout(client, monkey
     assert client.chat.completions.create.call_args.kwargs["timeout"] == 45.0
 
 
-def test_translate_grievance_sends_gpt_4_with_no_response_format(client):
-    """Call site 5 — JSON by prompt instruction only, like classification."""
+def test_translate_grievance_sends_the_text_model_with_a_strict_schema(client):
+    """
+    Call site 5. ⏳ **This one gained structured output by consolidating**: it ran on `gpt-4`,
+    which rejects both JSON modes, so it was on the `prompt` rung by necessity rather than choice.
+    """
     client.chat.completions.create.return_value = _chat(json.dumps(TRANSLATE_JSON))
 
     llm.translate_grievance_to_english_LLM(dict(TRANSLATE_INPUT))
 
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "gpt-4"
-    assert "response_format" not in kwargs
+    assert kwargs["model"] == "gpt-5-nano"
+    assert kwargs["response_format"]["type"] == "json_schema"
 
 
-def test_detect_sensitive_content_sends_gpt_35_turbo_with_json_object(client):
-    """Call site 6 — the SEAH detection path."""
+def test_detect_sensitive_content_sends_the_text_model_with_a_strict_schema(client):
+    """Call site 6 — the SEAH detection path, moved off `gpt-3.5-turbo` by Q-21."""
     client.chat.completions.create.return_value = _chat(
         json.dumps({"detected": True, "level": "high", "message": "excerpt"})
     )
@@ -240,8 +243,8 @@ def test_detect_sensitive_content_sends_gpt_35_turbo_with_json_object(client):
     llm.detect_sensitive_content_llm("a worker followed me home", "en")
 
     kwargs = client.chat.completions.create.call_args.kwargs
-    assert kwargs["model"] == "gpt-3.5-turbo"
-    assert kwargs["response_format"] == {"type": "json_object"}
+    assert kwargs["model"] == "gpt-5-nano"
+    assert kwargs["response_format"]["type"] == "json_schema"
 
 
 # ═════════════════════════════════════════════════════════════════════════════

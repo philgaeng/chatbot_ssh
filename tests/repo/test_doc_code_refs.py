@@ -107,7 +107,7 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     ("backend/services/LLM_services.py", 475, "call_llm"),
     ("backend/services/LLM_services.py", 535, "call_llm"),
     # Where every model name is declared — one file, one line each (DPG-17).
-    ("backend/config/llm_config.py", 105, "gpt-5-nano"),
+    ("backend/config/llm_config.py", 114, "gpt-5-nano"),
     # The three ticketing call sites — leg L5.
     ("ticketing/clients/llm_client.py", 150, "call_llm"),
     ("ticketing/clients/llm_client.py", 228, "call_llm"),
