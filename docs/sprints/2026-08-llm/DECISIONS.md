@@ -25,6 +25,7 @@
 | [Q-11](#q-11) | One model or per-task | One text model first, then downsize | [`02` DPG-14](02-llm-agnostic-spec.md#dpg-14) |
 | [Q-12b](#q-12b) | Redact when | **At transmission** — the mapping is PII | [`04` DPG-31](04-pii-redaction-spec.md#dpg-31) |
 | [Q-12c](#q-12c) | Where the ML dependency lives | Dedicated service, own initiative | [`04` DPG-32](04-pii-redaction-spec.md#dpg-32) |
+| [Q-12d](#q-12d) | Names: privacy-first, and the rule layer does them | **Recall over precision for names**; deterministic name detection ships in Sprint 3 | [`04` §31.2b](04-pii-redaction-spec.md#dpg-31) |
 | [Q-12](#q-12) | Nepali NER licence | Email the author; fine-tune as fallback | [`04` DPG-32](04-pii-redaction-spec.md#dpg-32) |
 | [Q-13](#q-13) | `gpt-5-nano` · voice live? | Deliberate cost choice · **voice not live** | [`02` DPG-14](02-llm-agnostic-spec.md#dpg-14) |
 | [Q-14](#q-14) | SEAH fail open/closed | **Fail-open stays** — pre-filter verified | [`02` DPG-15](02-llm-agnostic-spec.md#dpg-15) |
@@ -526,5 +527,43 @@ the job header so nobody "fixes" it later by making it required.
 ---
 
 ---
+
+---
+
+---
+
+## ✅ Q-12d — Do person names wait for the ML layer, and which way does the privacy/accuracy trade go? {#q-12d}
+**Owns:** DPG-31, DPG-32, DPG-35 · **Raised by the owner, 2026-08-18**
+
+> **DECIDED — names are privacy-first, and the pseudonymiser handles them without waiting for the ML tier.**
+>
+> Two things were wrong in the specs and the DPG documents, both flagged by the owner:
+>
+> 1. **Scope.** DPG-31's recogniser list covered only numeric identifiers and email, so both consultant-facing
+>    documents said person names would reach the provider unaddressed. **Names are substantially tractable at
+>    the rule layer** — honorific and role-title triggers (`Er.`, Engineer, overseer, contractor, ward
+>    chairperson, `श्री`), a Nepali family-name gazetteer, and self-identification patterns. That is now
+>    §31.2b, with §31.2c covering full address spans while leaving the bare district the classifier needs.
+> 2. **Direction of the trade.** For **names** the trade goes to **privacy**: tune for recall, accept
+>    over-redaction. This confirms what DPG-32 already said and removes the ambiguity with §31.3's
+>    classification-first rule — which stands, but applies to **location**, where a bare district is not
+>    identifying and the classifier depends on it. *"Location is less important as we don't expect a full
+>    address, and if we get one it should be easy to find using common words like village."*
+>
+> **The honest claim is now "most names are removed, some get through, here is the measured number"** —
+> neither "names are handled" nor "names are unaddressed". Both DPG documents were corrected, and the
+> residual is disclosed alongside the provider's own terms (consultant-Q16), because with self-hosting
+> parked that residual reaches a third party indefinitely.
+>
+> **Restore after translation** — the owner's second point — was already the design (DPG-33 step 2):
+> redact, translate, put the names back. *"Even if not 100% correct that should do the trick."*
+
+**Answer (2026-08-18, owner):** *"I thought that our pseudomiser will look as well for common first names and
+last names and titles + prepositions use before names in order to be more efficient … for names, it is privacy
+first. What we need to do is not to change the spec but change the statement that only emails and numeric will
+be done and that names will reach the provider — we need to say what we will do to prevent it while
+disclaiming that there may be a few names that still reach it. There we should reference to the privacy
+clauses of huggingface. For translation, we can replace the pseudomyzed items after translation — even if not
+100% correct that should do the trick."*
 
 ---

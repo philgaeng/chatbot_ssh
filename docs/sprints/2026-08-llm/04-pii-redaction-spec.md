@@ -172,6 +172,40 @@ Custom Presidio recognisers (or plain regex at this stage) for:
 
 Both digit systems, for every numeric pattern.
 
+### 31.2b — Person names, deterministically (added 2026-08-18)
+
+**Names are not the NER layer's exclusive job, and treating them as such was a scoping error.** A
+rule layer gets a real fraction of them without any ML dependency, and in this domain the fraction it
+gets is the one that matters most — the named official. Three recognisers, in descending precision:
+
+1. **Honorific and role-title triggers.** The token(s) following a title are almost always a name, and
+   this is the *third-party official* case that carries the sharpest legal exposure (§0):
+   `श्री` · `श्रीमती` · `सुश्री` · `डा.` · Mr · Mrs · Ms · Dr · **Er.** / Engineer · Sir · Madam, and the
+   domain's own role titles — engineer, sub-engineer, junior engineer / JE, overseer, contractor,
+   supervisor, ward chairperson, chairperson, secretary. **`Er.` earns its place**: it is the standard
+   Nepali honorific for an engineer and this is a road-works GRM.
+2. **Family-name (thar) gazetteer.** Nepali surnames are a comparatively closed and distinctive set —
+   Shrestha, Tamang, Gurung, Magar, Rai, Limbu, Thapa, Bhattarai, Adhikari, Poudel, Karki, Basnet,
+   Chaudhary, Yadav, Sah, Mandal, Bhandari, Dahal, Khadka, Pandey, Sharma, Acharya, Ghimire, Subedi,
+   Neupane … A surname hit is high precision *and* lets you take the adjacent token as the given name.
+   ⚠ **Surnames carry caste and ethnicity in Nepal.** That is precisely why they must not reach a third
+   party — and also why the gazetteer itself is sensitive: it is a list of ethnic markers. Keep it as
+   project data with a comment saying so; do not publish it as a "sample dataset".
+3. **Self-identification patterns.** *"my name is X"*, *"I am X"*, `मेरो नाम X हो`, `म X हुँ`. High
+   precision, and it catches the opening line the voice channel guarantees (§0).
+
+**Given-name matching is deliberately last and weakest.** Many Nepali given names double as common
+nouns — *Bahadur* (brave), *Maya* (affection), *Laxmi*, *Kumar* — so a given-name gazetteer alone
+over-fires. Use it only to extend a match anchored by (1) or (2), never on its own.
+
+### 31.2c — Addresses, not districts
+
+A bare district name is not identifying and the classifier needs it (§31.3). **A full address is a
+different object** and is worth catching: detect settlement-level qualifiers — `गाउँ` / gaun (village),
+`टोल` / tole (neighbourhood), ward + number, VDC, `नगरपालिका` / municipality, house/plot numbers — and
+redact the address span while leaving the district and province intact. If a complainant writes out a
+full address it is usually formulaic, which is what makes this tractable at the rule layer.
+
 ### 31.3 — Replacement semantics
 
 Three choices matter, and each has a reason:
@@ -232,6 +266,12 @@ Per-document mapping scope. Never a process-global counter (two concurrent griev
 - [ ] Devanagari normalisation, with an offset-alignment assertion
 - [ ] Nepali mobile / landline / `+977` / citizenship-number / **vehicle-registration** / email recognisers,
       both digit systems
+- [ ] **Person-name recognisers (§31.2b)** — honorific/role-title triggers, family-name gazetteer,
+      self-identification patterns. Tuned for **recall**, per DPG-32: a missed name is a privacy breach,
+      an over-redacted common noun is a small classification cost. The gazetteer is marked as sensitive
+      project data, not a publishable sample
+- [ ] **Address spans (§31.2c)** redacted via settlement qualifiers, while district and province survive
+      for the classifier
 - [ ] Consistent, reversible, per-document placeholder mapping
 - [ ] **Whether any caller needs cross-request `restore()` is established, and recorded.** If none does, the
       mapping is never persisted and the acceptance says so explicitly
@@ -264,18 +304,22 @@ single most important test in this sprint.
 > the sprint. DPG-31's *"must ship without DPG-32"* constraint was written for exactly this and now carries
 > real weight.
 >
-> **What that costs, stated plainly so the trade is visible:** **person names in narrative go unredacted.**
-> Deterministic patterns catch phones, citizenship numbers, vehicle plates and emails; they do **not** catch
-> *"the site engineer Ram Bahadur refused to…"*. Since T2 is parked and T1 is permanent, that text goes to a
-> third party indefinitely. **Sprint 3 therefore closes the numeric-identifier leak and leaves the
-> third-party-name leak open** — which must be said in `docs/dpg/pii-egress-inventory.md`, in DPG-04's
-> privacy assessment, and to the consultant. It is a defensible staging decision; it is not a solved problem,
-> and it must not be reported as one.
+> **What that costs — restated 2026-08-18, because the first version overstated it.** This banner used to say
+> person names go unredacted entirely. That was a scoping error: **§31.2b covers names at the rule layer** —
+> honorific and role-title triggers, a family-name gazetteer, self-identification patterns — which catches the
+> named official and the self-introducing complainant, the two cases that dominate a road-works GRM.
 >
-> ⭐ **If that gap is unacceptable before the anonymiser service exists**, the cheap interim is a **deny-list
-> of the project's own known personnel** — officers, contractors, ward officials are enumerable from
-> `ticketing.*` and the project documents. Poor general recall, but high precision on exactly the people a
-> road-sector GRM names most. Say the word and I will spec it as DPG-31.4.
+> **Deferring the ML tier costs recall, not coverage.** A name with no title, no recognisable surname and no
+> self-identification frame — *"the man operating the roller swore at my daughter"*, or an unusual surname
+> absent from the gazetteer — still passes through. **So the honest claim is "most names are removed, some
+> get through", not "names are handled" and not "names are unaddressed".** That residual must be measured
+> (DPG-35) and disclosed in `docs/dpg/pii-egress-inventory.md`, DPG-04's assessment and the consultant
+> briefing — with the provider's own terms named beside it, because a permanent third-party arrangement is
+> what makes the residual matter.
+>
+> ⭐ **Cheap way to shrink it further, still no ML:** a deny-list of the project's *own* personnel. Officers,
+> contractors and ward officials are enumerable from `ticketing.*` and the project documents — poor general
+> recall, near-perfect on exactly the people this GRM names most.
 
 **Person-name detection is the hard part**, and it is where a redaction layer fails quietly.
 
@@ -423,13 +467,13 @@ instead of nine call sites.
 > | **Phone recall, split by digit system** | **Stays in Sprint 3.** It measures DPG-31, and it is the single most important number here — see T-31-a |
 > | **Vehicle / citizenship / email recall** | **Stays.** Deterministic patterns, shipped this sprint |
 > | **Classification-quality delta, redacted vs raw** | **Stays**, reduced: measures over-redaction from deterministic patterns only |
-> | PERSON recall / precision | ⏸ **Travels with DPG-32** — there is no person detection to measure |
-> | Third-party-name recall | ⏸ **Travels with DPG-32.** ⚠ And until then it is effectively **0** by construction, which is the number to report rather than omit |
+> | PERSON recall / precision | **Stays, as a rule-layer number.** §31.2b detects names deterministically, so there *is* something to measure — and measuring it turns "some names get through" from a hedge into a disclosed figure |
+> | Third-party-name recall | **Stays**, reported separately from complainant self-identification: different legal category, and the title-trigger recogniser behaves very differently on the two |
 > | Voice-origin subset | ⏸ **Deferred** — voice is not live (Q-13.2) and there is no ASR budget |
 >
-> **The honest headline for Sprint 3 is therefore:** *numeric identifiers measured and closed; person names
-> not yet addressed.* Publish it that way. A recall table that silently omits PERSON reads as a control that
-> covers names.
+> **The honest headline for Sprint 3 is therefore:** *numeric identifiers closed; person names substantially
+> but not completely removed, with the residual measured.* Publish the number. A table that omits PERSON reads
+> as a control that covers names; one that claims PERSON with no figure reads as a control that works.
 
 A redaction system nobody measured is a compliance artefact, not a control. DPG-20's labelled PII spans
 serve this (synthetic in phase 1, Q-15).
@@ -499,10 +543,11 @@ should say so explicitly, with the new reason.
 - [ ] **No unredacted numeric identifier** in any outbound model call — verified by test, at the chokepoint
 - [ ] No raw grievance text in logs, traces, or Celery payloads — verified by test
 - [ ] **Devanagari-digit phone numbers detected** — explicit test case (T-31-a)
-- [ ] ⏸ **Third-party names in narrative — NOT detected this sprint** (DPG-32 moved out, Q-12c). The gap is
-      **stated explicitly** in the egress inventory, the privacy assessment, and to the consultant. This box
-      is deliberately unticked, not overlooked
-- [ ] Deterministic recall measured and published, with PERSON reported as **not covered** rather than omitted
+- [ ] **Third-party names in narrative — detected at the rule layer** (§31.2b: titles, surname gazetteer,
+      self-identification), with the **known residual measured and disclosed**. Not "handled", not
+      "unaddressed" — a number, published, with the provider's terms named beside it
+- [ ] Deterministic PERSON recall measured and published **as a rule-layer number**, with the ML tier's
+      absence stated as the reason it is not higher
 - [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at storage
 - [ ] **The restore mapping is either never persisted, or protected as the PII it is** — and not in `ticketing.*`
 - [ ] Audio's irreducibility documented. ⚠ It is **no longer a T2 argument** — T2 is parked (Q-03/Q-05), so

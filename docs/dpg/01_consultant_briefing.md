@@ -2,7 +2,7 @@
 
 **For:** ADB's Digital Public Goods consultant · **From:** the project team · **Date:** 2026-08-17
 **Subject:** self-assessment against the [DPG Standard](https://www.digitalpublicgoods.net/standard), the
-engineering that closes the gaps, and fourteen questions for you — **three of which block us** (Q1, Q4, Q15).
+engineering that closes the gaps, and fifteen questions for you — **four of which block us** (Q1, Q4, Q15, Q16).
 
 > **What this document is.** A summary, written to be read before a meeting. The full
 > indicator-by-indicator assessment, with file-and-line evidence for every claim, is
@@ -92,8 +92,10 @@ Four sub-sprints, 27 tickets, specced in full at
   number an ASCII pattern misses completely.
 - Redaction of the logging, task-queue and backup paths — the model call is the leak everyone designs
   against; logs and queued payloads are the leak that actually happens.
-- Measured recall, published, including where it is weak. ⚠ **Person names stay unaddressed in this
-  pass** — see Q9.
+- **Person names removed at the rule layer** — honorific and role-title triggers (`Er.`, Engineer,
+  overseer, ward chairperson, श्री …), a Nepali family-name gazetteer, and self-identification patterns
+  (*"my name is …"*). No ML dependency, so it ships in this pass. ⚠ **Some names will still get through**
+  — see §4.
 
 ---
 
@@ -164,6 +166,13 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish without it.
 - **Q10 — Which project-hygiene artefacts are actually required** versus merely liked? `CONTRIBUTING`,
   `CODE_OF_CONDUCT`, `SECURITY`, issue templates, public roadmap, release tags, governance model. We would
   rather build the required set once than guess and iterate.
+- **Q16 🔴 — The provider's terms, and whether a DPA is required.** Hugging Face's privacy policy carries no
+  Inference-Providers-specific clause on retention or training use, the Terms reference no DPA, and the
+  default routing policy picks a different third-party processor per request (§4). We intend to **pin a
+  single named provider** so the processor and its jurisdiction are known. **Does ADB — or the DPGA — expect
+  a signed data-processing agreement** with that provider before complainant narratives are routed through
+  it? If the answer is yes and no provider will sign one, that reopens self-hosting (§5) — the most
+  expensive consequence on this list.
 - **Q14 — Is there anything in the current Standard revision, or the AI-systems guidance specifically, that
   we have missed** by reading the published Standard and questionnaire?
 
@@ -197,6 +206,32 @@ PostgreSQL *before* any model call; classification runs as a retrying background
 states; the chatbot waits on a bounded deadline. **A grievance is never lost because a model was
 unavailable** — so a slower model degrades throughput, not intake.
 
+### Where the residual goes, and under whose terms
+
+Redaction is imperfect by construction, so the honest question is *what happens to the text that gets
+through*. With self-hosting parked (§5) that text goes to a third party permanently, so we read the
+provider's terms rather than assuming them. **What we found is worth your view (Q16):**
+
+- **Hugging Face's published privacy policy has no Inference-Providers-specific clause.** It does not state
+  whether inference inputs are retained, for how long, or whether they may be used for training. The general
+  clauses are that data is kept *"for as long as necessary to deliver the Services"* and may be *"stored and
+  processed in the United States or any other country in which the Company or its affiliates, subsidiaries
+  or agents maintain facilities."*
+- **The Terms of Service say "You own the Content you create"**, alongside a broad licence to *"use, display,
+  publish, reproduce, distribute"* content in order to provide the service. The confidentiality commitment —
+  *"reasonable and appropriate measures designed to keep your Content confidential"* — is framed around
+  private repositories rather than inference traffic. **No DPA is referenced in the Terms.**
+- **⚠ The router is a proxy, and by default the processor is not fixed.** Inference Providers forwards
+  requests to third-party partners — Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate,
+  Scaleway, OVHcloud and others — and the default policy selects *the fastest available provider per
+  request*, failing over automatically. **Under the default configuration we could not tell you which company
+  processed a given grievance, or in which jurisdiction.** Each partner's own terms also apply.
+
+**Our engineering response, which we would like sanity-checked:** pin the provider explicitly instead of
+using automatic routing — the API supports a `model:provider` suffix — so exactly one named processor handles
+grievance text and DPG-04's assessment can assess *that* company's terms and location. It costs the automatic
+failover, which for asynchronous classification is an acceptable trade.
+
 **And the thing we are least comfortable with:** there is **not a single automated test** covering either AI
 surface, so our statements about model behaviour rest on manual observation rather than evidence we could
 hand you. That is why the sprint starts with tests.
@@ -218,9 +253,20 @@ Recorded so they are not re-opened, and because two of them change what we are a
   configurable fallback if users report quality problems. **This is more than indicator 4 requires** and we
   would lead with it: the Standard asks for demonstrated replaceability; we intend to run the replacement.
 - **Redaction happens at transmission**, not before storage — see Q8.
-- **Person-name redaction is deferred** to the standalone anonymiser service in Q9; the first pass covers
-  numeric identifiers and emails. **Third-party names in narrative will still reach the provider** — a
-  disclosed residual, not a solved problem.
+- **Person names are redacted, imperfectly, and we would rather quantify that than round it either way.**
+  An earlier draft of this briefing said names were deferred entirely to the anonymiser service in Q9.
+  That was wrong, and correcting it matters because it is the difference between "we do nothing about
+  names" and "we do most of it". What ships in the first pass:
+  **honorific and role-title triggers** — `Er.`, Engineer, overseer, contractor, ward chairperson, `श्री`
+  — which catch the *named official*, the sharpest exposure because that person never consented to
+  anything; a **Nepali family-name (thar) gazetteer**, which is tractable because surnames are a
+  comparatively closed set; and **self-identification patterns** (*"my name is …"*, `मेरो नाम … हो`),
+  which catch the opening line the voice channel all but guarantees.
+  **What still gets through:** a name with no title, no recognisable surname and no self-identification
+  frame — *"the man operating the roller"* who is later named in passing, or an unusual surname the
+  gazetteer does not carry. **We will publish the measured residual rather than describe it** (see the
+  privacy section below). Higher recall needs the ML model in Q9; the rule layer is not a placeholder for
+  it, it is the part that works without an unlicensed dependency.
 - **A licence-drift finding we surfaced ourselves and fixed.** Our Redis image tag pinned only the major
   version, so it silently followed upstream onto a non-OSI licence line — nobody edited the file; the licence
   moved underneath it. Now pinned to a minor and taken under AGPLv3. **The class of problem is more

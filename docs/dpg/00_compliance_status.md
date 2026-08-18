@@ -450,16 +450,46 @@ the very submission meant to remove it (**Q9**). We have therefore split the wor
 
 - **Landing now:** the deterministic layer — Nepali phone formats in **both** digit systems (Devanagari
   digits defeat an ASCII regex, and `९८४१२३४५६७` is a phone number in plain text), citizenship numbers,
-  vehicle registrations, emails. Plus redaction of the logging, Celery and backup paths, which is where
-  leaks actually happen.
-- **Not landing yet:** person names. Which means **third-party names in narrative still reach the
-  provider** — *"the site engineer Ram Bahadur refused to…"*. With T2 parked, that is an indefinite
-  exposure, not a transitional one. We are treating it as a **disclosed residual**, not a solved problem.
+  vehicle registrations, emails, and full address spans (settlement qualifiers such as *gaun*, *tole*,
+  ward numbers — while leaving the bare district, which the classifier needs). Plus redaction of the
+  logging, Celery and backup paths, which is where leaks actually happen.
+- **Also landing now — person names, at the rule layer.** An earlier draft of this section said names
+  were deferred entirely. That was wrong. Three recognisers ship without any ML dependency:
+  **honorific and role-title triggers** (`Er.`, Engineer, overseer, contractor, ward chairperson, `श्री`),
+  which catch the *named official* — the sharpest exposure, since that person consented to nothing;
+  a **Nepali family-name (thar) gazetteer**, tractable because surnames are a comparatively closed set;
+  and **self-identification patterns** (*"my name is …"*, `मेरो नाम … हो`), which catch the opening line the
+  voice channel all but guarantees.
+- **⚠ What still gets through, stated as a residual rather than rounded away:** a name with no title, no
+  recognisable surname and no self-identification frame. *"The man operating the roller"*, named in passing
+  three sentences later, is the shape of the miss. Higher recall needs the ML model whose licence is
+  unresolved (Q9). **We will publish the measured residual, not a description of it** — and because T2 is
+  parked, that residual reaches a third party indefinitely rather than during a transition, which is why
+  §4.3a sets out whose terms it lands under.
 - **The intended fix, and it may interest ADB beyond this project:** fine-tune a Nepali NER model on an
   openly-licensed corpus, **release it openly**, and run it as a standalone anonymiser service usable by
   any country programme where in-country self-hosting is impossible. Permissively-licensed Nepali NLP
   tooling barely exists, so that would be a genuine DPG *contribution* rather than only a compliance fix.
   **Q9** asks whether you would see it that way and whether there is appetite to fund it.
+
+#### 4.3a Whose terms the residual lands under
+
+We read the provider's terms rather than assuming them, and the result is a question for you (Q16):
+Hugging Face's **privacy policy carries no Inference-Providers-specific clause** on whether inference
+inputs are retained or used for training — only that data is kept *"for as long as necessary to deliver
+the Services"* and may be *"stored and processed in the United States or any other country in which the
+Company or its affiliates, subsidiaries or agents maintain facilities."* The **Terms of Service** say
+*"You own the Content you create"* while taking a broad licence to *"use, display, publish, reproduce,
+distribute"* it to provide the service, frame confidentiality around private repositories rather than
+inference traffic, and **reference no DPA**.
+
+⚠ **And the router is a proxy whose downstream processor is not fixed by default:** requests are
+forwarded to third-party partners — Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate,
+Scaleway, OVHcloud among others — with the default policy choosing the fastest available per request and
+failing over automatically. Under that configuration **we could not say which company processed a given
+grievance, or in which jurisdiction.** Our intended fix is to pin one named provider (`model:provider`)
+so DPG-04 can assess a specific company's terms and location; whether ADB requires a signed DPA on top of
+that is Q16.
 
 We should also be honest that one of our own documents currently claims summaries are PII-scrubbed
 before storage, and nothing scrubs them. It is on our list to fix the document
