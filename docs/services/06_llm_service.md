@@ -83,6 +83,20 @@ Two things follow, and both matter more than the model name:
 
 ### Sensitive-content detection
 
+> ⚠ **There are THREE SEAH signals, not one, and only the second is on this page.** Documented here
+> 2026-08-18 (DPG-19b) because Q-14's fail-open decision rests on the first one existing, and no
+> spec said so:
+>
+> | Signal | Where | Model? |
+> |---|---|---|
+> | **Deterministic keyword detector**, scored | `backend/shared_functions/keyword_detector.py` → slot validation, **inside the conversation** | none |
+> | **This function**, async via Celery | `detect_sensitive_content_llm` | yes |
+> | **The classification's categories** | `classify_and_summarize_grievance` returns categories; the review step keeps any containing `"gender"` (`form_grievance_complainant_review.py::detect_sensitive_categories`) | yes, the same call |
+>
+> So an LLM outage degrades a second pass and leaves the deterministic one running — which is what
+> makes fail-open defensible (Q-14). ⚠ **If the keyword path ever stops running independently,
+> fail-open stops being justified.**
+
 - `detect_sensitive_content_llm(text, language_code)`
 
 Specialized to detect sexual/gender harassment indicators; intentionally excludes non-target categories like land disputes.

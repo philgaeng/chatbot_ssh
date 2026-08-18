@@ -87,6 +87,16 @@ instinct pointed at the wrong thing. The real questions are in DPG-14.
 
 ### 3. Full call-site inventory — nine calls, not four
 
+> ⚠ **Corrected 2026-08-18 (D-38, Q-22): nine calls exist; FIVE of them run.** The other four are
+> the **voice-notes flow, parked** for lack of a transcription budget — complete code, switched off,
+> declared in `PARKED_TASKS` (`backend/task_queue/registered_tasks.py`) and pinned by
+> `tests/backend/test_llm_config_pins.py`. **Live:** #4 classification (`gpt-5-nano`), #6 SEAH
+> detection (`gpt-3.5-turbo`), and #7–9 on ticketing. **Parked:** #1 ASR, #2 and #3 contact
+> extraction, #5 grievance translation.
+>
+> The count below stayed "nine" through four documents and three weeks because *unreachable* and
+> *switched off on purpose* look the same to a grep. That is now a test, not a habit.
+
 | # | Function | File:line | Model | `response_format` | Notes |
 |---|---|---|---|---|---|
 | 1 | `transcribe_audio_file` | `LLM_services.py` call `:45`, model `:47` | `whisper-1` | — (audio) | ⚠ suspected live defect — DPG-14 |
@@ -1138,7 +1148,7 @@ rows should land on it.
 > another. Meaning: we have one entry, then the LLM orchestration layer chooses the model, and then
 > we have a parser function that makes sure we feed the model what is required."* — owner, 2026-08-18
 
-### 18.0 — What actually runs: five of the nine call sites, and four are dead
+### 18.0 — What actually runs: five of the nine call sites, and four are parked
 
 **The owner's claim — *"only gpt-5-nano is called; I combined classification, summary, translation
 and SEAH detection into one call"* — was checked against the code on 2026-08-18. It is right about
@@ -1190,7 +1200,7 @@ almost certainly *why* the chatbot-side translation fell out of use. That is a c
 it has simply never been stated, and three documents still describe the dead path as the English record.
 
 ⚠ **And the DPG evidence pack counts nine.** `00_compliance_status.md`, `privacy-assessment.md` and
-this spec all present nine call sites as the indicator-4 and egress inventory. Four are unreachable.
+this spec all present nine call sites as the indicator-4 and egress inventory. Four are parked (Q-22).
 An inventory that overstates exposure spends the reader's trust on paths that do not exist; corrected
 in [DPG-19b](#dpg-19b).
 

@@ -57,7 +57,8 @@ and asserted a few things they had right. **Both directions have been reconciled
 the same note. What moved into the specs: container images as a fourth dependency set + a pin-drift check
 (DPG-02), project hygiene (**new DPG-05**), the stale root README (**new DPG-06**), vehicle-registration
 recognisers (DPG-31), and three consultant questions that gate Sprint 2's model criteria. What was corrected
-*in the audit*: `.env.example` exists, there are nine call sites not eight, CI has four gates not three, and
+*in the audit*: `.env.example` exists, there are nine call sites not eight (⚠ **and five of the nine run** —
+the other four are the parked voice-notes flow, established 2026-08-18: D-38, Q-22), CI has four gates not three, and
 Sprint 1 no longer ships the open-by-default flip.
 
 ---

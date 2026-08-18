@@ -78,6 +78,41 @@ __all__ = [
     'detect_sensitive_content_task',
 ]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Parked tasks (DPG-19b)
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ **Live, parked and rotted look identical to a grep.** That is not a hypothetical: four LLM
+# tasks below have no production caller, and because nothing distinguished "switched off on
+# purpose" from "nobody noticed", they were counted as live egress paths in
+# `docs/dpg/privacy-assessment.md` and in the DPG compliance briefing — a compliance document
+# describing four paths that cannot run. One of them was nearly deleted on that evidence.
+#
+# So a task that nothing enqueues must say why, here. `tests/backend/test_llm_config_pins.py`
+# fails on any LLM task that is neither enqueued in production nor listed below.
+#
+# Parking is not deprecation: these are complete, they resolve their models through
+# `backend/config/llm_config.py` like every live path, their characterization tests still run,
+# and unparking is a budget decision rather than a migration.
+PARKED_TASKS: dict[str, str] = {
+    "transcribe_audio_file_task": (
+        "Voice-notes flow. Switched off in the proto by CB-01 — see the comment in "
+        "process_file_upload_task: audio is stored and never transcribed, transcription and "
+        "classification deferred to officers. Unparking needs a transcription budget (Q-19) and "
+        "DPG-22's Nepali WER baseline, which does not exist yet."
+    ),
+    "extract_contact_info_task": (
+        "Voice-notes flow. Consumes a TRANSCRIPTION of spoken contact details — see the chain in "
+        "backend/task_queue/test_tasks.py — which is why the typed path never needed it and "
+        "validates phone numbers deterministically instead "
+        "(backend/actions/services/contact/phone.py). Parked with transcription."
+    ),
+    "translate_grievance_to_english_task": (
+        "Voice-notes flow. Parked with transcription. Note that officers do read English today: "
+        "the ticketing surface generates it (generate_case_findings), so nothing is missing while "
+        "this is off — grievance_description_en simply is not populated by the chatbot."
+    ),
+}
+
 # Initialize FileServerCore
 file_server_core = FileServerCore()
 

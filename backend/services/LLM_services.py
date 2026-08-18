@@ -65,7 +65,13 @@ def _asr_client() -> Optional[OpenAI]:
         return None
 
 def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> str:
-    """Transcribe an audio file using the configured ASR endpoint"""
+    """Transcribe an audio file using the configured ASR endpoint.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). Nothing enqueues `transcribe_audio_file_task`:
+    audio is uploaded and stored, and `process_file_upload_task` skips transcription by decision
+    (CB-01 proto). This is complete code that is switched off, not dead code — see
+    `PARKED_TASKS` in `backend/task_queue/registered_tasks.py` for what unparking needs.
+    """
     client = _asr_client()
     if not client:
         raise RuntimeError("OpenAI client not available for transcription")
@@ -88,7 +94,13 @@ def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_
         raise
     
 def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
-    """Extract name and phone number from contact information text"""
+    """Extract name and phone number from contact information text.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). It consumes a *transcription of spoken contact
+    details*, which is why the typed path never needed it: typed phone numbers are validated
+    deterministically in a slot validator (`actions/services/contact/phone.py`), with no model.
+    ⚠ **No complainant PII reaches a model through this function today.**
+    """
     # DPG-14 / D-28: `field_name` and `response` are resolved BEFORE the try, because the
     # handler below reads both. Previously `field_name` came from a list index and `response`
     # was bound only after the API call, so every pre-call failure — no client, a provider
@@ -159,7 +171,11 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
         
 
 def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
-    """Extract name and phone number from contact information text"""
+    """Extract all six contact fields at once.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b), and the more thoroughly parked of the pair:
+    this one has no reference anywhere outside its own module and tests.
+    """
     task = model_for("extract")
     try:
         # Use the configured LLM endpoint to extract structured information
@@ -451,7 +467,13 @@ def _grievance_ref(input_data: Dict[str, Any]) -> str:
 
 
 def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Translate a grievance to English using OpenAI API
+    """Translate a grievance to English.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). Nothing enqueues
+    `translate_grievance_to_english_task`, so `grievance_description_en` / `grievance_summary_en`
+    are not populated by the chatbot. ⚠ **Officers still read English**: the ticketing surface
+    generates it (`generate_case_findings`). Nothing is missing while this is off.
+
     Args:
         grievance_data: Dict containing grievance data: {grievance_id, language_code, grievance_description, grievance_summary, grievance_categories}
     Returns:

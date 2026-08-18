@@ -102,15 +102,15 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     # which is the whole discipline this pin exists to enforce:
     #   grep -rn "LLM_services.py:" docs/ --include=*.md | grep -v /archive/
     # The six chatbot call sites — what the privacy assessment's leg L4 cites.
-    ("backend/services/LLM_services.py", 76, "audio.transcriptions.create"),
-    ("backend/services/LLM_services.py", 126, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 170, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 289, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 486, "chat.completions.create"),
-    ("backend/services/LLM_services.py", 560, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 82, "audio.transcriptions.create"),
+    ("backend/services/LLM_services.py", 138, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 186, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 305, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 508, "chat.completions.create"),
+    ("backend/services/LLM_services.py", 582, "chat.completions.create"),
     # DPG-14.3: the ASR call passes `language=`, not `language_code=`. The SDK declares its
     # parameters explicitly, so the old kwarg raised TypeError on every transcription.
-    ("backend/services/LLM_services.py", 83, "language=language_code"),
+    ("backend/services/LLM_services.py", 89, "language=language_code"),
     # Where every model name now lives — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 105, "gpt-5-nano"),
     # The three ticketing call sites — what the privacy assessment's leg L5 cites.

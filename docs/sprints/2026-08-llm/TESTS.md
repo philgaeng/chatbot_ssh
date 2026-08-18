@@ -204,8 +204,8 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-19b-a** | `PARKED_TASKS` names all four voice-flow paths with a reason, and every name in it is a real task — a parked declaration for a task that no longer exists is a stale excuse | Park a task that does not exist, or park one without a reason → red |
-| **T-19b-b** | ⭐ **The reachability pin.** Every LLM-calling task is either **enqueued in production** (`test_tasks.py` does not count) **or declared in `PARKED_TASKS` with a reason**. Nothing else is allowed | Add an LLM task that is neither enqueued nor parked → red |
+| **T-19b-a** ✅ | `PARKED_TASKS` names each parked path with a reason, every name in it is a real LLM task, and the parked set is **exactly the voice flow** — so parking the live classification or SEAH task fails loudly rather than quietly stopping the product | ✅ **Checked** — a one-word reason → red; the live classification task parked → red |
+| **T-19b-b** ✅ | ⭐ **The reachability pin.** Every task decorated `register_task(task_type='LLM')` (found by AST) is either **enqueued in production** — `.delay` / `.apply_async` / `.s(`, with `test_tasks.py` explicitly excluded — **or declared in `PARKED_TASKS` with a reason** | ✅ **Checked** — removed a parked declaration → red (3 tests) |
 
 ⚠ **T-19b-b is the general fix, and the distinction it enforces is the whole point.** *Live*,
 *parked* and *rotted* look identical to a grep — which is how a nine-item egress inventory ended up

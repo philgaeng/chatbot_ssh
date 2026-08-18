@@ -323,3 +323,111 @@ def test_the_committed_templates_carry_no_secret(template):
         if name.strip() in secretish:
             assert value.strip() == "", f"{template.name} carries a value for {name.strip()}"
         assert not value.strip().startswith(("sk-", "hf_")), f"{template.name}: {name} looks like a key"
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-19b-a / T-19b-b — live, parked, or rotted: the distinction, enforced
+# ═════════════════════════════════════════════════════════════════════════════
+
+TASKS_MODULE = REPO_ROOT / "backend" / "task_queue" / "registered_tasks.py"
+
+# Where a task may legitimately be enqueued from. `test_tasks.py` is a manual script, not
+# production — counting it is what let four paths look live for eleven months.
+ENQUEUE_SEARCH_TREES = ("backend", "channels", "scripts", "ticketing", "ops")
+NOT_PRODUCTION = ("test_tasks.py", "registered_tasks.py", "task_manager.py")
+
+
+def _llm_task_names() -> list[str]:
+    """Every task decorated `@TaskManager.register_task(task_type='LLM')`, from the AST."""
+    tree = ast.parse(TASKS_MODULE.read_text(), filename=str(TASKS_MODULE))
+    names = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        for dec in node.decorator_list:
+            if not isinstance(dec, ast.Call):
+                continue
+            if getattr(dec.func, "attr", None) != "register_task":
+                continue
+            for kw in dec.keywords:
+                if kw.arg == "task_type" and getattr(kw.value, "value", None) == "LLM":
+                    names.append(node.name)
+    return names
+
+
+def _is_enqueued_in_production(task_name: str) -> bool:
+    pattern = re.compile(rf"\b{re.escape(task_name)}\s*\.\s*(delay|apply_async|s)\s*\(")
+    for tree_name in ENQUEUE_SEARCH_TREES:
+        root = REPO_ROOT / tree_name
+        if not root.exists():
+            continue
+        for path in root.rglob("*.py"):
+            if "__pycache__" in path.parts or path.name in NOT_PRODUCTION:
+                continue
+            if pattern.search(path.read_text()):
+                return True
+    return False
+
+
+def test_every_llm_task_is_either_enqueued_or_declared_parked():
+    """
+    ⭐ **T-19b-b — the pin this whole ticket is for.**
+
+    **Live, parked and rotted look identical to a grep**, and that is not a hypothetical: four LLM
+    tasks have no production caller, and because nothing distinguished *switched off on purpose*
+    from *nobody noticed*, they were counted as live egress in `docs/dpg/privacy-assessment.md`
+    and in the DPG compliance briefing — a compliance document describing four paths that cannot
+    run. Three of them were then nearly deleted on exactly that evidence.
+
+    So: enqueued in production, or listed in `PARKED_TASKS` with a reason. Nothing else.
+    ⚠ `test_tasks.py` deliberately does not count — treating a manual script as production is what
+    made the four look live in the first place.
+    """
+    from backend.task_queue.registered_tasks import PARKED_TASKS
+
+    undeclared = [
+        name
+        for name in _llm_task_names()
+        if name not in PARKED_TASKS and not _is_enqueued_in_production(name)
+    ]
+
+    assert not undeclared, (
+        f"These LLM tasks are enqueued nowhere in production and are not declared parked: "
+        f"{undeclared}. Either wire them up, or add them to PARKED_TASKS with the reason and the "
+        "decision that parked them — an unreachable path that says nothing becomes a phantom in "
+        "the next egress inventory."
+    )
+
+
+def test_the_parked_declaration_is_a_contract_not_an_excuse_list():
+    """
+    **T-19b-a.** Every parked entry names a task that exists, and gives a reason long enough to be
+    one. A parked list that accumulates stale names is how the *next* reader loses the ability to
+    tell which paths are real — the failure this ticket exists to prevent, one level up.
+    """
+    from backend.task_queue.registered_tasks import PARKED_TASKS
+
+    task_names = set(_llm_task_names())
+    for name, reason in PARKED_TASKS.items():
+        assert name in task_names, (
+            f"PARKED_TASKS names {name!r}, which is not an LLM task in registered_tasks.py. "
+            "A parked declaration for a task that no longer exists is a stale excuse."
+        )
+        assert len(reason) > 60, f"{name} is parked without a usable reason"
+
+
+def test_the_parked_tasks_are_the_voice_flow_and_nothing_else():
+    """
+    Pins *which* paths are parked, so unparking or parking another one is a deliberate edit that
+    shows up in review — and so the four documents that describe this stay checkable against it.
+    """
+    from backend.task_queue.registered_tasks import PARKED_TASKS
+
+    assert set(PARKED_TASKS) == {
+        "transcribe_audio_file_task",
+        "extract_contact_info_task",
+        "translate_grievance_to_english_task",
+    }
+    # ⚠ The classification and SEAH-detection tasks are LIVE. If either ever appears here, the
+    # product has stopped classifying grievances and somebody should have noticed.
+    assert "classify_and_summarize_grievance_task" not in PARKED_TASKS
+    assert "detect_sensitive_content_task" not in PARKED_TASKS
