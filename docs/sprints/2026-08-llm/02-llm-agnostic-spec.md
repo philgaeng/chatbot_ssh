@@ -1648,32 +1648,88 @@ flow is the privacy-conscious path, and it is the one that shows an empty classi
 
 That is the argument for the owner's 90 s, and it is a better argument than the average case.
 
-### 15b.2 — ⚠ The coupling: you cannot raise the budget without making failure terminal
+### 15b.2 — ⚠ A longer budget cannot work, and the retry maths says why
 
-Raising the deadline to 90 s **makes D-34 worse, not better**. Today a failed classification leaves
-the row at `pending` — not terminal — so `load_grievance_for_classification` polls the whole budget
-before giving up. At 20 s that is an awkward pause. **At 90 s it is a ninety-second stall on a
-classification that will never arrive.**
+Raising the deadline to 90 s makes **D-34 worse**: a failed classification leaves the row at
+`pending`, which is not terminal, so the poll runs its full length. A 20-second pause becomes a
+ninety-second stall. But fixing D-34 does not rescue a long budget either, because **the two failure
+classes resolve on completely different timescales**:
 
-So the two halves ship together, or not at all:
+| Failure class | Time to reach `LLM_failed` (max_retries 3, initial_delay 2, backoff ×2) | Observable inside a chat wait? |
+|---|---|---|
+| **Fast** — connection refused, 400 (e.g. D-40's parameter errors), bad model name | 4 attempts + 2 s + 4 s + 8 s ≈ **14 s** | ✅ yes |
+| **Slow** — the model is simply slow, and the call times out | 4 × `TIMEOUT_CLASSIFY` (120 s) + backoff ≈ **8 minutes** | ❌ never |
 
-1. `CLASSIFICATION_WAIT_SECONDS` in the registry, default **90**.
-2. **`LLM_failed` reachable** (D-34): the task re-raises so Celery's `autoretry_for` fires, and
-   `_persist_classification_failed_if_final` writes the terminal code once retries are spent. The
-   retrieve step already short-circuits on terminal statuses, so the stall becomes as short as the
-   failure is definite.
-3. The review step must **say** the classification is unavailable rather than rendering blank — a
-   complainant who is shown an empty summary after 90 s has been told nothing, twice.
+**Retry-gated terminal marking is therefore incompatible with any chat-time deadline**, at any budget.
 
-⚠ **What changing the task's terminal state touches**: it becomes a Celery FAILURE rather than
-SUCCESS-with-a-FAILED-payload, and the webchat polls task status. Check that path, do not assume it.
+And today's numbers are already incoherent in the same way: **the chat waits 20 s while one attempt is
+allowed 120 s.** The poll can only ever succeed if the model is fast; on a slow one it gives up six
+times over before a single attempt is even due to finish.
+
+✅ **The one thing that is already right:** `load_grievance_for_classification` **short-circuits on
+terminal statuses** (`LLM_SKIPPED`, `LLM_failed`, `LLM_error`). The machinery works. The status never
+arrives.
+
+### 15b.3 — What ships instead (agreed with the owner, 2026-08-18)
+
+**1. Lower the budget to 30 s, do not raise it.** `CLASSIFICATION_WAIT_SECONDS = 30` — the measured
+classification is 14–20.5 s, so this covers the normal case with margin. A longer wait buys nothing,
+because **the review runs after submission**: the grievance is filed, the ticket is dispatched, and
+the classification reaches the officer through the two-minute sync whether or not the complainant
+ever sees it. The only thing a 90 s budget would buy is 90 seconds of silence for the anonymous
+complainant (D-41).
+
+**2. The first attempt gets a shorter timeout than the retries.** Someone is waiting on attempt 1;
+nobody is waiting on attempt 4:
+
+```python
+TIMEOUT_CLASSIFY_INTERACTIVE = 30    # self.request.retries == 0 — a person is watching
+TIMEOUT_CLASSIFY             = 120   # retries, in the background
+```
+
+Roughly three lines — the timeout is already per-request since DPG-11 — and it makes the wait and the
+attempt **coherent**: the chat can now observe the first attempt's outcome instead of always timing
+out before it.
+
+**3. End the wait on knowledge, not on the clock.** With (2), a fast failure marks terminal in ~14 s
+and the poll exits immediately (the short-circuit already exists). The slow case resolves after the
+conversation, which is acceptable because of (4) and (5).
+
+**4. Say something in every branch. The review step must never render blank.**
+
+| State | What the complainant is told |
+|---|---|
+| ready | the summary and categories, to confirm or correct |
+| not ready yet | *"Your grievance is filed. We are still preparing the summary — you will see it when you check your status."* |
+| terminal without content | *"Your grievance is filed. An officer will categorise it."* |
+
+**5. Deliver late results rather than waiting for them.** The classification lands in the row anyway
+and syncs to the ticket within two minutes. Pushing it to the complainant afterwards — status check
+now, an orchestrator `POST /message` later — removes the entire reason to hold a conversation open.
+⚠ Precedent exists: the road-hazard fast path already sets `LLM_SKIPPED` and skips the review cleanly
+(`intake_submit.py:91`), so "skip the review gracefully" is a path the flow already supports.
+
+**6. `LLM_failed` on the last attempt** (D-34) — still required, and now it is *reachable within the
+budget* for the fast class, which is the class that includes every configuration error.
+
+#### What each option actually costs the complainant
+
+| | Today | 90 s + D-34 | **This** |
+|---|---|---|---|
+| Normal | works | works | works |
+| Fast failure | 20 s blank | ~14 s, message | ~14 s, message |
+| Slow failure / timeout | 20 s blank | **90 s blank** | 30 s, message, result delivered later |
+| Anonymous fast path (D-41) | 20 s blank | 90 s blank | 30 s, message |
 
 ### Acceptance
 
-- [ ] `CLASSIFICATION_WAIT_SECONDS` in the registry, default 90; no literal deadline anywhere
-- [ ] **`LLM_failed` reachable and verified against the database**, the way DPG-15's runs were —
-      ships in the same commit as the raised budget, per §15b.2
-- [ ] The review step distinguishes *not ready yet* from *will not arrive*, and says so
+- [ ] `CLASSIFICATION_WAIT_SECONDS` in the registry, default **30**; no literal deadline anywhere
+- [ ] `TIMEOUT_CLASSIFY_INTERACTIVE` (30) applies on `self.request.retries == 0`; `TIMEOUT_CLASSIFY`
+      (120) on retries — so the wait and one attempt are finally coherent
+- [ ] **`LLM_failed` written on the last attempt and verified against the database**, the way DPG-15's
+      runs were — reachable *within the budget* for the fast failure class
+- [ ] The review step distinguishes *ready* / *not ready yet* / *will not arrive*, and **never renders
+      a blank summary** — three messages, per §15b.3
 - [ ] ⚠ The **no-contact path measured end to end**: decline contact sharing, drive to the review
       step, and record how long the flow actually takes. This is the case the budget exists for and
       the only one where the number matters

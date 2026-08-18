@@ -217,7 +217,7 @@ documentation. A path that is unreachable and silent is a liability. The pin cos
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-15b-a** | The deadline is `CLASSIFICATION_WAIT_SECONDS` from the registry, default 90 — no literal deadline survives anywhere | Hard-code a timeout → red |
+| **T-15b-a** | The deadline is `CLASSIFICATION_WAIT_SECONDS` from the registry, default **30** — no literal deadline survives anywhere. And the **first attempt** uses `TIMEOUT_CLASSIFY_INTERACTIVE` (30) while retries use `TIMEOUT_CLASSIFY` (120): a person is waiting on attempt 1 and nobody is waiting on attempt 4 | Hard-code a timeout, or give attempt 1 the background timeout → red |
 | **T-15b-b** | ⚠ **Rewritten by Q-20** — the review step already runs after submission, so there is nothing to move. What is pinned instead: the review step **distinguishes *not ready yet* from *will not arrive***, and renders a message rather than a blank summary in both cases | Render an empty summary without saying why → red |
 | **T-15b-c** | ⭐ A classification that lands **after** submission still updates the grievance, and the update reaches the ticket | Drop the late-update path → red |
 | **T-15b-d** | ⭐ `LLM_failed` is written once retries are exhausted — the state D-34 showed to be unreachable. **Verified against the database**, not only against a mock. ⚠ **Ships in the same commit as the 90 s budget (D-41)**: a non-terminal failure makes the poll run its full length, so raising the budget without this turns a 20-second pause into a 90-second stall | Return the FAILED dict instead of re-raising → red |
