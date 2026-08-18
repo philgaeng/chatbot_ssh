@@ -3,7 +3,11 @@
 > **Raised:** 2026-08-18 by [DPG-15](../02-llm-agnostic-spec.md#dpg-15)'s degraded-mode audit, after
 > the two findings it *did* fix (D-32, D-33).
 > **Logged as deviations D-34 and D-36** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🔵 open · **Size:** S each, M to test properly · **Owner:** unassigned
+> **Status:** **D-34 is now owned by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)** (this sprint) —
+> making `LLM_failed` reachable is part of moving the checkpoint, because a checkpoint that waits
+> needs a terminal state to stop waiting on. **D-36 remains 🔵 open and unowned** — the ticketing
+> closure document is a different path with a different owner.
+> **Size:** S each, M to test properly
 
 ## D-34 — `LLM_failed` is written only after retries that never happen
 

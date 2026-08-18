@@ -179,6 +179,38 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 | **T-15-b** ✅ | `/health/llm` reports reachability and the base-URL **host**; the response contains no API key, and it returns **200 even when degraded** — a non-200 invites the healthcheck wiring T-15-c forbids | ✅ **Checked** — added the key to the response → red |
 | **T-15-c** ✅ | `/health` stays green while `/health/llm` is red — **and the compose files are read** to assert no container healthcheck probes the LLM. The rule is not "the probe returns 200", it is "nothing restarts the chatbot when the provider is down", and that lives in compose | ✅ **Checked** — pointed a healthcheck at `/health/llm` → red |
 
+### DPG-18 — the call layer (second wave)
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-18-a** | `call_llm()` is the **only** thing in either surface that calls `.create()` — AST-parsed, same shape as T-11-d. A call site that builds its own request is the drift this ticket removes | Rebuild a request at any call site → red |
+| **T-18-b** | The `prompt` rung's instruction is **generated from the Pydantic schema** and names every required field — so the three rungs cannot describe different shapes | Hand-write the fallback text, or drop a field from the generated text → red |
+| **T-18-c** | `parse_response()` handles what providers actually return: a bare object, an object wrapped in ```` ```json ```` fences, leading prose before the brace. Each yields the validated model or a **typed** error — never a silent `{}` | Remove fence-stripping → red |
+| **T-18-d** | One task key change moves the model for every call site that uses it, on **both** surfaces — the consolidation of §18.2 is a config edit and this proves it | Pin a model at a call site → red |
+
+### DPG-19 — meaningful input (second wave)
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-19-a** | Below `MIN_CLASSIFY_CHARS`, **no model call is made** and the status is `LLM_SKIPPED` — asserted on a mocked client that must not be touched | Call the model anyway → red |
+| **T-19-b** | ⭐ **The owner's point, pinned.** At or above the threshold, an empty-but-valid result (`"{}"`) is **not** a failure: the localized "not enough information" response, `is_failed_classification()` False, and a warning carrying the **length only** | Make an empty result count as a failure → red *(this is the regression the guardrail could introduce)* |
+| **T-19-c** | The threshold is measured on **whitespace-stripped** length and is a registry value — a 30-space "grievance" is below it, and Devanagari counts by character like anything else | Count raw `len()` → red |
+| **T-19-d** | The translation error message contains the `grievance_id`, **at most three words** of the description, and **never** the summary, the full description or `input_data` | Restore the `input_data` interpolation → red |
+| **T-19-e** | D-29's underlying bug: a pre-call failure now raises the declared `ValueError`, not `UnboundLocalError` | Move the `result` binding back inside the `try` → red |
+
+### DPG-15b — the classification checkpoint (second wave)
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-15b-a** | The deadline is `CLASSIFICATION_WAIT_SECONDS` from the registry, default 90 — no literal deadline survives anywhere | Hard-code a timeout → red |
+| **T-15b-b** | The review step does **not** block when the classification has not arrived; submission does the waiting | Make the review step wait again → red |
+| **T-15b-c** | ⭐ A classification that lands **after** submission still updates the grievance, and the update reaches the ticket | Drop the late-update path → red |
+| **T-15b-d** | `LLM_failed` is written once retries are exhausted — the state D-34 showed to be unreachable. **Verified against the database**, not only against a mock | Return the FAILED dict instead of re-raising → red |
+
+⚠ **T-19-b is the one to write first.** DPG-19 exists because an empty summary might wrongly be
+treated as a failure; the cheapest way to introduce exactly that bug is to build the guardrail
+carelessly. The test that fails if it happens should exist before the guardrail does.
+
 ### DPG-16 — env drift
 
 | ID | Test | Mutation check |
@@ -263,7 +295,7 @@ underperform its published F1, and the report should say so before a reviewer do
 | Sprint | Test IDs | New files |
 |---|---|---|
 | 0 | T-01 (9), T-02-a…e (29) — ✅ landed, 38 assertions | `tests/repo/test_spdx_headers.py`, `test_licence_scan.py`, `test_image_pins.py` |
-| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
+| 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…d, T-19-a…e, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
 | 2 | T-24-a…d | `@live_llm`-marked subset |
 | 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |
 

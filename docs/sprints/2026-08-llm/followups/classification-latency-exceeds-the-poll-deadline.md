@@ -3,7 +3,14 @@
 > **Raised:** 2026-08-18 by [DPG-14.1](../02-llm-agnostic-spec.md#dpg-14)'s liveness check — three live
 > calls against `gpt-5-nano`, which answered a question nobody had asked.
 > **Logged as deviation D-30** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🔵 open · **Size:** S to measure properly, M to fix well · **Owner:** unassigned
+> **Status:** 🟡 **superseded 2026-08-18 — now owned by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)**,
+> in this sprint. · **Size:** S to measure properly, M to fix well
+>
+> ⚠ **The owner's answer is better than this document's framing.** This was written as "the deadline
+> is too short"; the answer is that **the deadline is in the wrong place**. Classification runs while
+> the complainant fills in contact details, so the checkpoint belongs at *submission*, with a 90 s
+> budget and a late arrival updating the submitted grievance — not at the review step with a 20 s
+> poll. The measurements below stand and are the input to that ticket; the framing does not.
 
 ## What was measured
 

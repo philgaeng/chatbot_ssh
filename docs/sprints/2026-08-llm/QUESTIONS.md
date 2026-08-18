@@ -1,7 +1,8 @@
 # Open questions for the project owner
 
-> **19 of 21 answered.** This file holds **only what is still live** — two open questions and one awaiting an
-> external answer. The register below records every decision in one line each.
+> **19 of 24 answered.** This file holds **only what is still live** — five open questions and one awaiting an
+> external answer. **Q-20, Q-21 and Q-22 came out of the owner's review of Sprint 1** and each gates part of
+> the second wave (DPG-15b, DPG-18, DPG-19). The register below records every decision in one line each.
 >
 > **The answered questions moved to [`DECISIONS.md`](DECISIONS.md)** with the owner's answer verbatim, the
 > original framing, and a pointer to the spec each landed in. Nothing was discarded: **expand any row by
@@ -13,12 +14,15 @@
 
 ---
 
-## Still live — 3
+## Still live — 6
 
 | Q | Subject | State | What it blocks |
 |---|---|---|---|
 | [**Q-02**](#q-02) | Which open licence — Apache-2.0 or MIT | 🔴 **open** | **[DPG-01](01-licensing-and-governance-spec.md#dpg-01)** — delegated to the consultant, so `LICENSE` now waits on *two* externals: which text (Q-02) and which holder (Q-01). Indicator 2 fails outright with no licence at all, so this is the cheapest unblock on the list |
 | [**Q-19**](#q-19) | The LLM budget | 🔴 **open** (new) | **Most of Sprint 2** — [DPG-22](03-open-models-spec.md#dpg-22), [DPG-23](03-open-models-spec.md#dpg-23), [DPG-24](03-open-models-spec.md#dpg-24). Raised by the answers themselves: there is no inference budget, and those three tickets are made of inference calls |
+| [**Q-21**](#q-21) | Which single text model | 🔴 **open** (new) | **[DPG-18](02-llm-agnostic-spec.md#dpg-18) §18.2** — the consolidation itself. ⚠ It changes the **SEAH detection** model, which is why it is a question and not a default |
+| [**Q-20**](#q-20) | Where the review step sits in the flow | 🔴 **open** (new) | **[DPG-15b](02-llm-agnostic-spec.md#dpg-15b)** — if the complainant confirms the AI summary *before* contact collection, moving the wait to submission means they sometimes confirm nothing, and the fix is a step reorder, not a timeout |
+| [**Q-22**](#q-22) | What happens to the two dead contact-extraction functions | 🟡 open (new) | **[DPG-19](02-llm-agnostic-spec.md#dpg-19)** — delete, or wire them up? They are unreachable today (**D-35**), and the privacy assessment counts them as live egress either way until it is corrected |
 | [**Q-01**](#q-01) | Who opens the ADB OGC IP request | 🔶 in flight | **[DPG-03](01-licensing-and-governance-spec.md#dpg-03)** and the submission. ⚠ The owner is writing to the *DPG consultant*, which is not the OGC channel the question meant |
 
 ---
@@ -174,3 +178,64 @@ Stated so you know they were considered and settled rather than overlooked:
   produced four files of duplicated model names and one falsified provenance field. Two factories, **one
   config**: DPG-17. Where that shared config lives is Q-18, and it is a `backend/config/` module, not a
   `backend/services/` one — a distinction the original bullet elided.
+
+---
+
+## Q-20 — Where does the classification review step sit in the intake flow? {#q-20}
+
+**Owns:** [DPG-15b](02-llm-agnostic-spec.md#dpg-15b) · **Raised:** 2026-08-18, by the owner's own
+proposal to move the checkpoint · **Blocks:** any code in that ticket
+
+Your description of the flow was: *"the classification happens while we request the complainant to
+fill in his contact info; the actual submission happens then, and that should be the time where we
+check."* Measured, the wait is at
+`backend/actions/forms/form_grievance_complainant_review.py:75` — the step where the complainant
+**confirms the AI summary and categories**.
+
+So the question is what that step is for, and when it runs:
+
+- If it runs **after** contact collection, your design works as stated: the classification has had
+  the whole contact conversation to finish, and submission is a backstop with a 90 s budget.
+- If it runs **before**, then removing the wait means the complainant is sometimes asked to confirm
+  a summary that does not exist yet — and the right fix is to **reorder the steps**, not to change a
+  timeout.
+
+**What I need:** confirmation of the intended order. I can trace the live flow to establish the
+actual order (about an hour), but the *intended* one is a product decision and it is yours.
+
+## Q-21 — Which single text model? {#q-21}
+
+**Owns:** [DPG-18 §18.2](02-llm-agnostic-spec.md#dpg-18) · **Raised:** 2026-08-18
+
+⚠ **Context you may not have:** the September 2025 migration to `gpt-5-nano` moved **one call site
+of five**. Contact extraction (×2) and SEAH detection are still on `gpt-3.5-turbo` from July 2025;
+both translation paths are still on `gpt-4`. Consolidating is therefore a bigger change than
+"finish the migration" — it is the first time three of those paths change model at all.
+
+**Recommendation:** `gpt-5-nano` for `classify`, `extract`, `translate` and `detect`; leave the
+ticketing findings pair on `gpt-4o-mini`/`gpt-4o` until DPG-23 measures them, since those are the
+officer-facing and **complainant-facing** outputs and already support `json_schema`.
+
+**Why it needs your word rather than a default:** `detect` is the **SEAH** path. Changing its model
+changes the sensitivity of harassment detection, and nobody has measured nano against turbo on it.
+The deterministic keyword pre-filter still runs underneath (Q-14), so the floor does not move — but
+the ceiling might, in either direction.
+
+## Q-22 — Delete the dead contact-extraction path, or wire it up? {#q-22}
+
+**Owns:** [DPG-19](02-llm-agnostic-spec.md#dpg-19) · **Raised:** 2026-08-18, answering *"how is the
+phone number sent to the LLM?"* — it is not
+
+`extract_contact_info` and `extract_all_contact_info` have **no production caller**. Phone numbers
+are validated deterministically in a slot validator. Three options:
+
+1. **Delete both** (and the task). Removes two of the nine call sites from every inventory, shrinks
+   the indicator-4 surface honestly, and removes an LLM path that would send contact PII if anyone
+   ever wired it up.
+2. **Keep as dead code**, corrected in the docs only. Cheapest; leaves a loaded path in the tree.
+3. **Wire it up deliberately** for the messy free-text cases the deterministic validator rejects —
+   with the Sprint-3 redaction in front of it, not before.
+
+**Recommendation: (1), and mention it to the consultant as a scope reduction.** ⚠ Whatever you
+choose, `docs/dpg/privacy-assessment.md` leg L4 must stop listing them as live egress — that part is
+not optional and DPG-19 does it either way.

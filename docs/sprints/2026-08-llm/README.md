@@ -98,6 +98,14 @@ Sprint 1 no longer ships the open-by-default flip.
 | **DPG-15** | Degraded mode — verify what exists, close the gaps, add the probe | backend | S/M | [02](02-llm-agnostic-spec.md#dpg-15) |
 | **DPG-16** | Env plumbing: `.env.example`, compose, `.env.open` / `.env.openai` | repo | S | [02](02-llm-agnostic-spec.md#dpg-16) |
 | **DPG-17** | **One config file** — `backend/config/llm_config.py`, the only registry either surface reads. *Lands before DPG-11/12* | both | S | [02](02-llm-agnostic-spec.md#dpg-17) |
+
+> **Second wave, added 2026-08-18 after the owner reviewed Sprint 1's result.** Three tickets, in
+> the rows below: DPG-18, DPG-19 and DPG-15b. ⚠ Two of them start from corrections — `gpt-3.5-turbo`
+> is still live on three call sites, and the contact-extraction path that would send a phone number
+> to a model **has no caller at all**.
+| **DPG-18** | **One entry point** — the layer picks the model and shapes the request; one model | both | M | [02](02-llm-agnostic-spec.md#dpg-18) |
+| **DPG-19** | **Meaningful input** — 25-char gate, empty ≠ failure, bounded error text | backend | S/M | [02](02-llm-agnostic-spec.md#dpg-19) |
+| **DPG-15b** | **Classification checkpoint moves to submission** — 90 s, late update | backend | M | [02](02-llm-agnostic-spec.md#dpg-15b) |
 | **DPG-20** | Labelled benchmark set (test data, never production PII) | data | M | [03](03-open-models-spec.md#dpg-20) |
 | **DPG-21** | Provider setup + smoke script (HF Inference Providers) | ops | S | [03](03-open-models-spec.md#dpg-21) |
 | **DPG-22** | ASR evaluation — Nepali WER on the labelled voice subset | eval | M | [03](03-open-models-spec.md#dpg-22) |

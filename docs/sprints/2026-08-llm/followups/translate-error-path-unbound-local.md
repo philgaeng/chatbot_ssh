@@ -3,7 +3,14 @@
 > **Raised:** 2026-08-18, by [DPG-10](../02-llm-agnostic-spec.md#dpg-10)'s characterization net —
 > the test that pinned the failure contract found the contract was not the one the code has.
 > **Logged as deviation D-29** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🔵 open · **Size:** XS to write, but it belongs with **T-34-b (Sprint 3)**, not before it.
+> **Status:** 🟡 **superseded 2026-08-18 — now owned by [DPG-19 §19.3](../02-llm-agnostic-spec.md#dpg-19)**,
+> in this sprint. · **Size:** XS
+>
+> ⚠ **The reason for deferring it has been removed.** This document argued the fix must wait for
+> Sprint 3, because binding `result` early makes a `ValueError` reachable whose message interpolates
+> the whole grievance. The owner's answer: *"trim the grievance — we just need the first 3 words to
+> easily find it."* With `grievance_id` plus three words, the message is bounded, the binding is
+> safe, and both halves land together. The analysis below stands; its conclusion does not.
 
 ## What was found
 

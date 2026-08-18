@@ -446,6 +446,15 @@ instead of nine call sites.
 
 ---
 
+> ⚠ **Found 2026-08-18 while answering *"how is the phone number sent to the LLM?"* (it is not —
+> see [`02` §19.0b](02-llm-agnostic-spec.md#dpg-19)). Two log lines this ticket must cover, and
+> neither was in its inventory:**
+> `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO** on every
+> validation — `logger.info("%s - Validating phone: %s", action_name, slot_value)` — and `:37` logs
+> it again on the invalid path. **This is the leak that actually happens**, in the sense DPG-34 means:
+> no model, no third party, just the phone number in the container logs of every intake. Recorded,
+> not fixed — Sprint 1 does not touch it.
+
 ## DPG-34 — Redaction at the logging, Celery, and backup boundary {#dpg-34}
 
 **The leak that actually happens.** Do not treat this as the smaller half of the sprint.

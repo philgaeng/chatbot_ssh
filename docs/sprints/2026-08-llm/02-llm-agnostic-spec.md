@@ -281,6 +281,19 @@ single Deviations table with a **Status** column. Add rows there; do not start a
                           declared_env_vars() rather than restating the list.
 
 7. DPG-15  DEGRADED     — audit (can start any time) + the health probe (needs DPG-16).
+
+── second wave, owner 2026-08-18 ──────────────────────────────────────────────
+
+8. DPG-19  GUARDRAILS   — meaningful-input gate + bounded error text. Independent of
+                          DPG-18; closes D-29. Cheapest of the three, land it first.
+
+9. DPG-18  CALL LAYER   — one entry point per surface, shaping shared. Rewrites the
+                          bodies of all nine call sites, so it goes AFTER DPG-19
+                          rather than being rebased over it. Model consolidation is
+                          the last commit of this ticket and needs Q-21.
+
+10. DPG-15b TIMING      — the wait moves to submission, 90s, late-update. Needs Q-20
+                          answered (the flow's step order) before any code.
 ```
 
 **The invariant: DPG-10's tests are green at every commit.** If they go red, the behaviour changed and
@@ -1096,6 +1109,350 @@ never seen the repo.
 ### Tests
 
 [`TESTS.md`](TESTS.md) → **T-16-a** (`.env.example` covers every variable the code reads — a drift pin).
+
+---
+
+## Second wave — DPG-18, DPG-19, DPG-15b (owner, 2026-08-18)
+
+Raised by the owner after reading Sprint 1's result. Three of the five points are code changes and
+are specced below; the other two are answered in place:
+
+| Owner's point | Disposition |
+|---|---|
+| *"We use only nano now, not turbo"* + *"one entry, the layer picks the model, a parser feeds the model what it needs"* | **[DPG-18](#dpg-18)** — and ⚠ the first half is not yet true, see §18.0 |
+| *"An empty summary is not necessarily a failure… we need a length guardrail, ~25 characters"* | **[DPG-19](#dpg-19)** — and ⚠ the shipped code does **not** treat an empty summary as a failure; §19.0 shows why the concern is still right |
+| *"I don't understand how the phone number is sent to the LLM"* | **It is not.** Answered in §19.0b — and the answer corrects a compliance document, so it is not merely reassuring |
+| *"Move the classification checkpoint to submission, ~90 s, update the submission if it lands late"* | **[DPG-15b](#dpg-15b)** — supersedes the D-30 and D-34 followups |
+| *"Fix the ValueError by trimming the grievance — the first 3 words are enough to find it"* | **[DPG-19.3](#dpg-19)** — closes **D-29** inside this sprint instead of deferring it to Sprint 3 |
+
+**On the numbering.** 20–25 belong to Sprint 2 and 30–36 to Sprint 3, so the new tickets take 18 and
+19. The timing work is **DPG-15b** rather than 20-something because it is literally the continuation
+of DPG-15: it closes two deviations that ticket raised (D-30, D-34), and a reader who finds those
+rows should land on it.
+
+---
+
+## DPG-18 — One entry point: the layer picks the model and shapes the request {#dpg-18}
+
+> *"We may need to make the functions configurable so that they work whether we call one model or
+> another. Meaning: we have one entry, then the LLM orchestration layer chooses the model, and then
+> we have a parser function that makes sure we feed the model what is required."* — owner, 2026-08-18
+
+### 18.0 — The correction this ticket starts from: turbo is still live
+
+⚠ **`gpt-3.5-turbo` is still called on three of the nine sites, and `gpt-4` on two.** Not an
+opinion — `git log -S` on each literal:
+
+| Model | Call sites | In the code since |
+|---|---|---|
+| `gpt-5-nano` | classification | **2025-09-12** — `57e26238` *"updated LLM to gpt-5-nano and modified LLM query"* |
+| `gpt-3.5-turbo` | contact extraction ×2, SEAH detection | **2025-07-07**, never migrated |
+| `gpt-4` | grievance translation, ticketing note translation | pre-dates that |
+| `gpt-4o-mini` / `gpt-4o` | ticketing findings, SEAH findings | 2025-09-11 |
+
+**The September migration moved one call site out of five, and the other four kept their old
+models for eleven months.** That is not carelessness — it is precisely what five copies of a model
+name in five modules produce, and it is the argument DPG-17 was written from. The owner's
+recollection was *the intent*; the intent had nowhere to live. It does now: eight lines in one file.
+
+⚠ **It also means one measurement in this sprint has a bigger consequence than it looked.** `gpt-4`
+rejects JSON mode outright (D-31), which is why `structured_translate` degrades to `prompt`. That is
+not a translation-quality decision anybody made — it is an eleven-month-old default constraining a
+2026 design. Consolidating the model (§18.2) removes the constraint rather than working around it.
+
+### 18.1 — The layer
+
+A call site today, after DPG-11/12/13, carries five concerns:
+
+```python
+task   = model_for("classify")                      # which model, which deadline
+client = _llm_client()                              # which client
+resp   = client.chat.completions.create(            # how to ask for JSON
+    model=task.model, timeout=task.timeout,
+    **response_format_kwargs("grievance_classification", GrievanceClassification.model_json_schema(),
+                             task.structured_output),
+    messages=[...],                                 # the actual prompt
+)
+parsed = GrievanceClassification.model_validate(    # how to read it back
+    parse_llm_response("grievance_response", resp.choices[0].message.content, language_code))
+```
+
+After DPG-18 it carries one:
+
+```python
+result = call_llm("classify", messages, schema=GrievanceClassification)
+```
+
+**Three of those five concerns vary by provider, and none of them varies by call site.** That is the
+test for what moves into the layer.
+
+| Moves to the shared layer | Stays at the call site |
+|---|---|
+| Which model, which endpoint, which deadline | The prompt — the only thing that is actually about this task |
+| *How* to ask for structured output (`json_schema` → `json_object` → `prompt`) | What to do with the validated result |
+| *How* to read it back: fences stripped, JSON parsed, schema validated, typed error raised | |
+
+**What "the parser feeds the model what is required" means concretely — the `prompt` rung.** When the
+model supports no JSON mode at all, the requirement has to travel *in words*. Today that is
+hand-written in each prompt, nine times, and the nine have already drifted: three say *"Return the
+response in **strict JSON format** like this:"* with a hand-typed example, one says *"Respond with a
+JSON object only, no other text"*, and the ticketing pair embed a full schema block in the system
+message. `augment_prompt_for_schema()` generates that paragraph **from the same Pydantic model the
+`json_schema` rung sends**, so the three rungs cannot describe different shapes — which is exactly
+the failure mode a hand-written fallback has.
+
+### Where it lives, and why it is two files and not one
+
+| Piece | Where | Why |
+|---|---|---|
+| `request_for(task, messages, schema=None, **overrides) -> dict` | `backend/config/llm_config.py` | Pure. No client. Already the home of the ladder |
+| `augment_prompt_for_schema(messages, schema) -> messages` | same | The `prompt` rung, generated from the schema |
+| `parse_response(raw, schema) -> BaseModel` | same | Fence-stripping, JSON, validation, one typed error |
+| `call_llm(task, messages, schema=None)` | **`backend/services/llm_client.py`** *and* **`ticketing/clients/llm_client.py`** | ~15 lines each: `client.chat.completions.create(**request_for(...))` then `parse_response(...)` |
+
+⚠ **Why not one shared caller.** It would have to import an OpenAI client into `backend/config/`,
+and `ticketing/` would then be reaching into the chatbot's runtime rather than its configuration —
+the boundary Q-18 drew deliberately. The rule that survives is the one that matters: **the shaping
+is shared, the calling is not.** *Two factories, one config* becomes *two callers, one contract*.
+
+### 18.2 — One model, once the layer exists
+
+With the layer in place, consolidating is an edit to `llm_config.py`'s defaults and nothing else.
+**Q-21 is open: which model.** The owner's steer (Q-11) was *"one text model first, then downsize"*,
+and the obvious candidate is the one already carrying the primary path.
+
+What consolidation buys, beyond a smaller bill:
+
+- **`json_schema` everywhere.** Measured: `gpt-5-nano` ✅, `gpt-4o-mini` ✅, `gpt-3.5-turbo` ❌,
+  `gpt-4` ❌ — three of the four sites currently on a weaker rung are there because of the *model*,
+  not the endpoint.
+- **One model to benchmark** in DPG-23 instead of four, which matters when Q-19 says there is no budget.
+- **One model for T2 to host** if the vLLM tier is ever unparked — each additional model is a second
+  process or a second GPU (Q-11's own reasoning).
+
+⚠ **What it costs, stated plainly:** translation and SEAH detection are currently on *different*
+models from classification, and nobody has measured whether nano is as good at them. `detect` is a
+**SEAH** path. This ticket therefore ships the consolidation **behind the registry**, with the old
+values one env var away, and DPG-23 measures the delta. Consolidating is not the same as knowing.
+
+### Acceptance
+
+- [ ] `call_llm(task, messages, schema=None)` exists on both surfaces and is the **only** thing that
+      calls `.create()` — no call site constructs a request or parses a response itself
+- [ ] `request_for`, `augment_prompt_for_schema` and `parse_response` live in `llm_config.py`, remain
+      first-party-import-free (T-17-b still green), and are the only implementation of the ladder
+- [ ] The `prompt` rung's instruction is **generated from the schema**; the nine hand-written "return
+      strict JSON" paragraphs are gone, and a test proves the generated text names every required field
+- [ ] All nine call sites migrated; DPG-10's net stays green **unchanged** for the eight sites whose
+      request shape does not change
+- [ ] §18.0's table is reproduced in `docs/services/06_llm_service.md` — the *why* travels with the rule
+- [ ] Model consolidation applied once **Q-21** is answered, defaults only, with the previous values
+      recorded in the commit message so the rollback is one env var
+
+### Tests
+
+[`TESTS.md`](TESTS.md) → **T-18-a … T-18-d**.
+
+### ❓ Questions
+
+- 🔴 **Q-21 — which single text model?** Recommendation: `gpt-5-nano` for `classify`, `extract`,
+  `detect` and `translate`, leaving the ticketing findings pair alone until DPG-23 measures them
+  (they are the officer- and **complainant-facing** outputs, and `gpt-4o-mini` already does
+  `json_schema`). Needs the owner's word because it changes the SEAH detection path.
+
+---
+
+## DPG-19 — Meaningful input: an empty summary is not a failure {#dpg-19}
+
+> *"An empty summary is not necessarily a failure. If the grievance text is too short it cannot be
+> summarised. So if we decide that empty summary or empty translations are errors, then we need
+> guardrails to assess the length of the grievance pushed… probably minimum 25 characters."* — owner
+
+### 19.0 — First, what the shipped code actually does
+
+⚠ **The risk the owner names is real, and the code does not have it — check before building.**
+`is_failed_classification()` (DPG-15) keys on `status == "error"` or a non-empty `error` string.
+Both are set **only when the call itself failed**. A model that answers `{}` for a three-word
+grievance travels the sentinel path, gets the localized *"not enough information to proceed"*
+response, and is **not** treated as a failure. Pinned by
+`test_a_malformed_classification_is_distinguishable_from_an_empty_one`.
+
+**So this ticket is not a correction. It is the guardrail that makes that distinction deliberate
+rather than accidental** — and it adds the half that is genuinely missing: *today a six-character
+grievance is sent to the model at all*, and we have no way to tell "the model declined to summarise
+two words" from "the model failed to summarise a paragraph".
+
+### 19.0b — And the answer to *"how is the phone number sent to the LLM?"*
+
+**It is not.** Traced end to end, and the answer corrects a compliance document:
+
+- The complainant's phone is validated and normalised **deterministically**, in a slot validator —
+  `backend/actions/services/contact/phone.py::validate_complainant_phone` → `helpers.is_valid_phone`
+  / `is_philippine_phone`. No model is involved anywhere on that path.
+- `extract_contact_info` and `extract_all_contact_info` — the two LLM functions that *would* send it
+  — **have no production caller.** The only reference to `extract_contact_info_task` outside its own
+  definition is `backend/task_queue/test_tasks.py`, a manual test script. `extract_all_contact_info`
+  has no reference at all. (Confirmed by a whole-repo grep across `.py`/`.js`/`.ts`/`.yml`.)
+- What *does* reach the model is the **grievance narrative** (classification, translation, SEAH
+  detection) and, on the ticketing surface, officer notes and the case timeline. If a complainant
+  types their number *inside the narrative*, it goes — which is Sprint 3's subject, and is what
+  DPG-31's Devanagari-digit recognisers exist for.
+
+⚠ **This corrects `docs/dpg/privacy-assessment.md` leg L4**, which lists six call sites as places
+"grievance text leaves the country". **Two of the six are unreachable.** An egress inventory that
+overstates exposure is not a safe error: it is the same class of defect as one that understates it,
+because it spends the reader's trust on paths that do not exist. Fixed as part of this ticket, and
+logged as **D-35**.
+
+⚠ **One real finding while tracing it**, for Sprint 3 rather than here: `phone.py:27` logs the phone
+number at INFO — `logger.info("%s - Validating phone: %s", action_name, slot_value)` — and `:37`
+logs it again on the invalid path. That is the log surface DPG-34 owns; recorded, not fixed.
+
+### 19.1 — The gate
+
+A new registry value, `MIN_CLASSIFY_CHARS` (default **25**, the owner's number), applied to the
+**description**, on whitespace-stripped length:
+
+| Input | Behaviour |
+|---|---|
+| Below the threshold | **The model is not called.** The grievance is marked `LLM_SKIPPED` — an existing terminal code that means exactly this — and the flow continues. Free, instant, honest |
+| At or above, model returns content | Normal path |
+| At or above, model returns `{}` | **Not a failure.** The localized "not enough information" response, plus a **warning log** carrying the length (not the text) so DPG-23 can count how often it happens |
+| Any length, call raises | Failure — unchanged from DPG-15 |
+
+⚠ **25 characters is not the same amount of information in every script.** In Devanagari it is a
+short sentence; in English it is roughly four words. The threshold is a registry value precisely so
+it can differ by language later; this ticket ships one number and says so.
+
+⚠ **The same gate belongs on translation** — the second half of the owner's sentence. Translating
+"धुलो" costs a call and returns nothing useful. Same threshold, same skip.
+
+### 19.2 — Say which of the three happened
+
+`LLM_SKIPPED` already exists and already means "not classified, and that is fine". What is missing
+is that **nothing distinguishes *too short to classify* from *Celery was unavailable*** — both write
+`LLM_SKIPPED` today. This ticket adds the reason to the log and the task result, not a new status
+code: a fourth status would need a migration and an officer-portal change for a distinction only
+operators need.
+
+### 19.3 — Bounded error text (closes D-29)
+
+> *"We can already fix the ValueError issue by trimming the grievance — we just need the first 3
+> words to easily find it."*
+
+`translate_grievance_to_english_LLM` interpolates the **whole `input_data`** into its `ValueError`,
+and that message reaches the Celery error log. That is why D-29 was deferred: binding `result`
+early — the obvious one-line fix — makes a PII-leaking message *reachable*. The owner's trim removes
+the reason to defer:
+
+```python
+raise ValueError(
+    f"Error translating grievance {input_data.get('grievance_id')}: {exc} "
+    f"(text starts: {first_words(input_data.get('grievance_description'), 3)})"
+)
+```
+
+- `grievance_id` **first** — it is the identifier that actually finds the record, and it is not PII
+  on its own.
+- Three words, whitespace-split, truncated to 60 characters as a backstop against a pasted wall of
+  text with no spaces.
+- ⚠ **Three words of a grievance is still narrative text**, and could be *"Er. Sharma refused"*.
+  This is a deliberate, bounded trade the owner has made: enough to find the record, small enough to
+  stop being a transcript. It stays in scope for DPG-34's log redaction, which will see three words
+  instead of a paragraph.
+- The same treatment applies to the other message in that function (`:455`) and to
+  `parse_llm_response`, which DPG-13 already reduced to a length.
+
+**With this, D-29's underlying bug is fixed here**: `result` is bound before the `try`, the declared
+`ValueError` becomes reachable, and the message it carries is bounded.
+
+### Acceptance
+
+- [ ] `MIN_CLASSIFY_CHARS` in the registry (default 25), applied to classification **and** translation
+- [ ] Below the threshold: **no model call**, status `LLM_SKIPPED`, reason logged
+- [ ] At or above with an empty result: **not a failure**, warning logged with the length only
+- [ ] `is_failed_classification()` unchanged in behaviour — a test asserts an empty-but-valid result
+      is still not a failure, so the guardrail cannot drift into treating it as one
+- [ ] D-29 fixed: `result` bound before the `try`; no message interpolates `input_data`, any
+      description, or any summary — only `grievance_id` plus at most three words
+- [ ] `docs/dpg/privacy-assessment.md` leg L4 corrected to four reachable call sites, with the
+      unreachable two named and the reason recorded
+- [ ] The `phone.py` INFO logs recorded as a Sprint-3 finding — **logged, not fixed** here
+
+### Tests
+
+[`TESTS.md`](TESTS.md) → **T-19-a … T-19-e**.
+
+---
+
+## DPG-15b — The classification wait belongs at submission, not at review {#dpg-15b}
+
+> *"The classification happens while we request the complainant to fill in his contact info. The
+> actual submission of the grievance happens then, and that should be the time where we check if the
+> classification is done or not. We could very well allocate a way longer timer — like 90 s — and
+> just make sure that we update the submission once the classification is done, if submission is
+> done before the classification task is finished."* — owner
+
+**This supersedes two deviations from DPG-15's audit**: D-30 (14–20.5 s measured against a 20 s
+deadline) and D-34 (`LLM_failed` unreachable). The owner's design answers both, and answers them
+better than "raise the timeout" would have.
+
+### 15b.0 — The flow as it is, measured
+
+| Step | Where | What happens |
+|---|---|---|
+| Trigger | `backend/actions/forms/intake_submit.py:70` → `trigger_async_classification` | The row is written, then the Celery task is enqueued. **Intake never waits here** — this part is right and stays |
+| Wait | `backend/actions/forms/form_grievance_complainant_review.py:75` → `load_grievance_for_classification` | Polls **20 s**, 0.5 s interval, then gives up and renders whatever is in the row |
+| Resolve | `backend/actions/services/submit/classification.py::classification_status_for_submit` | Re-reads the row; falls back to `"pending"` |
+
+And the measurement that makes it urgent (D-30): **14.0 s, 15.2 s, 20.5 s** of server processing for
+one classification — one sample of three already over the deadline, *before* Celery queue wait.
+
+### 15b.1 — What changes
+
+1. **The budget becomes a registry value, `CLASSIFICATION_WAIT_SECONDS`, default 90** (the owner's
+   number). One value, one place, and DPG-23 can revise it from measurement rather than from feel.
+2. **The blocking wait moves to submission.** The review step stops blocking: if the classification
+   is not ready it renders without it rather than freezing the conversation for 20 seconds.
+   ⚠ **Open, and it must be answered before writing code (Q-20):** the review step is where the
+   complainant *confirms* the summary and categories. Skipping the wait there means either the
+   review step is reached later in the flow (after contact collection, as the owner describes), or
+   the complainant sometimes reviews nothing. **The step order has to be read off the live flow, not
+   assumed** — that is one hour of tracing, and it is the whole design.
+3. **Late classification updates the submitted grievance.** Half of this already exists and it is
+   worth knowing before building the other half: `ticketing/tasks/grievance_sync.py:193,206`
+   back-fills `grievance_summary` on the ticket when it changes, so a classification landing after
+   the ticket was created **does** reach the officer. What is missing is the complainant-facing side
+   and the status write.
+4. **`LLM_failed` becomes reachable** (D-34): the task re-raises so Celery's `autoretry_for` fires,
+   and `_persist_classification_failed_if_final` writes the terminal code once retries are spent.
+   ⚠ This changes the task's terminal state from SUCCESS-with-a-FAILED-payload to a Celery FAILURE,
+   **and the frontend polls task status** — that is why DPG-15 logged it instead of fixing it, and
+   it needs its own check against the webchat status path.
+
+### Acceptance
+
+- [ ] `CLASSIFICATION_WAIT_SECONDS` in the registry, default 90; no literal deadline anywhere
+- [ ] The flow's step order **read from the code and written down** before the wait is moved (Q-20)
+- [ ] The review step does not block on a classification that has not arrived
+- [ ] Submission checks, waits up to the budget, and proceeds either way — intake still completes
+      with the endpoint dead (T-15-a stays green)
+- [ ] A classification that lands **after** submission updates the grievance, and the update reaches
+      ticketing (verify the sync path with a real late arrival, in-container)
+- [ ] `LLM_failed` is written after retries are exhausted, **verified against the database** the way
+      DPG-15's runs were — with the webchat task-status path checked, not assumed
+- [ ] D-30 and D-34 closed in `PROGRESS.md`, and their followup docs updated to point here
+
+### Tests
+
+[`TESTS.md`](TESTS.md) → **T-15b-a … T-15b-d**.
+
+### ❓ Questions
+
+- 🔴 **Q-20 — where does the review step sit in the flow?** If the complainant confirms the AI
+  summary *before* contact collection, moving the wait to submission means they sometimes confirm
+  nothing, and the fix is a step reorder rather than a timeout change. Needs one hour of tracing and
+  the owner's confirmation of the intended order.
 
 ---
 
