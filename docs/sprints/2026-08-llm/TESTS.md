@@ -110,12 +110,12 @@ here as T-06.
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-10-a** | Each of the 9 call sites sends the expected model name and `response_format` to a mocked client | Change any hard-coded model string → red |
-| **T-10-b** | Each call site's **happy-path parse**: realistic provider response in, documented dict out | Drop a key from the parsed result → red |
-| **T-10-c** | Each call site's **failure contract** — raise / sentinel dict / `None`, per the table in [`02`](02-llm-agnostic-spec.md#dpg-10). Nine functions, three different idioms; pin each as it is | Change `return None` to `raise` in any client function → red |
-| **T-10-d** | `client is None` guard, per function (module client is `None` when the key is unset) | Remove any `if not client` guard → red |
-| **T-10-e** | `parse_llm_response`: valid JSON · the `"{}"` sentinel → localized "not enough information" · malformed JSON → `{}` · all four language codes in `error_response_dict` | Change the `en` fallback string → red |
-| **T-10-f** | `detect_sensitive_content_llm` clamps an out-of-range `level` to `"low"` | Remove the clamp at `:390-391` → red |
+| **T-10-a** ✅ | Each of the 9 call sites sends the expected model name and `response_format` to a mocked client | ✅ **Checked** — `gpt-5-nano`→`gpt-4o-mini` → red; collapsing `_MODEL_SEAH` onto `_MODEL_STANDARD` → red (2 tests) |
+| **T-10-b** ✅ | Each call site's **happy-path parse**: realistic provider response in, documented dict out | ✅ Covered by exact-dict assertions, so a dropped *or added* key is red |
+| **T-10-c** ✅ | Each call site's **failure contract** — raise / sentinel dict / `None`, per the table in [`02`](02-llm-agnostic-spec.md#dpg-10). Nine functions, three different idioms; pinned as they are. ⚠ **Two of them are not the documented contract**: `extract_contact_info` and `translate_grievance_to_english_LLM` raise `UnboundLocalError` on any pre-call failure (D-28, D-29) | ✅ **Checked** — `return None` → `return {}` in `generate_case_findings` → red |
+| **T-10-d** ✅ | `client is None` guard, per function (module client is `None` when the key is unset). ⚠ Includes the pin that **classification ignores it entirely** — it builds its own client, so an unkeyed deployment still calls the provider there | ✅ **Checked** — removed translation's guard → red |
+| **T-10-e** ✅ | `parse_llm_response`: valid JSON · the `"{}"` sentinel → localized "not enough information" · malformed JSON → `{}` · all four language codes **plus an unknown one** · and that the sentinel branch is grievance-only | ✅ **Checked** — changed the `en` fallback string → red |
+| **T-10-f** ✅ | `detect_sensitive_content_llm` clamps an out-of-range `level` to `"low"` (4 cases, incl. the correct-word-wrong-case `"HIGH"`), and coerces a non-string `message` | ✅ **Checked** — removed the clamp → red (4 tests) |
 
 ⚠ **T-10-a must patch `backend.services.LLM_services.OpenAI` (the class), not the module-level `client`.**
 `classify_and_summarize_grievance` builds its own client at `:199`; patching only the module attribute
