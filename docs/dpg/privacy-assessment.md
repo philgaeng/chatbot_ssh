@@ -470,14 +470,22 @@ to give their identity at intake. That is a different thing and the word is corr
 2. **The transfer is currently unredacted.** The complainant's own words, their name and phone, and
    third-party names all leave the country as written. There is no technical control at that boundary
    today.
-3. **The mitigation is specified, scheduled, and partial.** Sprint 3
+3. **The mitigation is specified, scheduled, and partial — but less partial than an earlier draft of
+   this section claimed.** Sprint 3
    ([DPG-31](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-31), DPG-33, DPG-34) builds
-   deterministic redaction at the transmission boundary — phone numbers, emails, national ID and
-   vehicle-registration patterns. **The NER layer that would catch *person names* has been moved out
-   of Sprint 3 into a separate initiative** (Q-12c). So the first redaction release will leave person
-   names — including third-party and SEAH-context names — unredacted. **That is a disclosed
-   limitation, not a hidden one**, and it is stated here because a reader who discovers it themselves
-   is entitled to distrust everything else.
+   deterministic redaction at the transmission boundary. That covers **more than numeric patterns**:
+   alongside phone numbers, emails, citizenship and vehicle-registration numbers, §31.2b ships **three
+   person-name recognisers that need no ML at all** — honorific and role-title triggers (`श्री`, `Er.`,
+   Engineer, overseer, ward chairperson), a **Nepali family-name (thar) gazetteer**, and
+   self-identification patterns (*"my name is …"*, `मेरो नाम … हो`). **In this domain the fraction the
+   rule layer catches is the fraction that matters most — the named official**, who is exactly the
+   person who never consented.
+   **What still gets through:** a name with no title, no recognisable surname and no self-identification
+   frame — *"the man operating the roller"*, later named in passing — or an unusual surname the
+   gazetteer does not carry. The ML model (Q-12c / consultant-Q9) raises recall; **it is not the whole
+   of name redaction, and treating it as such was a scoping error this project has already made once.**
+   So the honest claim is *"most names are removed, some get through, and we will publish the measured
+   residual"* — not *"names are unaddressed"*, and not *"names are handled"*.
 4. **What is genuinely in Nepal:** identity (self-hosted Keycloak), the database, uploads, the
    production SMS gateway (DOIT), and all application logic. The platform is not dependent on a
    foreign cloud for its operation. The model provider is the exception, and it is the only one.
@@ -530,7 +538,7 @@ protects the complainant and protects no one else.
 | pgcrypto encryption of contact fields | Encrypts the **complainant's** four contact fields. A third-party name inside `grievance_description` is plaintext, and the description is not an encrypted field |
 | The `ticketing.*` PII boundary | Governs *complainant* PII columns. A third-party name arrives as free text inside the narrative and inside cached summaries; no column-level rule catches it |
 | SEAH access isolation | Protects the case **inside** the platform. It does not follow the text to the model provider |
-| Deterministic redaction (Sprint 3) | Catches phones, emails, ID numbers, vehicle registrations — **patterns**. A Nepali personal name is not a pattern |
+| Deterministic redaction (Sprint 3) | **Reaches third-party names, imperfectly** — §31.2b's honorific/role-title triggers are aimed squarely at the named official, and the thar gazetteer plus self-identification patterns cover much of the rest. **This is the one control in this table that does bite on third parties**, which is why the residual has to be measured rather than described. What escapes it: an untitled name with an unusual surname, mentioned in passing |
 
 ### 4.3 Position
 
@@ -543,10 +551,14 @@ protects the complainant and protects no one else.
 3. **Even granting the basis for *holding* it, the *transfer* of it is separate.** Holding a named
    engineer's details in a Nepali government grievance database is one thing; sending them to a US
    commercial AI provider is another. This is where a legal position is most needed.
-4. **The technical control is specified and partially scheduled.** Deterministic redaction lands in
-   Sprint 3. Person-name redaction requires the NER layer, which has been separated into its own
-   initiative. **Until that lands, person names go unredacted, and this document says so rather than
-   implying the problem is handled.**
+4. **The technical control is specified, scheduled, and partial — and it does reach names.** Sprint 3's
+   deterministic layer includes the three person-name recognisers in §31.2b, tuned for **recall** on the
+   principle that a missed name is a privacy breach while an over-redacted common noun is a small
+   classification cost. **An earlier draft of this document said person names were deferred entirely to
+   the ML initiative. That was wrong** — the same error this project made once before and corrected
+   (sprint deviation D-08) — and it matters, because it is the difference between *"we do nothing about
+   names"* and *"we do most of it and will publish the residual"*. Neither overclaim is acceptable in a
+   submission; the measured number is the answer to both.
 5. **A disclosure-at-intake obligation may follow.** If a complainant is told their words go to an
    external AI service, they can choose what to write. That is a partial mitigation available today at
    the cost of one screen of copy, and it does not depend on any legal answer.
@@ -614,7 +626,7 @@ privacy impact, not a legal characterisation.
 | **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:282,335,343` | 🟠 Medium | DPG-34 |
 | **F-7** | **No deletion capability exists anywhere in the platform**, and no retention period has been chosen. Archiving is implemented and is not deletion | `ARCHIVING_AND_RETENTION.md` §5.3, §10 | 🟠 Medium | **needs a legal position** |
 | **F-8** | **No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed | — | 🟠 Medium | **needs an owner** |
-| **F-9** | **Third parties named in grievances have not consented and cannot exercise any right**; deterministic redaction will not catch personal names, and the NER layer that would has been moved to a separate initiative | §4 | 🟠 Medium | **needs a legal position** + separate initiative |
+| **F-9** | **Third parties named in grievances have not consented and cannot exercise any right.** The redaction layer *does* reach names (§31.2b — title triggers, thar gazetteer, self-identification), tuned for recall, so this is a **measured residual rather than an untouched gap** — but the residual is real and unquantified until DPG-35 reports it, and no redaction addresses the fact that these people have no rights they can exercise over data already held | §4 | 🟠 Medium | **needs a legal position**; recall figure from DPG-35 |
 | **F-10** | **Public closure endpoint is unauthenticated with a non-expiring UUID4 token.** Deliberate design (the complainant has no account) but a forwarded link is a permanent disclosure | `public_closure.py:19,39` | 🟡 Low-medium | new — add expiry |
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question with ADB OGC | — | 🟡 Low-medium | DPG-03 |
 | **F-12** | **SMS fallback routes a complainant's phone number and message through AWS SNS in Singapore.** Production Nepal uses the in-country DOIT gateway, so this is a fallback path — but it is a cross-border leg nobody had inventoried | `messaging.py:280,330`; `AWS_REGION=ap-southeast-1` | 🟡 Low | new |

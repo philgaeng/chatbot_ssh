@@ -310,8 +310,11 @@ scoped by it.
       marks every statutory section reference `[§ unverified]` rather than implying the numbering was checked
 - [x] Individual Privacy Act 2018 position stated, including cross-border transfer **as an indefinite
       arrangement** (T1 is the steady state; T2 is parked) → §3.7
-- [x] Third-party PII position stated explicitly — with T2 parked this is the **load-bearing** section → §4, with the
-      NER deferral (Q-12c) disclosed rather than implied away: *person names go unredacted in the first release*
+- [x] Third-party PII position stated explicitly — with T2 parked this is the **load-bearing** section → §4.
+      ⚠ **Corrected 2026-08-18 after the owner flagged it:** the first draft said person names go unredacted until the
+      ML layer lands. **That repeats sprint deviation D-08's error** — §31.2b ships three deterministic person-name
+      recognisers (title triggers, thar gazetteer, self-identification), and in this domain they catch the case that
+      matters most, the named official. The honest claim is *most names removed, residual measured and published*
 - [x] The transfer analysis is framed on **transmission**, not on provider retention or training use, with
       the provider's commitments cited as mitigation → **§3.7.1**, which also states the two corollaries a reader
       reaches for and should not (openness is a licensing property; a no-retention commitment does not un-make a
@@ -330,7 +333,7 @@ scoped by it.
 ### ⚠ Three findings the ticket did not anticipate
 
 Reading the code to build the diagram surfaced three privacy defects **no spec had**, all logged as
-deviation **D-12** and registered in the assessment's §6:
+deviation **D-19** and registered in the assessment's §6:
 
 | | Finding | Where |
 |---|---|---|
@@ -480,7 +483,7 @@ visible file in the repository.
    (`chatbot.facets-ai.com`, `grm.facets-ai.com`, `grm.stage.facets-ai.com`) appear **nowhere else in the repository**
    and are not a `server_name` in any nginx config. The real hosts are `nepal-gms-chatbot.facets-ai.com` (AWS staging)
    and `grm-chatbot.dor.gov.np` (DOR production). **A reviewer clicking a dead production URL on the front page is the
-   same failure as the Rasa row, one click earlier.** Logged as deviation **D-10**.
+   same failure as the Rasa row, one click earlier.** Logged as deviation **D-17**.
 
 ### Tests
 
@@ -507,5 +510,5 @@ is in [`PROGRESS.md`](PROGRESS.md#sprint-0--definition-of-done).
       — 2, 7 and 9a do (rows 5 and 8 were updated too). **Row 3 still has no file and cannot have one until ADB OGC
       responds**; it names the blocker instead of a placeholder
 - [x] Every deferral logged in `followups/` + `TODO.md`, same commit — two followups created. ⚠ One stated
-      exception: D-12's three new privacy findings live in the assessment's findings register with owners, not in
+      exception: D-19's three new privacy findings live in the assessment's findings register with owners, not in
       `followups/` — they are findings awaiting a ticket, not deferrals of scoped work
