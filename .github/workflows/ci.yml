@@ -162,9 +162,19 @@ jobs:
               sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$f"
             fi
           done
-          echo "--- apt mirrors in use after the rewrite ---"
+          #
+          # ⚠ And the sources files are not where the hostname lives. The echo below is what
+          # finally showed it: the runner's sources say `mirror+file:/etc/apt/apt-mirrors.txt`,
+          # a MIRRORLIST — so rewriting the sources matched nothing at all, twice, while apt went
+          # on reading the dead Azure URL out of that file. This is the line that actually does
+          # the work.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          echo "--- apt mirrorlist after the rewrite ---"
+          cat /etc/apt/apt-mirrors.txt 2>/dev/null || echo "(no mirrorlist on this runner)"
           grep -rhoE 'https?://[a-z0-9.-]*archive\.ubuntu\.com' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u
+            /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             libvips-dev \
