@@ -33,6 +33,7 @@ docs/
 | [`PROGRESS.md`](PROGRESS.md) | Current build state, demo DB, deviations, commit log |
 | [`TODO.md`](TODO.md) | Open gaps, post-demo backlog, tech debt |
 | [`ARCHIVING_AND_RETENTION.md`](ARCHIVING_AND_RETENTION.md) | Resolved-case archiving schedule, `archiving_policy` settings, attachment tiering |
+| [`models/01_seah_detection_benchmark.md`](models/01_seah_detection_benchmark.md) | **How a model change on the SEAH path is tested** — where the examples come from (authored by the Nepal team, never real cases), how many are needed, and why the set screens rather than ranks. ⚠ The dataset itself is deliberately **not** in this repository |
 
 ---
 
