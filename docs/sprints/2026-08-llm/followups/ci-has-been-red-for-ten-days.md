@@ -125,6 +125,16 @@ remain and are not gating (`--max-warnings=-1`). Type-check, 88 unit tests and t
 | `docs-links` | ✅ | ✅ |
 | `webchat-checks` | ✅ | ✅ |
 
+**And on the branch that matters.** Getting a *feature* branch green proves the fixes work; it does
+not fix what this document is about. `dpg/sprint1-llm-agnostic` was fast-forwarded into
+`integration/stage` on 2026-08-19 (48 commits, 0 behind) — run **32266109536, all four jobs green**,
+the branch's first since 2026-08-08. **Red means something there again**, which was the point:
+"a permanently red build is indistinguishable from a build nobody is watching."
+
+⚠ **Deployment is a separate step and has not happened.** When it does,
+`scripts/database/rehash_search_tokens.py` (D-19/F-3) has to run on that box — every search token is
+derived differently now, so until it does, phone and email lookup return nothing and raise nothing.
+
 ---
 
 ### 2. `backend-tests` → pytest — **18 failed, 1166 passed, 8 skipped**
