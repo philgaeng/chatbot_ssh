@@ -32,7 +32,10 @@ on:
 jobs:
   backend-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    # 10 → 15 on 2026-08-19: the job itself runs in ~3 min, so the old budget was ample until a
+    # hung apt step spent all of it. The step now has its own 4-minute limit, so this headroom
+    # cannot mask a hang — it only stops a slow-but-working runner from failing a good build.
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:15
@@ -130,10 +133,20 @@ jobs:
       # `libvips-dev` keeps a stable name across both and pulls the runtime in.
       # The Dockerfile keeps ownership of the HEIF assertion — it is the image that has to
       # serve HEIF uploads.
+      # ⚠ This step ate three consecutive runs on 2026-08-19 (32266510148, 32266858967,
+      # 32269200562). Each hung here and was killed by the job's 10-minute budget, which GitHub
+      # reports as **cancelled** — indistinguishable in the UI from a human pressing stop, and
+      # reached before a single test ran. The run three hours earlier finished the whole job in
+      # 2m51s, so this is a slow or unreachable apt mirror, not a slow step.
+      #
+      # `timeout-minutes` on the step turns a hang into a clear, fast failure that names the
+      # cause instead of silently consuming the job. `Acquire::Retries` handles the ordinary
+      # flake without a human. Neither hides a real outage — they make one legible.
       - name: Install system libraries (libvips — mirrors the Dockerfile)
+        timeout-minutes: 4
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             libvips-dev \
             libvips-tools \
             libheif1 \
