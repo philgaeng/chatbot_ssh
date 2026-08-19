@@ -75,7 +75,7 @@ should be guessed at:
 - [ ] A decision recorded on prompt size and reasoning effort, with the cost delta measured
       (⚠ this is the same budget question as **Q-19**, which is unanswered)
 - [ ] Whatever is chosen, the complainant-visible behaviour on a slow-but-successful classification is
-      written down in [`docs/services/06_llm_service.md`](../../services/06_llm_service.md)
+      written down in [`docs/services/06_llm_service.md`](../../../services/06_llm_service.md)
 
 ## Why it is not fixed here
 

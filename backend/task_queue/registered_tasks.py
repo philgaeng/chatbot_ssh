@@ -767,12 +767,11 @@ def classify_and_summarize_grievance_task(self,
                 'entity_key': entity_key,
             }
 
-        # ⚠ **The countdown is explicit because the configured one was never applied** (D-45):
-        # `TASK_CONFIG` declares its retry settings under `'retries'` and the decorator reads
-        # `'retry'`, so every task in this queue silently falls back to Celery's defaults —
-        # including a **180-second** delay. Three retries at 180 s is nine minutes, which is not a
-        # ladder the conversation can observe; 2/4/8 exhausts in about fourteen seconds, inside the
-        # 30 s wait, which is the whole point of retrying here at all.
+        # The countdown is explicit, and stays explicit now that D-45 is fixed and the configured
+        # ladder is applied: this task **catches its own exception**, so `autoretry_for` never sees
+        # it and the configured backoff would not be used. The numbers are chosen to fit inside the
+        # complainant's wait — 2/4/8 exhausts in about fourteen seconds, where three retries at
+        # Celery's old 180-second default would have taken nine minutes.
         raise self.retry(exc=e, countdown=2 * (2 ** self.request.retries))
 
     # ✅ QUICK FIX (direct database call call):

@@ -3,7 +3,9 @@
 > **Raised:** 2026-08-19 by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b), while making `LLM_failed`
 > reachable. Found by running the retry ladder and reading the countdown Celery actually chose.
 > **Logged as deviation D-45** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🔵 open · **Size:** XS to fix, M to verify · **Blast radius:** every task in the queue
+> **Status:** ✅ **FIXED 2026-08-19.** The key is corrected, the exception names resolve to real
+> classes, and the configured ladders reach the tasks — verified by reading the options off two live
+> task objects. · **Blast radius was:** every task in the queue
 
 ## The defect
 
@@ -45,7 +47,32 @@ no automatic retry was configured to catch it if it had.
 
 Observed directly: `self.retry()` on the classification task reported *"Retry in 180s"*.
 
-## What DPG-15b did about it
+## What was actually done (2026-08-19)
+
+**Both halves, because the key alone would have been worse than the bug.** Fixing `retry` → `retries`
+while `retry_on` still resolved through `getattr(__builtins__, name, Exception)` would have switched
+on *retry-on-anything* for every task type — and a permanent failure, like a malformed payload, is
+not something retrying can fix.
+
+1. `retry_config = config.get('retries', {})`.
+2. `_resolve_retry_exceptions()` maps names to real classes (builtins, `openai`'s rate-limit and
+   connection errors, SQLAlchemy's `OperationalError` for the configured "DeadlockError"), and
+   **drops anything unrecognised with a warning** instead of widening it to `Exception`.
+3. `retry_backoff` is set from `initial_delay`, which is what Celery reads as the delay factor.
+
+Verified on live task objects:
+
+```
+classify_and_summarize_grievance_task  max_retries=3 delay=2s backoff=2
+                                       autoretry=[ConnectionError, TimeoutError, RateLimitError]
+send_sms_task                          max_retries=2 delay=2s backoff=2
+                                       autoretry=[ConnectionError, TimeoutError]
+```
+
+Pinned by `tests/backend/test_task_retry_config.py`, whose central test is that an unknown name is
+dropped loudly rather than becoming `Exception`.
+
+## What DPG-15b did about it, before the fix
 
 Nothing to the shared config — it passes an **explicit** `countdown=2 * (2 ** retries)` on the one
 task it owns, giving 2/4/8 s. That matters for the design: a fast failure has to exhaust its ladder
