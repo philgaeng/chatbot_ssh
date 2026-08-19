@@ -31,6 +31,7 @@ from backend.config.database_tables import (
 )
 # Database constants are now accessed through database_constants.py
 import hashlib
+import hmac
 DEFAULT_TIMEZONE = DEFAULT_VALUES['DEFAULT_TIMEZONE']
 
 
@@ -46,6 +47,15 @@ class DatabaseConnectionError(DatabaseError):
 class DatabaseQueryError(DatabaseError):
     """Exception for database query issues"""
     pass
+
+class EncryptionUnavailableError(DatabaseError):
+    """
+    A key is configured but the value could not be encrypted.
+
+    ⚠ Its whole purpose is to STOP a write. Do not catch it to keep going — a caller that swallows
+    this has reinstated D-19/F-2: storing complainant PII in the clear while reporting success.
+    """
+
 
 class BaseDatabaseManager:
     """Base class for database operations with proper logging and error handling"""
@@ -240,17 +250,54 @@ class BaseDatabaseManager:
         return tuple(self._prepare_field_for_database(k, input_data[k]) for k in input_data.keys()) 
 
 
+    _encryption_disabled_warned = False
+
+    def _warn_encryption_disabled_once(self) -> None:
+        """Say once, loudly, that PII is being stored in the clear — never silently."""
+        if BaseDatabaseManager._encryption_disabled_warned:
+            return
+        BaseDatabaseManager._encryption_disabled_warned = True
+        self.logger.warning(
+            "DB_ENCRYPTION_KEY is not set: complainant PII is being stored UNENCRYPTED. This is "
+            "the documented local/dev mode. It must not be how production runs — see "
+            "docs/dpg/privacy-assessment.md F-2."
+        )
+
     def _encrypt_field(self, value: str) -> Optional[str]:
-        """Encrypt a field value using pgcrypto"""
-        if not value or not self.encryption_key:
+        """
+        Encrypt a field value using pgcrypto.
+
+        ⚠ **This used to fail OPEN** (D-19/F-2): any pgcrypto error was logged and the **plaintext
+        value returned and stored**, so a deployment with a key configured could write complainant
+        names, phones and addresses in the clear while looking entirely healthy. `_decrypt_field`
+        mirrored the behaviour, so reads came back correct and nothing downstream could tell. The
+        failure was undetectable from outside the database.
+
+        It now fails **closed**: if a key is configured and encryption does not work, the write
+        raises. A failed write is visible and recoverable; silently-plaintext PII is neither.
+
+        ⚠ The no-key path still returns the value unchanged — that is the documented unencrypted
+        mode the local stack runs in — but it now says so once per process instead of never.
+        """
+        if not value:
+            return value
+        if not self.encryption_key:
+            self._warn_encryption_disabled_once()
             return value
         try:
             query = "SELECT encode(pgp_sym_encrypt(%s, %s), 'hex') AS encrypted"
             result = self.execute_query(query, (value, self.encryption_key), "encrypt_field")
-            return result[0]['encrypted'] if result else value
+            if not result or not result[0].get('encrypted'):
+                raise RuntimeError("pgcrypto returned no ciphertext")
+            return result[0]['encrypted']
+        except EncryptionUnavailableError:
+            raise
         except Exception as e:
             self.logger.error(f"Error encrypting field: {str(e)}")
-            return value
+            raise EncryptionUnavailableError(
+                "Refusing to store an unencrypted value: a DB_ENCRYPTION_KEY is configured but "
+                f"pgcrypto encryption failed ({type(e).__name__}). The write was abandoned."
+            ) from e
     
     def _decrypt_field(self, encrypted_value: str) -> Optional[str]:
         """Decrypt a field value using pgcrypto"""
@@ -499,8 +546,43 @@ class BaseDatabaseManager:
             raise ValueError(f"Invalid phone number: {phone_number}")
         return cleaned
 
+    def _search_pepper(self) -> Optional[str]:
+        """
+        The secret that turns a search token from an encoding into a pseudonym.
+
+        `SEARCH_TOKEN_PEPPER` if set, otherwise the encryption key — which is not ideal (two uses
+        of one secret) but is strictly better than none, and means an existing deployment gains the
+        protection without a second secret to distribute. Documented in `.env.example`.
+        """
+        return os.getenv("SEARCH_TOKEN_PEPPER") or self.encryption_key
+
     def _hash_value(self, value: str) -> str:
-        return hashlib.sha256(value.encode('utf-8')).hexdigest()
+        """
+        A lookup token for an encrypted column: equal inputs give equal tokens, and the token does
+        not give back the input.
+
+        ⚠ **This used to be a bare `sha256(value)`** (D-19/F-3), which for this data is a reversible
+        encoding rather than a pseudonym. **Nepal's mobile space is enumerable in seconds** — ten
+        digits with a fixed 97/98 prefix is a few tens of millions of candidates — so anyone with a
+        `complainant_phone_hash` could recover the number with a laptop and a loop. The same
+        argument applies, more weakly, to names and addresses. Unsalted hashes of a small domain are
+        personal data, not anonymised data, and the privacy assessment now says so.
+
+        HMAC with a server-side pepper preserves the only property the schema needs — equality —
+        while making the token useless to anyone who does not hold the secret.
+
+        ⚠ **Changing this changes every token.** Existing rows must be re-derived:
+        `scripts/database/rehash_search_tokens.py`. Tokens are derived from encrypted columns the
+        application can decrypt, so the backfill is mechanical.
+        """
+        pepper = self._search_pepper()
+        if not pepper:
+            # No pepper available — the caller only hashes when a key is configured, so this is
+            # the unencrypted dev mode. Keep the old behaviour rather than inventing a secret.
+            return hashlib.sha256(value.encode('utf-8')).hexdigest()
+        return hmac.new(
+            pepper.encode('utf-8'), value.encode('utf-8'), hashlib.sha256
+        ).hexdigest()
 
     def _hash_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Hash sensitive fields in complainant data"""

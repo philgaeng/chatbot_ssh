@@ -114,12 +114,12 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     ("ticketing/clients/llm_client.py", 309, "call_llm"),
     ("ticketing/api/routers/tickets/summary.py", 113, "the configured LLM"),
     # The privacy assessment's load-bearing citations (indicators 7, 9a).
-    ("backend/services/database_services/base_manager.py", 243, "_encrypt_field"),
-    ("backend/services/database_services/base_manager.py", 255, "_decrypt_field"),
-    ("backend/services/database_services/base_manager.py", 502, "_hash_value"),
+    ("backend/services/database_services/base_manager.py", 266, "_encrypt_field"),
+    ("backend/services/database_services/base_manager.py", 302, "_decrypt_field"),
+    ("backend/services/database_services/base_manager.py", 559, "_hash_value"),
     ("backend/services/database_services/grievance_manager.py", 190, "_decrypt_sensitive_data"),
     ("backend/shared_functions/keyword_detector.py", 259, "detect_sensitive_content"),
-    ("ticketing/api/routers/public_closure.py", 19, "public/closure"),
+    ("ticketing/api/routers/public_closure.py", 38, "public/closure"),
     # ✅ Removed by DPG-11 (2026-08-18): the `load_dotenv('/home/ubuntu/...')` anchor is gone
     # because the line is gone, and the two documents that cited it now say so rather than
     # pointing at whatever moved into line 27. An anchor for deleted code is not a stale anchor

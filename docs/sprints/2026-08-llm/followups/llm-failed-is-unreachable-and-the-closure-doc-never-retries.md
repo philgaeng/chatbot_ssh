@@ -9,7 +9,7 @@
 > fix reproduced the bug, because `self.retry(exc=…)` re-raises the original exception rather than
 > `MaxRetriesExceededError`). Originally scoped as:
 > making `LLM_failed` reachable is part of moving the checkpoint, because a checkpoint that waits
-> needs a terminal state to stop waiting on. **D-36 remains 🔵 open and unowned** — the ticketing closure
+> needs a terminal state to stop waiting on. **D-36 is now ✅ CLOSED 2026-08-19 as well** (see §D-36) — the ticketing closure
 > document is a different path with a different owner, and it is now the last of the three.
 > **Size:** S each, M to test properly
 
@@ -60,6 +60,40 @@ read about what was decided.
       honest note in place of the narrative — a closure page missing its AI summary is still a
       closure page, and this is a **complainant-facing** artefact
 - [ ] Either way, the resolution notification and the closure link stop depending on a model call
+
+### ✅ Fixed 2026-08-19 — by asking a different question
+
+The fix was not "retry harder". It was noticing that both public routes gated on the wrong predicate:
+
+```python
+if row.generation_status != "complete":      # ← did the AI succeed?
+    raise HTTPException(404)
+```
+
+`build_public_summary_json` produces the **whole deterministic record** — dates, level reached,
+category, status, the resolution date — regardless of whether the model call returned anything. Only
+the narrative paragraph comes from the LLM. So a complainant who had been told "resolved" was being
+refused a document that existed and was complete apart from one optional field, because a model call
+had failed hours earlier.
+
+The routes now ask **is there something here a complainant can usefully read**:
+
+```python
+def _is_publishable(row) -> bool:
+    return bool((row.summary_public_json or {}).get("resolution_text_public"))
+```
+
+And the generation task retries twice (30 s, 60 s) when the narrative is missing, then logs at ERROR —
+naming the ticket — that the complainant was **not** notified, rather than firing a notification
+pointing at a 404.
+
+**Tests:** `tests/ticketing/test_closure_publishable.py` — 5 tests, 4 mutations verified red.
+
+⚠ **A row already sitting at `llm_failed`** with a populated `summary_public_json` becomes publishable
+the moment this ships; nothing needs backfilling. A row with no `summary_public_json` at all stays 404,
+correctly — there is genuinely nothing to show.
+
+---
 
 ## Why these are separate from what DPG-15 fixed
 

@@ -95,7 +95,7 @@ That single fact reframes the whole assessment, and it cuts both ways:
 
 **What it means the assessment is *not*.** Every exposure described below — the unredacted narratives
 crossing a border (§3.7), the third-party names nobody consented to (§4), the plaintext narrative in
-backups (F-4), the grievance text in the broker and the logs (F-5, F-6) — is **prospective, not
+backups (F-4, since fixed), the grievance text in the broker and the logs (F-5, F-6) — is **prospective, not
 realised**. No real complainant's words have been sent to a model provider. No real engineer has been
 named to a third party. **Nothing in §6 describes harm that has already happened.** A reader who takes
 this document as an incident report has read it wrong.
@@ -141,8 +141,8 @@ every grievance mechanism handles; rows 2 and 3 are the case this one creates by
 
 | Category | Fields / artefacts | Where it lives | Protection at rest |
 |---|---|---|---|
-| **Complainant contact** | `complainant_full_name`, `complainant_phone`, `complainant_email`, `complainant_address` | `public.complainants` | pgcrypto `pgp_sym_encrypt`, hex-encoded — **conditional**, see F-2 |
-| **Complainant search tokens** | `complainant_*_hash` — SHA-256 of the four fields above | `public.complainants` | **Unsalted hash** — see F-3 |
+| **Complainant contact** | `complainant_full_name`, `complainant_phone`, `complainant_email`, `complainant_address` | `public.complainants` | pgcrypto `pgp_sym_encrypt`, hex-encoded — **fails closed** since 2026-08-19 (F-2) |
+| **Complainant search tokens** | `complainant_*_hash` — HMAC-SHA256 of the four fields above | `public.complainants` | Keyed with `SEARCH_TOKEN_PEPPER` since 2026-08-19 (F-3) |
 | **Grievance narrative** | `grievance_description` — the complainant's own words, in Nepali or English | `public.grievances` | **Plaintext.** Not in `ENCRYPTED_FIELDS` |
 | **Derived narrative** | `grievance_summary`, `grievance_categories`, translations | `public.grievances`, cached in `ticketing.tickets` | Plaintext. Summary is free text and **can contain self-disclosed PII** — cached by design; the raw description deliberately is not |
 | **Attachments** | Photographs, documents, **voice recordings** | `uploads_data` volume, `uploads/{grievance_id}/` | **Plaintext files on disk** |
@@ -260,7 +260,7 @@ personal data is exposed beyond what a reader would assume.
 | # | Leg | What it carries | Verified at | Assessment |
 |---|---|---|---|---|
 | **L1** | Complainant → webchat | Free-text narrative, voice recordings, attachments, contact fields, map-pin location | `channels/REST_webchat/` | TLS in transit at the nginx edge. Anonymous submission is supported end-to-end |
-| **L2** | Webchat → orchestrator → `public.grievances` / `public.complainants` | As above | `base_manager.py:243` (encrypt), `:255` (decrypt) | Four contact fields encrypted with pgcrypto. **⚠ The narrative is not** — `grievance_description` is stored in plaintext and is the field most likely to contain third-party names |
+| **L2** | Webchat → orchestrator → `public.grievances` / `public.complainants` | As above | `base_manager.py:266` (encrypt), `:302` (decrypt) | Four contact fields encrypted with pgcrypto. **⚠ The narrative is not** — `grievance_description` is stored in plaintext and is the field most likely to contain third-party names |
 | **L3** | Orchestrator → Celery → **Redis** | ⚠ Task payloads containing `grievance_description` verbatim, and the raw text of a sensitive-content check | `classification.py:140,153`; `sensitive.py:35-41` | The broker holds unredacted grievance text, including potential SEAH disclosures. Mitigating: the `redis` service declares **no persistence volume**, so payloads are not written to durable storage. They are still in memory and in any process dump |
 | **L4** | Celery → **model provider** | ⚠ **The raw grievance narrative** — unredacted. ⚠ **Corrected 2026-08-18: not the complainant's name or phone, and not audio** | `LLM_services.py:305` (classification), `:490` (SEAH detection) | **Two reachable call sites, not six.** ⚠ **Corrected twice in one day** — six → four → two — as reachability was established per site rather than counted from the source (D-35, D-37, **D-38**). The other four are the **voice-notes flow, parked for lack of a transcription budget** (Q-22): ASR, contact extraction ×2, grievance translation. ⏸ **Parked, not removed** — they are complete, they resolve models through the same registry, and they will egress narrative *and* spoken contact details on the day they are unparked, which is when this row changes back. The live contact path is deterministic (`actions/services/contact/phone.py`), no model involved. **An inventory that overstates egress is not a safe error**: a reviewer who finds one phantom row has reason to distrust the rest. What leaves today, twice per grievance: the narrative — which may contain contact details typed *inside it*. See §4 |
 | **L5** | Ticketing Celery → **model provider** | ⚠ Officer case notes verbatim; **the whole case timeline, including SEAH cases** | `ticketing/clients/llm_client.py:152, 230, 309` | **Three call sites.** Same destination, second independent client. A reviewer who redirects one and finds the other is entitled to distrust the rest of the submission. ⏳ **Re-pointed 2026-08-18 (DPG-12):** that reviewer's test now passes — both surfaces read one registry, and a test constructs both factories from one env change to prove it (T-17-d). **The content leaving the country is unchanged**; redaction is Sprint 3 |
@@ -268,7 +268,7 @@ personal data is exposed beyond what a reader would assume.
 | **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:190`; `routers/grievance.py` | Server-side decryption at a single boundary; authenticated with an API key; the read is audited. This is the platform's strongest privacy control |
 | **L8** | Ticketing → orchestrator `POST /message` | Officer's reply text to the complainant | `ticketing/clients/orchestrator.py` | Internal. Officer-authored content |
 | **L9** | Ticketing → Messaging API → SMS / email | Complainant phone number and message body | `messaging.py:145-148`, `:280`, `:330` | **Production Nepal uses the DOIT government gateway** (`sms.doit.gov.np`) — in-country. ⚠ **The fallback is AWS SNS in `ap-southeast-1` (Singapore)** — a second, quieter cross-border leg carrying a phone number and a message about a grievance. Email goes to an SMTP relay whose destination depends on configuration |
-| **L10** | Reports and closure documents | XLSX exports of case data; a closure PDF | `report_export.py`, `closure_pdf.py`, `report_shares.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a UUID4 token in the URL, with **no expiry** (`public_closure.py:19,39`). Report shares use `secrets.token_urlsafe(24)` — adequate entropy — but also do not expire |
+| **L10** | Reports and closure documents | XLSX exports of case data; a closure PDF | `report_export.py`, `closure_pdf.py`, `report_shares.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a UUID4 token in the URL, with **no expiry** (`public_closure.py:38,58`). Report shares use `secrets.token_urlsafe(24)` — adequate entropy — but also do not expire |
 | **L11** | Backups | ⚠ Full `pg_dump` of `app_db` **plus a tar of the uploads volume** | `scripts/ops/backup_db.sh:45-60` | Contact columns remain ciphertext inside the dump. **The narrative, all officer notes, and every voice recording and photograph are in the clear.** Encryption is **optional and off unless `BACKUP_GPG_RECIPIENT` or `BACKUP_PASSPHRASE` is set**. Retention 14 days. Off-box copy optional; **destination unspecified in the repo** — a deployment fact this document cannot verify |
 | **L12** | Auth | Officer usernames, emails, names, credentials, login and failure events | `docker-compose.grm.yml:48`, `keycloak` schema | Self-hosted Keycloak, same database, same host. No third-party identity provider — worth stating, it is a real jurisdictional advantage |
 | **L13** | Ops monitoring | Aggregate counts only — grievances submitted, tickets resolved, logins, reveal events | `ops/reports.py:36-58` | ✅ **Verified PII-free.** Every query is a `count(*)`. The daily ops email carries no personal data |
@@ -352,7 +352,9 @@ cannot assert them; they are a commercial fact. `⚠ Not verified.`
 
 | Control | Status |
 |---|---|
-| Contact PII encrypted at rest (pgcrypto symmetric) | 🟢 built, **conditionally** — see F-2 |
+| Contact PII encrypted at rest (pgcrypto symmetric) | 🟢 built, **fails closed** (F-2, 2026-08-19) |
+| Search tokens keyed, not a bare hash | 🟢 built (F-3, 2026-08-19) |
+| Backups refuse to be written unencrypted | 🟢 built (F-4, 2026-08-19) |
 | TLS in transit at the edge | 🟢 built (nginx, certbot) |
 | Server-side decryption at a **single** boundary | 🟢 built and pinned by test |
 | Ticketing holds no key and has no accessor | 🟢 built and pinned by test |
@@ -362,8 +364,10 @@ cannot assert them; they are a commercial fact. `⚠ Not verified.`
 | Full admin audit log and per-ticket event timeline | 🟢 built |
 | Nightly dependency CVE scan and licence scan | 🟢 built |
 
-**Gaps, all in §6:** conditional encryption (F-2), unsalted search hashes (F-3), unencrypted backups
-by default (F-4), grievance text in the broker (F-5) and in logs (F-6).
+**Gaps, all in §6:** grievance text in the broker (F-5) and in logs (F-6). The three storage-layer
+defects — conditional encryption (F-2), unsalted search hashes (F-3), unencrypted backups by default
+(F-4) — were **fixed on 2026-08-19**, before any genuine grievance had been processed. That timing is
+the whole point of §0.5: each was ordinary engineering that day and a breach assessment after.
 
 ### 3.4 Sensitive personal data
 
@@ -423,7 +427,7 @@ quarterly reports to named oversight roles only; officer accounts individually p
 
 **⚠ Two disclosure surfaces to review with counsel:**
 
-1. The **unauthenticated public closure endpoint** (`public_closure.py:19`) — anyone holding the URL
+1. The **unauthenticated public closure endpoint** (`public_closure.py:38`) — anyone holding the URL
    can read a case's public closure summary and download its PDF. That is deliberate: the complainant
    needs to see their outcome without an account. But the token is a UUID4 that **never expires**, and
    a forwarded link is a permanent disclosure. Adding an expiry is cheap.
@@ -656,15 +660,15 @@ privacy impact, not a legal characterisation.
 | # | Finding | Where | Severity | Owner |
 |---|---|---|---|---|
 | **F-1** | **Grievance narratives, complainant contact details and third-party names are transmitted unredacted to a commercial model provider outside Nepal, on 9 call sites, permanently** | `LLM_services.py` ×6, `llm_client.py` ×3 | 🔴 High | Sprint 3 — DPG-31/33 |
-| **F-2** | **Encryption at rest fails open.** `_encrypt_field` returns the **plaintext value unchanged** when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises — the error is logged, the write proceeds. A misconfigured or degraded deployment silently stores complainant PII in the clear, and nothing downstream can tell the difference | `base_manager.py:243-252` | 🔴 High | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
-| **F-3** | **Unsalted SHA-256 of phone, email, name and address** stored as `*_hash` search tokens. Nepal's mobile number space is small enough to enumerate exhaustively in seconds; the hash of a phone number is therefore reversible, so these columns are personal data, not pseudonyms | `base_manager.py:502-511`, used at `complainant_manager.py:121` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
-| **F-4** | **Backups are unencrypted by default.** `pg_dump` of the whole database plus a tar of the uploads volume; GPG/passphrase encryption only if an env var is set; off-box destination unspecified in the repo. Contact columns stay ciphertext, but the narrative, all officer notes, and every voice recording and photograph are in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) |
+| **F-2** | **Encryption at rest fails open.** `_encrypt_field` returns the **plaintext value unchanged** when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises — the error is logged, the write proceeds. A misconfigured or degraded deployment silently stores complainant PII in the clear, and nothing downstream can tell the difference | `base_manager.py:266-297` | 🔴 High | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** Encryption now fails **closed**: with a key configured, a pgcrypto failure raises `EncryptionUnavailableError` and abandons the write. The keyless dev mode survives but warns once per process instead of never. |
+| **F-3** | **Unsalted SHA-256 of phone, email, name and address** stored as `*_hash` search tokens. Nepal's mobile number space is small enough to enumerate exhaustively in seconds; the hash of a phone number is therefore reversible, so these columns are personal data, not pseudonyms | `base_manager.py:559-573`, used at `complainant_manager.py:121` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** Tokens are `HMAC-SHA256(pepper, value)` — `SEARCH_TOKEN_PEPPER`, falling back to the encryption key — which keeps the equality lookup and removes the reversibility. ⚠ Existing tokens must be re-derived: `scripts/database/rehash_search_tokens.py`. |
+| **F-4** | **Backups are unencrypted by default.** `pg_dump` of the whole database plus a tar of the uploads volume; GPG/passphrase encryption only if an env var is set; off-box destination unspecified in the repo. Contact columns stay ciphertext, but the narrative, all officer notes, and every voice recording and photograph are in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** The script now **discards** an unencryptable dump *and* the uploads archive unless `BACKUP_ALLOW_UNENCRYPTED=1` is set deliberately. The uploads tar — voice notes and photographs — is encrypted too, which it never was before. |
 | **F-5** | **Grievance text, including potential SEAH disclosures, passes through the Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | DPG-34 |
 | **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:298, 337, 345` | 🟠 Medium | DPG-34 |
 | **F-7** | **No deletion capability exists anywhere in the platform**, and no retention period has been chosen. Archiving is implemented and is not deletion | `ARCHIVING_AND_RETENTION.md` §5.3, §10 | 🟠 Medium | **needs a legal position** |
 | **F-8** | **No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed | — | 🟠 Medium | **needs an owner** |
 | **F-9** | **Third parties named in grievances have not consented and cannot exercise any right.** The redaction layer *does* reach names (§31.2b — title triggers, thar gazetteer, self-identification), tuned for recall, so this is a **measured residual rather than an untouched gap** — but the residual is real and unquantified until DPG-35 reports it, and no redaction addresses the fact that these people have no rights they can exercise over data already held | §4 | 🟠 Medium | **needs a legal position**; recall figure from DPG-35 |
-| **F-10** | **Public closure endpoint is unauthenticated with a non-expiring UUID4 token.** Deliberate design (the complainant has no account) but a forwarded link is a permanent disclosure | `public_closure.py:19,39` | 🟡 Low-medium | new — add expiry |
+| **F-10** | **Public closure endpoint is unauthenticated with a non-expiring UUID4 token.** Deliberate design (the complainant has no account) but a forwarded link is a permanent disclosure | `public_closure.py:38,58` | 🟡 Low-medium | new — add expiry |
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question with ADB OGC | — | 🟡 Low-medium | DPG-03 |
 | **F-12** | **SMS fallback routes a complainant's phone number and message through AWS SNS in Singapore.** Production Nepal uses the in-country DOIT gateway, so this is a fallback path — but it is a cross-border leg nobody had inventoried | `messaging.py:280,330`; `AWS_REGION=ap-southeast-1` | 🟡 Low | new |
 | **F-13** | **Intake does not disclose that grievance text is sent to an external AI provider.** Consent is genuinely collected (§3.1) but not for this | `required_slots.py:21,46` | 🟡 Low to fix, high in principle | new — cheap |

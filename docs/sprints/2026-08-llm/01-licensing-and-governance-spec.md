@@ -337,8 +337,8 @@ deviation **D-19** and registered in the assessment's §6:
 
 | | Finding | Where |
 |---|---|---|
-| **F-2** | **Encryption at rest fails open** — `_encrypt_field` returns the plaintext value unchanged when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises. The error is logged; the write proceeds | `base_manager.py:243-252` |
-| **F-3** | **Unsalted SHA-256** of phone/email/name/address stored as search tokens. Nepal's mobile number space is enumerable, so the phone hash is reversible — these are personal data, not pseudonyms | `base_manager.py:502-511` |
+| **F-2** | **Encryption at rest fails open** — `_encrypt_field` returns the plaintext value unchanged when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises. The error is logged; the write proceeds | `base_manager.py:266-297` |
+| **F-3** | **Unsalted SHA-256** of phone/email/name/address stored as search tokens. Nepal's mobile number space is enumerable, so the phone hash is reversible — these are personal data, not pseudonyms | `base_manager.py:559-573` |
 | **F-4** | **Backups unencrypted by default** — `pg_dump` + uploads tar; GPG/passphrase only if an env var is set. Contact columns stay ciphertext; the narrative, officer notes, voice notes and photos do not | `backup_db.sh:45-60` |
 
 The ticket's framing anticipated the *known* exposure (model-provider egress). These are ordinary

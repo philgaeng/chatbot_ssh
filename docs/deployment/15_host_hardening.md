@@ -64,7 +64,15 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 ## 5. Backups & keys
 
-- DB + uploads backups: `scripts/ops/backup_db.sh` (encrypt with `BACKUP_GPG_RECIPIENT`/`BACKUP_PASSPHRASE`, off-box via `BACKUP_REMOTE`).
+- DB + uploads backups: `scripts/ops/backup_db.sh` — set `BACKUP_GPG_RECIPIENT` (preferred) or
+  `BACKUP_PASSPHRASE`; off-box via `BACKUP_REMOTE`.
+  ⚠ **Encryption is no longer optional** (D-19/F-4, fixed 2026-08-19). With neither variable set the
+  script **discards the dump and the uploads archive** rather than leaving them on disk, unless
+  `BACKUP_ALLOW_UNENCRYPTED=1` says otherwise in so many words. The reason: the contact columns stay
+  ciphertext inside a dump, but the grievance narrative, every officer note, and **every voice
+  recording and photograph** in the uploads tar do not — so an unencrypted backup is a complete copy
+  of the most sensitive material the system holds. Losing a backup is recoverable on the next run;
+  an unencrypted copy of a survivor's report is not.
 - Weekly restore verification: `scripts/ops/restore_drill.sh`.
 - `DB_ENCRYPTION_KEY` stored separately — see [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md).
 

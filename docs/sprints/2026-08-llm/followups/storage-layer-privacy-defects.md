@@ -3,8 +3,46 @@
 > **Raised:** 2026-08-18, while writing [`docs/dpg/privacy-assessment.md`](../../../dpg/privacy-assessment.md) (DPG-04).
 > **Deferred from:** DPG-04 · logged as deviation **D-19** in [`../PROGRESS.md`](../PROGRESS.md) ·
 > registered as **F-2, F-3, F-4** in the assessment's §6.
-> **Status:** 🔵 open · **Size:** M each, S to schedule together
+> **Status:** ✅ **CLOSED 2026-08-19** — all three fixed in one pass, before any genuine grievance was
+> processed. **Size, in the event:** M for the three together, not M each.
 > **Deadline that matters:** ⭐ **before go-live**, not before submission — see §Why the clock matters.
+> It was met with room to spare, which is the only reason these were engineering rather than a
+> breach assessment.
+
+---
+
+## What was done (2026-08-19)
+
+| | Fix | Where | Pinned by |
+|---|---|---|---|
+| **F-2** | Encryption fails **closed**. With a key configured, a pgcrypto failure raises `EncryptionUnavailableError` (a `DatabaseError`, so existing handlers see it) and the write is abandoned. The keyless dev mode survives — it is how the local stack runs — but it now warns **once per process** instead of never | `base_manager.py::_encrypt_field`, `::_warn_encryption_disabled_once` | `tests/backend/test_storage_privacy.py` (4 tests) |
+| **F-3** | Tokens are `HMAC-SHA256(pepper, value)`. `SEARCH_TOKEN_PEPPER`, falling back to `DB_ENCRYPTION_KEY` so an existing deployment gains the protection without a second secret to distribute. Equality lookup is unchanged, which is the only property the schema needs | `base_manager.py::_hash_value`, `::_search_pepper` | same file (5 tests) |
+| **F-4** | The backup script **discards** an unencryptable dump *and* the uploads archive rather than leaving them on disk, unless `BACKUP_ALLOW_UNENCRYPTED=1` says otherwise in so many words. The uploads tar is encrypted too — it never was before, and it holds the voice notes and photographs | `scripts/ops/backup_db.sh` | same file (6 tests, which **run the real script** against a stubbed `docker`) |
+
+**Migration required for F-3.** Changing the algorithm invalidates every stored token, so phone and
+email lookup break until they are re-derived. `scripts/database/rehash_search_tokens.py` decrypts each
+encrypted column, re-derives the token and writes it back; `--dry-run` reports without writing, and rows
+that will not decrypt are skipped **loudly** rather than silently rehashed from ciphertext. Run it once
+per deployment, after setting `SEARCH_TOKEN_PEPPER` — or immediately, if you are letting it fall back to
+the encryption key.
+
+**Two things deliberately not done.**
+
+* **The keyless path still stores plaintext.** Making the absence of a key fatal would refuse to boot
+  every dev stack and every CI run in the repo, and the failure mode it prevents — *someone ships to
+  production without a key* — is better caught by a deployment check than by breaking local work. The
+  warning is the compromise; if it turns out nobody reads it, the next step is an `ENV=production`
+  assertion, not a global one.
+* **The pepper defaults to the encryption key.** Two uses of one secret is not ideal. It is strictly
+  better than leaving the tokens reversible, and it means the fix lands without a key-distribution
+  step, which is what would have deferred it again.
+
+**How the tests are more than decoration.** Eight mutations were run and all eight went red: encryption
+returning the plaintext again (F-2); the warn-once guard removed (F-2); `_hash_value` back to a bare
+`sha256` (F-3); the pepper's key fallback dropped (F-3); the dump's discard block reverted to a log line
+(F-4); the uploads discard block removed (F-4); the uploads encryption block removed (F-4); and the prune
+glob narrowed so it no longer matches the `.gpg` form — a fix that would have quietly broken retention
+while every other test stayed green (F-4).
 
 ---
 
@@ -28,7 +66,7 @@ passes over `base_manager.py` and three chances to reintroduce the next.
 
 ## F-2 — Encryption at rest fails open
 
-**`backend/services/database_services/base_manager.py:243-252`**
+**`backend/services/database_services/base_manager.py:266-297`**
 
 ```python
 def _encrypt_field(self, value: str) -> Optional[str]:
@@ -76,7 +114,7 @@ for auth; this is the same argument applied to encryption, and it should reuse t
 
 ## F-3 — Search tokens are unsalted SHA-256 of PII
 
-**`base_manager.py:502-511`**, consumed at `complainant_manager.py:121` and `grievance_manager.py:537`
+**`base_manager.py:559-573`**, consumed at `complainant_manager.py:121` and `grievance_manager.py:537`
 
 ```python
 def _hash_value(self, value: str) -> str:
