@@ -71,6 +71,14 @@ unlimited warnings, so **the 2 errors are what fails it.** Both are
 
 ### 2. `backend-tests` → pytest — **18 failed, 1166 passed, 8 skipped**
 
+> **Re-checked 2026-08-19** on `dpg/sprint1-llm-agnostic` (run 32229396825, commit `1e540b9e`, the end
+> of Sprint 1): **18 failed, 1365 passed** — the *same eighteen*, file for file and message for
+> message, with 199 more passing tests beside them. That is the useful thing this row now does: it is
+> a fixed number to compare against, so "did I break CI" is answerable without reading the log. The
+> failures are all one shape — the seed leaves no active project type and no Level 1 officer staffing,
+> so intake refuses and every downstream ticket assertion falls over. `ui-checks` is still the same
+> lint failure. `docs-links` and `webchat-checks` are green.
+
 The failures cluster in four files, and they are about project types, the back-fill migration and the
 grievance-sync watermark — nothing to do with this sprint:
 
