@@ -252,6 +252,16 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
             is_seah=ticket.is_seah,
             primary_language=data["primary_language"],
         )
+        # D-36: a missing narrative is worth one more attempt before it becomes permanent — the
+        # usual cause is transient provider trouble, and the ladder costs the complainant nothing
+        # because nobody is waiting on this task. After that, publish what we have.
+        if llm_out is None and self.request.retries < 2:
+            logger.warning(
+                "generate_resolved_case_summary: no LLM narrative for ticket_id=%s, retrying "
+                "(attempt %s)", ticket_id, self.request.retries + 1,
+            )
+            raise self.retry(countdown=30 * (self.request.retries + 1))
+
         llm_out = with_investigation_activity_preamble(data, llm_out)
         # ⚠ This reached into the client module's privates (`_llm._MODEL_SEAH`) rather than
         # restating the literal, so `grep "gpt-"` could not find it — DPG-12's own acceptance
@@ -287,7 +297,15 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
         row.summary_text_en = summary_json.get("findings_summary", {}).get("combined_digest_en")
         db.commit()
 
-        if status == "complete" and row.closure_public_url:
+        # ⚠ **The complainant is notified whenever there is something to read — not only when the
+        # model succeeded** (D-36). This gate was `status == "complete"`, so an unavailable model
+        # meant the person was told their case was resolved and never received the outcome, and
+        # nothing ever retried the document. The deterministic record — dates, duration, who
+        # resolved it, the resolution category and **the officer's own resolution text** — is built
+        # either way; only the AI narrative is missing, and that is not worth withholding a closure
+        # document over. `generation_status` still records the difference for the officer view.
+        publishable = bool((public_json or {}).get("resolution_text_public"))
+        if publishable and row.closure_public_url:
             notify_complainant.delay(
                 ticket_id,
                 (
@@ -295,6 +313,11 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
                     f"Read the outcome here: {row.closure_public_url}"
                 ),
                 "RESOLVED_CLOSURE",
+            )
+        elif not publishable:
+            logger.error(
+                "generate_resolved_case_summary: nothing publishable for ticket_id=%s "
+                "(status=%s) — the complainant was NOT notified", ticket_id, status,
             )
 
         return {"ticket_id": ticket_id, "status": status, "token": row.closure_public_token}
