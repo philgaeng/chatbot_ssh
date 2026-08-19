@@ -4,13 +4,17 @@
 > Sprint index: [`README.md`](README.md) · Test ledger: [`TESTS.md`](TESTS.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 > Status legend: ⬜ not started · 🟡 in progress · ✅ done · ⏸ blocked · ❌ dropped (log why)
 
-**Sprint status: 🟡 IN PROGRESS — Sprint 0 complete · Sprint 1 first wave complete, second wave specced** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
+**Sprint status: 🟡 IN PROGRESS — Sprints 0 and 1 complete (both waves)** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
 
 > **Sprint 1, first wave, closed 2026-08-18.** All eight tickets ✅ on `dpg/sprint1-llm-agnostic`,
 > eight commits, DPG-10's net green at every one of them.
 >
-> ⚠ **Reopened the same day with a second wave — DPG-18, DPG-19, DPG-15b — after the owner reviewed
-> the result.** Two of the three start from corrections the review surfaced: `gpt-3.5-turbo` is still
+> ✅ **Second wave closed 2026-08-19** — DPG-19, DPG-19b, DPG-18 (layer + consolidation) and DPG-15b,
+> five more commits. All three of its questions (Q-20, Q-21, Q-22) were answered by the owner and
+> each was confirmed against the code before it was implemented.
+>
+> ⚠ **Reopened on 2026-08-18 with that second wave — DPG-18, DPG-19, DPG-15b — after the owner
+> reviewed the result.** Two of the three start from corrections the review surfaced: `gpt-3.5-turbo` is still
 > live on three call sites (the Sept-2025 nano migration moved one of five), and the contact-extraction
 > path that would send a phone number to a model **has no caller at all** — which also means this
 > tracker overstated D-33's severity (**D-37**) and the privacy assessment overstated its egress
