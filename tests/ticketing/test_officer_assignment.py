@@ -367,7 +367,15 @@ class TestLoadBalancing:
 
 
 class TestPackageRouting:
-    def test_package_scoped_officer_when_ticket_has_package_id(self, ctx, jhapa_lot_package_id):
+    def test_package_scoped_officer_when_ticket_has_package_id(
+        self, ctx, jhapa_lot_package_id, without_seeded_package_l1s
+    ):
+        """A package-scoped officer wins over every other path when the ticket names a lot.
+
+        ⚠ Takes `without_seeded_package_l1s` because the seed now staffs every lot (D-26). The
+        assertion is that *this* officer is picked, so the test must be the only one holding the
+        lot — otherwise it is really asserting load-ranking, and would pass or fail on the seed.
+        """
         pkg_officer = _uid("pkg-l1")
         ctx.add_scope(
             pkg_officer,
@@ -424,8 +432,14 @@ class TestPackageRouting:
 
 
 class TestSupervisorFallback:
-    def test_l1_falls_back_to_supervisor_when_no_l1_officer(self, ctx, db, kl_road_project):
-        """No package L1 → assign workflow step supervisor (L2) instead."""
+    def test_l1_falls_back_to_supervisor_when_no_l1_officer(
+        self, ctx, db, kl_road_project, without_seeded_package_l1s
+    ):
+        """No package L1 → assign workflow step supervisor (L2) instead.
+
+        ⚠ "No package L1" is the precondition, and since D-26 the seed provides one for every
+        lot — so the fixture has to remove them. Without it this test was passing on an accident.
+        """
         from ticketing.models.package import ProjectPackage
 
         pkg = db.execute(

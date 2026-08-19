@@ -69,16 +69,24 @@ def test_default_is_project_wide():
 
 
 def test_a_project_wide_level_passes_on_one_officer(db, kl_road_project):
-    """KL Road has packages with no per-package officer. With Level 1 declared project-wide, its one
-    project-wide officer is a complete answer."""
+    """With Level 1 declared project-wide, its one project-wide officer is a complete answer —
+    and the per-lot staffing is not consulted at all, which is the point of the branch."""
     with _l1_scope(db, kl_road_project, per_package=False):
         assert _check(db, kl_road_project, "C1").status == "pass"
         assert _check(db, kl_road_project, "C5").status == "pass"
 
 
-def test_a_per_lot_level_is_not_satisfied_by_a_project_wide_officer(db, kl_road_project):
+def test_a_per_lot_level_is_not_satisfied_by_a_project_wide_officer(
+    db, kl_road_project, without_seeded_package_l1s
+):
     """The whole point. Same staffing as the passing case above — only the level's own answer
-    changed — and now the checks name the packages that need somebody."""
+    changed — and now the checks name the packages that need somebody.
+
+    ⚠ The fixture is load-bearing, and its absence was a real gap. Until 2026-08-19 the seed
+    staffed no lot at all, so "no lot has an officer" was true by accident and this test read as
+    if it were arranging nothing. It was arranging everything — it just had not said so, and it
+    went green for the wrong reason the moment the seed was completed (D-26).
+    """
     with _l1_scope(db, kl_road_project, per_package=True):
         c1 = _check(db, kl_road_project, "C1")
         assert c1.status == "fail" and c1.severity == "block"
@@ -86,6 +94,19 @@ def test_a_per_lot_level_is_not_satisfied_by_a_project_wide_officer(db, kl_road_
 
         c5 = _check(db, kl_road_project, "C5")
         assert c5.status == "fail"
+
+
+def test_a_per_lot_level_passes_once_every_lot_has_an_officer(db, kl_road_project):
+    """The complement, and the one the demo database has to satisfy to accept a ticket at all.
+
+    C1 is the check that gates **intake**, not merely activation: with a lot unstaffed,
+    `POST /api/v1/tickets` refuses with "Add a Level 1 officer for these packages: …". Ten tests
+    failed on exactly that before the seed staffed the lots, and none of them mentioned packages.
+    Nothing pinned the passing direction, so nothing noticed the seed had stopped satisfying it.
+    """
+    with _l1_scope(db, kl_road_project, per_package=True):
+        c1 = _check(db, kl_road_project, "C1")
+        assert c1.status == "pass", c1.message
 
 
 def test_the_country_fallback_cannot_answer_a_per_lot_level():

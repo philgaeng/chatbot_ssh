@@ -11,7 +11,7 @@
  * Each assignment writes an `officer_scope` via the sanctioned backend writer, so auto-assign,
  * SEAH isolation and the reassignment chain all key off the same rows.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   getWorkflow,
@@ -209,21 +209,14 @@ export function CastStaffing({
    * screen made, so there is nothing here to reassign.
    */
   /** Officers covering a job only because they hold its role — never an assignment made here.
-   *  Shared by the row (which shows them) and the level (which explains them once). */
-  const roleStaffedRef = useRef<(k: string | null) => OfficerRosterEntry[]>(() => []);
-
-  const byRoleFor = useCallback(
-    (step: WorkflowStep, tier: { key: string; roleKeyOf: (s: WorkflowStep) => string | null }) => {
-      const cur = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key);
-      const inh = isPkg
-        ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key)
-        : [];
-      if (cur.length || inh.length) return [] as OfficerRosterEntry[];
-      return roleStaffedRef.current(tier.roleKeyOf(step));
-    },
-    [scopeCast, projectWideCast, isPkg],
-  );
-
+   *  Shared by the row (which shows them) and the level (which explains them once).
+   *
+   *  Declared BEFORE `byRoleFor`, which calls it. It used to be the other way round, bridged by a
+   *  `roleStaffedRef` that was assigned during render — and writing a ref during render is what
+   *  `react-hooks/refs` flags as an error, the only two errors standing between `ui-checks` and
+   *  green. There was never a cycle to break: `roleStaffed` depends on `roster` and the project
+   *  code, on nothing below it. The ref was ordering convenience, and it cost a stale closure risk
+   *  and a lint error to keep. */
   const roleStaffed = useCallback(
     (roleKey: string | null) => {
       if (!roleKey) return [] as OfficerRosterEntry[];
@@ -238,7 +231,17 @@ export function CastStaffing({
     [roster, project.short_code],
   );
 
-  roleStaffedRef.current = roleStaffed;
+  const byRoleFor = useCallback(
+    (step: WorkflowStep, tier: { key: string; roleKeyOf: (s: WorkflowStep) => string | null }) => {
+      const cur = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key);
+      const inh = isPkg
+        ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === tier.key)
+        : [];
+      if (cur.length || inh.length) return [] as OfficerRosterEntry[];
+      return roleStaffed(tier.roleKeyOf(step));
+    },
+    [scopeCast, projectWideCast, isPkg, roleStaffed],
+  );
 
   /** The position the officer holds — the wireframe shows it under the name so an admin can
    *  see WHICH SEAT is doing the work, not just who. Positions come from the roster today;

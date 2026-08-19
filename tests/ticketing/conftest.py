@@ -181,6 +181,38 @@ def without_seeded_jhapa_l1(db):
             db.commit()
 
 
+# The demo seed staffs Level 1 **lot by lot** (2026-08-19, D-26): `LEVEL_1_SITE.staff_per_package`
+# is `True`, and go-live check C1 gates ticket intake — so an unstaffed lot does not warn, it makes
+# `POST /api/v1/tickets` refuse. Before that fix no lot had an officer, and a handful of tests
+# quietly relied on it: one asserted "a per-lot level is not satisfied by a project-wide officer"
+# by staffing nobody per lot, another expected its own package officer to be the only candidate.
+#
+# ⚠ Those tests were **asserting the absence of seed data**, which is not a precondition anyone
+# declared — it is a gap nobody had noticed. This fixture makes the precondition explicit: a test
+# that needs "no lot has a Level 1 officer" says so, and keeps saying it if the seed changes again.
+@pytest.fixture
+def without_seeded_package_l1s(db):
+    rows = db.execute(
+        select(OfficerScope).where(
+            OfficerScope.role_key == ROLE_L1,
+            OfficerScope.package_id.isnot(None),
+        )
+    ).scalars().all()
+    snapshot = [
+        {c.name: getattr(r, c.name) for c in OfficerScope.__table__.columns} for r in rows
+    ]
+    for r in rows:
+        db.delete(r)
+    db.flush()
+    try:
+        yield
+    finally:
+        if snapshot:
+            for data in snapshot:
+                db.add(OfficerScope(**data))
+            db.commit()
+
+
 @pytest.fixture
 def kl_road_project(db) -> Project:
     return db.execute(

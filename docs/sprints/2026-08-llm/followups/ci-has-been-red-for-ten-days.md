@@ -2,7 +2,8 @@
 
 > **Raised:** 2026-08-18, by pushing `dpg/sprint0-licensing` and looking at the result.
 > **Deferred from:** DPG-01/DPG-02 verification · logged as deviation **D-26** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🔵 open · **Size:** S for the lint errors, M for the pytest failures
+> **Status:** ✅ **CLOSED 2026-08-19** · **Size, in the event:** S for the lint errors — the M for the
+> pytest failures was eighteen symptoms of one cause, which is smaller than it looked and worse than it read
 > **Why it is not in this sprint:** both failures predate it and neither is a licensing or privacy defect.
 > Fixing them is a separate, bounded piece of work that deserves its own commit and its own diagnosis.
 
@@ -68,6 +69,63 @@ unlimited warnings, so **the 2 errors are what fails it.** Both are
   The claim is not unevidenced — the same Next.js compiler ran the build successfully inside Docker on
   2026-08-18 (D-02) — but the CI gate specifically named in the deviation is unavailable, and the
   tracker now says so instead of implying otherwise.
+
+## ✅ CLOSED 2026-08-19 — both jobs green
+
+**Eighteen failures, one root cause, said four different ways.** Every one of them came from the
+same mistake:
+
+> **Something reads data that the seeder writes afterwards.**
+
+CI's order is fixed: migrations, then `mock_tickets.py`. A back-fill migration that derives its
+rows from data the seed creates therefore finds nothing — **on a fresh database, and only on a
+fresh database.** On the deployment where a human looks, the data is already there and the
+back-fill works perfectly. Nothing raises. A table is simply empty, and the symptom surfaces much
+later wearing an unrelated face.
+
+| # | What was skipped | Reads | Written by | Failures |
+|---|---|---|---|---|
+| 1 | `b3c5d7e9` — project workflow slots | `projects.standard_workflow_id` | `seed_standard()` | (feeds #2) |
+| 2 | `n0p2r4t6` — project types | `project_workflows` | #1 | 8 |
+| 3 | `p2r4t6v8` — per-package staffing | seed staffs project-wide, level says lot by lot | — | 10 |
+| 4 | `apply_donor_informed_defaults` — a **service-layer side effect**, not a migration | the API calls it when a donor is added; the seed writes `project_donors` directly | — | 1 (see below) |
+
+**The fix is in the seeder, not the migrations.** A migration must not invent data that did not
+exist — `n0p2r4t6` documents that choice deliberately, and it is right. The seeder is the thing
+that runs on a fresh database, so the seeder is where these facts have to be asserted. All four
+additions **derive** their values from the project's own rows rather than hard-coding them, so
+they cannot drift from `seed_standard()` the first time a workflow changes.
+
+⚠ **#4 deserves its own note, because it presented as flaky rather than broken.**
+`test_kl_road_has_donor_and_is_informed` failed on a fresh database and passed on a used one — the
+test that exercises `apply_donor_informed_defaults` **commits**, so a single full-suite run
+repaired the database permanently. Anyone who re-ran to check would have watched it go green.
+
+**What now pins it:** [`tests/ticketing/test_seed_completeness.py`](../../../../tests/ticketing/test_seed_completeness.py)
+— eight tests asserting the *outcome* rather than any one mechanism, because the mechanism will
+change and the outcome must not: **a freshly built database must produce a project that can accept
+a grievance.** Five mutations verified red, each reproducing its original failure exactly.
+
+**Three tests were asserting the absence of seed data** and went red when the gap was filled —
+"a per-lot level is not satisfied by a project-wide officer" arranged that state by staffing
+nobody, and read as if it were arranging nothing. They now take a `without_seeded_package_l1s`
+fixture that says the precondition out loud.
+
+**`ui-checks`:** 2 errors, both `react-hooks/refs` in `CastStaffing.tsx` — a `roleStaffedRef`
+assigned during render to let `byRoleFor` call a `roleStaffed` defined below it. There was no cycle
+to break; reordering the two removes the ref, the errors, and a stale-closure risk. 164 warnings
+remain and are not gating (`--max-warnings=-1`). Type-check, 88 unit tests and the build all pass.
+
+**Result — verified by rebuilding the database exactly as CI does, not inferred:**
+
+| Job | Before | After |
+|---|---|---|
+| `backend-tests` | 18 failed, 1166 passed | **0 failed, 1388 passed** |
+| `ui-checks` | 2 errors | **0 errors** |
+| `docs-links` | ✅ | ✅ |
+| `webchat-checks` | ✅ | ✅ |
+
+---
 
 ### 2. `backend-tests` → pytest — **18 failed, 1166 passed, 8 skipped**
 
