@@ -85,6 +85,7 @@ def call_llm(
     schema_name: str | None = None,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    timeout: float | None = None,
 ):
     """
     One entry point for the chatbot surface: the layer picks the model and shapes the request.
@@ -109,6 +110,7 @@ def call_llm(
         schema_name=schema_name,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        timeout=timeout,
     )
     return parse_response(get_llm_client().chat.completions.create(**request), schema)
 

@@ -131,6 +131,15 @@ class LLMSettings(BaseSettings):
         validation_alias=AliasChoices("TIMEOUT_CLASSIFY", "OPENAI_CLASSIFICATION_TIMEOUT"),
     )
     timeout_ticket: float = 30.0
+    # ⚠ **The first attempt is short because somebody is waiting on it; the retries are long
+    # because nobody is** (DPG-15b). Before this split the chat waited 20 s while a single attempt
+    # was allowed 120 s — so the poll could only ever succeed if the model happened to be fast, and
+    # gave up six times over before one attempt was due to finish.
+    timeout_classify_interactive: float = 30.0
+    # How long the conversation waits for a classification before carrying on without it. The
+    # grievance is already filed by then and the result reaches the officer either way, so this is
+    # a courtesy to the complainant, not a gate — 30 s covers the measured 14–20.5 s with margin.
+    classification_wait_seconds: float = 30.0
 
     # ── Meaningful input (DPG-19) ────────────────────────────────────────────
     # Below this many non-whitespace characters, the model is not called at all: there is nothing
@@ -542,6 +551,7 @@ def request_for(
     schema_name: str | None = None,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    timeout: float | None = None,
 ) -> dict:
     """
     Everything a call site needs to hand `chat.completions.create(**…)`, decided from the registry.
@@ -565,7 +575,9 @@ def request_for(
 
     request: dict = {
         "model": resolved.model,
-        "timeout": resolved.timeout,
+        # An explicit deadline wins over the task's: the caller is the only one who knows whether
+        # a person is sitting in a chat window waiting for this (DPG-15b).
+        "timeout": timeout or resolved.timeout,
         "messages": messages,
         **response_format_kwargs(schema_name or task, schema, mode),
     }

@@ -194,10 +194,15 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                             ]
 
                 # Pending/empty after poll — manual add path; do not skip consent with empty slots.
+                # ⚠ DPG-15b: this branch used to render NOTHING. The complainant had just waited
+                # out the poll and was then shown a blank summary with no explanation, which is
+                # indistinguishable from the product being broken. Three states, three messages:
+                # ready (utterance 1), will not arrive (2), and not ready yet (3) — this one.
                 self.logger.warning(
                     "Classification results not yet available after poll; manual review "
                     f"(db_status={grievance_classification_status_db})"
                 )
+                dispatcher.utter_message(text=self.get_utterance(3))
                 return [SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
                         SlotSet('grievance_summary_temp', grievance_summary or ''),
                         SlotSet('grievance_categories', grievance_categories or []),

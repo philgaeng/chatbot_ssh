@@ -228,7 +228,7 @@ designed behaviour, not a bug to work around.
 #### f. The privacy assessment cites these exact call sites — this sprint moves all nine
 
 [`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) §2.2 legs **L4** and **L5** cite
-`LLM_services.py:47,79,116,232,324,385` and `llm_client.py:90, 169, 261` as the places grievance text
+`LLM_services.py:47, 79, 116, 232, 324, 385` and `llm_client.py:90, 169, 261` as the places grievance text
 leaves the country. **DPG-11 and DPG-12 move every one of them.**
 
 Update §2.2 in the same commit that moves them. DPG-30 (Sprint 3) verifies the diagram against the code
@@ -732,7 +732,7 @@ here is a production intake outage.
 - [ ] `load_dotenv('/home/ubuntu/...')` deleted
 - [ ] DPG-10's tests pass **unchanged** (they may gain parametrization, not rewrites)
 - [ ] `docs/services/06_llm_service.md` updated — it currently says "uses OpenAI Whisper transcription API"
-- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L4 re-pointed** — it cites `LLM_services.py:47,79,116,232,324,385`
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L4 re-pointed** — it cites `LLM_services.py:47, 79, 116, 232, 324, 385`
       as the places grievance text leaves the country, and this ticket moves all six
 
 ### Tests

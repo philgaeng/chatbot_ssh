@@ -74,6 +74,7 @@ def call_llm(
     schema_name: str | None = None,
     temperature: float | None = None,
     max_output_tokens: int | None = None,
+    timeout: float | None = None,
 ):
     """
     One entry point for the ticketing surface. Same contract as the chatbot surface's, and
@@ -91,6 +92,7 @@ def call_llm(
         schema_name=schema_name,
         temperature=temperature,
         max_output_tokens=max_output_tokens,
+        timeout=timeout,
     )
     return parse_response(_get_client().chat.completions.create(**request), schema)
 

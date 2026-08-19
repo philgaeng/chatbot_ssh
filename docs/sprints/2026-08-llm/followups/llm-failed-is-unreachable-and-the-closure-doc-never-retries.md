@@ -3,10 +3,14 @@
 > **Raised:** 2026-08-18 by [DPG-15](../02-llm-agnostic-spec.md#dpg-15)'s degraded-mode audit, after
 > the two findings it *did* fix (D-32, D-33).
 > **Logged as deviations D-34 and D-36** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** **D-34 is now owned by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)** (this sprint) —
+> **Status:** ✅ **D-34 CLOSED 2026-08-19 by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)** — verified
+> against the database: the row reaches `LLM_failed` and the poll stops in 0.19 s. ⚠ Two findings came
+> out of fixing it: **D-45** (no task has ever had its retry config applied) and **D-46** (the first
+> fix reproduced the bug, because `self.retry(exc=…)` re-raises the original exception rather than
+> `MaxRetriesExceededError`). Originally scoped as:
 > making `LLM_failed` reachable is part of moving the checkpoint, because a checkpoint that waits
-> needs a terminal state to stop waiting on. **D-36 remains 🔵 open and unowned** — the ticketing
-> closure document is a different path with a different owner.
+> needs a terminal state to stop waiting on. **D-36 remains 🔵 open and unowned** — the ticketing closure
+> document is a different path with a different owner, and it is now the last of the three.
 > **Size:** S each, M to test properly
 
 ## D-34 — `LLM_failed` is written only after retries that never happen

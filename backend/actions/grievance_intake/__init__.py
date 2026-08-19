@@ -5,6 +5,7 @@
 from backend.actions.grievance_intake.classification import (
     CLASSIFICATION_POLL_INTERVAL_SECONDS,
     CLASSIFICATION_POLL_MAX_SECONDS,
+    classification_wait_seconds,
     grievance_has_classification_content,
     load_grievance_for_classification,
     trigger_async_classification,
@@ -23,6 +24,7 @@ from backend.actions.grievance_intake.voice_record import (
 __all__ = [
     "CLASSIFICATION_POLL_INTERVAL_SECONDS",
     "CLASSIFICATION_POLL_MAX_SECONDS",
+    "classification_wait_seconds",
     "VOICE_DESCRIPTION_PLACEHOLDER",
     "finalize_voice_record",
     "get_sensitive_issue_slots_on_submit",

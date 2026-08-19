@@ -205,18 +205,25 @@ def test_classify_keeps_its_own_deadline_as_a_per_request_timeout(client, monkey
     """
     **T-14-b.** Classification used to build a second client purely to carry its own timeout.
     The deadline survives — as a per-request value from the registry — and the second client
-    does not. `OPENAI_CLASSIFICATION_TIMEOUT` is still honoured, as a deprecated alias.
+    does not.
+
+    ⏳ **DPG-15b split the deadline in two**: the default call is interactive (a person is waiting)
+    and gets 30 s; `TIMEOUT_CLASSIFY` — with `OPENAI_CLASSIFICATION_TIMEOUT` still honoured as a
+    deprecated alias — is now the *background* deadline used by retries.
     """
     client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
     monkeypatch.delenv("OPENAI_CLASSIFICATION_TIMEOUT", raising=False)
     monkeypatch.delenv("TIMEOUT_CLASSIFY", raising=False)
 
     llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+    assert client.chat.completions.create.call_args.kwargs["timeout"] == 30.0
+
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, interactive=False)
     assert client.chat.completions.create.call_args.kwargs["timeout"] == 120.0
 
     monkeypatch.setenv("OPENAI_CLASSIFICATION_TIMEOUT", "45")
     llm_config.get_llm_settings.cache_clear()
-    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, interactive=False)
     assert client.chat.completions.create.call_args.kwargs["timeout"] == 45.0
 
 
@@ -1176,3 +1183,193 @@ def test_translation_refuses_text_that_is_too_short(client):
         llm.translate_grievance_to_english_LLM(payload)
 
     client.chat.completions.create.assert_not_called()
+
+# ═════════════════════════════════════════════════════════════════════════════
+# T-15b-a … T-15b-d — the wait, the deadlines, and the terminal state
+# ═════════════════════════════════════════════════════════════════════════════
+
+def test_the_conversations_wait_and_one_attempt_are_finally_coherent(monkeypatch, tmp_path):
+    """
+    **T-15b-a.** Before this the chat waited 20 s while one attempt was allowed 120 s — the poll
+    could only ever succeed if the model happened to be fast, and gave up six times over before a
+    single attempt was due to finish. Both numbers now come from the registry, and the wait is the
+    longer of the two so the conversation can actually observe the first attempt's outcome.
+    """
+    from backend.actions.grievance_intake import classification as intake
+
+    monkeypatch.chdir(tmp_path)
+    llm_config.get_llm_settings.cache_clear()
+    settings = llm_config.get_llm_settings()
+
+    assert settings.classification_wait_seconds == 30.0
+    assert settings.timeout_classify_interactive == 30.0
+    assert settings.timeout_classify == 120.0
+    assert intake.classification_wait_seconds() == 30.0
+    assert settings.classification_wait_seconds >= settings.timeout_classify_interactive, (
+        "the conversation must not give up before the attempt it is waiting on can finish"
+    )
+
+    monkeypatch.setenv("CLASSIFICATION_WAIT_SECONDS", "45")
+    llm_config.get_llm_settings.cache_clear()
+    assert intake.classification_wait_seconds() == 45.0
+
+
+def test_the_poll_actually_uses_the_configured_deadline(monkeypatch, tmp_path):
+    """
+    ⚠ **Written because the first version of the test above could not go red.** It asserted that
+    the registry *returns* 30 s, which stays true if the poll ignores it and keeps a literal — the
+    exact drift the registry exists to prevent. This one drives the poll with a row that is never
+    ready and measures how long it actually waits.
+    """
+    import asyncio
+    import time as _time
+
+    from backend.actions.grievance_intake import classification as intake
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("CLASSIFICATION_WAIT_SECONDS", "1")
+    llm_config.get_llm_settings.cache_clear()
+
+    class _NeverReady:
+        def get_grievance_by_id(self, gid):
+            return {"grievance_id": gid, "grievance_summary": "", "grievance_categories": [],
+                    "grievance_classification_status": "pending"}
+
+        def grievance_row_exists(self, gid):
+            return True
+
+    started = _time.monotonic()
+    asyncio.run(intake.load_grievance_for_classification(_NeverReady(), llm.logger, "GR-1"))
+    waited = _time.monotonic() - started
+
+    assert 0.9 <= waited < 5, (
+        f"the poll waited {waited:.1f}s against a configured 1s deadline — it is not reading the "
+        "registry"
+    )
+
+
+def test_the_first_attempt_gets_the_short_deadline_and_retries_the_long_one(client, monkeypatch, tmp_path):
+    """
+    **T-15b-a, the half that makes it work.** Someone is waiting on attempt 1; nobody is waiting on
+    attempt 4. The call site says which situation it is in; the registry says what that means in
+    seconds.
+    """
+    monkeypatch.chdir(tmp_path)
+    llm_config.get_llm_settings.cache_clear()
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
+
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, interactive=True)
+    assert client.chat.completions.create.call_args.kwargs["timeout"] == 30.0
+
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT, interactive=False)
+    assert client.chat.completions.create.call_args.kwargs["timeout"] == 120.0
+
+
+def test_the_poll_stops_as_soon_as_the_status_is_terminal():
+    """
+    **T-15b-b.** The short-circuit already existed and worked; what was missing was any way to
+    reach a terminal status (D-34). With one, a failed classification ends the wait in about
+    fourteen seconds instead of running the full deadline — the reason the budget could be raised
+    at all.
+    """
+    import asyncio
+
+    from backend.actions.grievance_intake import classification as intake
+    from backend.config.classification_status import LLM_FAILED
+
+    reads = []
+
+    class _Db:
+        def get_grievance_by_id(self, gid):
+            reads.append(gid)
+            return {"grievance_id": gid, "grievance_summary": "", "grievance_categories": [],
+                    "grievance_classification_status": LLM_FAILED}
+
+        def grievance_row_exists(self, gid):
+            return True
+
+    # ⚠ `asyncio.run`, not `get_event_loop()`: the latter picks up whatever loop another test left
+    # behind, so these two passed alone and failed in the full suite — an ordering dependency, which
+    # `04_testing.md` rule 4.8 forbids for exactly this reason.
+    row = asyncio.run(intake.load_grievance_for_classification(_Db(), llm.logger, "GR-1"))
+
+    assert row["grievance_classification_status"] == LLM_FAILED
+    assert len(reads) == 1, "a terminal status must end the wait on the first read, not the last"
+
+
+def test_the_terminal_write_no_longer_depends_on_retries_that_never_happen():
+    """
+    ⭐ **T-15b-d (D-34).** `_persist_classification_failed_if_final` returned early unless
+    `request.retries >= max_retries` — but the task returned a FAILED dict instead of re-raising,
+    so nothing ever retried, `retries` stayed 0, and the terminal state was unreachable. Verified
+    against the database on 2026-08-18: the row sat at `pending` forever.
+
+    The guard now lives where it can be satisfied — the task retries, and calls this once
+    `MaxRetriesExceeded` says the ladder is spent.
+    """
+    import backend.task_queue.registered_tasks as tasks
+
+    assert not hasattr(tasks, "_persist_classification_failed_if_final"), (
+        "the retry-gated version is the bug; it must not come back"
+    )
+    assert hasattr(tasks, "_persist_classification_failed")
+
+    # ⚠ Inspect the CODE, not the prose. The comments in that function quote the construct they
+    # warn against ("`except MaxRetriesExceededError:` never fires"), so a naive substring search
+    # matches the warning and fails the very implementation it is meant to protect.
+    source = "\n".join(
+        line for line in inspect.getsource(tasks.classify_and_summarize_grievance_task).splitlines()
+        if not line.strip().startswith("#")
+    )
+    assert "self.retry(exc=" in source, "nothing retries, so nothing is ever final"
+    assert "_persist_classification_failed(grievance_id)" in source
+    assert "interactive=(self.request.retries == 0)" in source, (
+        "the first attempt must be the one with the short deadline"
+    )
+
+    # ⚠ The terminal decision must be made BEFORE retrying. `self.retry(exc=...)` re-raises the
+    # ORIGINAL exception once retries are spent — it does not raise MaxRetriesExceededError — so a
+    # terminal write placed in `except MaxRetriesExceededError:` never runs. That was the first
+    # implementation of this fix, and it reproduced D-34 one layer up.
+    assert "if self.request.retries >= max_retries:" in source
+    assert "except MaxRetriesExceededError" not in source, (
+        "catching it is the trap: Celery only raises it when no exc= is passed, so the terminal "
+        "write inside such a handler never runs. (The comment explaining that is welcome; the "
+        "handler is not — which is why this asserts on the construct and not the word.)"
+    )
+
+    # And the countdown is explicit, because the configured ladder was never applied (D-45).
+    assert "countdown=2 * (2 ** self.request.retries)" in source
+
+
+def test_the_review_step_says_something_in_every_branch():
+    """
+    **T-15b-c.** Three states, three messages. The 'not ready yet' branch used to render nothing —
+    the complainant waited out the poll and was shown a blank summary, which is indistinguishable
+    from the product being broken.
+    """
+    from backend.actions.forms import form_grievance_complainant_review as review
+    from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
+
+    source = inspect.getsource(review.ActionRetrieveClassificationResults.execute_action)
+    pending = source[source.index("Pending/empty after poll"):]
+    assert "utter_message" in pending, "the pending branch must not be silent"
+
+    for index in (1, 2, 3):
+        for language in ("en", "ne"):
+            text = get_utterance_base(
+                "form_grievance_complainant_review",
+                "action_retrieve_classification_results",
+                index,
+                language,
+            )
+            assert text and text.strip(), f"utterance {index} missing for {language}"
+
+    ready = get_utterance_base("form_grievance_complainant_review",
+                               "action_retrieve_classification_results", 2, "en")
+    not_ready = get_utterance_base("form_grievance_complainant_review",
+                                   "action_retrieve_classification_results", 3, "en")
+    assert ready != not_ready, "'will not arrive' and 'not ready yet' must not be the same message"
+    assert "filed" in not_ready.lower(), (
+        "the complainant must be told the grievance is safe before being told the summary is not ready"
+    )

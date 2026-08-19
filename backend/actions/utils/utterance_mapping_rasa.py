@@ -1097,7 +1097,21 @@ UTTERANCE_MAPPING = {
                 2: {
                     'en': "Categorization of your grievance is not available. Our officer will review your grievance and contact you soon.",
                     'ne': "तपाईको गुनासो हाम्रो वर्गिकरण वा समूह मा उपलब्ध छैन।  हाम्रा अधिकारीले तपाईको गुनासोको समीक्षा गरि तपाईलाई चाँडै नै सम्पर्क गर्नेछन्‌। ",
-                }
+                },
+                # DPG-15b: "not ready yet" is a different message from "will not arrive" (2), and
+                # both are different from silence — which is what this branch used to render. The
+                # grievance is already filed by the time either is shown; the summary is the only
+                # thing still outstanding, and it reaches the officer regardless.
+                3: {
+                    'en': (
+                        "Your grievance has been filed. We are still preparing the summary and "
+                        "categories — you will be able to see them when you check your grievance status."
+                    ),
+                    'ne': (
+                        "तपाईंको गुनासो दर्ता भइसकेको छ। हामी अझै सारांश र श्रेणीहरू तयार गर्दै छौं — "
+                        "तपाईंले आफ्नो गुनासोको स्थिति हेर्दा ती हेर्न सक्नुहुनेछ।"
+                    ),
+                },
             },
             'buttons': {
                 1: BUTTONS_AFFIRM_DENY,

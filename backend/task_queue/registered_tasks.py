@@ -127,13 +127,20 @@ FAILED = status_codes['FAILED']
 RETRYING = status_codes['RETRYING']
 
 
-def _persist_classification_failed_if_final(task_self, grievance_id: str) -> None:
-    """Set grievance_classification_status=LLM_failed only after Celery retries are exhausted."""
-    max_retries = getattr(task_self, "max_retries", None)
-    if max_retries is None:
-        max_retries = 3
-    if task_self.request.retries < max_retries:
-        return
+def _persist_classification_failed(grievance_id: str) -> None:
+    """
+    Write the terminal `LLM_failed` status.
+
+    ⚠ **This used to be `_persist_classification_failed_if_final`, and it never fired** (D-34). It
+    returned early unless `request.retries >= max_retries` — correct in intent, since a transient
+    outage should not be recorded as permanent — but the task returned a FAILED dict instead of
+    re-raising, so Celery never retried, `retries` stayed 0, and the condition was never true. The
+    terminal state was unreachable on the one path that most needs it, and the grievance sat at
+    `pending` while the conversation polled its full deadline for an answer that would never come.
+
+    The caller now decides when it is final (after `self.retry()` raises MaxRetriesExceeded), which
+    is the same intent with the guard somewhere it can actually be satisfied.
+    """
     try:
         from backend.config.classification_status import LLM_FAILED
         from backend.services.database_services.postgres_services import DatabaseManager
@@ -147,6 +154,7 @@ def _persist_classification_failed_if_final(task_self, grievance_id: str) -> Non
         _logging.getLogger(__name__).warning(
             "Could not persist LLM_failed for %s: %s", grievance_id, exc
         )
+
 
 
 #---------------------------------REGISTERED TASKS---------------------------------
@@ -687,7 +695,15 @@ def classify_and_summarize_grievance_task(self,
         from backend.services.LLM_services import classify_and_summarize_grievance
         complainant_district = input_data.get('complainant_district')
         complainant_province = input_data.get('complainant_province')
-        values = classify_and_summarize_grievance(grievance_description, language_code, complainant_district, complainant_province) #values is a dict with keys: grievance_summary, grievance_categories
+        # First attempt: a person is waiting in the chat, so the model gets the short deadline.
+        # Retries: nobody is waiting, so it gets the full one (DPG-15b).
+        values = classify_and_summarize_grievance(
+            grievance_description,
+            language_code,
+            complainant_district,
+            complainant_province,
+            interactive=(self.request.retries == 0),
+        ) #values is a dict with keys: grievance_summary, grievance_categories
         # DPG-15: `if not values` was the only guard, and the failure dict is TRUTHY — so a dead
         # model endpoint took the SUCCESS path and stored LLM_generated with an empty summary.
         # Raising here puts the retry below (and the terminal LLM_failed write) back in play.
@@ -720,7 +736,6 @@ def classify_and_summarize_grievance_task(self,
         
     except Exception as e:
         error = "error during classification by LLM: " + str(e) #adding context to error message
-        _persist_classification_failed_if_final(self, grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 
@@ -728,13 +743,37 @@ def classify_and_summarize_grievance_task(self,
             entity_key=entity_key, 
             entity_id=entity_id
         )
-        return {
-            'status': FAILED,
-            'operation': 'classification',
-            'error': error,
-            'task_id': self.request.task_id,
-            'entity_key': entity_key,
-        }
+        # DPG-15b / D-34: retry, and only call it terminal when the retries are actually spent.
+        # Two failure classes behave very differently here, and only one is observable from the
+        # conversation: a fast failure (refused connection, a 400, a bad model name) exhausts
+        # 2+4+8s of backoff in about fourteen seconds — inside the complainant's wait, so the poll
+        # sees `LLM_failed` and stops instead of running its full deadline. A slow failure (the
+        # model timing out) takes minutes and resolves after the conversation, which is why the
+        # first attempt gets the short deadline and the review step has a message for "not ready".
+        # ⚠ **Decide whether this is the last attempt BEFORE retrying, not after.**
+        # `self.retry(exc=...)` re-raises the ORIGINAL exception once retries are spent — it does
+        # not raise MaxRetriesExceededError, which is only used when no `exc` is given. So an
+        # `except MaxRetriesExceededError:` around the retry never fires, and the terminal write
+        # inside it never happens: the same unreachable-guard shape as D-34 itself, one layer up.
+        # Found by driving it against the database rather than reading the docs.
+        max_retries = self.max_retries if self.max_retries is not None else 3
+        if self.request.retries >= max_retries:
+            _persist_classification_failed(grievance_id)
+            return {
+                'status': FAILED,
+                'operation': 'classification',
+                'error': error,
+                'task_id': self.request.task_id,
+                'entity_key': entity_key,
+            }
+
+        # ⚠ **The countdown is explicit because the configured one was never applied** (D-45):
+        # `TASK_CONFIG` declares its retry settings under `'retries'` and the decorator reads
+        # `'retry'`, so every task in this queue silently falls back to Celery's defaults —
+        # including a **180-second** delay. Three retries at 180 s is nine minutes, which is not a
+        # ladder the conversation can observe; 2/4/8 exhausts in about fourteen seconds, inside the
+        # 30 s wait, which is the whole point of retrying here at all.
+        raise self.retry(exc=e, countdown=2 * (2 ** self.request.retries))
 
     # ✅ QUICK FIX (direct database call call):
     try:
@@ -743,7 +782,9 @@ def classify_and_summarize_grievance_task(self,
         print(f"Database operation completed: {db_result}")
     except Exception as e:
         error = "Error in classify_and_summarize_grievance_task during database operation: " + str(e) #adding context to error message
-        _persist_classification_failed_if_final(self, grievance_id)
+        # A database failure is not a model failure: no retry ladder here, mark it terminal so the
+        # conversation stops waiting for a classification that was produced but could not be stored.
+        _persist_classification_failed(grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 

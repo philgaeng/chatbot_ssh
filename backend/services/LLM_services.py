@@ -209,7 +209,9 @@ def classify_and_summarize_grievance(
     complainant_district: str = DEFAULT_DISTRICT,
     complainant_province: str = DEFAULT_PROVINCE,
     categories: List[str] = LIST_OF_CATEGORIES,
-    categories_list: Dict[str, Any] = CLASSIFICATION_DATA
+    categories_list: Dict[str, Any] = CLASSIFICATION_DATA,
+    *,
+    interactive: bool = True,
 ) -> Dict[str, Any]:
     """
     Classify and summarize a grievance using LLM.
@@ -275,10 +277,15 @@ def classify_and_summarize_grievance(
         # DPG-14.2 removed a second client built here, shadowing the module one behind a guard that
         # could never fire. DPG-18 removes the request construction too: model, deadline and
         # structured-output rung all come from the registry.
+        # ⚠ `interactive` is the caller telling us whether a person is waiting, and the registry
+        # decides what that means in seconds (DPG-15b). A first attempt gets the short deadline so
+        # the conversation is not held open; a retry gets the long one because nobody is watching.
+        settings = get_llm_settings()
         validated = call_llm(
             "classify",
             schema=GrievanceClassification,
             schema_name="grievance_classification",
+            timeout=settings.timeout_classify_interactive if interactive else None,
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. You will be given a grievance text and you will need to categorize it into one or more categories as provided to you. You will also need to summarize the grievance text."},
                 {"role": "user", "content": f"""

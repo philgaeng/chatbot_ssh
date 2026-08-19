@@ -3,8 +3,11 @@
 > **Raised:** 2026-08-18 by [DPG-14.1](../02-llm-agnostic-spec.md#dpg-14)'s liveness check — three live
 > calls against `gpt-5-nano`, which answered a question nobody had asked.
 > **Logged as deviation D-30** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** 🟡 **superseded 2026-08-18 — now owned by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b)**,
-> in this sprint. · **Size:** S to measure properly, M to fix well
+> **Status:** ✅ **CLOSED 2026-08-19 by [DPG-15b](../02-llm-agnostic-spec.md#dpg-15b).** The wait is now
+> 30 s from the registry, the first attempt has a 30 s deadline instead of 120 s, and a failed
+> classification reaches a terminal status — so the poll ends on knowledge rather than on the clock
+> (measured: 0.19 s instead of the full budget). The measurements below stand as the input that
+> produced that design. · **Size:** was S/M
 >
 > ⚠ **Corrected twice, and the second correction is the honest one.** This was written as *"the
 > deadline is too short"*. The first correction said *"the deadline is in the wrong place"*. **Q-20's
