@@ -67,7 +67,7 @@
   - `backend/actions/utils/utterance_mapping_rasa.py` — added EN + NE utterance index 3 for `action_main_menu`
   - `backend/actions/action_submit_grievance.py` — both standard + SEAH submit paths now pass `project_code=tracker.get_slot("project_code") or "KL_ROAD"` and `package_id=tracker.get_slot("package_id")` to `dispatch_ticket`
   - `tests/test_qr_token_integration.py` — 17 unit tests (fetch_qr_scan happy/error paths, location resolution, dispatch_ticket package_id propagation)
-  - Operational notes (env override + 422 data gotcha + local recipe): see "QR Token Scan Flow" in `docs/COMMIT_STRATEGY.md`
+  - Operational notes (env override + 422 data gotcha + local recipe): see "QR Token Scan Flow" in `docs/deployment/08_commit_strategy.md`
 
 - ✅ **Demo bypass roster** (2026-05-12, `07edd4d` + `dee4421`):
   - **Backend:** dev bypass `CurrentUser.organization_id` reads optional `X-Internal-Organization-Id` (still defaults to `DOR` when absent).
