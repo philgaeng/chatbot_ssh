@@ -6,7 +6,8 @@ name: CI
 #   backend-tests — Postgres 15 service, all three Alembic streams, pytest
 #                   (ticketing/orchestrator/actions/backend, @integration included)
 #   ui-checks     — channels/ticketing-ui: tsc --noEmit, eslint, next build
-#   docs-links    — relative markdown link check under docs/ (excludes archive/)
+#   docs-links    — relative markdown link check under docs/ (excludes archive/) AND the
+#                   root-level *.md, where CLAUDE.md lives — see the job for why both
 #
 # `dev/**` is included in the push triggers because the 2026-07 hardening sprint
 # works off a single shared `dev/hardening` branch (see CLAUDE.md git workflow).
@@ -282,7 +283,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check relative markdown links under docs/ (excludes archive/)
+      - name: Check relative markdown links and repo paths
         run: |
           python3 - <<'PY'
           import os
@@ -290,38 +291,88 @@ jobs:
           import sys
           from urllib.parse import unquote
 
+          # ── Why this checks two things, in two different scopes ───────────────────────
+          #
+          # It used to walk docs/ only, and to look only at `](path)` markdown links. Both
+          # limits let the same break through on 2026-08-19: CLAUDE.md — the binding project
+          # instruction file — had pointed at `docs/deployment/COMMIT_STRATEGY.md` ever since
+          # the doc reorganisation renamed that file. In two places, one of them the recovery
+          # procedure for commits that land on `main` by accident, which is a thing you look
+          # up precisely when you are already in trouble. It was out of scope on both counts:
+          # CLAUDE.md sits at the repo root, and the reference is a backticked path, not a
+          # markdown link.
+          #
+          # So: markdown links across docs/ AND the root files; backticked repo paths across
+          # the root files only.
+          #
+          # ⚠ The backtick check is deliberately NOT extended to docs/, and not because of the
+          # count (112, measured 2026-08-19 and logged as a followup). It is that a backticked
+          # path in prose does not always mean "go read this". A post-mortem legitimately names
+          # the file it just described deleting; a spec legitimately names one it proposes
+          # creating. Both would be flagged and both flags would be wrong. Markdown links carry
+          # that distinction on their own — nobody links to a file they just deleted — so the
+          # link check is safe everywhere. Root-level files are instructions rather than
+          # history, which is why the stricter check holds there.
+
           DOCS_ROOT = "docs"
           LINK_RE = re.compile(r"\]\(([^)#\s]+)\)")
+          REPO_DIRS = "docs|backend|ticketing|scripts|channels|ops|deployment|tests|migrations"
+          PATH_RE = re.compile(
+              r"`((?:" + REPO_DIRS + r")/[^`\s]+?\.(?:md|py|sh|ts|tsx|yml|yaml|json|sql|ini|txt))`"
+          )
+          # Template placeholders are not paths: `docs/sprints/<sprint>/followups/<slug>.md`
+          PLACEHOLDER = re.compile(r"[<>{}*]")
+
           broken = []
-          checked = 0
+          checked_links = 0
+          checked_paths = 0
 
-          for dirpath, dirnames, filenames in os.walk(DOCS_ROOT):
-              dirnames[:] = [d for d in dirnames if "archive" not in d]
-              if "archive" in dirpath:
-                  continue
-              for fname in filenames:
-                  if not fname.endswith(".md"):
+          def docs_files():
+              for dirpath, dirnames, filenames in os.walk(DOCS_ROOT):
+                  dirnames[:] = [d for d in dirnames if "archive" not in d]
+                  if "archive" in dirpath:
                       continue
-                  fpath = os.path.join(dirpath, fname)
-                  if "archive" in fpath:
-                      continue
-                  with open(fpath, encoding="utf-8") as f:
-                      text = f.read()
-                  for match in LINK_RE.finditer(text):
-                      target = match.group(1)
-                      if target.startswith(("http://", "https://", "mailto:", "#")):
-                          continue
-                      target = unquote(target)
-                      checked += 1
-                      resolved = os.path.normpath(os.path.join(dirpath, target))
-                      if not os.path.exists(resolved):
-                          broken.append((fpath, target))
+                  for fname in filenames:
+                      if fname.endswith(".md"):
+                          yield os.path.join(dirpath, fname)
 
-          print(f"checked {checked} relative link(s) under {DOCS_ROOT}/ (excluding archive)")
+          def root_files():
+              for fname in sorted(os.listdir(".")):
+                  if fname.endswith(".md") and os.path.isfile(fname):
+                      yield fname
+
+          # (1) relative markdown links — docs/ and the root files
+          for fpath in list(docs_files()) + list(root_files()):
+              dirpath = os.path.dirname(fpath) or "."
+              with open(fpath, encoding="utf-8") as f:
+                  text = f.read()
+              for match in LINK_RE.finditer(text):
+                  target = match.group(1)
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  target = unquote(target)
+                  checked_links += 1
+                  if not os.path.exists(os.path.normpath(os.path.join(dirpath, target))):
+                      broken.append((fpath, target, "link"))
+
+          # (2) backticked repo paths — root files only, see the note above
+          for fpath in root_files():
+              with open(fpath, encoding="utf-8") as f:
+                  text = f.read()
+              for match in PATH_RE.finditer(text):
+                  target = match.group(1)
+                  if PLACEHOLDER.search(target):
+                      continue
+                  checked_paths += 1
+                  if not os.path.exists(target):
+                      broken.append((fpath, target, "path"))
+
+          print(f"checked {checked_links} relative link(s) under {DOCS_ROOT}/ and the root *.md")
+          print(f"checked {checked_paths} backticked repo path(s) in the root *.md")
           if broken:
-              print(f"Found {len(broken)} broken relative link(s):")
-              for fpath, target in broken:
-                  print(f"  {fpath} -> {target}")
+              print(f"Found {len(broken)} broken reference(s):")
+              for fpath, target, kind in broken:
+                  print(f"  [{kind}] {fpath} -> {target}")
               sys.exit(1)
-          print("All relative markdown links resolve OK.")
+          print("All references resolve OK.")
           PY
