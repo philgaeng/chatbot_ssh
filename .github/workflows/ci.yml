@@ -150,9 +150,21 @@ jobs:
           # then falls back to archive.ubuntu.com. The fallback WORKS; it is the time spent
           # failing over that killed three runs. Pointing at the mirror that answers skips the
           # wait entirely, and costs nothing when Azure is healthy.
-          sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' \
-            /etc/apt/sources.list /etc/apt/sources.list.d/*.list \
-            /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+          #
+          # ⚠ The first attempt at this rewrite silently did nothing. It passed three paths to one
+          # `sed -i`, and `/etc/apt/sources.list` does not exist on a noble runner — sed aborts on
+          # the missing file before touching the others, and `2>/dev/null || true` swallowed the
+          # error. The run failed identically and the log looked the same, which is the worst
+          # possible outcome for a workaround. Hence the loop, and hence the echo below: a
+          # workaround that cannot be seen working is a workaround you get to debug twice.
+          for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$f" ]; then
+              sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$f"
+            fi
+          done
+          echo "--- apt mirrors in use after the rewrite ---"
+          grep -rhoE 'https?://[a-z0-9.-]*archive\.ubuntu\.com' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u
           sudo apt-get -o Acquire::Retries=3 update
           sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
             libvips-dev \
