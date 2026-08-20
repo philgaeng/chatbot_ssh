@@ -139,6 +139,33 @@ Contract: [../services/05_messaging_service.md](../services/05_messaging_service
 
 Policy detail: [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md).
 
+### 8.1 ⚠ Self-hosted inference (T2) — the intended posture, **not deployed**
+
+Added by [DPG-25](../sprints/2026-08-llm/03-open-models-spec.md#dpg-25), 2026-08-20. **None of this
+is built.** T2 is parked because nobody owns the GPU running costs (Q-05), and this section exists so
+that unparking starts from a decided network posture instead of an improvised one. Full document:
+[`../dpg/vllm-deployment.md`](../dpg/vllm-deployment.md).
+
+| Control | Requirement | Status |
+|---|---|---|
+| **Network placement** | Private subnet; reachable **only** from the application security group. Never internet-facing | ⚠ not deployed |
+| **Transport** | TLS terminated at a reverse proxy in front of vLLM | ⚠ not deployed |
+| **Authentication** | `--api-key` set **even on a private network** — defence in depth | ⚠ not deployed |
+| **Recovery** | Instance snapshotted once configured, so a rebuild is minutes | ⚠ not deployed |
+| **Ownership** | A named owner for monitoring and restart | ⏸ **the parked item** — Q-05. Not the hardware: the *person* |
+
+⚠ **The API-key row is not boilerplate.** §13 of this document already carries a row about a service
+bound to `0.0.0.0` *"because the firewall holds"*. **Do not add a second one.** A private network is
+a blast-radius control, not an authentication story, and an inference endpoint holds grievance text
+in memory.
+
+⚠ **And note what T1 means for this section while T2 stays parked.** T1 is the **steady state, not a
+transition**: grievance text — including SEAH narratives — leaves the country indefinitely, reaches a
+provider that is selected per request unless the model id pins one, and is unredacted until
+[Sprint 3](../sprints/2026-08-llm/04-pii-redaction-spec.md) lands. That is the trade this parking
+decision makes, and it is the reason redaction moved from prudent to necessary
+([privacy assessment](../dpg/privacy-assessment.md) F-17).
+
 ---
 
 ## 9. Public and token-based access controls

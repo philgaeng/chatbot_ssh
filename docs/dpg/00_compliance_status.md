@@ -611,6 +611,21 @@ and the indicator-4 answer.
 > it — but it **does** change the privacy analysis in §4.3 from a transitional exposure to a permanent one,
 > and it makes the redaction work the only remaining control rather than a defence in depth. We would rather
 > you hear that framing from us.
+>
+> **⭐ And since we costed it (DPG-25, 2026-08-20), one thing turned out to be sharper than "parked
+> for want of a payer":** the crossover volume — where a dedicated GPU becomes cheaper than hosted
+> inference — is **40,000 to 780,000 grievances per month** across every price assumption we tried.
+> Two pilot districts handle grievances in the **tens** per month; all 77 districts of Nepal at 100
+> each would be **7,700**. So T1 is cheaper at every volume this system will ever see, by three to
+> four orders of magnitude, and **volume growth does not close the gap** — classification is one
+> request per grievance, not one per conversational turn, so a dedicated GPU would sit idle almost
+> always, and idle GPU time is the entire cost.
+>
+> **That means T2 is not a cost decision at all. It is a data-sovereignty decision with a price
+> attached**, and we would rather say so than present a break-even that quietly implies waiting for
+> volume to justify it. The token counts behind that arithmetic are measured
+> ([`model-benchmarks.md`](model-benchmarks.md)); the instance prices are quotes we have not taken,
+> which is why the conclusion is stated as a range and not a number.
 
 Indicative T2 sizing — one 24 GB GPU instance (AWS `g5`/`g6.xlarge` class) serving one 27–31B model at
 4-bit quantisation, co-hosting a Whisper-class ASR model, roughly **$700–900/month** on demand and

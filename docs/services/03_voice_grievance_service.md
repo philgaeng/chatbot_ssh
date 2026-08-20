@@ -88,6 +88,41 @@ Behavior:
 > the same as "transcription works":** voice is not live for lack of an LLM budget (Q-13.2), so there
 > is no field evidence and no Nepali WER baseline — DPG-22 owns that. Read step 2 as
 > `⚠ Not verified end-to-end`.
+>
+> ### ⚠ DPG-22, 2026-08-20 — three things measured, and none of them is a WER
+>
+> **1. There is no chosen model and no WER, and the reason is not only budget.** The benchmark set
+> has **no audio** — six voice-origin items, all of them *transcript-shaped text*, which is what
+> classification consumes and not what transcription consumes. Nothing in this repository can author
+> a recording, and TTS would not close the gap: synthetic speech is cleaner than a person on a rural
+> mobile connection, so a WER measured on it would flatter every candidate.
+> [Follow-up](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md).
+>
+> **2. ⚠ The open configuration's ASR endpoint returns 404.** `.env.open` ships
+> `ASR_BASE_URL=https://router.huggingface.co/v1`, and that router **does not expose**
+> `/v1/audio/transcriptions` — verified for `whisper-large-v3`, its turbo variant, and a
+> provider-pinned form. Not auth and not billing: the same route *without* a token returns 401, chat
+> and `/v1/models` both return 200 with it, and the router's catalogue holds 132 models, **none of
+> them audio**. **So whoever unparks this flow must first choose an ASR provider that does serve the
+> OpenAI-compatible audio surface** — the registry already keeps `ASR_BASE_URL` and `ASR_API_KEY`
+> separate from the chat endpoint precisely so that is a two-line change.
+> [Follow-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md).
+>
+> **3. Licences verified from the model cards, at probe time** — this is the part that *is* settled:
+>
+> | Candidate | Licence (read 2026-08-20) | Verdict |
+> |---|---|---|
+> | `openai/whisper-large-v3` | **apache-2.0** | ✅ permissive |
+> | `openai/whisper-large-v3-turbo` | **MIT** | ✅ permissive — ⚠ the sprint spec's table says Apache-2.0. **It is MIT.** Both pass the filter, so no decision changes, but the table was wrong |
+> | `ai4bharat/indicwav2vec_v1_nepali` | **MIT** | ✅ permissive, and it is the **Nepali-specific** model — far smaller, CTC decoder, much faster |
+> | `facebook/mms-1b-all` | **cc-by-nc-4.0** | ❌ **cannot ship** — non-commercial. Excluded on licence, not on quality, exactly as the spec predicted |
+> | Meta *Omnilingual ASR* | ⚠ **could not be verified** — the repository ids tried do not resolve publicly; only community re-exports are findable | ⚠ The spec asserts Apache-2.0; **that is unverified**, and it should not be repeated until someone resolves the real repo |
+>
+> **And the framing that must travel with any future number.** Voice has never been live, so there
+> is **no incumbent to beat**. The honest sentence is *"we shipped a working ASR path where there
+> was none"* — never *"we matched the incumbent"*. Both are fine; conflating them is not, and the
+> baseline column in [`model-benchmarks.md`](../dpg/model-benchmarks.md) says "never live" rather
+> than sitting blank for that reason.
 
 Typical voice path:
 
