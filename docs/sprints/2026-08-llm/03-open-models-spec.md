@@ -1,5 +1,53 @@
 # Sprint 2 — Open models, benchmarks, and CI evidence (DPG-20…25)
 
+> ## 🤝 HANDOVER — read this before anything else (written 2026-08-20)
+>
+> **Sprint 1 is finished and merged.** `dpg/sprint1-llm-agnostic` fast-forwarded into
+> `integration/stage`; every one of its ten tickets is ✅ in [`PROGRESS.md`](PROGRESS.md), plus five
+> unplanned fixes it turned up (D-19, D-26, D-36, D-45, D-47). **Branch from `integration/stage`, not
+> from `main`** — `main` is 300 commits behind and nothing here has reached it.
+>
+> **What Sprint 1 hands you.** The thing this sprint needed and did not have: one file,
+> [`backend/config/llm_config.py`](../../../backend/config/llm_config.py), where every model name,
+> base URL, timeout and structured-output mode in the product is declared. Both LLM surfaces read it and
+> neither owns it; it imports nothing first-party, pinned by a test. **Switching the whole product to
+> open weights is now an env-file swap** — [`.env.open`](../../../.env.open) already exists and already
+> names candidates. Your job is to prove the swap works and measure what it costs in quality, not to
+> build the mechanism.
+>
+> **⚠ Four things changed under this spec while it sat. Read §0 before planning — they are not cosmetic:**
+>
+> | | What changed | What it does to your plan |
+> |---|---|---|
+> | 1 | **A 25-character floor on classification** (DPG-19). Shorter text is *skipped*, not classified | A benchmark item under 25 chars measures the gate, not the model. **Constrains DPG-20's authoring.** |
+> | 2 | **A 30-second interactive budget** (DPG-15b) | p95 latency stopped being a table row and became **pass/fail**: over ~30 s and the complainant never sees their own classification. |
+> | 3 | **The SEAH benchmark data must stay OUT of git** — owner's decision, 2026-08-19 | Directly contradicts DPG-20's "commit under `tests/data/benchmark/`". **Both are right, about different data.** §0 resolves it; do not resolve it yourself. |
+> | 4 | **CI is green** — first time since 2026-08-08 (D-26) | DPG-24's "green on the integration branch" is now reachable, and **red now means something.** Do not add a job that normalises red. |
+>
+> **⭐ The one blocker you cannot engineer around: [Q-19](QUESTIONS.md#q-19), the LLM budget, is 🔴 open.**
+> It gates DPG-22, DPG-23 and DPG-24 — three of the five tickets — because they are made of inference
+> calls and nobody has priced them. **Do not start those three by building a harness.** Price them first:
+> items × models × tasks is knowable arithmetic, and *"no budget"* and *"$40"* may not be in conflict.
+> Put the number in front of the owner as a decision, not a request.
+>
+> **What you can start today, unblocked:** **DPG-20** (authoring, costs nothing to run) and **DPG-25**
+> (a document and a price; T2 is parked, so there is nothing to deploy). **DPG-21** needs only a Hugging
+> Face token.
+>
+> **⚠ Half of DPG-20 is already in flight — do not duplicate it.** The SEAH slice has a written method
+> ([`docs/models/01_seah_detection_benchmark.md`](../../models/01_seah_detection_benchmark.md)), a
+> collection workbook, and a request already sent to the Nepal team for real seed cases. Read that
+> document before authoring anything SEAH-shaped. The **general** classification/extraction slice —
+> categories, districts, code-switching, Devanagari digits — is unstarted and is yours.
+>
+> **How this sprint works** — same as Sprint 1, and it is binding: read
+> [`../README.md`](../README.md) and [`../../engineering/00_engineering_index.md`](../../engineering/00_engineering_index.md)
+> first; every ticket ships its tests in the same commit; every deferral gets a `followups/` doc **and** a
+> `TODO.md` row in that same commit; Docker only, never the host; and never write a claim into a document
+> you have not verified against the code. Sprint 1's deviation log is 47 rows long mostly because that
+> last rule was enforced — **treat a wrong sentence in a spec as a defect, and log it.**
+
+
 > Branch `dpg/sprint2-open-models` · **Depends on Sprint 1** (there is nothing to point at a second
 > provider until the base URL is a variable). **DPG-20 does not depend on Sprint 1 — start it during Sprint 1.**
 > **Goal:** a working, benchmarked open-weights configuration, with evidence.
@@ -46,6 +94,45 @@ rather than a re-design.
 | `pytest tests/test_llm_services.py` in the CI job | That file does not exist today; Sprint 1's DPG-10 creates `tests/backend/test_llm_services.py` and `tests/ticketing/test_llm_client.py` | DPG-24's job runs the real paths |
 | CI is greenfield | `.github/workflows/ci.yml` already runs **four** parallel gates — `backend-tests` (`:23`, full Postgres + Redis service block, all three Alembic streams), `ui-checks` (`:202`), `webchat-checks` (`:236`), `docs-links` (`:262`) | DPG-24 adds a **fifth job to an existing file**, following its conventions — not a new workflow file with its own dialect. ⚠ This spec said "three" and named only three of the four until 2026-08-17; `webchat-checks` was the one missed |
 | The candidate filter is settled: Apache-2.0 / MIT | **It is gated on the consultant.** Several of the strongest multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma). Whether those count as open alternatives for indicator 4 is an open question — [`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q5 | The filter may be **loosened** before DPG-23 runs, which would widen the candidate field and may materially change the Nepali quality result. **Do not build the benchmark harness around a frozen licence filter** |
+
+### §0.1 — What Sprint 1 changed under this spec (added 2026-08-20)
+
+Sprint 1 shipped after this spec was written. These are not clarifications; each one changes a ticket.
+
+| # | Sprint 1 fact | Where | What it does to this sprint |
+|---|---|---|---|
+| **A** | **`backend/config/llm_config.py` exists** — every model name, base URL, timeout and structured-output mode declared once, read by both surfaces, importing nothing first-party | DPG-17 | The migration mechanism is **built**. This sprint measures and chooses; it does not plumb. A model name written at a call site is a regression Sprint 1 removed, pinned by `tests/backend/test_llm_config_pins.py` |
+| **B** | **`.env.open` already names candidates** — `MODEL_CLASSIFY=openai/gpt-oss-20b`, `MODEL_TRANSLATE=openai/gpt-oss-120b`, `MODEL_ASR=openai/whisper-large-v3`, and a 120b for SEAH findings | DPG-16 | DPG-21/23 **validate or replace** these, they do not choose from a blank sheet. ⚠ They are placeholders written without measurement — treat them as a hypothesis, and record the date and the evidence when you confirm or drop each one |
+| **C** | **`MIN_CLASSIFY_CHARS=25`** — text shorter than 25 characters returns `{"skipped": "too_short"}` and is never sent to a model | DPG-19 | **Constrains DPG-20.** A benchmark item under the floor measures the gate, not the model, and would silently deflate every accuracy number. Author above it, and include a *deliberate* handful below it to pin the gate itself |
+| **D** | **The interactive budget is 30 s** — `CLASSIFICATION_WAIT_SECONDS=30`, `TIMEOUT_CLASSIFY_INTERACTIVE=30`. The complainant fills contact and OTP forms while classification runs, then reviews the result | DPG-15b | **p95 latency is now pass/fail, not a metric.** A model that answers correctly in 45 s fails the product: the review step is skipped and the grievance is filed unreviewed. Measured `gpt-5-nano` today is 14–20.5 s, so the headroom is thin |
+| **E** | **`_PROFILES` in `llm_config.py` decides `json_schema` vs `json_object` vs prompt-only, per model prefix** | DPG-13/17 | DPG-21's capability matrix has a **code** destination, not only a doc. A matrix that lives only in `open-model-configuration.md` is a claim nothing enforces; the ladder in `response_format_for()` is what actually runs |
+| **F** | **Four voice-flow functions are declared PARKED** — `PARKED_TASKS` in `registered_tasks.py`, with docstring headers | DPG-19b | Confirms DPG-22's sequencing (last, Q-19). ⚠ It also means **nothing exercises the ASR path in production**, so DPG-22's numbers describe a path that is switched off. Say so where they are published |
+| **G** | **CI is green on `integration/stage`** — first time since 2026-08-08, 1398 tests | D-26 | DPG-24's "green on the integration branch" is reachable. And the D-26 lesson binds: *a permanently red build is indistinguishable from one nobody watches.* A live-API job **will** go red on provider outages — that is Q-17's whole subject. Decide the branch-protection question before the job exists, not after the first outage |
+| **H** | **Line numbers in §0 above are stale.** `ci.yml` is now `backend-tests` `:33`, `ui-checks` `:263`, `webchat-checks` `:297`, `docs-links` `:323` | D-26, D-48 | Cosmetic, but the file also changed shape: `docs-links` now checks the **root** `*.md` and backticked paths too, and `backend-tests` pins its apt mirror. Read it before adding the fifth job |
+
+### §0.2 — ⚠ The benchmark data is split, and DPG-20's acceptance is wrong as written
+
+This spec says *"Commit under `tests/data/benchmark/`"* and treats a committed synthetic set as the
+publishable artefact for consultant-Q5b. On **2026-08-19 the owner decided the opposite** for the SEAH
+slice, and wrote the reason into
+[`docs/models/01_seah_detection_benchmark.md`](../../models/01_seah_detection_benchmark.md) §3.3:
+
+> *"Three hundred realistic Nepali harassment complaints sitting in it will be read as leaked case data
+> by somebody, regardless of how the file is labelled."*
+
+**Both positions are right, about different data.** Resolve it by splitting the set rather than choosing
+a side:
+
+| Slice | Lives | Why |
+|---|---|---|
+| **General** — categories, districts, dust/road-hazard narratives, code-switching, Devanagari digits | ✅ **Committed** under `tests/data/benchmark/` | It is the reproducibility artefact indicator 4 wants, and nothing in it reads as a case file |
+| **SEAH** — harassment and abuse narratives | ❌ **Never committed**, never seeded into the demo DB | §3.3 above. Held by the project owner |
+
+**The cost of the split, stated once and then repeated wherever the numbers appear:** the SEAH numbers are
+**not independently reproducible from the repository**. That is a real weakness in the evidence pack and
+it is the right trade. ⚠ **Do not "fix" it by committing the SEAH set** — and do not quietly drop the SEAH
+numbers either, because sensitive-content recall is the one metric with a safeguarding consequence.
+
 
 ---
 
@@ -111,7 +198,16 @@ production accuracy is the kind of claim that discredits an otherwise sound subm
 
 ### Acceptance
 
-- [ ] Set committed under `tests/data/benchmark/` with a provenance README
+> ⚠ **Amended 2026-08-20 — read [§0.2](#02--the-benchmark-data-is-split-and-dpg-20s-acceptance-is-wrong-as-written)
+> first.** The line below is right for the general slice and wrong for the SEAH slice, and the SEAH half
+> is already in flight under [`docs/models/01_seah_detection_benchmark.md`](../../models/01_seah_detection_benchmark.md).
+
+- [ ] **General slice** committed under `tests/data/benchmark/` with a provenance README
+- [ ] **SEAH slice NOT committed** — held by the owner, never seeded into the demo DB (§0.2), and every
+      published SEAH number says it is not reproducible from the repository
+- [ ] **Every item ≥ 25 characters**, because `MIN_CLASSIFY_CHARS` skips shorter text without calling a
+      model (§0.1-C) — plus a *deliberate* handful below the floor, labelled as gate fixtures rather than
+      benchmark items, so the gate itself is pinned and nobody later "fixes" the short ones into the set
 - [ ] Categories drawn from the live taxonomy, not invented
 - [ ] Voice subset has verbatim transcripts
 - [ ] PII spans labelled (serves DPG-35 — do it once)
@@ -184,6 +280,10 @@ Alternatives, all OpenAI-compatible, for comparison or failover:
 - [ ] `HF_TOKEN` in `env.local` and in GitHub secrets; not in any tracked file
 - [ ] `scripts/ops/llm_smoke.py` committed and runnable in-container against any base URL
 - [ ] Capability matrix (chat / `json_object` / `json_schema` / audio) recorded per candidate provider
+- [ ] **The matrix landed in `_PROFILES` in `backend/config/llm_config.py`, not only in the doc** (§0.1-E).
+      That table is what `response_format_for()` reads at runtime to pick the strictest mode a model
+      actually honours; a matrix that lives only in prose is a claim nothing enforces, and the first
+      symptom is a silently-ignored `json_schema` producing malformed output under load
 - [ ] `docs/dpg/open-model-configuration.md` updated
 
 ---
@@ -279,6 +379,24 @@ question in the doc**; do not let a bad WER quietly become a decision nobody mad
 > hundred short texts on per-token pricing is plausibly tens of dollars, and *"no budget"* and *"$40"* may
 > not be in conflict. **Get the number rather than assuming either.**
 
+### ⚠ Two constraints Sprint 1 added (2026-08-20)
+
+**1. p95 latency is pass/fail at ~30 s, not a row in a table** (§0.1-D). The complainant fills the contact
+and OTP forms while classification runs in the background, then reviews the result before submitting —
+`CLASSIFICATION_WAIT_SECONDS=30`. A model that is *more accurate* but answers in 45 s **fails**: the review
+step is skipped and the grievance files unreviewed. `gpt-5-nano` measures 14–20.5 s today, so a 2× slowdown
+is the whole budget. **Record p95 against the 30 s line explicitly**, and if the best open model misses it,
+that is a product decision to put to the owner — lengthening the wait, dropping the review step, or
+accepting a weaker-but-faster model — not a number to bury in a cell.
+
+**2. How many models should the open configuration use?** Sprint 1 consolidated the closed configuration to
+**two** on the owner's instruction (Q-21): `gpt-5-nano` for every text task, `whisper-1` for audio. But
+[`.env.open`](../../../.env.open) currently proposes **three** — a 20b for most tasks, a 120b for
+translation and SEAH findings, and Whisper. Those are placeholders nobody measured. **Make this an explicit
+decision with a number beside it**: if the 120b buys materially better Nepali or materially better SEAH
+recall, two models becomes three and that is fine — but say what it bought. Operating three models costs
+more than operating two in every dimension that matters here, and "it was in the template" is not a reason.
+
 ### Candidates and criteria
 
 | Task | Candidate class | Licence target | Note |
@@ -303,7 +421,7 @@ Measure on identical data (DPG-20), per task:
 | Sensitive-content **recall** | | | |
 | Translation quality (chrF++ or human rating) | | | |
 | Nepali ASR WER *(from DPG-22)* | | | |
-| p95 latency | | | |
+| p95 latency **(vs the 30 s interactive budget — pass/fail, §0.1-D)** | | | |
 | Cost / 1,000 grievances | | | |
 
 **Expect the open configuration to score somewhat worse, and report the number rather than implying
@@ -334,6 +452,10 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 - [ ] Sensitive detection scored on **recall**
 - [ ] Classification scored **set-level**
 - [ ] Translation decision (Q-09) made and recorded with the number that decided it
+- [ ] **p95 measured against the 30 s interactive budget** and the pass/fail stated per candidate — not
+      merely tabulated (§0.1-D)
+- [ ] **The two-models-or-three decision made explicitly**, with the measurement that decided it, and
+      `.env.open`'s placeholder candidates either confirmed with a date or replaced
 - [ ] Chosen defaults written into `.env.open` and `docs/dpg/open-model-configuration.md`
 - [ ] The gap, wherever it exists, stated plainly in the DPG submission language
 
@@ -353,9 +475,16 @@ configuration, on every commit.
 
 ### Shape — a fifth job in the existing workflow
 
-Add to `.github/workflows/ci.yml` as the **fifth** job, alongside `backend-tests` / `ui-checks` /
-`webchat-checks` / `docs-links`, following that file's existing conventions (header comment explaining the
-gate, explicit `env:` block with rationale comments, `timeout-minutes`).
+Add to `.github/workflows/ci.yml` as the **fifth** job, alongside `backend-tests` (`:33`) / `ui-checks`
+(`:263`) / `webchat-checks` (`:297`) / `docs-links` (`:323`), following that file's existing conventions
+(header comment explaining the gate, explicit `env:` block with rationale comments, `timeout-minutes`).
+
+> ⚠ **Read the file first — it changed on 2026-08-19** (§0.1-G/H). `docs-links` now also checks the root
+> `*.md` and backticked repo paths; `backend-tests` pins its apt mirror and gives the system-libraries step
+> its own timeout, after a mirror outage burned four runs by consuming the job budget silently. **The
+> lesson is directly yours:** a step that can hang must fail fast and say why, and a workaround that leaves
+> no evidence of having run costs you the next debugging round too. Your job calls a live third-party API —
+> it is the most hang-prone thing in the workflow.
 
 ```yaml
   dpg-platform-independence:
@@ -427,7 +556,11 @@ policy must change with it. Put that sentence next to the reason.
 - [ ] **Measured** CI inference spend recorded in the job header, and a hard token cap set on the HF account
 - [ ] If the cadence was reduced below per-commit for cost, the **badge and job header say so** (Q-19)
 - [ ] Badge in the repo `README.md` linking the job — this is the link that goes in the submission
-- [ ] Green on the integration branch
+- [ ] Green on the integration branch — **which is now a real bar**: CI went green on 2026-08-19 for the
+      first time since 08-08 (D-26), so red means something again. ⚠ **Do not be the job that undoes
+      that.** A live-API gate reddens on provider outages by construction; that is what Q-17's
+      never-a-required-check answer is for, and the reason belongs in the job header where the next person
+      will read it before "fixing" it
 
 ### ✅ Questions — answered
 

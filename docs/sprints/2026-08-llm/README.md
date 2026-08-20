@@ -70,7 +70,7 @@ Sprint 1 no longer ships the open-by-default flip.
 | [`00-dpg-context-and-decisions.md`](00-dpg-context-and-decisions.md) | Why indicator 4 shapes everything · the T1/T2/T3 deployment ladder · the DPG evidence pack · the six open decisions |
 | [`01-licensing-and-governance-spec.md`](01-licensing-and-governance-spec.md) | **Sprint 0** — DPG-01…06. Licence, dependency audit, IP ownership, privacy assessment. Non-code, long lead. |
 | [`02-llm-agnostic-spec.md`](02-llm-agnostic-spec.md) | **Sprint 1** — DPG-10…17. Both LLM surfaces routed through configurable clients, reading **one** config file. The indicator-4 answer. |
-| [`03-open-models-spec.md`](03-open-models-spec.md) | **Sprint 2** — DPG-20…25. Benchmark set, model selection, CI platform-independence job, vLLM deployment. |
+| [`03-open-models-spec.md`](03-open-models-spec.md) | **Sprint 2** — DPG-20…25. Benchmark set, model selection, CI platform-independence job, vLLM deployment. ⭐ **Starting Sprint 2? Read its 🤝 HANDOVER block and §0.1/§0.2 first** — Sprint 1 changed four things under this spec (a 25-char floor, a 30 s pass/fail latency budget, a split on where benchmark data lives, and a green CI), and [Q-19](QUESTIONS.md#q-19) still gates three of its five tickets. |
 | [`04-pii-redaction-spec.md`](04-pii-redaction-spec.md) | **Sprint 3** — DPG-30…36. Redaction at the model-call *and* logging boundaries. Nepali-specific. |
 | [`PROGRESS.md`](PROGRESS.md) | **The tracker.** Status per ticket, checklists, deviations log. Updated at every commit. |
 | [`TESTS.md`](TESTS.md) | **The test ledger.** Every test this sprint must add, with its purpose and its mutation check. |
