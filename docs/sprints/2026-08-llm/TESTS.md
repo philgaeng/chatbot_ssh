@@ -36,6 +36,7 @@ is a quarantine with better branding.
 | `tests/backend/test_llm_config.py` | T-17-a…d — the shared registry, both surfaces | `backend-tests` |
 | `tests/backend/test_llm_config_pins.py` | T-11-d, T-16-a, T-17-b…c — the grep/drift pins | `backend-tests` |
 | `tests/backend/test_benchmark_set.py` | T-20-a…j | `backend-tests` |
+| `tests/backend/test_llm_smoke.py` | T-21-a…g | `backend-tests` |
 | `tests/backend/test_pii_service.py` | T-31-a…e, T-33, T-34 | `backend-tests` |
 | `tests/data/benchmark/` | DPG-20 fixtures (data, not tests) | — |
 | marked `@pytest.mark.live_llm` | T-24-a…b — real round-trips against the open config | `dpg-platform-independence` only |
@@ -249,6 +250,13 @@ carelessly. The test that fails if it happens should exist before the guardrail 
 | **T-20-h** ✅ | No committed item is marked `sensitive`, and ≥5 `seah_confusable` negatives are present — the owner's 2026-08-19 decision held by a test rather than by memory, in both directions: the SEAH narratives stay out, the false-alarm controls stay in | ✅ **Checked** — flagged one item sensitive → red |
 | **T-20-i** ✅ | The README's stated counts, shortest-item length and single uncovered category match the data. A benchmark README with a stale cell is worse than none | ✅ **Checked** — added an item without touching the README → red |
 | **T-20-j** ✅ | `@integration` — **no committed item is byte-identical to a stored grievance.** Provenance is a claim no test can check; this checks the thing that would falsify it in the obvious way, against the seeded database | ✅ **Checked** — planted a real stored `grievance_description` into the set → red. Also confirmed **not vacuous**: the table holds 289 descriptions, so an empty-set pass is not what makes it green |
+| **T-21-a** ✅ | ⭐ **A 402/401/429/5xx/timeout is `blocked`, never `refused`** — six message shapes, each asserted. The account saying no is not a measurement, and rendering it as one is D-50 | ✅ **Checked** — classified 402 as a refusal → red |
+| **T-21-b** ✅ | A **400 on a parameter** stays `refused`, because that IS the measurement DPG-13's ladder is built from (`gpt-3.5-turbo` 400s on `json_schema`, `gpt-4` on both) | ✅ **Checked** — swept 400s into `blocked` → red |
+| **T-21-c** ✅ | ⭐ **A report with any blocked cell emits NO `ModelProfile`.** `_PROFILES` decides the strictest rung a model is ever asked for, in the code path that runs; a row derived from a 402 is permanent pessimism on evidence that measured nothing, and looks identical to a measured row | ✅ **Checked** — emitted a tuple for a blocked model → red |
+| **T-21-d** ✅ | The rung **degrades, never guesses upward**: `json_schema` refused + `json_object` accepted ⇒ `json_object`; both refused ⇒ `prompt` | ✅ **Checked** — returned the stronger rung → red |
+| **T-21-e** ✅ | The matrix renders **three** states (`✅` / `❌` / `⚠ blocked`), not two. A blocked cell shown as ❌ is the defect itself | ✅ **Checked** — collapsed to two states → red |
+| **T-21-f** ✅ | ⭐ **Accepted-and-ignored is not a pass.** The probe schema requires a `district` field the prompt never mentions, so a provider that silently drops `response_format` returns 200 with plausible JSON and no `district`. Downgraded to the rung that was actually honoured | ✅ **Checked** — accepted any parseable JSON → red |
+| **T-21-g** ✅ | The candidate shortlist loads, every shortlisted model states **why**, every excluded one states **a licence and a reason**, and nothing is in both lists — so a loosened consultant-Q5 is a data edit rather than a re-design | ✅ **Checked** — removed a reason → red |
 | **T-24-a** | `@live_llm` — a real chat round-trip against the configured open endpoint returns a parseable structured result | Point at an invalid model → red |
 | **T-24-b** | `@live_llm` — a real transcription round-trip against the configured open ASR endpoint | Same |
 | **T-24-c** | The `live_llm` marker is **deselected** by `backend-tests` and **selected** by `dpg-platform-independence`. Assert on the config, so the "runs nowhere" quarantine cannot re-form silently | Remove the marker from the DPG job's selection → red |

@@ -471,7 +471,14 @@ def test_the_prompt_rung_adds_a_system_message_when_there_is_none(monkeypatch):
         ("gpt-5-nano", False, "max_completion_tokens", 4000),
         ("gpt-4o-mini", True, "max_tokens", 0),
         ("gpt-3.5-turbo", True, "max_tokens", 0),
-        ("openai/gpt-oss-120b:groq", True, "max_tokens", 0),   # unknown → conservative default
+        # ⭐ Measured 2026-08-20 (DPG-21). This row said `0` and `# unknown → conservative default`
+        # until the probe ran — and the default's zero was the D-40 trap waiting for the open
+        # configuration, because `.env.open` ships gpt-oss as the default open model and gpt-oss
+        # reasons. The provider-suffixed id is deliberate: `:groq` must not defeat the prefix match.
+        ("openai/gpt-oss-120b:groq", True, "max_tokens", 1000),
+        # …and a genuinely unrecognised id keeps the fall-through pinned, which is what the row
+        # above used to do. A DPG-23 candidate, so it is a real id rather than a made-up one.
+        ("Qwen/Qwen3.5-27B", True, "max_tokens", 0),
     ],
 )
 def test_the_request_is_shaped_to_what_the_model_accepts(
@@ -484,6 +491,10 @@ def test_the_request_is_shaped_to_what_the_model_accepts(
 
     * `gpt-5-nano` rejects any `temperature` but its default, and rejects `max_tokens` by name;
     * a cap sized for the visible output returns **empty content**, because reasoning spends it first.
+    * ⭐ **and the open models reason too** — gpt-oss carries a measured 1,000-token floor. Before
+      DPG-21 probed it, it fell through to an overhead of **0**, which is the same shape as D-40 on
+      the configuration this repository advertises as its open one. The last row keeps the
+      fall-through itself pinned, so adding a profile never silently removes the safe default.
     """
     monkeypatch.setenv("MODEL_CLASSIFY", model)
     llm_config.get_llm_settings.cache_clear()

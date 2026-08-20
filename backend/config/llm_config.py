@@ -241,6 +241,43 @@ _PROFILES: tuple[tuple[str, ModelProfile], ...] = (
     ("gpt-3.5", ModelProfile("json_object", True, "max_tokens", 0)),
     ("gpt-4", ModelProfile("prompt", True, "max_tokens", 0)),
     ("whisper", ModelProfile("prompt", True, "max_tokens", 0)),
+    # ── Open weights, measured 2026-08-20 (DPG-21, scripts/ops/llm_smoke.py) ─────────────────
+    # Against Hugging Face Inference Providers, served by Groq. Six probes, one request each,
+    # same method as the OpenAI rows above.
+    #
+    # ⚠ **What was measured on which variant, because this one row covers both:**
+    #
+    #   |                        | 20b | 120b |
+    #   |------------------------|-----|------|
+    #   | `json_schema` honoured | ✅  | ✅   |
+    #   | `json_object`          | ✅  | ✅   |
+    #   | `temperature`          | ✅  | —    |
+    #   | `max_tokens`           | ✅  | —    |
+    #   | reasoning tokens seen  | 186 | 182  |
+    #
+    # The 120b run hit the account's credit ceiling (HTTP 402) after three probes, so its
+    # `temperature` and token-cap cells are **unmeasured**. They are covered by this row anyway
+    # because the values it asserts for them are the same ones DEFAULT_PROFILE already asserts —
+    # so the row adds the two facts that WERE measured (a honoured grammar, and a non-zero
+    # reasoning budget) and extrapolates nothing that changes behaviour. Re-run the probe when the
+    # account has credit and split this row if 120b disagrees.
+    #
+    # ⭐ **`json_schema` is honoured, and the probe proves it was applied rather than accepted.**
+    # The probe schema requires a `district` field the prompt never mentions; an ignored schema
+    # produces a reply without it. That distinction matters because a silently-dropped
+    # `response_format` and an honoured one are identical from the caller's side, and the first one
+    # only shows up as malformed output under load.
+    #
+    # ⚠ **`reasoning_overhead` is the entry that actually earns its keep.** gpt-oss is a reasoning
+    # model, and without a row here it fell through to DEFAULT_PROFILE, whose overhead is **0** —
+    # the exact configuration that produced D-40 (a cap consumed entirely by reasoning returns
+    # `finish_reason: length` with EMPTY content, which is not an error and looks like nothing at
+    # all). `.env.open` ships `gpt-oss-20b` as the default open model, so the repository's own open
+    # configuration was one long ticket timeline away from that failure.
+    #
+    # ⚠ Measured from small probes: treat the overhead as a **floor**. A resolved-case summary over
+    # a real ticket timeline reasons harder than a two-line dust complaint (D-40 needed 3,904).
+    ("gpt-oss", ModelProfile("json_schema", True, "max_tokens", 1000)),
 )
 
 DEFAULT_PROFILE = ModelProfile()

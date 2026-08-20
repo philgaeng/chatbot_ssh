@@ -1,0 +1,103 @@
+{
+  "_comment": [
+    "The DPG-23 candidate shortlist, as DATA so that widening it is an edit, not a redesign.",
+    "That matters because the licence limb of the filter is PROVISIONAL: consultant-Q5 asks whether",
+    "restricted-use open weights (Llama, Gemma class) count as open alternatives for indicator 4. If",
+    "the answer loosens, move rows from `excluded` to `shortlist` and re-run — no code changes.",
+    "",
+    "The filter, from 03-open-models-spec.md: permissive licence (Apache-2.0 / MIT) · real",
+    "multilingual coverage including Nepali · reliable guided decoding · fits one 24 GB GPU at 4-bit.",
+    "",
+    "Catalogue read from https://router.huggingface.co/v1/models on 2026-08-20 (132 models served).",
+    "Licences are VERIFIED AT RUN TIME from each model card, never from this file — see llm_smoke.py."
+  ],
+  "catalogue_read": "2026-08-20",
+  "shortlist": [
+    {
+      "id": "openai/gpt-oss-20b",
+      "expected_licence": "apache-2.0",
+      "params": "21B MoE, ~3.6B active",
+      "why": "The incumbent placeholder in .env.open, so it has to be measured rather than assumed. Cheapest serious candidate, eight providers on the router, and the only one that comfortably fits well under the 24 GB limb. Reasoning model — watch the token cap."
+    },
+    {
+      "id": "openai/gpt-oss-120b",
+      "expected_licence": "apache-2.0",
+      "params": "117B MoE, ~5.1B active",
+      "why": "The bigger sibling, and the .env.open placeholder for translation and SEAH findings before Q-21 collapsed the template to two models. Included to measure what that split would have bought. FAILS the 24 GB limb — relevant only while T2 stays parked and inference is hosted."
+    },
+    {
+      "id": "Qwen/Qwen3.5-27B",
+      "expected_licence": "apache-2.0",
+      "params": "27B dense",
+      "why": "The strongest multilingual coverage available under a permissive licence, and dense-27B is the size the spec's candidate table names for classification and summary. Fits 24 GB at 4-bit."
+    },
+    {
+      "id": "Qwen/Qwen3.5-35B-A3B",
+      "expected_licence": "apache-2.0",
+      "params": "35B MoE, ~3B active",
+      "why": "Same family, MoE — tests whether a similar quality tier is reachable at materially lower inference cost, which is the trade the spec's candidate table explicitly asks about."
+    },
+    {
+      "id": "Qwen/Qwen3.5-9B",
+      "expected_licence": "apache-2.0",
+      "params": "9B dense",
+      "why": "The cheap-and-fast end. Q-11 notes per-task downsizing became MORE attractive once T2 was parked (there is no paid-for GPU whose capacity is already sunk), and extraction is schema-constrained work where guided decoding does most of the job."
+    },
+    {
+      "id": "swiss-ai/Apertus-70B-Instruct-2509",
+      "expected_licence": "apache-2.0",
+      "params": "70B dense",
+      "why": "The strongest DPG story in the list: fully open weights AND open training data, built explicitly for low-resource language coverage. If it is competitive on Nepali it is the most defensible choice on indicator 4, not merely an acceptable one. FAILS the 24 GB limb at 70B."
+    },
+    {
+      "id": "microsoft/phi-4",
+      "expected_licence": "mit",
+      "params": "14B dense",
+      "why": "MIT, small, and a useful floor: if a 14B model is adequate on this taxonomy, the cost conversation with the Nepal Government changes shape. Weak multilingual coverage is the expected failure — worth measuring rather than assuming."
+    }
+  ],
+  "excluded": [
+    {
+      "id": "google/gemma-4-31B-it",
+      "licence": "gemma-terms-of-use",
+      "reason": "Bespoke community licence with use restrictions. Excluded by the PROVISIONAL licence limb, not on quality — Gemma-class models are among the strongest multilingual options at this size, so this exclusion may be costing real Nepali quality. consultant-Q5."
+    },
+    {
+      "id": "google/gemma-3-27b-it",
+      "licence": "gemma-terms-of-use",
+      "reason": "Same. Named separately because it is the exact size class the spec's candidate table recommends."
+    },
+    {
+      "id": "meta-llama/Llama-3.3-70B-Instruct",
+      "licence": "llama-3.3-community",
+      "reason": "Llama Community License — use restrictions and an acceptable-use policy. Same provisional exclusion. consultant-Q5."
+    },
+    {
+      "id": "CohereLabs/aya-expanse-32b",
+      "licence": "cc-by-nc-4.0",
+      "reason": "⚠ The exclusion that hurts most. Aya is PURPOSE-BUILT for multilingual coverage and is exactly the right size, but CC-BY-NC forbids commercial use — and unlike the Gemma/Llama limb this one does NOT loosen if consultant-Q5 loosens, because non-commercial is incompatible with a government production deployment however indicator 4 is read. Excluded on licence, not on quality."
+    },
+    {
+      "id": "aisingapore/Gemma-SEA-LION-v4-27B-IT",
+      "licence": "gemma-terms-of-use",
+      "reason": "Inherits Gemma terms. Also: SEA-LION targets South-EAST Asian languages; Nepali is South Asian and is not in its focus set, so the regional-specialist argument does not apply here."
+    },
+    {
+      "id": "zai-org/GLM-4.5-Air",
+      "licence": "mit",
+      "reason": "Licence is fine. Excluded on SIZE — 106B total is far outside the 24 GB limb, and the family's smaller members are not on the router. Kept in the record so a later reader knows it was considered rather than missed."
+    }
+  ],
+  "asr": [
+    {
+      "id": "openai/whisper-large-v3",
+      "expected_licence": "apache-2.0",
+      "why": "The .env.open placeholder, and whisper-1 IS Whisper — so this is close to a drop-in for a closed dependency that was never actually live here."
+    },
+    {
+      "id": "openai/whisper-large-v3-turbo",
+      "expected_licence": "apache-2.0",
+      "why": "14.76% Nepali WER in the 2026 OpenSLR SLR54 comparative study — best-equal, and faster than large-v3."
+    }
+  ]
+}
