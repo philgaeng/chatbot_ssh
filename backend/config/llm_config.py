@@ -142,8 +142,13 @@ class LLMSettings(BaseSettings):
     classification_wait_seconds: float = 30.0
 
     # ── Meaningful input (DPG-19) ────────────────────────────────────────────
-    # Below this many non-whitespace characters, the model is not called at all: there is nothing
-    # to summarise, and a model asked to summarise two words returns either noise or nothing.
+    # Below this many characters — the text with leading and trailing whitespace stripped, so
+    # internal spaces still count — the model is not called at all: there is nothing to summarise,
+    # and a model asked to summarise two words returns either noise or nothing.
+    # ⚠ This comment said "non-whitespace characters" until 2026-08-20. It was wrong, and the two
+    # readings diverge on exactly the spaced-out input a person types when they are unsure what to
+    # write: "a b c d e f g h i j k l m" is 25 characters and 13 non-whitespace, and it IS sent.
+    # `tests/backend/test_benchmark_set.py::test_the_gate_counts_stripped_length_...` is the pin.
     # ⚠ 25 characters is not the same amount of information in every script — in Devanagari it is a
     # short sentence, in English roughly four words. It is a registry value precisely so it can
     # differ by language later; today it is one number and this comment is the disclosure.
