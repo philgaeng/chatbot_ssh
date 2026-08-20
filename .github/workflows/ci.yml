@@ -475,12 +475,26 @@ jobs:
   # outlives those months. Therefore:
   #   * the live subset is small and FIXED — a handful of round-trips, never the benchmark suite
   #     (scripts/ops/llm_benchmark.py is where the expensive thing lives, and it is not in CI);
-  #   * a HARD TOKEN CAP must be set on the Hugging Face account BEFORE this job's first run —
-  #     not after the first invoice;
+  #   SPEND CEILING: ⚠ **THERE IS NO SPENDING-LIMIT CONTROL TO SET.** This line used to say "a hard token cap
+  #     must be set on the Hugging Face account before this job's first run". Checked against
+  #     Hugging Face's own pricing documentation on 2026-08-20: a configurable spending limit is a
+  #     **Team/Enterprise organization** feature, and the account this job uses is a personal free
+  #     account (verified via whoami-v2: type=user, isPro=false, no orgs). The instruction was
+  #     unactionable as written.
+  #     **What actually bounds the spend, and it is structural rather than configured:**
+  #       – free tier is ~$0.10 of included credits per month; past that every request returns 402;
+  #       – extra usage is **pre-paid**, so the balance you load IS the ceiling. Load $20 and $20 is
+  #         the most that can ever be spent. Do not enable auto-recharge if it is ever offered.
+  #     ⚠ **And the consequence for THIS job:** on the free tier the credits are exhausted within a
+  #     few runs, after which every live test skips and the guard below correctly fails the job. So
+  #     a small pre-paid balance is not optional if this job is to run per-commit — otherwise take
+  #     the documented degraded cadence (nightly + release tags) and say so in the badge;
   #   * measured monthly spend belongs in this header once there is a month of it.
-  #   MEASURED SPEND: ⚠ not yet measured — this job has never run. The account had exhausted its
-  #   included credits when the job was written (D-50), so the first real figure lands with the
-  #   first funded run. Record it HERE, not in a document nobody opens with the workflow.
+  #   MEASURED SPEND: ⚠ not yet measured — this job has never run in CI. What IS measured, from
+  #   running the same suite by hand on 2026-08-20: 5 live tests, ~7 requests, all small. The
+  #   expensive thing (scripts/ops/llm_benchmark.py) is deliberately not in CI. Record the real
+  #   monthly figure HERE once there is a month of it — not in a document nobody opens with the
+  #   workflow.
   #   WHO PAYS AFTER THE DEMO MONTHS: ⚠ UNRESOLVED, stated plainly rather than left to be
   #   discovered. Q-19's envelope is time-boxed and personally expensed; this job is not
   #   time-boxed. If the answer is still unresolved when the envelope ends, reduce the cadence to

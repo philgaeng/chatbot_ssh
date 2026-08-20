@@ -36,9 +36,29 @@ not the message.* A 402 that says "monthly" and means "this minute" is the same 
 reads as *"the model cannot detect harassment"* (D-44) and a 402 that reads as *"this model does not
 support temperature"* (the first version of this very script).
 
-⚠ **What remains genuinely unknown:** whether there is *also* a monthly ceiling, and where it is.
-Everything below about setting a hard token cap before DPG-24's first run **still stands** — the cap
-is not made unnecessary by the limit being a rate limit.
+⚠ **How confident to be about "rate limit".** What is *established* is narrower than that word:
+**the message does not mean what it says.** The account served **250+ further calls** after
+announcing that its monthly credits were depleted, and paced probing recovered every model that had
+just 402'd. Whether the underlying mechanism is a burst limiter, a windowed allowance, or something
+else is **not** established, and this document should not claim it is. What follows operationally —
+back off, pace, and never record a 402 as a model property — holds either way.
+
+### ⚠ And the thing that *is* now established, checked 2026-08-20
+
+Against Hugging Face's own pricing documentation and the account itself (`whoami-v2`:
+`type=user`, `isPro=false`, no organizations):
+
+| | |
+|---|---|
+| **A configurable spending limit** | ⚠ **Does not exist for this account.** It is a **Team/Enterprise organization** feature. DPG-24's acceptance criterion *"set a hard token cap on the HF account before the first run"* was **unactionable as written**, and the job header now says so instead of restating it |
+| **Free tier** | ~$0.10 of included credits per month; past that, requests 402 |
+| **Extra usage** | **Pre-paid.** The balance you load *is* the ceiling — load $20 and $20 is the most that can ever be spent. That is the real cap, achieved by not topping up rather than by a setting |
+
+⭐ **The consequence for DPG-24, which matters more than the terminology:** on the free tier the
+credits go within a few runs, after which every live test skips, and the job's *nothing-passed*
+guard correctly fails it. **So a small pre-paid balance is not optional if that job is to run
+per-commit** — the alternative is the documented degraded cadence (nightly + release tags) with the
+badge saying so.
 
 ---
 

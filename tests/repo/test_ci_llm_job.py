@@ -185,14 +185,20 @@ def test_the_job_header_records_why_ci_may_route_while_production_pins(ci_text):
 
 def test_the_job_header_is_honest_about_cost_and_about_who_pays_next(ci_text):
     """
-    Two acceptance items that are easy to write as intentions and hard to keep as facts: the
-    measured spend, and the payer after Q-19's time-boxed envelope ends. Both must appear — as a
-    number, or as an explicit `⚠ UNRESOLVED`. A blank is the one thing that is not allowed.
+    Three acceptance items that are easy to write as intentions and hard to keep as facts: what
+    bounds the spend, what it has actually cost, and who pays after Q-19's time-boxed envelope ends.
+    Each must appear — as a value, or as an explicit `⚠`. A blank is the one thing not allowed.
+
+    ⚠ **Asserted as LABELS, not as prose.** The first version of this test pinned the phrase
+    "HARD TOKEN CAP", and then broke when that instruction turned out to be unactionable — a
+    configurable spending limit is a Team/Enterprise feature and this runs on a personal account, so
+    the honest header had to say something different. A pin on wording fights the correction it
+    should be recording. The labels are the contract; what is written under them is free to change
+    as reality does.
     """
     header = ci_text[ci_text.index("# ── DPG-24") : ci_text.index("  dpg-platform-independence:")]
-    assert "MEASURED SPEND:" in header
-    assert "WHO PAYS AFTER THE DEMO MONTHS:" in header
-    assert "HARD TOKEN CAP" in header
+    for label in ("SPEND CEILING:", "MEASURED SPEND:", "WHO PAYS AFTER THE DEMO MONTHS:"):
+        assert label in header, f"the job header does not record {label!r}"
 
 
 def test_the_workflow_header_counts_its_own_jobs(workflow, ci_text):
