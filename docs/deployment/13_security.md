@@ -97,6 +97,79 @@ Detailed policy: [09_privacy.md](09_privacy.md).
 | **Secrets via environment** | All services | No credentials in repo; `.env` / deployment env vars |
 | **Webhook/API shared secrets** | Ticketing + messaging + Keycloak | `TICKETING_SECRET_KEY`, `MESSAGING_API_KEY`, `KEYCLOAK_WEBHOOK_SECRET` |
 
+
+### 5.1 Where each secret lives — the "lives in" inventory
+
+> **Added 2026-08-20.** §5 above says *"no credentials in repo; `.env` / deployment env vars"*, which
+> is true and answers the wrong question. It does not say **where the canonical copy is** or **what
+> else holds a copy** — and that is precisely what nobody reconstructs from memory when a key has to
+> be rotated in a hurry.
+>
+> ⚠ **The vault paths below are a PROPOSED convention, not a record of what exists.** Confirm the
+> real Proton Pass vault/item names and replace them. A plausible-looking path that resolves to
+> nothing is worse than a blank.
+
+**Source of truth: Proton Pass.** Everything else is a derived copy. `pass-cli` can resolve
+`pass://vault/item/field` references, so the vault column is intended to be machine-usable rather
+than prose.
+
+| Variable | Protects | Source of truth | Derived copies |
+|---|---|---|---|
+| `DB_ENCRYPTION_KEY` | ⭐ **Complainant PII at rest.** `backend` is the sole holder (T3-04) — ticketing has no accessor and must not regain one | `pass://GRM/Postgres/db_encryption_key` | local · AWS staging · DOR prod |
+| `SEARCH_TOKEN_PEPPER` | ⭐ HMAC pepper for phone/email/name lookup tokens (D-19/F-3). ⚠ **Rotating it invalidates every stored token** — `scripts/database/rehash_search_tokens.py` must run on the same box | `pass://GRM/Postgres/search_token_pepper` | local · AWS staging · DOR prod |
+| `POSTGRES_PASSWORD` | Database superuser | `pass://GRM/Postgres/password` | local · AWS staging · DOR prod |
+| `OPS_DB_PASSWORD` | Scoped `ops_app` role | `pass://GRM/Postgres/ops_password` | local · AWS staging · DOR prod |
+| `REDIS_PASSWORD` | Broker + result backend | `pass://GRM/Redis/password` | local · AWS staging · DOR prod |
+| `TICKETING_SECRET_KEY` | Ticketing ↔ chatbot webhook | `pass://GRM/Ticketing/secret_key` | local · AWS staging · DOR prod |
+| `MESSAGING_API_KEY` | Messaging API (`x-api-key`) — also guards `GET /api/grievance/{id}`, which serves **plaintext PII** | `pass://GRM/Messaging/api_key` | local · AWS staging · DOR prod |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client | `pass://GRM/Keycloak/client_secret` | local · AWS staging · DOR prod |
+| `KEYCLOAK_ADMIN_PASSWORD` | ⭐ Realm admin — **can mint officer accounts** | `pass://GRM/Keycloak/admin_password` | local · AWS staging · DOR prod |
+| `KEYCLOAK_WEBHOOK_SECRET` | Onboarding webhook | `pass://GRM/Keycloak/webhook_secret` | local · AWS staging · DOR prod |
+| `SMTP_PASSWORD` | Officer-invite mail relay | `pass://GRM/SMTP/password` | local · AWS staging · DOR prod |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | SNS (complainant SMS) | `pass://GRM/AWS/*` | local · AWS staging · DOR prod |
+| `LLM_API_KEY` / `ASR_API_KEY` | Model provider. ⚠ **Grievance text is sent to whoever this authenticates against** | `pass://GRM/LLM/hf_token` | local · **GitHub secret `HF_TOKEN`** · staging/prod when the open config ships |
+
+### 5.2 ⚠ CI holds exactly one secret, and it must stay that way
+
+`HF_TOKEN` is the **only** GitHub Actions secret in this repository, and the reason is a rule worth
+stating rather than rediscovering:
+
+> **Anyone with repository write access can print a GitHub Actions secret** by editing a workflow.
+> So a secret in CI is exposed to the union of everyone who can push — which is a wider set than
+> everyone who can reach the production box.
+
+That is an acceptable trade for `HF_TOKEN` specifically: it is **scoped** (inference only),
+**capped** (extra usage is pre-paid, so the loaded balance is the ceiling), and **cheap to rotate**
+(revoke, mint, re-paste; nothing stored depends on it). It is not an acceptable trade for anything
+in the rows above it.
+
+⚠ **Which is also why CI must not adopt vault injection.** `pass-cli` resolves `pass://` references
+by authenticating to Proton — so a runner using it needs a Proton credential, and that credential
+would itself have to live in a GitHub secret. The bootstrap does not disappear; it **moves and gets
+worse**, because a vault session unlocks `DB_ENCRYPTION_KEY`, the Keycloak admin password and the
+SMTP relay, where today CI can reach one rate-limited inference token.
+
+**The rule that generalises:** inject-from-vault pays off where the environment *already* holds many
+secrets — a developer laptop, a deploy box — because it removes plaintext at rest without widening
+the blast radius. It is a **downgrade** where the environment holds few, because it trades one
+scoped credential for vault-wide access. CI holds few. CI keeps its one secret.
+
+### 5.3 Rotation
+
+Rotating any row above means updating **every** derived copy. Copies do not self-update, and nothing
+in this repository detects a stale one — the symptom is a service failing to start, or worse, a
+lookup silently returning nothing (`SEARCH_TOKEN_PEPPER`).
+
+- **Local** — regenerate from the vault (`pass-cli inject` / `pass-cli run --env-file`)
+- **GitHub** — manual re-paste; `gh secret set HF_TOKEN` needs *Secrets: write* on the PAT
+- **AWS staging / DOR prod** — per the deployment runbook, then restart the affected services
+- ⚠ **`SEARCH_TOKEN_PEPPER` additionally requires** `scripts/database/rehash_search_tokens.py` on
+  that box, or phone and email lookup return nothing and no error is raised
+
+⚠ **`pass-cli` is beta and gated to paid Proton tiers.** Prove it on the developer machine before it
+goes anywhere near a deploy path — a vault-resolution failure on the DOR box during an incident is a
+much worse day than a hand-copied variable.
+
 ---
 
 ## 6. Messaging security
