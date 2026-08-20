@@ -206,3 +206,31 @@ def test_the_workflow_header_counts_its_own_jobs(workflow, ci_text):
     assert f"{words[count]} independent gates" in ci_text, (
         f"the header does not say there are {count} jobs"
     )
+
+
+def test_the_job_fails_when_nothing_passed(workflow):
+    """
+    ⭐ The control that keeps the quota-skip honest.
+
+    The live tests skip rather than fail when the provider refuses on quota — correct, because a 402
+    is not a defect here and a job that reddens on someone else's billing gets ignored. But that
+    creates a new way to be wrong: a run where **every** test skipped would exit 0 and display a
+    green tick while having tested nothing. That is the quarantine pattern with better manners.
+
+    So the step must fail when nothing passed, and must still fail on a real failure.
+    """
+    commands = _run_commands(workflow, DPG_JOB)
+
+    # ⚠ Assert the CONDITION, not the message. The first version of this test checked only that the
+    # words "NOTHING PASSED" appeared, and survived a mutation that replaced the guard with
+    # `if true` — the message stayed in the dead else-branch and the test stayed green. A pin that
+    # matches prose rather than behaviour is decorative (D-42, twice now this sprint).
+    assert "grep -qE '[0-9]+ (passed|xpassed)' live.log" in commands, (
+        "the job does not test whether anything actually passed — a run where every live test "
+        "skipped would report green having tested nothing"
+    )
+    assert "NOTHING PASSED" in commands, "the failure says nothing about why"
+    assert "exit 1" in commands, "the guard detects the condition but does not fail the job"
+    assert "a live test FAILED" in commands, (
+        "a genuine failure must still redden the job — only quota refusals may skip"
+    )

@@ -15,6 +15,7 @@ from __future__ import annotations
 import pytest
 
 from backend.config.llm_config import llm_endpoint
+from tests.llm_live_helpers import live_call
 
 pytestmark = pytest.mark.live_llm
 
@@ -34,7 +35,9 @@ def test_the_ticketing_client_reaches_the_same_endpoint_and_answers():
     from ticketing.clients import llm_client
 
     llm_client.reset_client()
-    translated = llm_client.translate_to_english("सडकको धूलोले घरमा बस्न गाह्रो भएको छ।")
+    translated = live_call(
+        lambda: llm_client.translate_to_english("सडकको धूलोले घरमा बस्न गाह्रो भएको छ।")
+    )
 
     assert translated is None or isinstance(translated, str), (
         "the ticketing surface returned something that is neither a translation nor its documented "

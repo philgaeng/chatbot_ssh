@@ -560,11 +560,37 @@ jobs:
         # silently consuming the job budget. That is the D-26 apt-mirror lesson applied to the
         # most hang-prone step in this workflow.
         timeout-minutes: 8
+        # ⚠ THE `-q ... || true` IS NOT SLOPPINESS — read the guard below before touching it.
+        #
+        # These tests SKIP (not fail) when the provider refuses on quota — a 402/429 says the
+        # account is out of budget this minute, which is not a defect in this repository, and a job
+        # that reddens on it teaches everyone to ignore the job (D-26: a permanently red build is
+        # indistinguishable from one nobody watches).
+        #
+        # ⚠ But a run that skipped EVERYTHING must not be reported as evidence — that is the
+        # quarantine pattern wearing a green tick. So the exit code is captured, and the job fails
+        # if **nothing actually passed**. Skips are tolerated; an empty gate is not.
         run: |
+          set -o pipefail
           PYTHONPATH=. python -m pytest \
             tests/backend/test_llm_live.py \
             tests/ticketing/test_ticketing_llm_live.py \
-            -m live_llm -v --strict-markers
+            -m live_llm -v --strict-markers | tee live.log || true
+
+          if grep -qE '[0-9]+ (passed|xpassed)' live.log; then
+            echo "::notice title=DPG platform-independence::the open configuration answered — $(grep -oE '[0-9]+ passed' live.log | head -1)"
+          else
+            echo "::error title=DPG platform-independence::NOTHING PASSED. Every live test skipped"
+            echo "or failed, so this run is not evidence of anything. Most likely the provider"
+            echo "refused on quota for the whole window — check the account before re-running."
+            exit 1
+          fi
+
+          if grep -qE '[0-9]+ failed' live.log; then
+            echo "::error title=DPG platform-independence::a live test FAILED — that is a real"
+            echo "finding, not a quota problem: quota refusals skip. Read the failure."
+            exit 1
+          fi
 
       - name: Say which endpoint this actually proved
         if: steps.gate.outputs.run == 'true' && always()

@@ -4,7 +4,40 @@
 > Sprint index: [`README.md`](README.md) · Test ledger: [`TESTS.md`](TESTS.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 > Status legend: ⬜ not started · 🟡 in progress · ✅ done · ⏸ blocked · ❌ dropped (log why)
 
-**Sprint status: 🟡 IN PROGRESS — Sprints 0 and 1 complete (both waves)** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
+**Sprint status: 🟡 IN PROGRESS — Sprints 0, 1 and 2 complete** · Created 2026-08-17 · Baseline `integration/stage` @ `f0d4552d`
+
+> **Sprint 2 (`dpg/sprint2-open-models`) — all six tickets landed, 2026-08-20.** Six commits.
+> **DPG-20 ✅ · DPG-21 ✅ · DPG-25 ✅ · DPG-22 🟡 · DPG-23 🟡 · DPG-24 🟡.**
+>
+> ⭐ **The one that matters: the LLM suite is green against the open configuration.** Four passed,
+> one xfailed, exit 0 — the product's own call paths, both surfaces, against `openai/gpt-oss-20b` on
+> Hugging Face Inference Providers. That is indicator 4 **executing**, not asserted.
+>
+> **What the three 🟡 are waiting on, and none of it is code:**
+> - **DPG-22** — WER needs audio nobody has recorded, and the open ASR endpoint **404s** (D-53).
+> - **DPG-23** — 103 of 105 classification calls hit the provider's token limit, because **our**
+>   prompt is ~20,700 characters (the catalogue is injected twice). Detection ran fully.
+> - **DPG-24** — the job is written, pinned by 14 tests, and has never executed in CI.
+>
+> **Six deviations, five of them defects in code that was already live:**
+> **D-49** four categories silently lost their high-priority flag, including dust and the SEAH
+> category · **D-50** ⚠ *my own diagnosis was wrong* — a rate limit, not depleted credit ·
+> **D-51** the classifier invents categories on 17% of grievances and they are stored ·
+> **D-52** the SEAH detector flags 5 of 8 gendered non-harassment complaints into a channel most
+> officers cannot see · **D-53** the open ASR endpoint does not exist · **D-54** a candidate model
+> refuses a grievance about children falling ill.
+>
+> ⚠ **The single most important missing number in this sprint is SEAH recall.** `gpt-5-nano` flags
+> 5 of 8 confusables; `gpt-oss-20b` flags **0 of 105 items, of anything**. Those are consistent with
+> "better calibrated" *and* with "says no to everything", and the committed set has no positives to
+> tell them apart. **Neither model may be selected on this evidence.**
+>
+> ⭐ **Two findings the sprint was not looking for.** Both models invent the *same* `Road Hazard -
+> Dust` — two vendors, two architectures, one fabricated label — which makes D-51 a **taxonomy**
+> question more than a model one. And DPG-25's costing found the T1/T2 crossover sits at
+> 40,000–780,000 grievances/month against a national ceiling near 7,700: **T2 is a data-sovereignty
+> decision with a price, not a cost decision at all.**
+
 
 > **Sprint 1, first wave, closed 2026-08-18.** All eight tickets ✅ on `dpg/sprint1-llm-agnostic`,
 > eight commits, DPG-10's net green at every one of them.
@@ -116,6 +149,30 @@ rather than an excuse — and DPG-03 is the longest lead time on the whole progr
 Indicator 2 fails outright with *no* licence, so a provisional Apache-2.0 with an honest
 pending-holder disclosure in `NOTICE` is strictly better than an empty repository root — and it is
 reversible before publication. That reasoning is recorded in `NOTICE` itself, not just here.
+
+---
+
+## Sprint 2 acceptance — checked against reality, 2026-08-20
+
+Each line is the spec's own wording, with the verdict beside it. Two are qualified and say why.
+
+| Acceptance criterion | Verdict |
+|---|---|
+| Labelled benchmark set built and committed (test data, **not** production PII), with provenance | ✅ 105 items, CC0-1.0, provenance README. "No production PII" is **verified by a test against the live DB**, not assumed |
+| Benchmark table completed and published in `docs/dpg/model-benchmarks.md` | ✅ Published. ⚠ **Complete is the wrong word and the document says so**: the closed column is full, the open column has detection only, and every unmeasured cell names its blocker |
+| **The full test suite green against the open configuration** | ✅ **4 passed, 1 xfailed, exit 0** — both surfaces, real calls, `openai/gpt-oss-20b`. The xfail is D-53 (the open ASR endpoint 404s) and is `strict=True`, so it reddens the day someone fixes it |
+| CI platform-independence job passing; badge in the repo `README.md` | 🟡 **Job written and pinned by 14 tests; it has never run.** Needs `HF_TOKEN` + `DPG_MODEL_*` set as repo secrets/variables — the one remaining step nobody in this repository can take. Badge is in place |
+| `docs/dpg/open-model-configuration.md` written — the reviewer-facing document | ✅ With the measured capability matrix, the excluded-on-licence list, and what is **not** yet true |
+| T2 vLLM **documented and costed** — `⚠ not deployed`, and the deferred e2e test logged | ✅ And the costing changed the conclusion — see the crossover |
+| The indicator-4 answer now true sentence by sentence | ⚠ **No — and that is the finding.** Checked clause by clause in `00-dpg-context-and-decisions.md`: **four of seven do not hold**, chiefly that the repository default is still proprietary because no open model has been *chosen*. A version that **is** true today is drafted beside it |
+| Every deferral logged in `followups/` + `TODO.md`, same commit | ✅ Nine follow-ups, nine `TODO.md` rows |
+
+### ⚠ What a reader should not conclude from the ticks above
+
+**Sprint 2 did not choose a model, and choosing one was its point.** The mechanism, the data, the
+harness, the scoring rules and the CI gate are all built, tested and reproducible. What is missing is
+**SEAH recall** — and until that exists for both candidates, selecting on the numbers that *do* exist
+would mean picking a detector that flags nothing because it scored a perfect false-alarm rate.
 
 ---
 

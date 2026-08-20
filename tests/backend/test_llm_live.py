@@ -26,6 +26,7 @@ import wave
 import pytest
 
 from backend.config.llm_config import get_llm_settings, llm_endpoint, model_for
+from tests.llm_live_helpers import live_call
 
 pytestmark = pytest.mark.live_llm
 
@@ -64,7 +65,7 @@ def test_a_real_structured_round_trip_against_the_configured_endpoint():
     """
     from backend.services.llm_client import call_llm
 
-    reply = call_llm(
+    reply = live_call(lambda: call_llm(
         "classify",
         schema=_Reply,
         schema_name="live_probe",
@@ -73,7 +74,7 @@ def test_a_real_structured_round_trip_against_the_configured_endpoint():
             {"role": "user", "content":
                 "Construction dust from the road works is entering our house and the children are ill."},
         ],
-    )
+    ))
 
     assert isinstance(reply.category, str) and reply.category.strip(), "empty content from a live call"
     assert isinstance(reply.urgent, bool)
@@ -117,15 +118,29 @@ def _one_second_of_silence() -> io.BytesIO:
     return buffer
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "D-53 — the configured open ASR endpoint has no transcription route. "
+        "https://router.huggingface.co/v1/audio/transcriptions returns 404 for every whisper id "
+        "tried, while /v1/models and /v1/chat/completions return 200 on the same token, and the "
+        "router's catalogue holds 132 models and no audio. "
+        "⚠ strict=True ON PURPOSE: the day someone points ASR at a provider that DOES serve audio, "
+        "this xpasses and the job goes red — which is the signal to DELETE THIS MARKER and record "
+        "that open transcription now works. A non-strict xfail would sit here forever after being "
+        "fixed, which is the marker-nobody-reads pattern. "
+        "Tracked: docs/sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md"
+    ),
+)
 def test_a_real_transcription_round_trip():
     from backend.services.llm_client import get_asr_client
 
     client = get_asr_client()
-    result = client.audio.transcriptions.create(
+    result = live_call(lambda: client.audio.transcriptions.create(
         model=get_llm_settings().model_asr,
         file=_one_second_of_silence(),
         language="ne",
-    )
+    ))
 
     # Silence transcribes to "" or to noise; both are fine. What must hold is that the call
     # completed and returned the documented shape.
@@ -148,10 +163,10 @@ def test_the_structured_rung_the_registry_picked_is_one_the_provider_accepts():
     task = model_for("classify")
     assert task.structured_output in ("json_schema", "json_object", "prompt")
 
-    reply = call_llm(
+    reply = live_call(lambda: call_llm(
         "classify", schema=_Reply, schema_name="live_rung",
         messages=[{"role": "user", "content": "A truck damaged our paddy field. Reply as JSON."}],
-    )
+    ))
     assert reply.category.strip(), (
         f"the {task.structured_output!r} rung was accepted but produced nothing usable on "
         f"{task.model!r} — check its _PROFILES entry"
