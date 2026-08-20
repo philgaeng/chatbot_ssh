@@ -476,9 +476,17 @@ def test_the_prompt_rung_adds_a_system_message_when_there_is_none(monkeypatch):
         # configuration, because `.env.open` ships gpt-oss as the default open model and gpt-oss
         # reasons. The provider-suffixed id is deliberate: `:groq` must not defeat the prefix match.
         ("openai/gpt-oss-120b:groq", True, "max_tokens", 1000),
-        # …and a genuinely unrecognised id keeps the fall-through pinned, which is what the row
-        # above used to do. A DPG-23 candidate, so it is a real id rather than a made-up one.
-        ("Qwen/Qwen3.5-27B", True, "max_tokens", 0),
+        # A measured open model with a different shape: Qwen reports `reasoning_tokens: 0` while
+        # emitting ~2,000 completion tokens for a one-line prompt, because its reasoning goes to a
+        # non-standard field. Taking the API at its word would truncate it exactly as D-40
+        # truncated gpt-5-nano, so the overhead is the observed floor, not the reported zero.
+        ("Qwen/Qwen3.5-27B", True, "max_tokens", 2000),
+        # …and a **deliberately fictional** id keeps the fall-through pinned. It used to be a real
+        # DPG-23 candidate, which was better — until DPG-21 measured the whole shortlist and every
+        # real id became a known one. A made-up id is the honest replacement: the property under
+        # test is *unrecognised*, and pinning it to a real model would silently stop testing that
+        # the day someone profiles it.
+        ("some-vendor/never-seen-v1", True, "max_tokens", 0),
     ],
 )
 def test_the_request_is_shaped_to_what_the_model_accepts(

@@ -98,43 +98,62 @@ docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.
   backend python -m scripts.ops.llm_smoke --candidates --json report.json
 ```
 
-### What it found
+### What it found — the full shortlist, measured
 
-| Model | Licence *(from the model card, at probe time)* | chat | `json_object` | `json_schema` | `temperature` | `max_tokens` | Served by |
+Second pass, 2026-08-20, paced (see the rate-limit note below). Six probes per model, one request
+per cell.
+
+| Model | Licence *(from the model card, at probe time)* | chat | `json_object` | `json_schema` | `temperature` | `max_tokens` | Probe latency |
 |---|---|---|---|---|---|---|---|
-| `openai/gpt-oss-20b` | apache-2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | groq |
-| `openai/gpt-oss-120b` | apache-2.0 | ✅ | ✅ | ✅ | ⚠ blocked | ⚠ blocked | — |
-| `Qwen/Qwen3.5-27B` | apache-2.0 | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | — |
-| `Qwen/Qwen3.5-35B-A3B` | apache-2.0 | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | — |
-| `Qwen/Qwen3.5-9B` | apache-2.0 | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | — |
-| `swiss-ai/Apertus-70B-Instruct-2509` | apache-2.0 | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | — |
-| `microsoft/phi-4` | mit | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | ⚠ blocked | — |
-| *audio / transcription* | — | ⚠ Not measured — no audio subset exists ([followup](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md)) | | | | | |
+| `openai/gpt-oss-20b` | apache-2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | **0.73 s** |
+| `openai/gpt-oss-120b` | apache-2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | **0.68 s** |
+| `Qwen/Qwen3.5-27B` | apache-2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | 20.48 s |
+| `Qwen/Qwen3.5-35B-A3B` | apache-2.0 | ✅ | ✅ | ✅ | ✅ | ✅ | 9.35 s |
+| `Qwen/Qwen3.5-9B` | apache-2.0 | ✅ | ✅ | ⚠ **accepted, not honoured** | ✅ | ✅ | 23.78 s |
+| `swiss-ai/Apertus-70B-Instruct-2509` | apache-2.0 | ❌ **"Your request was blocked"** | — | — | — | — | 0.42 s |
+| `microsoft/phi-4` | mit | ✅ | ✅ | ✅ | ✅ | ✅ | 1.77 s |
+| *audio / transcription* | — | ❌ **404 — the router serves no `/v1/audio/*` route at all** (see below) | | | | | |
 
-> ⚠ **`⚠ blocked` is a billing state, not a model property.** The Hugging Face account exhausted its
-> monthly included inference credits partway through the run (HTTP 402). Those cells measure the
-> wallet and say nothing about the models. They are marked, not left blank and not rendered as ❌ —
-> because the first version of the probe *did* render them as ❌, and *"depleted your monthly
-> included credits"* came out looking exactly like *"this model does not support `temperature`"*.
-> That is the failure `docs/models/01_seah_detection_benchmark.md` §6.1 makes a standing rule about,
-> and `tests/backend/test_llm_smoke.py` now pins the distinction.
->
-> **Licences were still verified for every candidate**, because model-card lookups are free.
+*(Probe latency is the `json_schema` request on a **one-sentence** prompt — not a benchmark number.
+It is here because the spread is three orders of magnitude and that is a finding in itself.)*
 
-### The two facts this bought, which were not free
+### ⭐ Three things this cost six requests each and was worth it
 
-1. **`json_schema` is genuinely honoured by `gpt-oss`, not merely accepted.** The probe schema
-   requires a `district` field the prompt never mentions, so a provider that silently drops
-   `response_format` returns a reply without it. That is the whole difference between "returned
-   JSON" and "was constrained", and asking for *some JSON* cannot tell them apart. Everything on the
-   `json_schema` rung of DPG-13's ladder therefore works on the open configuration too.
-2. ⚠ **`gpt-oss` reasons, and the registry did not know.** Unrecognised ids fall through to
-   `DEFAULT_PROFILE`, whose `reasoning_overhead` is **0** — and `.env.open` ships `gpt-oss-20b` as the
-   default open model. A token cap consumed entirely by the reasoning phase returns
-   `finish_reason: length` with **empty content**: not an error, not a truncation anyone notices,
-   just nothing. That is D-40, and the repository's own open configuration was one long ticket
-   timeline away from it. A measured 1,000-token floor is now in `_PROFILES`, pinned by
-   `tests/backend/test_llm_config.py`.
+**1. `Qwen/Qwen3.5-9B` accepts `json_schema` and ignores it.** HTTP 200, well-formed JSON, and
+**not one of the fields the schema declares required**. This is the failure DPG-13's degradation
+ladder exists for, caught in the wild — and it is invisible to any probe that asks for *some JSON*
+and calls a successful parse a pass. The probe schema requires a `district` field the prompt never
+mentions, precisely so "returned JSON" and "was constrained" can be told apart. The model is pinned
+to `json_object` in `_PROFILES`, which is the strongest rung it actually applies.
+
+⚠ **Had this not been measured, a fresh clone pointed at that model would have produced malformed
+output under load and nothing would have explained why.**
+
+**2. ⚠ `swiss-ai/Apertus-70B-Instruct-2509` refused the request outright** — *"Your request was
+blocked."* The prompt was the benchmark's flagship item: construction dust entering a house, children
+falling ill. **A content filter that blocks a grievance about children's health is disqualifying for
+a grievance system**, whatever the model's quality, and it would fail closed on exactly the reports
+that matter most. That is a shame — Apertus was the strongest *DPG story* in the shortlist (fully
+open weights **and** open training data, built for low-resource language coverage). It gets no
+`_PROFILES` entry; an unmeasured model takes the conservative default rather than a guess. See the
+[follow-up](../sprints/2026-08-llm/followups/apertus-content-filter-blocks-a-grievance.md).
+
+**3. ⚠ Latency varies by 30×, and the slow end is not survivable.** `gpt-oss` answers a one-sentence
+probe in **0.7 s**; `Qwen3.5-9B` takes **23.8 s** and emits 2,048 completion tokens to do it. The
+real classification prompt is ~20,700 characters before the complaint is added. **Against a 30-second
+interactive budget, the Qwen family is a serious risk and `gpt-oss` has enormous headroom** — and
+that is a selection input, not a footnote, because latency here is pass/fail rather than a table row.
+
+### ⚠ And a correction worth carrying: the router rate-limits and calls it a credit failure
+
+The first pass reported six of seven candidates as unmeasurable, on the strength of
+*"You have depleted your monthly included credits"* (HTTP 402). **That was wrong.** Probing the same
+models **one at a time**, seconds later, every one passed. It is a short-window rate limit whose
+message is about the month. The probe now backs off and retries account-level refusals — never model
+refusals, because a 400 on `json_schema` is the answer and not an obstacle — and paces itself between
+models. [The write-up](../sprints/2026-08-llm/followups/hf-router-rate-limit-reads-as-credit-exhaustion.md).
+
+**Licences were verified for all seven**, including Apertus, because model-card lookups are free.
 
 ### The candidate shortlist, and what the licence filter excluded
 
@@ -172,10 +191,16 @@ probed**, because each needs its own account. Do not read the fan-out count as a
 A configuration page that overstates its position is worth less than none, so:
 
 - ⚠ **The model ids in `.env.open` are still placeholders for *quality*.** DPG-21 (2026-08-20)
-  established that `gpt-oss` **can be driven correctly** — permissive licence confirmed from the
-  model card, `json_schema` honoured rather than merely accepted, reasoning overhead measured and
-  landed in `_PROFILES`. None of that is an accuracy result. **Capability is not quality**, and
-  conflating them is the easiest overstatement available here.
+  measured the **whole shortlist**: licences confirmed from the model cards, `json_schema` honoured
+  by five of six reachable candidates and *silently ignored* by the sixth, reasoning overheads
+  measured, and every result landed in `_PROFILES`. None of that is an accuracy result.
+  **Capability is not quality**, and conflating them is the easiest overstatement available here.
+- ⚠ **Transcription is not served by this configuration at all.** The router returns **404** for
+  `/v1/audio/transcriptions` — verified for three model ids, with `/v1/models` and
+  `/v1/chat/completions` both returning 200 on the same token. So *"the open configuration runs the
+  whole system"* is **false for audio** and true for text. Nothing breaks today because voice is
+  switched off, and it would break the day it is switched on
+  ([follow-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md)).
   Nepali classification quality, translation quality and ASR word-error rate are all unmeasured.
   [DPG-22 and DPG-23](../sprints/2026-08-llm/03-open-models-spec.md) own those numbers. ✅ **Funded as of
   2026-08-20** (Q-19 — a few hundred USD, owner-paid, shared with the pilot's own inference), so the

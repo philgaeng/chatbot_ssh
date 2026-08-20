@@ -17,7 +17,8 @@
       "id": "openai/gpt-oss-20b",
       "expected_licence": "apache-2.0",
       "params": "21B MoE, ~3.6B active",
-      "why": "The incumbent placeholder in .env.open, so it has to be measured rather than assumed. Cheapest serious candidate, eight providers on the router, and the only one that comfortably fits well under the 24 GB limb. Reasoning model — watch the token cap."
+      "why": "The incumbent placeholder in .env.open, so it has to be measured rather than assumed. Cheapest serious candidate, eight providers on the router, and the only one that comfortably fits well under the 24 GB limb. Reasoning model — watch the token cap.",
+      "measured_2026_08_20": "✅ All six capabilities. `json_schema` honoured (proved, not assumed). 0.73s on the probe — 30x faster than the Qwen family, which matters because latency here is pass/fail against the interactive budget, not a table row."
     },
     {
       "id": "openai/gpt-oss-120b",
@@ -41,13 +42,15 @@
       "id": "Qwen/Qwen3.5-9B",
       "expected_licence": "apache-2.0",
       "params": "9B dense",
-      "why": "The cheap-and-fast end. Q-11 notes per-task downsizing became MORE attractive once T2 was parked (there is no paid-for GPU whose capacity is already sunk), and extraction is schema-constrained work where guided decoding does most of the job."
+      "why": "The cheap-and-fast end. Q-11 notes per-task downsizing became MORE attractive once T2 was parked (there is no paid-for GPU whose capacity is already sunk), and extraction is schema-constrained work where guided decoding does most of the job.",
+      "measured_2026_08_20": "⚠ Accepts `json_schema` and does NOT honour it — 200, well-formed JSON, none of the required fields. Pinned to `json_object` in _PROFILES. Also the slowest probe measured (23.8s on one sentence), which is a serious risk against a 30s interactive budget."
     },
     {
       "id": "swiss-ai/Apertus-70B-Instruct-2509",
       "expected_licence": "apache-2.0",
       "params": "70B dense",
-      "why": "The strongest DPG story in the list: fully open weights AND open training data, built explicitly for low-resource language coverage. If it is competitive on Nepali it is the most defensible choice on indicator 4, not merely an acceptable one. FAILS the 24 GB limb at 70B."
+      "why": "The strongest DPG story in the list: fully open weights AND open training data, built explicitly for low-resource language coverage. If it is competitive on Nepali it is the most defensible choice on indicator 4, not merely an acceptable one. FAILS the 24 GB limb at 70B.",
+      "measured_2026_08_20": "⚠ PROVISIONALLY OUT. Its only reply to the probe was 'Your request was blocked' — a content filter, in 0.42s, on a grievance about children falling ill from construction dust. Kept in the SHORTLIST rather than moved to `excluded` on purpose: it is not yet established whether the filter belongs to the model or to the serving provider, and if it is the provider's then another route to the same weights has no such problem. See followups/apertus-content-filter-blocks-a-grievance.md."
     },
     {
       "id": "microsoft/phi-4",

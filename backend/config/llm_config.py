@@ -278,6 +278,29 @@ _PROFILES: tuple[tuple[str, ModelProfile], ...] = (
     # ⚠ Measured from small probes: treat the overhead as a **floor**. A resolved-case summary over
     # a real ticket timeline reasons harder than a two-line dust complaint (D-40 needed 3,904).
     ("gpt-oss", ModelProfile("json_schema", True, "max_tokens", 1000)),
+    # ── The rest of the DPG-23 shortlist, measured 2026-08-20 (second pass, paced) ────────────
+    # Six probes each, one request per cell. Full matrix and method:
+    # docs/dpg/open-model-configuration.md.
+    #
+    # ⚠ **`Qwen3.5-9B` accepts `json_schema` and does not honour it.** The request returned 200 and
+    # the reply omitted every field the schema declares required — the silent-degradation case
+    # DPG-13's ladder exists for, caught in the wild. It is pinned to `json_object` here, which is
+    # the strongest rung it actually applies. **This is why the probe asks for a field the prompt
+    # never mentions:** "returned JSON" and "was constrained" are indistinguishable otherwise, and
+    # the difference only shows up as malformed output under load.
+    #
+    # ⚠ **The `reasoning_overhead` values for the Qwen family are inferred, not itemised.** These
+    # models report `reasoning_tokens: 0` while emitting 1,450–2,048 completion tokens for a
+    # one-sentence probe — their reasoning goes to a non-standard `reasoning_content` field, so it
+    # is billed as completion and invisible in `completion_tokens_details`. Taking the API at its
+    # word would set an overhead of 0 and truncate them exactly as D-40 truncated `gpt-5-nano`.
+    # The value below is the **observed completion for a trivial prompt**, which is a floor.
+    ("Qwen3.5-9B", ModelProfile("json_object", True, "max_tokens", 2000)),
+    ("Qwen3.5", ModelProfile("json_schema", True, "max_tokens", 2000)),
+    ("phi-4", ModelProfile("json_schema", True, "max_tokens", 0)),
+    # ⚠ No entry for `swiss-ai/Apertus-*`: its only reply was "Your request was blocked" — a content
+    # filter, on a grievance about children falling ill from construction dust. See the follow-up;
+    # an unmeasured model gets the conservative default, never a guess.
 )
 
 DEFAULT_PROFILE = ModelProfile()

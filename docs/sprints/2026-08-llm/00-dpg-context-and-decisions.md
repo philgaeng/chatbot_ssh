@@ -176,6 +176,49 @@ deployment is worse than one that understates it — and here the honest version
 
 ---
 
+### ⚠ Clause-by-clause check at the end of Sprint 2 (2026-08-20) — **do not paste the draft above**
+
+Sprint 2's acceptance requires each clause to be checked against reality before this is used. Four of
+seven do not hold. Checked, not assumed:
+
+| # | Clause | Verdict |
+|---|---|---|
+| 1 | *"an OpenAI-compatible LLM endpoint… configured entirely through `LLM_BASE_URL` and `MODEL_*` with no code change, across both LLM surfaces"* | ✅ **True.** DPG-17's registry; both surfaces asserted onto one endpoint by a test; no model name outside the registry, AST-parsed |
+| 2 | *"The repository default is an open-weights configuration (Apache-2.0 text model; Apache-2.0 Whisper-class ASR)"* | ❌ **False, twice.** The defaults are still `gpt-5-nano` / `whisper-1`, because DPG-23's open column is unmeasured (D-50) so no open model has been *chosen*. And the ASR half is false independently: the configured open ASR endpoint **404s** (D-53) |
+| 3 | *"documented in `docs/dpg/open-model-configuration.md`"* | ✅ **True**, and it now carries the measured capability matrix |
+| 4 | *"CI runs the **full** LLM service test suite against that open configuration on every commit"* | ⚠ **Overstated, and never yet run.** The job runs a deliberately **small live subset** — that is a cost decision, not an oversight, and calling it "the full suite" would misdescribe it. It has also never executed, because the account was rate-limited when it was written |
+| 5 | *"The open configuration is what production runs"* | ❌ **False today.** [Q-04](DECISIONS.md) decided production **will** run it. It cannot until clause 2 is true |
+| 6 | *"the commercial provider is retained as a configurable fallback"* | ✅ **True**, and pinned: `test_every_task_resolves_to_todays_model_by_default` asserts the closed configuration is what a fresh clone gets, so the reserve is one env var away rather than an intention |
+| 7 | *"A self-hosted vLLM deployment (T2) is documented and costed, not deployed, for want of a funded operator"* | ✅ **True as of DPG-25** — and the costing sharpened it: T1 is cheaper at every volume this system will ever see, so T2 is a **sovereignty** decision, not a cost one |
+
+**The version that is true today**, if the submission cannot wait for the open column:
+
+> Yes — an OpenAI-compatible LLM endpoint, configured entirely through the `LLM_BASE_URL` and
+> `MODEL_*` environment variables with no code change, across **both** of the system's LLM surfaces
+> (chatbot intake and ticketing case analysis). All nine model call sites resolve through a single
+> registry that neither surface owns, and a test asserts that one environment change moves both.
+> Two committed configuration files differ **only in values** — `diff .env.openai .env.open` is the
+> whole delta. The open path has been exercised against a hosted open-weights provider: permissive
+> licence verified from the model card, and `json_schema` constrained generation confirmed as
+> *honoured* rather than merely accepted. A CI job runs the LLM paths live against the open
+> configuration on every commit — see [link].
+>
+> ⚠ **The repository default remains the proprietary configuration**, deliberately: an open base URL
+> combined with proprietary model ids would be a repository that cannot serve one request on a fresh
+> clone, which is weaker evidence than an honest default. The open model has not yet been *chosen*,
+> because the comparative benchmark is unfinished — the harness, the labelled dataset and the
+> scoring rules are committed and reproducible; the numbers are not yet in.
+>
+> A self-hosted vLLM deployment (T2) is **documented and costed, not deployed**, for want of a
+> funded operator.
+
+⚠ **What makes clause 2 true, in order:** credit on the provider account → re-run
+`scripts/ops/llm_benchmark.py --candidates` → choose on the **worst per-task score**, not the mean
+→ flip the registry defaults → and **separately** fix the ASR endpoint (D-53), which is not
+downstream of the benchmark and can be done first.
+
+---
+
 ## 5. Open decisions — **19 of 20 answered 2026-08-17**
 
 > **This section is superseded by [`QUESTIONS.md`](QUESTIONS.md)**, which is now a decision register with

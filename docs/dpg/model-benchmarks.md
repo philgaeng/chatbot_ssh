@@ -1,9 +1,11 @@
 # Model benchmarks — what this system actually scores
 
-> **Status (2026-08-20): half the table is measured.** The **closed baseline** is complete —
-> `gpt-5-nano`, the model production runs today, over all 105 items of the committed benchmark set.
-> The **open column is empty**, and the reason is not technical: the Hugging Face account has no
-> inference credit (**D-50**). Every open cell below says `⚠ Not measured` rather than sitting blank.
+> **Status (2026-08-20): the closed baseline is complete; the open column is one metric in.** The
+> **closed baseline** — `gpt-5-nano`, the model production runs today — covers all 105 items on both
+> tasks. For the **open** configuration, `openai/gpt-oss-20b` completed **all 105 detection items**
+> and **2 of 105 classification items**: the classification prompt is ~20,700 characters, and 105 of
+> them in a few minutes exceeds the provider's token rate limit (HTTP 402 on 103 items). Every
+> unmeasured cell says `⚠ Not measured` rather than sitting blank.
 > **Owner:** [DPG-23](../sprints/2026-08-llm/03-open-models-spec.md#dpg-23) · **Set:**
 > [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) · **Harness:**
 > [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)
@@ -43,17 +45,18 @@ docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.
 
 | Metric | Current (closed) — `gpt-5-nano` | Open config | Delta |
 |---|---|---|---|
-| Classification precision *(set-level)* | **0.740** | ⚠ Not measured | — |
+| Classification precision *(set-level)* | **0.740** | ⚠ Not measured — 103/105 rate-limited (§3.4) | — |
 | Classification recall *(set-level)* | **0.805** | ⚠ Not measured | — |
 | Category-set **F1** *(multi-label)* | **0.771** | ⚠ Not measured | — |
 | Exact-set accuracy *(every gold label, no invented extras)* | **0.676** | ⚠ Not measured | — |
-| Sensitive-content **recall** | ⚠ **Not measured — no positive scenarios in the committed set** (§5) | ⚠ Not measured | — |
-| Sensitive-content **false-alarm rate** | **0.067** *(7 / 105)* | ⚠ Not measured | — |
+| Sensitive-content **recall** | ⚠ **Not measured — no positive scenarios in the committed set** (§5) | ⚠ **Not measured** — same reason, and **it is the number that decides the row below** | — |
+| Sensitive-content **false-alarm rate** | **0.067** *(7 / 105)*, incl. **5 of 8** confusables | **0.000** *(0 / 105)*, incl. **0 of 8** confusables | ⚠ **Uninterpretable without recall — see §3.5** |
 | Field extraction F1 | ⚠ Not measured — the extraction path **has no production caller** (D-37) | ⚠ Not measured | — |
 | Translation quality (chrF++ / human) | ⚠ Not measured | ⚠ Not measured | — |
 | Nepali ASR **WER** | ⚠ **No baseline — voice has never been live** ([Q-13.2](../sprints/2026-08-llm/DECISIONS.md)), and there is no audio set ([followup](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md)) | ⚠ Not measured | n/a |
-| **p95 latency** vs the 30 s interactive budget | **24.6 s — PASSES** | ⚠ Not measured | — |
-| **p99 latency** vs the 30 s interactive budget | **40.6 s — FAILS** (§4) | ⚠ Not measured | — |
+| **p95 latency**, classification, vs the 30 s budget | **24.6 s — PASSES** | ⚠ Not measured (n=2) | — |
+| **p99 latency**, classification | **40.6 s — FAILS** (§4) | ⚠ Not measured | — |
+| **p95 latency**, SEAH detection | 8.78 s | **0.49 s** | **≈18× faster** |
 | **Cost / 1,000 grievances** | **11.36 M prompt + 3.36 M completion tokens** (§6) | ⚠ Not measured | — |
 
 ---
@@ -137,6 +140,68 @@ classification. The review step keeps any category containing `"gender"`
 ([`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §2), so classification
 is a **second, independent** route into the confidential channel. Both signals over-fire on the same
 material, and the system figure is the union — worse than either alone.
+
+### 3.4 ⚠ The classification prompt is too large to benchmark at the open provider's rate limit
+
+103 of 105 classification calls to `openai/gpt-oss-20b` returned **HTTP 402** — the router's
+short-window token limit, whose message says *"you have depleted your monthly included credits"*
+(the wording is misleading; see [the write-up](../sprints/2026-08-llm/followups/hf-router-rate-limit-reads-as-credit-exhaustion.md)).
+The **same run's 105 detection calls all completed**, because the detection prompt is short.
+
+**That contrast is the finding.** The classification prompt is ~20,700 characters *before the
+grievance is added*, because it injects the 24-category catalogue **twice, in two shapes**
+(`LLM_services.py:263-267`). So:
+
+- §6's cost lever is not only about money — **the same duplication is what makes the open path
+  hit a rate limit that the detection path sails through**;
+- and it will do the same thing in production the first time grievances arrive in a burst, which
+  is exactly the traffic shape this system has (road works, public meetings).
+
+⚠ **This is not a quality finding about the model and must not be reported as one.** It is a finding
+about *our prompt* on *this provider's limits*.
+
+### 3.5 ⭐ The open model flags **nothing** — which is not the same as being better
+
+| | `gpt-5-nano` (closed) | `openai/gpt-oss-20b` (open) |
+|---|---|---|
+| Ordinary complaints flagged as sensitive | **7 / 105** | **0 / 105** |
+| Of the 8 deliberate `seah_confusable` items | **5 flagged** | **0 flagged** |
+| Detection p50 latency | 3.73 s | **0.35 s** |
+
+Read naively this is a clean win for the open model: it makes none of the false alarms §3.2 describes,
+and it is ten times faster. **Do not read it naively.**
+
+⚠ **A detector that flags nothing has a perfect false-alarm rate and catches nothing.** The committed
+set contains **no harassment reports at all** (§5), so these two hypotheses fit the data equally:
+
+1. `gpt-oss-20b` is better calibrated — it distinguishes gendered *access and discrimination*
+   grievances from harassment, which is exactly the line `gpt-5-nano` fails to hold;
+2. `gpt-oss-20b` says *no* to everything, and a real harassment report would go unflagged.
+
+**Nothing in this repository can tell these apart**, and the second one is a safeguarding failure.
+This is the sharpest possible illustration of why
+[`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §1 insists on a
+confusion matrix rather than one number, and why the *recall* half is the one held by the project
+owner outside git.
+
+⚠ **Therefore: `gpt-oss-20b` must not be selected on this evidence**, and its 0.000 must not appear
+in a submission as an improvement. **The next measurement in this whole sprint is SEAH recall for
+both models against the owner's held-out positive set.** Until then this row is a question, not a
+result.
+
+### 3.6 ⭐ Both models invent the *same* category — which makes it a taxonomy finding
+
+`gpt-oss-20b` classified only 2 items before the rate limit, and on **both** it returned
+`Road Hazard - Dust` — the same invented category `gpt-5-nano` produced 7 times (§3.1).
+
+Two model families, two vendors, two architectures, **the same fabricated label**. That is much
+weaker evidence about either model and much stronger evidence about the **taxonomy**: the catalogue
+has no road-hazard grouping, dust is currently filed under `Environmental - Air Pollution`, and
+independent models keep reaching for the category a road project would expect to exist.
+
+**So D-51's recommended fix has two halves and the second one grew:** guard the storage path against
+invented values, *and* take the gap to the project owner as a taxonomy question. On this evidence the
+second half is the more interesting one.
 
 ---
 
@@ -240,7 +305,9 @@ crossover between them.
 
 | Row | Why |
 |---|---|
-| **The entire open column** | **D-50** — the Hugging Face account's included inference credits are exhausted (HTTP 402). Unblocking is a purchase, not a commit. The harness, the set and the scoring rules are all built and tested; re-running is one command |
+| **Open-column classification** (precision, recall, F1, exact-set, latency, cost) | The provider's short-window **token** limit: 103 of 105 calls returned 402 because our classification prompt is ~20,700 characters (§3.4). ⚠ **Fixing the prompt's duplicated catalogue is the unblock**, not buying credit — the same run's 105 short detection calls all completed. Failing that, run it in paced batches |
+| **Open-column SEAH recall** | ⭐ **The single most important missing number in this sprint.** The open model flags **nothing** (§3.5), which is either better calibration or a detector that always says no, and the committed set cannot tell them apart. Needs the owner's held-out positive set |
+| **Every other open cell** | Only one open candidate was benchmarked (`gpt-oss-20b`, the fastest). The other five reachable candidates have **capability** measured ([configuration doc](open-model-configuration.md)) but no accuracy |
 | Sensitive-content **recall** | The committed set has no positives, by decision (§5). Needs the owner's held-out set |
 | **ASR / WER** | Two independent blockers: voice has never been live so there is **no baseline to beat** (Q-13.2 — the honest framing is *"we shipped a working ASR path where there was none"*, never *"we matched the incumbent"*), and there is **no audio** in the benchmark set |
 | **Field extraction F1** | The contact-extraction path has **no production caller** (D-37). Benchmarking a dead path would spend budget to measure nothing |
