@@ -51,7 +51,9 @@ def test_an_account_or_transport_failure_is_blocked_not_refused(message, monkeyp
     def boom():
         raise RuntimeError(message)
 
-    probe = llm_smoke._run("json_schema", boom)
+    # retries=0: the classification is what is under test, not the backoff. Rule 4.7 — a test that
+    # sleeps is a test nobody runs, and this one would sleep 155 s per parametrisation.
+    probe = llm_smoke._run("json_schema", boom, retries=0)
 
     assert probe.outcome == "blocked", f"{message!r} was classified as a model refusal"
     assert probe.ok is False
@@ -73,7 +75,7 @@ def test_a_400_on_a_parameter_is_a_refusal_and_therefore_a_measurement(message):
     def boom():
         raise RuntimeError(message)
 
-    assert llm_smoke._run("json_schema", boom).outcome == "refused"
+    assert llm_smoke._run("json_schema", boom, retries=0).outcome == "refused"
 
 
 # ── The consequence: a blocked run may not produce a profile ─────────────────
@@ -194,3 +196,60 @@ def test_the_candidate_shortlist_loads_and_records_why_each_model_is_in_or_out()
     excluded_ids = {e["id"] for e in data["excluded"]}
     shortlist_ids = {e["id"] for e in data["shortlist"]}
     assert not (excluded_ids & shortlist_ids), "a model cannot be both shortlisted and excluded"
+
+
+# ── The backoff, with the clock injected ────────────────────────────────────
+
+
+def test_a_blocked_probe_is_retried_before_it_is_believed(monkeypatch):
+    """
+    ⚠ The provider reports a short-window **rate limit** with the words *"You have depleted your
+    monthly included credits"*. Measured 2026-08-20: probing seven candidates in one run blocked
+    after the first model's six calls, and probing the same models one at a time seconds later
+    passed every one. A harness that believes the message publishes *unmeasurable* for a model that
+    works — which is the same class of error as believing a 402 is a capability limit, one level up.
+    """
+    slept: list[float] = []
+    monkeypatch.setattr(llm_smoke.time, "sleep", slept.append)
+    attempts = {"n": 0}
+
+    def blocked_then_fine():
+        attempts["n"] += 1
+        if attempts["n"] < 3:
+            raise RuntimeError("Error code: 402 - depleted your monthly included credits")
+        return _FakeResponse('{"ok": true}')
+
+    probe = llm_smoke._run("chat", blocked_then_fine)
+
+    assert probe.outcome == "pass", "gave up on a rate limit that would have cleared"
+    assert attempts["n"] == 3
+    assert len(slept) == 2 and slept == list(llm_smoke.BLOCKED_BACKOFF_S[:2])
+
+
+def test_a_model_refusal_is_never_retried(monkeypatch):
+    """A 400 on `json_schema` is the answer, not an obstacle. Retrying it wastes money and time."""
+    slept: list[float] = []
+    monkeypatch.setattr(llm_smoke.time, "sleep", slept.append)
+    attempts = {"n": 0}
+
+    def always_400():
+        attempts["n"] += 1
+        raise RuntimeError("Error code: 400 - response_format.type must be text or json_object")
+
+    assert llm_smoke._run("json_schema", always_400).outcome == "refused"
+    assert attempts["n"] == 1, "a model refusal was retried"
+    assert not slept
+
+
+def test_a_persistent_block_says_how_hard_it_tried(monkeypatch):
+    monkeypatch.setattr(llm_smoke.time, "sleep", lambda _s: None)
+
+    def always_402():
+        raise RuntimeError("Error code: 402 - depleted your monthly included credits")
+
+    probe = llm_smoke._run("chat", always_402, retries=2)
+
+    assert probe.outcome == "blocked"
+    assert "still blocked after 2 retries" in probe.detail, (
+        "a persistent block must record that it was retried, or the next reader repeats the work"
+    )

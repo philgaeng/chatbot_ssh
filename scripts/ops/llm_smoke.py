@@ -224,7 +224,33 @@ def _provider_of(response) -> str:
     return ""
 
 
-def _run(name: str, call) -> Probe:
+# How long to wait out a rate limit, and how many times.
+#
+# ⚠ **The provider says "You have depleted your monthly included credits" for what is actually a
+# short-window rate limit.** Measured 2026-08-20: probing seven candidates in one run blocked after
+# the first model's six calls; probing the same models one at a time, seconds later, every one
+# passed all six. The message is about the account and the behaviour is about the last minute, and
+# a harness that believes the message publishes "unmeasurable" for a model that works.
+#
+# So: back off and retry before recording `blocked`. Only a refusal that survives the backoff is
+# reported, and the report says how long it waited.
+BLOCKED_RETRIES = 3
+BLOCKED_BACKOFF_S = (20.0, 45.0, 90.0)
+
+
+def _run(name: str, call, *, retries: int = BLOCKED_RETRIES) -> Probe:
+    """One probe, with backoff on account-level refusals but never on a model-level one."""
+    for attempt in range(retries + 1):
+        probe = _run_once(name, call)
+        if probe.outcome != "blocked" or attempt == retries:
+            if probe.outcome == "blocked" and attempt:
+                probe.detail = f"[still blocked after {attempt} retries] {probe.detail}"
+            return probe
+        time.sleep(BLOCKED_BACKOFF_S[min(attempt, len(BLOCKED_BACKOFF_S) - 1)])
+    return probe
+
+
+def _run_once(name: str, call) -> Probe:
     start = time.monotonic()
     try:
         response = call()
@@ -421,6 +447,11 @@ def main() -> int:
     parser.add_argument("--json", type=Path, help="write the full report here")
     parser.add_argument("--no-licence", action="store_true", help="skip model-card licence lookups")
     parser.add_argument("--dry-run", action="store_true", help="print the plan and spend nothing")
+    parser.add_argument(
+        "--pause", type=float, default=25.0,
+        help="seconds between models — the router rate-limits bursts and reports it as a credit "
+             "failure, so this is correctness, not courtesy (default 25)",
+    )
     args = parser.parse_args()
 
     endpoint = llm_endpoint()
@@ -444,7 +475,11 @@ def main() -> int:
 
     client = _client(endpoint.base_url, endpoint.api_key, endpoint.timeout)
     reports: list[ModelReport] = []
-    for model in models:
+    for index, model in enumerate(models):
+        if index:
+            # ⚠ Not politeness — necessity. Six probes back to back trip the limiter, and the next
+            # model then reports as unmeasurable when it is merely next in the queue.
+            time.sleep(args.pause)
         print(f"  probing {model} …", flush=True)
         report = probe_model(client, model)
         if not args.no_licence:

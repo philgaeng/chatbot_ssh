@@ -1,5 +1,21 @@
 # Nepal GRM Platform
 
+[![CI](https://github.com/philgaeng/chatbot_ssh/actions/workflows/ci.yml/badge.svg)](https://github.com/philgaeng/chatbot_ssh/actions/workflows/ci.yml)
+[![Runs on open models](https://github.com/philgaeng/chatbot_ssh/actions/workflows/ci.yml/badge.svg?job=dpg-platform-independence)](https://github.com/philgaeng/chatbot_ssh/actions/workflows/ci.yml?query=job%3Adpg-platform-independence)
+
+> **What the second badge means, and what it does not.** It is the `dpg-platform-independence`
+> job: the product's own LLM code paths — *both* surfaces, chatbot intake and ticketing case
+> analysis — calling a real provider through the **open-weights** configuration, on every commit.
+> That is [DPG indicator 4](docs/dpg/00_compliance_status.md) demonstrated rather than asserted,
+> and it is the link that goes in the submission, because a claim a build executes cannot silently
+> rot the way a document can.
+>
+> ⚠ **It is deliberately not a required status check.** The job calls a live third-party API, so a
+> provider outage reddens it while nothing here is wrong. The reason is written in the job header
+> so nobody later "fixes" it by making it required.
+> ⚠ It sends **only synthetic benchmark data** — never complainant text. That is why it may let the
+> router pick a provider per request while production pins one.
+
 Grievance Redress Mechanism (GRM) platform for Nepal road infrastructure projects
 (KL Road / Kakarbhitta–Laukahi Road, ADB Loan 52097-003).
 

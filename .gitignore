@@ -114,3 +114,5 @@ backend/actions/utils/utterance_mapping_translation_checks/new_mappings/buttons.
 backend/actions/utils/utterance_mapping_translation_checks/new_mappings/utterances.csv
 backend/actions/utils/utterance_mapping_translation_checks/mapping_with_latest_translations/*.xlsx
 
+.smoke_open.json
+.bench_*.json

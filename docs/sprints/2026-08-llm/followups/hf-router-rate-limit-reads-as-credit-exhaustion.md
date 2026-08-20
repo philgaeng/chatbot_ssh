@@ -1,14 +1,48 @@
-# Follow-up — the Hugging Face account has no inference credit, so the benchmark cannot run
+# Follow-up — the router rate-limits, and reports it as *"you have depleted your monthly credits"*
 
 > **Raised:** 2026-08-20, on DPG-21's first probe run.
 > **Logged as deviation D-50** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** ⏸ **BLOCKING the measurement half of Sprint 2** — DPG-21's matrix, all of DPG-23, all
-> of DPG-22. The *build* half is complete and committed.
-> **Size:** XS to unblock (buy credits or subscribe), and it is not an engineering task.
+> **Status:** ✅ **DIAGNOSIS CORRECTED AND WORKED AROUND, same day.** Originally logged as *"the
+> account has no inference credit"*. **That was wrong**, and §The correction has the evidence.
+> **Size:** S — a backoff and a pause between models, both landed.
 
 ---
 
-## The finding
+## ⚠ The correction — read this before the original finding below
+
+**The original diagnosis was wrong, and it was wrong in the direction that costs the most:** it
+declared six of seven candidate models *unmeasurable* on the strength of an error message.
+
+What is actually happening is a **short-window rate limit**. Measured the same day:
+
+| What was run | Result |
+|---|---|
+| Seven candidates, six probes each, back to back | model 1 passed all six; **every later model returned 402** |
+| `Qwen/Qwen3.5-27B` alone, by curl, four times, seconds later | **200, 200, 200, 200** |
+| `Qwen/Qwen3.5-27B` alone, all six probes in-container | **all six pass** |
+
+The provider's words are *"You have depleted your monthly included credits."* The behaviour is about
+the last minute, not the month. **A harness that believes the message publishes "unmeasurable" for a
+model that works** — which is the same class of error as reporting a 402 as a capability limit, one
+level up, and it very nearly went into a document as a result.
+
+**The fix, landed:** `_run()` now backs off (20 s / 45 s / 90 s) and retries before recording
+`blocked`, a **model refusal is never retried** (a 400 on `json_schema` is the answer, not an
+obstacle), and `--pause` spaces models apart — defaulting to 25 s, which is correctness rather than
+courtesy. Three tests pin it, with the clock **injected** rather than endured.
+
+**The general lesson, which is the third time this sprint has taught it:** *believe the behaviour,
+not the message.* A 402 that says "monthly" and means "this minute" is the same failure as a 401 that
+reads as *"the model cannot detect harassment"* (D-44) and a 402 that reads as *"this model does not
+support temperature"* (the first version of this very script).
+
+⚠ **What remains genuinely unknown:** whether there is *also* a monthly ceiling, and where it is.
+Everything below about setting a hard token cap before DPG-24's first run **still stands** — the cap
+is not made unnecessary by the limit being a rate limit.
+
+---
+
+## The original finding (kept, because the reasoning is what was wrong, not the observation)
 
 The token authenticates (`whoami-v2` → 200, user `pgaeng`, fine-grained with Inference permission)
 and the first requests succeeded — `openai/gpt-oss-20b` completed all six capability probes, served

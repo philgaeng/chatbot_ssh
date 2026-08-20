@@ -2,12 +2,19 @@ name: CI
 
 # HR-05 (2026-07 hardening sprint) — docs/sprints/2026-07_hardening/03-ci-pipeline-spec.md
 #
-# Three independent gates, run in parallel:
-#   backend-tests — Postgres 15 service, all three Alembic streams, pytest
-#                   (ticketing/orchestrator/actions/backend, @integration included)
-#   ui-checks     — channels/ticketing-ui: tsc --noEmit, eslint, next build
-#   docs-links    — relative markdown link check under docs/ (excludes archive/) AND the
-#                   root-level *.md, where CLAUDE.md lives — see the job for why both
+# Five independent gates, run in parallel:
+#   backend-tests  — Postgres 15 service, all three Alembic streams, pytest
+#                    (ticketing/orchestrator/actions/backend, @integration included,
+#                     @live_llm excluded — it costs money; see the fifth job)
+#   ui-checks      — channels/ticketing-ui: tsc --noEmit, eslint, next build
+#   webchat-checks — channels/webchat
+#   docs-links     — relative markdown link check under docs/ (excludes archive/) AND the
+#                    root-level *.md, where CLAUDE.md lives — see the job for why both
+#   dpg-platform-independence — DPG-24: the LLM paths, live, against the OPEN configuration.
+#                    ⚠ NOT a required status check, deliberately — see its header.
+#
+# ⚠ This comment said "three" and named three of four until 2026-08-20; `webchat-checks` had been
+# added without it. A header that undercounts its own jobs is how a gate goes unnoticed.
 #
 # `dev/**` is included in the push triggers because the 2026-07 hardening sprint
 # works off a single shared `dev/hardening` branch (see CLAUDE.md git workflow).
@@ -257,8 +264,19 @@ jobs:
         # DO NOT re-add `-m "not integration"` to silence a red build. These tests
         # require the seeded DB above; if one fails, the seed and the test have drifted
         # apart, and that is the bug. `pytest.ini` documents the marker's contract.
+        #
+        # DPG-24 (2026-08-20) — `-m "not live_llm"` is ADDED, and it is not the pattern above
+        # wearing a new hat. `live_llm` tests make REAL calls to a third-party provider: they cost
+        # money and they go red when someone else's service does. This job must stay free, offline,
+        # hermetic and *blocking*, so it does not run them.
+        #
+        # ⚠ The half that stops this being a quarantine is the `dpg-platform-independence` job
+        # below, which selects exactly this marker and runs on **every commit**. If you ever find
+        # `live_llm` deselected in BOTH places, the tests have become decoration — delete them
+        # instead, so the absence is visible. (T3-08 dismantled precisely that arrangement once;
+        # `pytest.ini` carries the full note.)
         run: |
-          PYTHONPATH=. python -m pytest tests/repo tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers
+          PYTHONPATH=. python -m pytest tests/repo tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers -m "not live_llm"
 
   ui-checks:
     runs-on: ubuntu-latest
@@ -419,3 +437,138 @@ jobs:
               sys.exit(1)
           print("All references resolve OK.")
           PY
+
+  # ── DPG-24 — platform independence, demonstrated rather than asserted ──────────────────────
+  #
+  # THE GATE: the product's own LLM paths — both surfaces — calling a real provider through the
+  # OPEN configuration, on every commit. Indicator 4 asks that the proprietary dependency be
+  # replaceable. A green run here is that claim executing, which is stronger evidence than any
+  # document, because it cannot silently rot.
+  #
+  # ⚠ NEVER MAKE THIS A REQUIRED STATUS CHECK (Q-17, decided).
+  # It calls a live third-party API, so it is flaky by construction: a provider outage reddens it
+  # and nothing in this repository is wrong. A gate that blocks merges on someone else's uptime
+  # gets routed around within a week, and then it gates nothing while still looking like a gate.
+  # It runs on every commit, it is read, and it is not required. If you are here because the job
+  # is red and you want to unblock a merge: you already can — that is the design.
+  #
+  # ⚠ AND DO NOT LET IT NORMALISE RED. CI on `integration/stage` went green on 2026-08-19 for the
+  # first time since 08-08 (D-26), and the lesson recorded there is that a permanently red build is
+  # indistinguishable from one nobody watches. This job is allowed to go red on a provider outage;
+  # it is not allowed to sit red for a week. If it does, the answer is to fix it or delete it —
+  # not to stop looking.
+  #
+  # ⚠ WHY CI MAY ROUTE FREELY WHILE PRODUCTION PINS A PROVIDER.
+  # The Hugging Face router selects a partner per request unless the model id names one
+  # (the `model:provider` suffix form). Production MUST pin, because otherwise the company processing a
+  # given grievance is not knowable in advance and DPG-04 cannot assess it
+  # (docs/dpg/privacy-assessment.md F-17). This job need not, and should not: it sends ONLY
+  # DPG-20's synthetic benchmark data and a fixed probe string — no complainant text, ever — so
+  # automatic routing is safe here and the multi-vendor fan-out is exactly the independence
+  # evidence indicator 4 wants.
+  #   ⚠ THE INVARIANT: if this job ever gains access to production data, the routing policy must
+  #   change with it. The split is safe because of the DATA, not because of the environment.
+  #
+  # ⚠ COST — the only recurring line in the whole DPG plan, against a time-boxed envelope.
+  # Q-19 (2026-08-20) funds Sprint 2 to a few hundred USD, owner-paid, covering the first demo
+  # months — and that envelope is SHARED with the pilot's own classification traffic. This job
+  # outlives those months. Therefore:
+  #   * the live subset is small and FIXED — a handful of round-trips, never the benchmark suite
+  #     (scripts/ops/llm_benchmark.py is where the expensive thing lives, and it is not in CI);
+  #   * a HARD TOKEN CAP must be set on the Hugging Face account BEFORE this job's first run —
+  #     not after the first invoice;
+  #   * measured monthly spend belongs in this header once there is a month of it.
+  #   MEASURED SPEND: ⚠ not yet measured — this job has never run. The account had exhausted its
+  #   included credits when the job was written (D-50), so the first real figure lands with the
+  #   first funded run. Record it HERE, not in a document nobody opens with the workflow.
+  #   WHO PAYS AFTER THE DEMO MONTHS: ⚠ UNRESOLVED, stated plainly rather than left to be
+  #   discovered. Q-19's envelope is time-boxed and personally expensed; this job is not
+  #   time-boxed. If the answer is still unresolved when the envelope ends, reduce the cadence to
+  #   nightly + release tags and say so in the badge and here — weaker evidence, still honest.
+  #   ⚠ What is NOT acceptable is a job that exists, never runs, and is cited as evidence.
+  #
+  # ⚠ FORK PRs GET NO SECRETS, so the job SKIPS rather than fails. A red X on every external
+  # contribution is the wrong signal for a public-good repository, and it is also just wrong: a
+  # contributor's patch did not break anything.
+  dpg-platform-independence:
+    runs-on: ubuntu-latest
+    # Generous relative to the work (a handful of calls) because the failure mode is a hung
+    # third-party request, not slow tests. The step has its own tighter budget below, so this
+    # ceiling cannot mask a hang — the same lesson the apt-mirror outage taught backend-tests.
+    timeout-minutes: 15
+    env:
+      # ── The open configuration, as a reviewer would set it ────────────────────────────────
+      # Repo VARIABLES, not literals, so swapping a model after DPG-23 reports is a settings
+      # change rather than a code change — and so this file never becomes a second place where a
+      # model name lives. backend/config/llm_config.py is the only one (DPG-17), and that is
+      # pinned by tests/backend/test_llm_config_pins.py.
+      LLM_BASE_URL: ${{ vars.DPG_LLM_BASE_URL || 'https://router.huggingface.co/v1' }}
+      LLM_API_KEY: ${{ secrets.HF_TOKEN }}
+      ASR_BASE_URL: ${{ vars.DPG_ASR_BASE_URL || 'https://router.huggingface.co/v1' }}
+      ASR_API_KEY: ${{ secrets.HF_TOKEN }}
+      # Empty ⇒ the registry default, which is today's PROPRIETARY model — so leaving these unset
+      # would make the job pass against OpenAI while reporting that open weights work. That is the
+      # most embarrassing false green available here, and
+      # test_the_endpoint_the_test_reached_is_the_one_the_registry_names is the assertion that
+      # catches it. Set the repo variables.
+      MODEL_CLASSIFY: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_EXTRACT: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TRANSLATE: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_DETECT: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TICKET_FINDINGS: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TICKET_FINDINGS_SEAH: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_ASR: ${{ vars.DPG_MODEL_ASR }}
+      # ⚠ One model for every text task, one for transcription — the owner's decision (Q-21,
+      # 2026-08-18, re-confirmed 08-20). If a per-task split is ever justified by measurement, it
+      # gets its own variable AND the measurement that justified it.
+      LLM_MAX_RETRIES: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip cleanly when there is no token (fork PRs)
+        id: gate
+        run: |
+          if [ -z "${{ secrets.HF_TOKEN }}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=DPG platform-independence::Skipped — no HF_TOKEN available."
+            echo "This is expected on pull requests from forks, which never receive secrets."
+            echo "It is NOT a failure: nothing in the contribution is wrong, and a red X here"
+            echo "would be the wrong signal on a public-good repository."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install the LLM client only
+        if: steps.gate.outputs.run == 'true'
+        # Deliberately NOT `-r requirements.txt`. This job needs the OpenAI SDK, pydantic and
+        # pytest — not pyvips, not psycopg2, not Rasa. backend-tests already proves the full
+        # install works; paying for it twice buys a slower job and a second thing that can break
+        # for reasons unrelated to the gate.
+        run: |
+          python -m pip install --upgrade pip
+          pip install "openai==1.70.0" "pydantic>=2" pydantic-settings pytest
+
+      - name: The LLM paths, live, against the open configuration
+        if: steps.gate.outputs.run == 'true'
+        # Its own timeout: a hung third-party request must fail fast and say why, rather than
+        # silently consuming the job budget. That is the D-26 apt-mirror lesson applied to the
+        # most hang-prone step in this workflow.
+        timeout-minutes: 8
+        run: |
+          PYTHONPATH=. python -m pytest \
+            tests/backend/test_llm_live.py \
+            tests/ticketing/test_ticketing_llm_live.py \
+            -m live_llm -v --strict-markers
+
+      - name: Say which endpoint this actually proved
+        if: steps.gate.outputs.run == 'true' && always()
+        # The evidence is worth nothing if the log does not say what it ran against. Host only —
+        # never the key.
+        run: |
+          echo "::notice title=DPG platform-independence::endpoint=${LLM_BASE_URL} model=${MODEL_CLASSIFY:-<registry default — SET THE REPO VARIABLE>}"
