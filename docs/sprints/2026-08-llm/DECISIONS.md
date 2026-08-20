@@ -261,6 +261,43 @@ a reviewer to check.
 
 ---
 
+## Q-19 — What is the LLM budget for benchmarking and for CI? {#q-19}
+
+**→ A few hundred USD, owner-funded, covering the pilot. Then a costed proposal to the Nepal Government.**
+
+> **ANSWERED 2026-08-20.** *"I can pay for all the inferences during first months of demo in 2 districts —
+> I will eventually expense it, so long as it is a few 100 USD. Then we will submit to Nepal Gvt the
+> choices they need to make moving forward with realistic budget."*
+
+**Sprint 2 is unblocked.** DPG-22, DPG-23 and DPG-24 were gated on this and are not any more. The
+recommendation in [`QUESTIONS.md`](QUESTIONS.md#q-19) — cap CI first, price DPG-23 before building it —
+still stands, but as ordinary discipline rather than as a way of working round an absence.
+
+**⚠ Three things this answer changes, and none of them is "the money question is closed":**
+
+1. **The envelope is shared with production, not dedicated to benchmarking.** It covers *"all the
+   inferences during first months of demo in 2 districts"* — the pilot's own grievance classification
+   comes out of the same few hundred dollars as the model sweep. **A benchmark that eats the pilot's
+   runway has not saved money, it has moved the failure.** Price DPG-23 against what is left after an
+   estimate of pilot traffic, not against the whole figure.
+2. **It is time-boxed to the demo months, and DPG-24 is not.** The CI job is the only cost that recurs
+   indefinitely — which is exactly why the spec already said to cap it first, and now there is a number to
+   cap against. **Set the hard token cap on the Hugging Face account before the job's first run**, not
+   after the first surprising invoice, and record the measured monthly spend in the job header so the
+   government proposal can quote a real figure rather than an estimate.
+3. **It creates a deliverable that did not exist: the proposal to the Nepal Government.** *"The choices
+   they need to make moving forward with realistic budget"* is a document, and Sprint 2 is what generates
+   its numbers — DPG-23's cost-per-1,000-grievances row and DPG-25's costed T2 proposal are its two
+   halves. See [DPG-25](03-open-models-spec.md#dpg-25): that ticket now has a named audience and a real
+   use, instead of being a costing nobody had asked for.
+
+**The scale anchor this finally supplies.** DPG-25 previously said *"pull real volumes from the grievance
+table"* — which contains no genuine grievances. **Two districts over the first months of the demo** is a
+concrete volume to size against, and it is the honest basis for extrapolating to national scale in the
+government proposal. State the extrapolation as an extrapolation.
+
+---
+
 ## Q-23 — Is the 30 s classification budget a hard limit? {#q-23}
 
 **→ No. It is a knob: measure, and raise it to 45 s or 60 s if a better model needs it.**

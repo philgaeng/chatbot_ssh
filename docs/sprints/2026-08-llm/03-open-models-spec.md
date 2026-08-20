@@ -37,15 +37,23 @@
 > means a shortlist** — *"not so many are decent candidates"* — so name the handful and why each made or
 > missed the list.
 >
-> **⭐ The one blocker you cannot engineer around: [Q-19](QUESTIONS.md#q-19), the LLM budget, is 🔴 open.**
-> It gates DPG-22, DPG-23 and DPG-24 — three of the five tickets — because they are made of inference
-> calls and nobody has priced them. **Do not start those three by building a harness.** Price them first:
-> items × models × tasks is knowable arithmetic, and *"no budget"* and *"$40"* may not be in conflict.
-> Put the number in front of the owner as a decision, not a request.
+> **✅ [Q-19](DECISIONS.md#q-19), the budget, was answered 2026-08-20 — every ticket is unblocked.** A few
+> hundred USD, owner-funded. **But read what it covers before you spend it:** *"all the inferences during
+> first months of demo in 2 districts"* — the pilot's own classification traffic comes out of the **same**
+> envelope as your model sweep. A benchmark that eats the pilot's runway has not saved money, it has moved
+> the failure. **Price DPG-23 against what is left after an estimate of pilot traffic**, and set the hard
+> token cap on the Hugging Face account *before* DPG-24's first run, because that job is the only cost
+> that outlives the demo months.
 >
-> **What you can start today, unblocked:** **DPG-20** (authoring, costs nothing to run) and **DPG-25**
-> (a document and a price; T2 is parked, so there is nothing to deploy). **DPG-21** needs only a Hugging
-> Face token.
+> **⭐ And it creates a deliverable that was not in this spec: a costed proposal to the Nepal Government** —
+> *"the choices they need to make moving forward with realistic budget."* DPG-23's cost-per-1,000-grievances
+> row and DPG-25's costed T2 proposal are its two halves. That gives [DPG-25](#dpg-25) a named audience and
+> a real use instead of a costing nobody asked for, and it gives it the scale anchor it lacked: **two
+> districts over the first demo months**, extrapolated to national — stated as an extrapolation.
+>
+> **Suggested order:** **DPG-20** (authoring, free) and **DPG-21** (needs only an HF token) first, because
+> everything else consumes them; then **DPG-23**, priced; then **DPG-24** with its cap set; **DPG-22** last
+> (audio is the most expensive per item and voice is not live); **DPG-25** any time — it is a document.
 >
 > **⚠ Half of DPG-20 is already in flight — do not duplicate it.** The SEAH slice has a written method
 > ([`docs/models/01_seah_detection_benchmark.md`](../../models/01_seah_detection_benchmark.md)), a
@@ -240,9 +248,10 @@ production accuracy is the kind of claim that discredits an otherwise sound subm
 - **Q-15** — ✅ **synthetic in phase 1**, hybrid once the project is live.
 - **Q-16** — ✅ **no labeller budget or staff time**; the set grows with the project. The target is a
   direction, not a plan.
-- ⚠ **See [Q-19](QUESTIONS.md) (new).** This ticket is free — it is authoring, not inference. **DPG-22 and
-  DPG-23, which consume it, are not**, and there is no LLM budget. Building the set is worth doing
-  regardless; **do not assume the benchmark that reads it is funded.**
+- **[Q-19](DECISIONS.md#q-19)** — ✅ **answered 2026-08-20: a few hundred USD, owner-funded.** This ticket
+  was always free (authoring, not inference); the tickets that consume it are now funded too. ⚠ **The
+  envelope is shared with the pilot's own traffic**, so the size of this set has a cost consequence
+  downstream — every item is re-run per candidate in DPG-23. **Size it for signal, not for volume.**
 
 ---
 
@@ -338,8 +347,10 @@ testing specifically for low-connectivity districts.
 >    is not. The "Current (closed)" column in DPG-23's table is **empty for ASR, and says why.**
 > 2. **No field evidence exists on DPG-14.3's suspected `language_code` bug** — nobody has run a voice note
 >    through it. The in-container SDK signature check is therefore **the only** way to resolve it.
-> 3. ⏸ **Sequence this ticket last in Sprint 2** ([Q-19](QUESTIONS.md)). Audio is the most expensive input
->    per item and, with voice not live, the least decision-relevant right now.
+> 3. ⏸ **Sequence this ticket last in Sprint 2** ([Q-19](DECISIONS.md#q-19)). Audio is the most expensive
+>    input per item and, with voice not live, the least decision-relevant right now. ✅ The budget answer
+>    (2026-08-20) does not change this: a funded envelope shared with the pilot makes *order* matter more,
+>    not less — spend it on the decisions that are live first.
 
 ### ⚠ And decide what "good enough" means before you measure
 
@@ -387,10 +398,12 @@ question in the doc**; do not let a bad WER quietly become a decision nobody mad
 >   closed"* only works if the closed configuration still passes CI and someone can flip it in minutes.
 >   DPG-17's registry makes that one file; the acceptance below pins it.
 >
-> ⚠ **And see [Q-19](QUESTIONS.md): this is the most expensive ticket in the sprint and there is no LLM
-> budget.** Price it — items × models × tasks is knowable arithmetic — before building the harness. A few
-> hundred short texts on per-token pricing is plausibly tens of dollars, and *"no budget"* and *"$40"* may
-> not be in conflict. **Get the number rather than assuming either.**
+> ✅ **[Q-19](DECISIONS.md#q-19) answered 2026-08-20 — this ticket is funded, within a few hundred USD.**
+> Still price it first: items × models × tasks is knowable arithmetic, and a few hundred short texts on
+> per-token pricing is plausibly tens of dollars. ⚠ **The envelope is shared with the pilot's own inference
+> across two districts**, so the number that matters is not "can we afford the benchmark" but "what is left
+> for the pilot after it". **Estimate pilot traffic first, subtract, then size the sweep** — and let the
+> cheap first pass eliminate weak candidates before the full set is spent on the survivors.
 
 ### ⚠ Two constraints Sprint 1 added (2026-08-20)
 
@@ -502,8 +515,10 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 
 ### Acceptance
 
-- [ ] **Priced before built** — the estimated token spend recorded, and confirmed affordable, before the
-      harness runs (Q-19). A benchmark nobody can pay for fails silently
+- [ ] **Priced before built** — the estimated token spend recorded and confirmed against the envelope
+      **after** an estimate of pilot traffic is subtracted (Q-19). The budget is shared with production
+- [ ] **Cost per 1,000 grievances recorded for the chosen model** — it is one half of the costed proposal
+      to the Nepal Government that Q-19's answer commits to
 - [ ] **The closed configuration still passes CI after the switch** — Q-04's reserve is only real if it can
       be flipped in minutes from DPG-17's registry. Pin it with a test, not an intention
 - [ ] The production switch to the open configuration recorded as a **deliberate, cost-driven decision**
@@ -534,7 +549,8 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 - **Q-04** — ✅ **production runs the open configuration**, on cost, with the closed one held in reserve
   against quality complaints. See the banner above: this makes the benchmark a production pre-flight check.
 - **Q-09** — ✅ **the chat LLM first**; a dedicated specialist service only if it is materially better.
-- ⚠ **[Q-19](QUESTIONS.md) is open and gates this ticket** — no LLM budget is currently allocated.
+- **Q-19** — ✅ **answered 2026-08-20**: funded to a few hundred USD, owner-paid, **shared with the pilot's
+  own inference**. See [DECISIONS.md](DECISIONS.md#q-19) for what that obliges.
 
 ---
 
@@ -602,8 +618,13 @@ policy must change with it. Put that sentence next to the reason.
    > ⚠ CLAUDE.md history: T3 ended an `@integration` quarantine and grew CI from 364 to 897 tests. **Do
    > not re-create a quarantine here.** A marker that nothing ever runs is exactly the pattern that was
    > just dismantled. This marker runs in *this* job, on every commit.
-3. **Cost — now the gating constraint, not a footnote.** Every push runs real inference, and
-   **[Q-19](QUESTIONS.md) establishes there is no LLM budget** (Q-13: *"a few calls per day to nano"*).
+3. **Cost — ✅ funded, and still the one to cap first.** Every push runs real inference.
+   **[Q-19](DECISIONS.md#q-19) (2026-08-20) funds it — a few hundred USD, owner-paid, covering the first
+   demo months.** ⚠ **This job is the only cost in the whole plan that outlives those months**, which is
+   exactly why the advice below did not change when the money arrived: a recurring charge against a
+   time-boxed, personally-expensed envelope is the one that turns into an awkward conversation. **Set the
+   hard token cap before the job's first run**, and record the measured monthly spend in the job header —
+   the government proposal Q-19 commits to will need a real figure, and this job is where it comes from.
    This job is the **only recurring** cost in the whole plan, so it is the one to cap first: a small fixed
    live subset (a handful of round-trips, **not** the suite), a hard token cap on the HF account, and the
    **measured** monthly spend in the job header.
@@ -624,7 +645,10 @@ policy must change with it. Put that sentence next to the reason.
 - [ ] The job header states **why CI may route automatically while production pins** — synthetic data only —
       and that the policy changes if that ever stops being true
 - [ ] **Measured** CI inference spend recorded in the job header, and a hard token cap set on the HF account
+- [ ] **Hard token cap set on the HF account before the first run** — not after the first invoice (Q-19)
 - [ ] If the cadence was reduced below per-commit for cost, the **badge and job header say so** (Q-19)
+- [ ] **Who pays after the demo months is named in the job header**, or the ticket says plainly that it is
+      unresolved. Q-19's envelope is time-boxed and owner-funded; this job is not time-boxed
 - [ ] Badge in the repo `README.md` linking the job — this is the link that goes in the submission
 - [ ] Green on the integration branch — **which is now a real bar**: CI went green on 2026-08-19 for the
       first time since 08-08 (D-26), so red means something again. ⚠ **Do not be the job that undoes
@@ -636,8 +660,10 @@ policy must change with it. Put that sentence next to the reason.
 
 - **Q-17** — ✅ **run on every commit, never a required status check**, with the reason in the job header so
   nobody later "fixes" it by making it required.
-- ⚠ **[Q-19](QUESTIONS.md) reframes the same question as a cost question.** Q-17 settled *flakiness*;
-  frequency is now also a budget decision. Cap first, degrade cadence only if you must, and say so.
+- **Q-19** — ✅ **answered 2026-08-20**, and it reframes Q-17 rather than closing it. Q-17 settled
+  *flakiness*; frequency is also a budget decision, and this is the **only recurring** line in the plan
+  against a **time-boxed** envelope. Cap first, degrade cadence only if you must, say so, and name the
+  payer for after the demo.
 
 ---
 
@@ -689,19 +715,47 @@ built in — which is why DPG-13's schemas are also a *T2 enabler*, not only a r
 - Snapshot the instance once configured, so a rebuild is minutes rather than a day.
 - Monitoring and restart policy — name the owner (Q-05).
 
+### ⭐ This document now has an audience — added 2026-08-20
+
+[Q-19](DECISIONS.md#q-19)'s answer commits to one: *"we will submit to Nepal Gvt the choices they need to
+make moving forward with realistic budget."* **That is this ticket's costed proposal, plus DPG-23's
+cost-per-1,000-grievances row.** Two rungs, one decision document:
+
+| Option | The number it needs | From |
+|---|---|---|
+| **T1 — hosted inference** (what runs today) | Cost per 1,000 grievances at pilot volume, extrapolated to national | DPG-23 |
+| **T2 — self-hosted vLLM** | Monthly instance cost at the volume where it overtakes T1 | this ticket |
+
+**The crossover is the whole point of the document.** Hosted inference is cheaper until volume makes a
+dedicated GPU cheaper; **say where that line falls** and the government has an actual choice rather than
+two unrelated prices. Below the line, T2 stays parked and that is the right answer; above it, unparking
+becomes a procurement decision with a payback period attached.
+
+⚠ **State the extrapolation as an extrapolation.** Two districts over a few demo months is a small base,
+and a national figure derived from it is an estimate with a stated method — not a forecast.
+
 ### Sizing — measure, do not inherit
 
 The $700–900/month, 5–15-concurrent-user figure in the source narrative is a generic estimate.
 **Size against this system's measured load**: the GRM's traffic is intake-shaped and bursty around road
 works and public meetings, not chat-shaped, and classification is one request per grievance rather than
-per turn. Pull real volumes from the grievance table before choosing an instance class.
+per turn.
+
+⚠ **The old instruction here was "pull real volumes from the grievance table" — and that table holds no
+genuine grievances**, only seed and demo rows. Q-19's answer supplies the anchor it was missing: **two
+districts over the first months of the demo**, which will be real traffic by the time this document is
+written. Size against that, and extrapolate to national with the method stated.
 
 ### Acceptance — rewritten for the parked scope
 
 - [ ] vLLM deployment documented at `docs/dpg/vllm-deployment.md` — instance class, quantisation, flags,
       networking, snapshot procedure
-- [ ] **A costed proposal**, not an estimate inherited from the source narrative: sized against volumes
-      pulled from the grievance table, with the monthly figure and its assumptions stated
+- [ ] **A costed proposal**, not an estimate inherited from the source narrative: sized against **real
+      pilot volume from the two demo districts** (Q-19's anchor — the grievance table holds no genuine
+      grievances yet), with the monthly figure and its assumptions stated
+- [ ] **The T1/T2 crossover volume identified** — the point where a dedicated GPU becomes cheaper than
+      hosted inference. Without it the Nepal Government proposal is two prices, not a choice
+- [ ] **Any national figure labelled as an extrapolation**, with the method and the base it came from
 - [ ] `docs/deployment/13_security.md` updated with the intended network posture, marked `⚠ not deployed`
 - [ ] **The ticket is marked `⚠ documented and costed, not deployed`, and every place that describes the
       ladder says the same** — `00-dpg-context-and-decisions.md` §2, the indicator-4 answer, and

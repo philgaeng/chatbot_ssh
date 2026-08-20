@@ -20,7 +20,7 @@
 | Q | Subject | State | What it blocks |
 |---|---|---|---|
 | [**Q-02**](#q-02) | Which open licence — Apache-2.0 or MIT | 🔴 **open** | **[DPG-01](01-licensing-and-governance-spec.md#dpg-01)** — delegated to the consultant, so `LICENSE` now waits on *two* externals: which text (Q-02) and which holder (Q-01). Indicator 2 fails outright with no licence at all, so this is the cheapest unblock on the list |
-| [**Q-19**](#q-19) | The LLM budget | 🔴 **open** (new) | **Most of Sprint 2** — [DPG-22](03-open-models-spec.md#dpg-22), [DPG-23](03-open-models-spec.md#dpg-23), [DPG-24](03-open-models-spec.md#dpg-24). Raised by the answers themselves: there is no inference budget, and those three tickets are made of inference calls |
+| [**Q-19**](#q-19) | The LLM budget | ✅ **answered 2026-08-20** — a few hundred USD, owner-funded, covering the pilot | **Most of Sprint 2** — [DPG-22](03-open-models-spec.md#dpg-22), [DPG-23](03-open-models-spec.md#dpg-23), [DPG-24](03-open-models-spec.md#dpg-24). Raised by the answers themselves: there is no inference budget, and those three tickets are made of inference calls |
 | [**Q-01**](#q-01) | Who opens the ADB OGC IP request | 🔶 in flight | **[DPG-03](01-licensing-and-governance-spec.md#dpg-03)** and the submission. ⚠ The owner is writing to the *DPG consultant*, which is not the OGC channel the question meant |
 
 ---
@@ -45,8 +45,6 @@ Full text, verbatim answers and reasoning: [`DECISIONS.md`](DECISIONS.md).
 | **Q-12** | Nepali NER licence | Email the author; budget an openly-licensed fine-tune as fallback | [→](DECISIONS.md#q-12) |
 | **Q-13** | `gpt-5-nano` · voice live? | Deliberate cost choice · **voice transcription is not live** | [→](DECISIONS.md#q-13) |
 | **Q-14** | SEAH fail open/closed | **Fail-open stays** — a deterministic pre-filter is the backup, **verified in code** | [→](DECISIONS.md#q-14) |
-| **Q-23** | Is 30 s a hard classification budget | **No — a knob.** Measure; raise to 45 s or 60 s if a better model needs it | [→](DECISIONS.md#q-23) |
-| **Q-24** | How many open models to benchmark | **A shortlist, not a sweep** — name every candidate and why it made or missed the list | [→](DECISIONS.md#q-24) |
 | **Q-15** | Benchmark provenance | Synthetic in phase 1; hybrid once the live project has data | [→](DECISIONS.md#q-15) |
 | **Q-16** | Benchmark size + labellers | **No labeller budget** — the set grows with the project | [→](DECISIONS.md#q-16) |
 | **Q-06** | Licence scan scheduled? | Scheduled, in `ops/security.py` | [→](DECISIONS.md#q-06) |
@@ -63,7 +61,10 @@ Worth re-reading before planning any sprint, because several tickets inherit the
    stepping stone.** Grievance text leaves the country **indefinitely** rather than during a transition, which
    **promotes [Sprint 3](04-pii-redaction-spec.md) from prudent to necessary** and removes the
    vLLM-in-production sentence from the indicator-4 answer.
-2. **There is no LLM budget (Q-13) → [Q-19](#q-19).** Sprint 2 is built almost entirely from inference calls
+2. ~~**There is no LLM budget (Q-13) → [Q-19](#q-19).**~~ ✅ **Answered 2026-08-20** — a few hundred USD,
+   owner-funded, covering benchmarking *and* the pilot's own inference, with a costed proposal to the
+   Nepal Government to follow. Sprint 2 is unblocked. The paragraph below is kept because the shape of the
+   problem it describes did not go away — it acquired a ceiling. Sprint 2 is built almost entirely from inference calls
    — a benchmark across several models and a CI job that calls a live API on every commit. **Nobody priced
    them.** This is the binding constraint on Sprint 2.
 
@@ -122,7 +123,7 @@ available, so degrading it is not free either.
 4. **Sequence DPG-22 last.** ASR is the most expensive per item (audio tokens) and the least decision
    relevant right now, since voice is not live.
 
-**Answer:**
+**Answer:** I can pay for all the inferences during first months of demo in 2 districts - I will eventually expense it for so long it is a few 100 USD. Then we will submit to Nepal Gvt the choices they need to make moving forward with realistic budget.
 
 ---
 

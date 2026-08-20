@@ -71,7 +71,7 @@
 ## Question status
 
 Answers verbatim + reasoning: [`DECISIONS.md`](DECISIONS.md). Still live: [`QUESTIONS.md`](QUESTIONS.md).
-**All 20 answered 2026-08-17**; Q-19 was raised by the answers and is open.
+**All 20 answered 2026-08-17**; Q-19 was raised by the answers and was **answered 2026-08-20**.
 
 | Q | Subject | Owns | Answer | Recorded in |
 |---|---|---|---|---|
@@ -95,7 +95,7 @@ Answers verbatim + reasoning: [`DECISIONS.md`](DECISIONS.md). Still live: [`QUES
 | Q-17 | Provider outage blocks merges? | DPG-24 | ✅ Every commit, never a required check | [`03` DPG-24](03-open-models-spec.md#dpg-24) |
 | Q-01 | Who opens the OGC request | DPG-03 | 🔶 **In flight** — writing to the consultant. ⚠ Not the same channel as ADB OGC. **Sprint 0 closed 2026-08-18 with this still open** — `NOTICE` names no holder and says so | [`01` DPG-03](01-licensing-and-governance-spec.md#dpg-03) · **date raised with consultant: ______** · **date sent to ADB OGC: ______** |
 | Q-02 | Apache-2.0 over MIT | DPG-01 | 🔴 **OPEN** — delegated to the consultant. **DPG-01 gated** | [`01` DPG-01](01-licensing-and-governance-spec.md#dpg-01) |
-| Q-19 | **LLM budget** (new) | DPG-22/23/24 | 🔴 **OPEN** — gates most of Sprint 2 | [`QUESTIONS.md`](QUESTIONS.md#q-19) |
+| Q-19 | **LLM budget** (new) | DPG-22/23/24 | ✅ **ANSWERED 2026-08-20** — a few hundred USD, owner-funded, covering benchmarking **and** the pilot's own inference in 2 districts; then a costed proposal to the Nepal Government. Sprint 2 unblocked; the constraint is now a ceiling shared with production, not an absence | [`QUESTIONS.md`](QUESTIONS.md#q-19) |
 
 ## ⏸ Sprint 0's two external blockers — named, with their clocks
 
@@ -221,7 +221,7 @@ above once a ticket touches it.
 | P-14 | `env.local` holds a live OpenAI key in plaintext. Gitignored and normal for a local env file, but it is the credential this sprint replaces — rotate when the migration lands | `env.local:39` | DPG-16 |
 | P-15 | ⚠ **A second copy of `_MODEL_STANDARD` / `_MODEL_SEAH`**, in a module the inventory missed — written into the resolved-case summary as `llm.model` (`:299`), i.e. a **persisted provenance field** computed from a copy rather than from the module that made the call. Change the client's mapping and miss this file → every resolved case records a model that never ran it | `ticketing/services/resolved_summary_builder.py:28-29`, `:301` | DPG-17 / DPG-12 |
 | P-16 | A **third** copy of the same SEAH ternary, re-derived for a log line — the log can disagree with the call it is logging | `ticketing/tasks/llm.py:165` (and a stale key reference at `:15`) | DPG-17 / DPG-12 |
-| P-22 | **There is no LLM budget** — *"I can shoulder a few calls per day to nano, not transcription"* (Q-13). Voice transcription is consequently **not live at all**, and Sprint 2 is built almost entirely from inference calls that nobody priced | Q-13 · DPG-22/23/24 | **Q-19** (new) |
+| P-22 | ~~**There is no LLM budget**~~ → ✅ **there is one, as of 2026-08-20**: a few hundred USD, owner-funded, covering benchmarking and the pilot's inference in two districts (Q-19). Voice transcription stayed **not live** on the original premise and is unaffected — it is sequenced last for decision relevance, not for money now. ⚠ **The premise that replaced it is subtler and easier to forget:** the envelope is shared with production and ends with the demo months, while DPG-24's cost recurs indefinitely | Q-13 · DPG-22/23/24 | **Q-19** ✅ |
 | P-23 | **T2 parked** (Q-03/Q-05) — no run-cost owner. T1 becomes the steady state, so grievance egress to a third party is **permanent, not transitional**, which promotes Sprint 3 and removes the vLLM-in-production sentence from the indicator-4 answer | Q-03, Q-05 | DPG-25, DPG-04, Sprint 3 |
 | P-24 | ✅ **A deterministic SEAH pre-filter exists and is wired in** — `shared_functions/keyword_detector.py:259` (scored, `:343`) via `helpers_repo.py:58` → `services/seah/sensitive_detection.py:25` → `base_mixins.py:170`, as synchronous slot validation. So the LLM leg's fail-open degrades a **second** pass. Strengthens indicator 9b, which the compliance doc credited to the LLM alone | verified 2026-08-17 | DPG-15, compliance §2.6 |
 | P-25 | Owner's Q-11 answer states translation and classification run **in one call**; the code has them as **two** (`:204-231` classify/summarise/follow-up; `:322` translate). The true and useful version: there is no translate-then-classify pipeline — the model consumes Nepali directly | `LLM_services.py:220-247`, `:324` | DPG-23, Q-11 |

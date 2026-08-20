@@ -90,8 +90,10 @@ A configuration page that overstates its position is worth less than none, so:
 - ⚠ **The model ids in `.env.open` are placeholders.** They are plausible — openly-licensed, served
   by the router, multilingual — but this system has **not** been measured on them.
   Nepali classification quality, translation quality and ASR word-error rate are all unmeasured.
-  [DPG-22 and DPG-23](../sprints/2026-08-llm/03-open-models-spec.md) own those numbers, and they are
-  currently gated on **Q-19: there is no LLM budget**.
+  [DPG-22 and DPG-23](../sprints/2026-08-llm/03-open-models-spec.md) own those numbers. ✅ **Funded as of
+  2026-08-20** (Q-19 — a few hundred USD, owner-paid, shared with the pilot's own inference), so the
+  measurements are scheduled rather than blocked. ⚠ **Until they land, nothing here may be cited as a
+  measured result** — placeholders that acquire a funding date are still placeholders.
 - ⚠ **The repository default is still the proprietary configuration**, deliberately. An open base
   URL combined with proprietary model ids is a repository that cannot serve one request on a fresh
   clone — weaker evidence than an honest default, not stronger. The flip is one line per task in the
