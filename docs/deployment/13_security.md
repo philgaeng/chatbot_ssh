@@ -102,73 +102,120 @@ Detailed policy: [09_privacy.md](09_privacy.md).
 
 > **Added 2026-08-20.** §5 above says *"no credentials in repo; `.env` / deployment env vars"*, which
 > is true and answers the wrong question. It does not say **where the canonical copy is** or **what
-> else holds a copy** — and that is precisely what nobody reconstructs from memory when a key has to
-> be rotated in a hurry.
->
-> ⚠ **The vault paths below are a PROPOSED convention, not a record of what exists.** Confirm the
-> real Proton Pass vault/item names and replace them. A plausible-looking path that resolves to
-> nothing is worse than a blank.
+> else holds a copy** — precisely what nobody reconstructs from memory when a key must be rotated in
+> a hurry.
 
-**Source of truth: Proton Pass.** Everything else is a derived copy. `pass-cli` can resolve
-`pass://vault/item/field` references, so the vault column is intended to be machine-usable rather
-than prose.
+**Source of truth: Bitwarden Secrets Manager (`bws`).** Everything else is a derived copy.
 
-| Variable | Protects | Source of truth | Derived copies |
-|---|---|---|---|
-| `DB_ENCRYPTION_KEY` | ⭐ **Complainant PII at rest.** `backend` is the sole holder (T3-04) — ticketing has no accessor and must not regain one | `pass://GRM/Postgres/db_encryption_key` | local · AWS staging · DOR prod |
-| `SEARCH_TOKEN_PEPPER` | ⭐ HMAC pepper for phone/email/name lookup tokens (D-19/F-3). ⚠ **Rotating it invalidates every stored token** — `scripts/database/rehash_search_tokens.py` must run on the same box | `pass://GRM/Postgres/search_token_pepper` | local · AWS staging · DOR prod |
-| `POSTGRES_PASSWORD` | Database superuser | `pass://GRM/Postgres/password` | local · AWS staging · DOR prod |
-| `OPS_DB_PASSWORD` | Scoped `ops_app` role | `pass://GRM/Postgres/ops_password` | local · AWS staging · DOR prod |
-| `REDIS_PASSWORD` | Broker + result backend | `pass://GRM/Redis/password` | local · AWS staging · DOR prod |
-| `TICKETING_SECRET_KEY` | Ticketing ↔ chatbot webhook | `pass://GRM/Ticketing/secret_key` | local · AWS staging · DOR prod |
-| `MESSAGING_API_KEY` | Messaging API (`x-api-key`) — also guards `GET /api/grievance/{id}`, which serves **plaintext PII** | `pass://GRM/Messaging/api_key` | local · AWS staging · DOR prod |
-| `KEYCLOAK_CLIENT_SECRET` | OIDC client | `pass://GRM/Keycloak/client_secret` | local · AWS staging · DOR prod |
-| `KEYCLOAK_ADMIN_PASSWORD` | ⭐ Realm admin — **can mint officer accounts** | `pass://GRM/Keycloak/admin_password` | local · AWS staging · DOR prod |
-| `KEYCLOAK_WEBHOOK_SECRET` | Onboarding webhook | `pass://GRM/Keycloak/webhook_secret` | local · AWS staging · DOR prod |
-| `SMTP_PASSWORD` | Officer-invite mail relay | `pass://GRM/SMTP/password` | local · AWS staging · DOR prod |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | SNS (complainant SMS) | `pass://GRM/AWS/*` | local · AWS staging · DOR prod |
-| `LLM_API_KEY` / `ASR_API_KEY` | Model provider. ⚠ **Grievance text is sent to whoever this authenticates against** | `pass://GRM/LLM/hf_token` | local · **GitHub secret `HF_TOKEN`** · staging/prod when the open config ships |
+⚠ **Two Bitwarden products, two vaults, and the distinction is load-bearing here.** Personal logins
+live in the password manager (`bw`). **Machine secrets — everything in this section — live in
+Secrets Manager (`bws`) under an organization.** They are separate stores with separate CLIs and
+separate access models. Keeping them apart is what makes "lives in" unambiguous: if it is in this
+table, it is in `bws`, never in `bw`.
 
-### 5.2 ⚠ CI holds exactly one secret, and it must stay that way
+**Convention:** one `bws` **project per environment**, and each secret's **key is the environment
+variable name itself**. That is what makes the same name carrying three different values tractable —
+the project selects the environment, so nothing has to be renamed per environment.
 
-`HF_TOKEN` is the **only** GitHub Actions secret in this repository, and the reason is a rule worth
-stating rather than rediscovering:
+| Project | Environment | Machine account may read |
+|---|---|---|
+| `grm-local` | developer machines | everything below |
+| `grm-staging` | AWS staging | everything below |
+| `grm-prod` | DOR production | everything below |
+| `grm-ci` | GitHub Actions | ⚠ **`LLM_API_KEY` / `ASR_API_KEY` only** — see §5.2 |
 
-> **Anyone with repository write access can print a GitHub Actions secret** by editing a workflow.
-> So a secret in CI is exposed to the union of everyone who can push — which is a wider set than
-> everyone who can reach the production box.
+| Variable | Protects | Traps |
+|---|---|---|
+| `DB_ENCRYPTION_KEY` | ⭐ **Complainant PII at rest.** `backend` is the sole holder (T3-04); ticketing has no accessor and must not regain one, pinned by `tests/ticketing/test_pii_boundary.py` | Rotating it without re-encrypting orphans every stored value |
+| `SEARCH_TOKEN_PEPPER` | ⭐ HMAC pepper for phone/email/name lookup tokens (D-19/F-3) | ⚠ **Rotating invalidates every stored token.** `scripts/database/rehash_search_tokens.py` must run on that box, or lookup silently returns nothing and raises nothing |
+| `POSTGRES_PASSWORD` | Database superuser | |
+| `OPS_DB_PASSWORD` | Scoped `ops_app` role | |
+| `REDIS_PASSWORD` | Broker + result backend | |
+| `TICKETING_SECRET_KEY` | Ticketing ↔ chatbot webhook | |
+| `MESSAGING_API_KEY` | Messaging API — **also guards `GET /api/grievance/{id}`, which serves plaintext PII** | |
+| `KEYCLOAK_CLIENT_SECRET` | OIDC client | |
+| `KEYCLOAK_ADMIN_PASSWORD` | ⭐ Realm admin — **can mint officer accounts** | |
+| `KEYCLOAK_WEBHOOK_SECRET` | Onboarding webhook | |
+| `SMTP_PASSWORD` | Officer-invite mail relay | |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | SNS (complainant SMS) | |
+| `LLM_API_KEY` / `ASR_API_KEY` | Model provider. ⚠ **Grievance text is sent to whoever this authenticates against** | Also copied into the GitHub secret `HF_TOKEN` |
 
-That is an acceptable trade for `HF_TOKEN` specifically: it is **scoped** (inference only),
-**capped** (extra usage is pre-paid, so the loaded balance is the ceiling), and **cheap to rotate**
-(revoke, mint, re-paste; nothing stored depends on it). It is not an acceptable trade for anything
-in the rows above it.
+### 5.2 ⚠ `env.local` cannot be eliminated — it can only be generated
 
-⚠ **Which is also why CI must not adopt vault injection.** `pass-cli` resolves `pass://` references
-by authenticating to Proton — so a runner using it needs a Proton credential, and that credential
-would itself have to live in a GitHub secret. The bootstrap does not disappear; it **moves and gets
-worse**, because a vault session unlocks `DB_ENCRYPTION_KEY`, the Keycloak admin password and the
-SMTP relay, where today CI can reach one rate-limited inference token.
+**Ten compose services declare `env_file: env.local`** (`docker-compose.yml` ×6,
+`docker-compose.grm.yml` ×4). Containers read that **file**, not the ambient shell environment, so
+`bws run -- docker compose up` would inject variables the containers never see.
 
-**The rule that generalises:** inject-from-vault pays off where the environment *already* holds many
-secrets — a developer laptop, a deploy box — because it removes plaintext at rest without widening
-the blast radius. It is a **downgrade** where the environment holds few, because it trades one
-scoped credential for vault-wide access. CI holds few. CI keeps its one secret.
+⚠ **This rules out the "never write the file" pattern** until those ten service definitions are
+converted to `environment:` with `${VAR}` substitution. That is a real refactor with a real
+regression risk, and it is **not** currently worth doing — so the shape is *generate the file*, not
+*replace the file*:
 
-### 5.3 Rotation
+```bash
+# Regenerate env.local from the vault. Same file the stack already reads.
+export BWS_ACCESS_TOKEN=…                      # scoped to ONE project
+bws secret list "$GRM_BWS_PROJECT" -o env > env.local
+chmod 600 env.local
+```
 
-Rotating any row above means updating **every** derived copy. Copies do not self-update, and nothing
-in this repository detects a stale one — the symptom is a service failing to start, or worse, a
-lookup silently returning nothing (`SEARCH_TOKEN_PEPPER`).
+**What that buys, stated honestly, because it is less than "the copy disappears":**
 
-- **Local** — regenerate from the vault (`pass-cli inject` / `pass-cli run --env-file`)
-- **GitHub** — manual re-paste; `gh secret set HF_TOKEN` needs *Secrets: write* on the PAT
-- **AWS staging / DOR prod** — per the deployment runbook, then restart the affected services
-- ⚠ **`SEARCH_TOKEN_PEPPER` additionally requires** `scripts/database/rehash_search_tokens.py` on
-  that box, or phone and email lookup return nothing and no error is raised
+| | |
+|---|---|
+| ✅ **Rotation** | regenerate and ship, instead of SSH-and-edit |
+| ✅ **Provenance** | the env is derived from a known vault state, not from whatever someone typed in March |
+| ✅ **Drift detection** | regenerate to a temp file and `diff` against what is on the box |
+| ❌ **Encryption at rest** | **unchanged.** `env.local` is still plaintext on every machine that has one |
 
-⚠ **`pass-cli` is beta and gated to paid Proton tiers.** Prove it on the developer machine before it
-goes anywhere near a deploy path — a vault-resolution failure on the DOR box during an incident is a
-much worse day than a hand-copied variable.
+Getting plaintext off the boxes needs a different mechanism entirely (Docker secrets, systemd
+credentials, a KMS). Out of scope, and named here so nobody assumes this bought it.
+
+### 5.3 Stage and production — inject on the developer machine, ship the file
+
+`make aws-deploy` and `make prod-deploy` run `git pull && docker compose up` **on the box** and never
+touch `env.local`. Each box's copy is hand-maintained over SSH. That is the thing worth changing, and
+the safe way is to keep vault resolution **on the developer machine**:
+
+```
+bws secret list <project> -o env  →  env.local (0600)  →  scp to box  →  deploy
+```
+
+⚠ **Do not run `bws` on the DOR box.** It would add a **runtime dependency on Bitwarden being
+reachable from Nepal government infrastructure** for services to start — on a host reached only via
+VPN with a password prompt. Resolving on the laptop fails *before* anything ships; resolving on the
+box fails at 2am during an incident. The machine-account token also never leaves your machine.
+
+**Keep secret rotation a separate `make` target from deploy.** Shipping code and rotating credentials
+are different operations with different blast radii, and coupling them means every deploy rewrites
+production's environment.
+
+### 5.4 ⚠ CI: keep the GitHub secret — but the reason is narrower than it looks
+
+`HF_TOKEN` is the **only** GitHub Actions secret in this repository. The standing rule:
+
+> **Anyone with repository *write* access can print a GitHub Actions secret** by editing a workflow.
+> So a CI secret is exposed to the union of everyone who can push — a wider set than everyone who can
+> reach production.
+
+That is acceptable for `HF_TOKEN`: **scoped** to inference, **capped** (extra usage is pre-paid, so
+the loaded balance is the ceiling), **cheap to rotate**, and nothing stored depends on it.
+
+**Why not resolve it from the vault in CI instead?** ⚠ **Not for the reason first written here.** The
+original argument was that a vault session unlocks everything — true of a whole-vault credential, and
+**not true of `bws`**, whose machine accounts are scoped per project. A `grm-ci` project containing
+only the model keys yields a token whose blast radius equals the token it replaces. The blast-radius
+objection largely dissolves.
+
+What remains is smaller and still decisive **today**:
+
+- it is **one secret for one secret** — `BWS_ACCESS_TOKEN` instead of `HF_TOKEN`, no net reduction;
+- it adds a **dependency on Bitwarden being up** for every CI run;
+- and it adds indirection for no present gain.
+
+⭐ **The flip point is worth writing down, because it will arrive:** once CI needs **three or more**
+secrets, central rotation beats pasting, and a project-scoped `bws` machine account becomes the
+better answer. Revisit then — and until then this is a *no payoff yet* decision, not a *dangerous*
+one.
 
 ---
 
