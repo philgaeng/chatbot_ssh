@@ -259,6 +259,54 @@ a reviewer to check.
 > binding tasks are SEAH recall — a miss is a safeguarding failure, not a quality complaint — and the
 > complainant-facing resolved summary, the only generated text that reaches the public.
 
+---
+
+## Q-23 — Is the 30 s classification budget a hard limit? {#q-23}
+
+**→ No. It is a knob: measure, and raise it to 45 s or 60 s if a better model needs it.**
+
+> **DECIDED 2026-08-20.** *"We will measure and adjust the number to 45 s or 60 s if needed."*
+
+**Why this is the right shape of answer.** DPG-15b *lowered* the wait to 30 s deliberately — but the
+reasoning was about a configuration where `gpt-5-nano` answers in 14–20.5 s, not about a bound that must
+hold for every future model. Freezing it would have let a latency number veto a quality decision by
+default, which is backwards: the number exists to serve the flow, not the other way round.
+
+**⚠ What raising it actually spends, since this is easy to get wrong in both directions.** Classification
+is triggered when the grievance form completes and runs while the complainant fills contact and OTP; the
+poll happens **after they submit** and only ever catches the slow tail. If it times out, nothing breaks
+operationally — the ticket is filed and the officer receives the classification through the two-minute
+ticketing sync. What is lost is **the complainant's chance to see and correct how their own grievance was
+understood**, which is the accountability half of the feature.
+
+So the trade is *seconds of spinner for the slow tail* against *the review step for those same users*, and
+the ceiling is not technical — it is how long someone watches a spinner on a rural mobile connection after
+they have already submitted. **Report the fraction of complainants affected alongside any proposed number.**
+
+⚠ `CLASSIFICATION_WAIT_SECONDS` and `TIMEOUT_CLASSIFY_INTERACTIVE` move together — the poll deadline and
+the first-attempt timeout are one decision, pinned by DPG-15b's coherence tests.
+
+---
+
+## Q-24 — How many open models does "benchmark many" mean? {#q-24}
+
+**→ A shortlist, not a sweep.**
+
+> **DECIDED 2026-08-20.** *"Many means a shortlist — anyway not so many are decent candidates."*
+
+The selection filter already does most of the narrowing before anything is spent: permissive licence,
+genuine multilingual coverage including Nepali, reliable guided decoding, fits one 24 GB GPU at 4-bit. On
+a low-resource language that leaves a handful, not a field.
+
+**What this obliges the benchmark to record**, because a shortlist is only credible if its edges are
+visible: **name every candidate considered and why each one made or missed the list** — especially the
+ones the *licence* limb excluded. That limb is provisional (consultant-Q5 asks whether restricted-use open
+weights satisfy indicator 4), and if the answer loosens, re-running DPG-23 should be a candidate-list edit
+rather than a re-design.
+
+It also makes [Q-19](QUESTIONS.md#q-19) tractable rather than solved: a shortlist is affordable in a way a
+sweep is not — but *affordable* is a number, and nobody has produced it yet.
+
 ✅ **Confirmed the same day, for the ticketing surface too:** *"Move to nano as well. Nano is very
 strong for classification especially when we just need to fill json."* The standard/SEAH split keeps
 **two keys** pointing at one model, so it survives as configuration and DPG-23 can re-open it with

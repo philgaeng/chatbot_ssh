@@ -31,6 +31,12 @@
 > with one model doing everything you **rank candidates by their worst per-task score, not their mean**,
 > and the binding tasks are SEAH recall and the complainant-facing summary. See [DPG-23](#dpg-23).
 >
+> **✅ Also decided 2026-08-20:** the 30 s classification budget is **a knob, not a wall** — measure and
+> raise it to 45 s or 60 s if a better model needs it, with the cost stated (see [DPG-23](#dpg-23): what
+> you spend is the review step for the slow tail, not the classification itself). And **"benchmark many"
+> means a shortlist** — *"not so many are decent candidates"* — so name the handful and why each made or
+> missed the list.
+>
 > **⭐ The one blocker you cannot engineer around: [Q-19](QUESTIONS.md#q-19), the LLM budget, is 🔴 open.**
 > It gates DPG-22, DPG-23 and DPG-24 — three of the five tickets — because they are made of inference
 > calls and nobody has priced them. **Do not start those three by building a harness.** Price them first:
@@ -388,13 +394,36 @@ question in the doc**; do not let a bad WER quietly become a decision nobody mad
 
 ### ⚠ Two constraints Sprint 1 added (2026-08-20)
 
-**1. p95 latency is pass/fail at ~30 s, not a row in a table** (§0.1-D). The complainant fills the contact
-and OTP forms while classification runs in the background, then reviews the result before submitting —
-`CLASSIFICATION_WAIT_SECONDS=30`. A model that is *more accurate* but answers in 45 s **fails**: the review
-step is skipped and the grievance files unreviewed. `gpt-5-nano` measures 14–20.5 s today, so a 2× slowdown
-is the whole budget. **Record p95 against the 30 s line explicitly**, and if the best open model misses it,
-that is a product decision to put to the owner — lengthening the wait, dropping the review step, or
-accepting a weaker-but-faster model — not a number to bury in a cell.
+**1. p95 latency is a threshold to *measure against*, not a row to fill in** (§0.1-D).
+
+⭐ **Decided 2026-08-20: the 30 s budget is a knob, not a wall.** *"We will measure and adjust the number to
+45 s or 60 s if needed."* So a candidate that is more accurate and slower is **not** automatically
+disqualified — but the raise has to be a stated decision with the cost beside it, not a config tweak that
+lands in a diff.
+
+**Understand what the wait actually is before you spend it.** Classification is triggered when the
+grievance form completes; the complainant then fills the contact and OTP forms while it runs. The poll
+happens **after they submit**, and it only ever catches the slow tail — most complainants never wait at all.
+`CLASSIFICATION_WAIT_SECONDS` bounds that tail.
+
+**And what timing out costs, which is less than it sounds and more than nothing.** From
+`backend/actions/grievance_intake/classification.py`:
+
+> *"the review step runs **after** submission, so the grievance is already filed and the classification
+> reaches the officer through the two-minute ticketing sync whether or not the complainant ever sees it.
+> A longer wait buys silence."*
+
+Nothing is lost operationally — the ticket exists, the officer gets the classification. What is lost is
+**the complainant's chance to see and correct how their own grievance was understood**, which is the
+accountability half of the feature. So the trade is *seconds of spinner* against *the review step for the
+users in the slow tail* — and the ceiling is not technical, it is how long someone will watch a spinner on
+a rural mobile connection after they have already submitted.
+
+**What to do:** measure p95 and p99 per candidate; report both against 30 / 45 / 60 s; and if the best
+model needs the raise, say what fraction of complainants would wait that long and recommend a number.
+`gpt-5-nano` measures 14–20.5 s today, so 30 s is roughly one slow model away from being tight already.
+⚠ **Raise `CLASSIFICATION_WAIT_SECONDS` and `TIMEOUT_CLASSIFY_INTERACTIVE` together** — the poll deadline
+and the first-attempt SDK timeout are the same decision, and DPG-15b's tests pin that they stay coherent.
 
 **2. ⭐ The open configuration ships TWO models.** Benchmark many candidates; keep **one text model for
 every text task, plus one for transcription**, mirroring the closed pair.
@@ -419,10 +448,16 @@ table has:**
   separate keys precisely so that stays cheap — one env var re-opens it. If a second text model turns out
   to buy something large enough to justify operating it, say what it bought and what it cost; do not let
   it back in because a template had it.
-- ⚠ **This makes DPG-23 wider, not narrower, and that sharpens [Q-19](QUESTIONS.md#q-19).** "Benchmark
-  many" is more inference than the spec originally assumed, on a sprint whose budget is still unfunded.
-  Price the candidate sweep before running it — and note that a **cheap first pass on a small slice can
-  eliminate most candidates** before the full set is spent on the two or three that survive.
+- **"Many" means a shortlist, not a sweep** (owner, 2026-08-20): *"anyway not so many are decent
+  candidates."* The filter in §Required reading does most of the narrowing before you spend anything —
+  permissive licence, real multilingual coverage including Nepali, reliable guided decoding, fits one
+  24 GB GPU at 4-bit. **Expect a handful, and name them in the doc with the reason each one made or missed
+  the list** — including the ones the licence limb excluded, because that limb is provisional
+  (consultant-Q5) and a loosened answer should be a candidate-list edit, not a re-design.
+- ⚠ **Still price it before running it ([Q-19](QUESTIONS.md#q-19)).** A shortlist is affordable in a way a
+  sweep is not, which is the point — but "affordable" is a number, not an adjective. A **cheap first pass
+  on a small slice** eliminates the weak candidates before the full set is spent on the two or three that
+  survive.
 
 ### Candidates and criteria
 
@@ -479,8 +514,11 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 - [ ] Sensitive detection scored on **recall**
 - [ ] Classification scored **set-level**
 - [ ] Translation decision (Q-09) made and recorded with the number that decided it
-- [ ] **p95 measured against the 30 s interactive budget** and the pass/fail stated per candidate — not
-      merely tabulated (§0.1-D)
+- [ ] **p95 and p99 measured against 30 / 45 / 60 s** per candidate. If a raise is recommended, it comes
+      with the fraction of complainants who would wait that long and an explicit number — the budget is a
+      knob (owner, 2026-08-20), but moving it costs the review step for the slow tail, not nothing
+- [ ] If the budget moves, `CLASSIFICATION_WAIT_SECONDS` **and** `TIMEOUT_CLASSIFY_INTERACTIVE` move
+      together, and DPG-15b's coherence tests still pass
 - [ ] **Exactly two models in the shipped configuration** — one text, one ASR (owner's decision,
       2026-08-20). Every `MODEL_*` in `.env.open` except `MODEL_ASR` carries the same value, and its
       placeholder names are either confirmed with a date and the evidence, or replaced

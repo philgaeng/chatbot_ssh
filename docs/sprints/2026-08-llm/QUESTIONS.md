@@ -45,6 +45,8 @@ Full text, verbatim answers and reasoning: [`DECISIONS.md`](DECISIONS.md).
 | **Q-12** | Nepali NER licence | Email the author; budget an openly-licensed fine-tune as fallback | [→](DECISIONS.md#q-12) |
 | **Q-13** | `gpt-5-nano` · voice live? | Deliberate cost choice · **voice transcription is not live** | [→](DECISIONS.md#q-13) |
 | **Q-14** | SEAH fail open/closed | **Fail-open stays** — a deterministic pre-filter is the backup, **verified in code** | [→](DECISIONS.md#q-14) |
+| **Q-23** | Is 30 s a hard classification budget | **No — a knob.** Measure; raise to 45 s or 60 s if a better model needs it | [→](DECISIONS.md#q-23) |
+| **Q-24** | How many open models to benchmark | **A shortlist, not a sweep** — name every candidate and why it made or missed the list | [→](DECISIONS.md#q-24) |
 | **Q-15** | Benchmark provenance | Synthetic in phase 1; hybrid once the live project has data | [→](DECISIONS.md#q-15) |
 | **Q-16** | Benchmark size + labellers | **No labeller budget** — the set grows with the project | [→](DECISIONS.md#q-16) |
 | **Q-06** | Licence scan scheduled? | Scheduled, in `ops/security.py` | [→](DECISIONS.md#q-06) |
