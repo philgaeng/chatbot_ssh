@@ -248,6 +248,17 @@ and a text model (DPG-23) — so `.env.open` and `.env.openai` differ in two mod
 That is a materially easier thing to benchmark on no budget (Q-19), and a materially easier thing for
 a reviewer to check.
 
+> ⚠ **Re-confirmed 2026-08-20, and the re-confirmation caught a drift.** `.env.open` shipped **three**
+> models for two days after this decision — a 120b for translation and SEAH findings, alongside a 20b for
+> everything else — because DPG-16 wrote the template from the candidate list rather than from the
+> decision. Nothing was wrong with the record; the artefact simply never got the message, and it would
+> have reached DPG-23 as an unexamined premise. The template is now collapsed to eight keys, two values.
+>
+> **The selection rule that follows, which this record did not previously spell out:** with one model
+> doing every text task, you **rank candidates by their worst per-task score, not their mean**. The
+> binding tasks are SEAH recall — a miss is a safeguarding failure, not a quality complaint — and the
+> complainant-facing resolved summary, the only generated text that reaches the public.
+
 ✅ **Confirmed the same day, for the ticketing surface too:** *"Move to nano as well. Nano is very
 strong for classification especially when we just need to fill json."* The standard/SEAH split keeps
 **two keys** pointing at one model, so it survives as configuration and DPG-23 can re-open it with

@@ -24,6 +24,13 @@
 > | 3 | **The SEAH benchmark data must stay OUT of git** — owner's decision, 2026-08-19 | Directly contradicts DPG-20's "commit under `tests/data/benchmark/`". **Both are right, about different data.** §0 resolves it; do not resolve it yourself. |
 > | 4 | **CI is green** — first time since 2026-08-08 (D-26) | DPG-24's "green on the integration branch" is now reachable, and **red now means something.** Do not add a job that normalises red. |
 >
+> **✅ Decided [Q-21](DECISIONS.md#q-21), 2026-08-18, re-confirmed 2026-08-20 — do not re-open it:** the
+> open configuration ships **two models** — one text model for every text task, one for transcription —
+> mirroring the closed pair. **Benchmark many, ship two.** `.env.open` shipped three for two days after
+> that decision and is now collapsed to match. The consequence is a selection rule, not just a count:
+> with one model doing everything you **rank candidates by their worst per-task score, not their mean**,
+> and the binding tasks are SEAH recall and the complainant-facing summary. See [DPG-23](#dpg-23).
+>
 > **⭐ The one blocker you cannot engineer around: [Q-19](QUESTIONS.md#q-19), the LLM budget, is 🔴 open.**
 > It gates DPG-22, DPG-23 and DPG-24 — three of the five tickets — because they are made of inference
 > calls and nobody has priced them. **Do not start those three by building a harness.** Price them first:
@@ -389,13 +396,33 @@ is the whole budget. **Record p95 against the 30 s line explicitly**, and if the
 that is a product decision to put to the owner — lengthening the wait, dropping the review step, or
 accepting a weaker-but-faster model — not a number to bury in a cell.
 
-**2. How many models should the open configuration use?** Sprint 1 consolidated the closed configuration to
-**two** on the owner's instruction (Q-21): `gpt-5-nano` for every text task, `whisper-1` for audio. But
-[`.env.open`](../../../.env.open) currently proposes **three** — a 20b for most tasks, a 120b for
-translation and SEAH findings, and Whisper. Those are placeholders nobody measured. **Make this an explicit
-decision with a number beside it**: if the 120b buys materially better Nepali or materially better SEAH
-recall, two models becomes three and that is fine — but say what it bought. Operating three models costs
-more than operating two in every dimension that matters here, and "it was in the template" is not a reason.
+**2. ⭐ The open configuration ships TWO models.** Benchmark many candidates; keep **one text model for
+every text task, plus one for transcription**, mirroring the closed pair.
+
+⚠ **This was already decided on 2026-08-18** — [Q-21](DECISIONS.md#q-21), in the owner's words: *"we just
+need two models… That will be aligned with what we discussed as well for the open weights model where we
+agreed to just have two."* It was **re-confirmed 2026-08-20**, and the reason it needed re-confirming is
+worth noticing: `.env.open` shipped **three** models for two days after the decision that said two — a 120b
+for translation and SEAH findings that nobody had measured. **The decision record was right and the
+artefact never got the message.** The template is now collapsed to match; every `MODEL_*` except
+`MODEL_ASR` carries the same value.
+
+**This is a benchmark-many-ship-one decision, and it changes how you select, not just how many rows the
+table has:**
+
+- **Select on the hardest task, not the average.** One model does everything, so the binding constraints
+  are **SEAH recall** — a miss is a safeguarding failure, not a quality complaint — and the
+  **complainant-facing resolved summary**, which is the only generated text that reaches the public. A
+  candidate that classifies dust complaints beautifully and reads harassment poorly is disqualified
+  whatever its headline accuracy. **Rank candidates by their worst per-task score, not their mean.**
+- **A per-task split is a decision to re-open with evidence, never a default.** The registry keeps eight
+  separate keys precisely so that stays cheap — one env var re-opens it. If a second text model turns out
+  to buy something large enough to justify operating it, say what it bought and what it cost; do not let
+  it back in because a template had it.
+- ⚠ **This makes DPG-23 wider, not narrower, and that sharpens [Q-19](QUESTIONS.md#q-19).** "Benchmark
+  many" is more inference than the spec originally assumed, on a sprint whose budget is still unfunded.
+  Price the candidate sweep before running it — and note that a **cheap first pass on a small slice can
+  eliminate most candidates** before the full set is spent on the two or three that survive.
 
 ### Candidates and criteria
 
@@ -454,8 +481,13 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 - [ ] Translation decision (Q-09) made and recorded with the number that decided it
 - [ ] **p95 measured against the 30 s interactive budget** and the pass/fail stated per candidate — not
       merely tabulated (§0.1-D)
-- [ ] **The two-models-or-three decision made explicitly**, with the measurement that decided it, and
-      `.env.open`'s placeholder candidates either confirmed with a date or replaced
+- [ ] **Exactly two models in the shipped configuration** — one text, one ASR (owner's decision,
+      2026-08-20). Every `MODEL_*` in `.env.open` except `MODEL_ASR` carries the same value, and its
+      placeholder names are either confirmed with a date and the evidence, or replaced
+- [ ] **Candidates ranked by worst per-task score, not mean** — SEAH recall and the complainant-facing
+      summary are the binding constraints when one model does everything
+- [ ] If a per-task split is proposed anyway, it comes with the measurement that justifies it and the
+      operating cost it adds — the registry makes it one env var, which is exactly why it needs a reason
 - [ ] Chosen defaults written into `.env.open` and `docs/dpg/open-model-configuration.md`
 - [ ] The gap, wherever it exists, stated plainly in the DPG submission language
 
