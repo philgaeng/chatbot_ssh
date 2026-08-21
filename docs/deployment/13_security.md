@@ -98,124 +98,257 @@ Detailed policy: [09_privacy.md](09_privacy.md).
 | **Webhook/API shared secrets** | Ticketing + messaging + Keycloak | `TICKETING_SECRET_KEY`, `MESSAGING_API_KEY`, `KEYCLOAK_WEBHOOK_SECRET` |
 
 
-### 5.1 Where each secret lives — the "lives in" inventory
+### 5.1 Principles
 
-> **Added 2026-08-20.** §5 above says *"no credentials in repo; `.env` / deployment env vars"*, which
-> is true and answers the wrong question. It does not say **where the canonical copy is** or **what
-> else holds a copy** — precisely what nobody reconstructs from memory when a key must be rotated in
-> a hurry.
+> **Scope note.** This policy spans **every repository under `~/projects/`**, not only this one. It
+> lives here because this is the project with a security specification; the inventory in §5.3 is
+> deliberately wider than the GRM.
+>
+> **Status: target state, not current state.** As of 2026-08-20 `sops` and `age` are **not
+> installed**, no `.sops.yaml` exists in any repository, and no `*.enc.env` exists anywhere. Every
+> credential below currently sits in a plaintext, gitignored file. This section describes where
+> things are going; §5.7 lists what must happen to get there.
 
-**Source of truth: Bitwarden Secrets Manager (`bws`).** Everything else is a derived copy.
+1. **Least scope.** A credential is issued for one consumer in one environment. Same variable name
+   across projects (`HF_TOKEN` everywhere) — **the directory is the namespace, not the variable
+   name.**
+2. **Rotatable without a deploy.** Changing a credential must not require a code change or a release.
+   That is why platform-native stores are preferred wherever the platform has one.
+3. **One credential per environment per consumer.** Staging must not be able to authenticate as
+   production. Per-client credentials are always separate; personal tooling credentials may be shared
+   across personal projects.
+4. **Every copy known.** A credential whose copies cannot be enumerated cannot be rotated, only
+   abandoned. §5.3 is the enumeration, and it is the artefact that makes §5.5 possible.
+5. **The vault is for bootstrapping and local development — it is not the runtime source of truth
+   for deployed code.** Each secret therefore has **at most two homes**: the platform that consumes
+   it, and the encrypted file it is restored from.
 
-⚠ **Two Bitwarden products, two vaults, and the distinction is load-bearing here.** Personal logins
-live in the password manager (`bw`). **Machine secrets — everything in this section — live in
-Secrets Manager (`bws`) under an organization.** They are separate stores with separate CLIs and
-separate access models. Keeping them apart is what makes "lives in" unambiguous: if it is in this
-table, it is in `bws`, never in `bw`.
+#### ⚠ Revocation is not rotation
 
-**Convention:** one `bws` **project per environment**, and each secret's **key is the environment
-variable name itself**. That is what makes the same name carrying three different values tractable —
-the project selects the environment, so nothing has to be renamed per environment.
+**No system revokes a secret that has already been read.** Removing an age recipient, deleting an IAM
+grant, revoking a share — all of these govern **future** reads only. A credential someone already
+holds stays valid until it is **rotated at the provider**.
 
-| Project | Environment | Machine account may read |
+Access controls and audit logs exist to tell us **what to rotate**, not to undo past access. In
+particular, `sops updatekeys` after removing a key stops future decrypts and **does not substitute
+for rotating every secret in that file.**
+
+### 5.2 Where secrets live, by category
+
+**Tooling: no hosted secrets manager.** Secrets are encrypted at rest with **SOPS** using **age**
+keys. **Proton Pass (free tier)** holds personal passwords and recovery material only — never
+application credentials.
+
+| Category | Store | Rationale |
 |---|---|---|
-| `grm-local` | developer machines | everything below |
-| `grm-staging` | AWS staging | everything below |
-| `grm-prod` | DOR production | everything below |
-| `grm-ci` | GitHub Actions | ⚠ **`LLM_API_KEY` / `ASR_API_KEY` only** — see §5.2 |
+| Vercel-deployed config | **Vercel environment variables**, per environment | Rotatable from the dashboard without a deploy; scoped per environment natively |
+| Supabase config | **Supabase secrets** | Same — the platform that issues the credential also rotates it |
+| Hetzner / self-managed compute | **`secrets.enc.env`**, SOPS-encrypted, committed to the deploy repo | No platform store exists; the repo is already the deploy unit, so the secret travels with what consumes it |
+| Client-owned secrets | **SOPS in the client's repo**, with the **client's age public key added as co-recipient from day one** | Day one matters: retrofitting a recipient means re-encrypting, and it means the client could not read their own secrets in the interim |
+| Client production credentials where the client runs a cloud KMS | **SOPS with that KMS as recipient** | Gives the client **IAM-level revocation** and a **decrypt audit trail** — neither of which an age recipient list provides |
+| Personal passwords, **age private keys**, recovery codes | **Proton Pass** | Human custody, not machine consumption |
 
-| Variable | Protects | Traps |
+#### File layout, per repository
+
+| File | Committed? | Contents |
 |---|---|---|
-| `DB_ENCRYPTION_KEY` | ⭐ **Complainant PII at rest.** `backend` is the sole holder (T3-04); ticketing has no accessor and must not regain one, pinned by `tests/ticketing/test_pii_boundary.py` | Rotating it without re-encrypting orphans every stored value |
-| `SEARCH_TOKEN_PEPPER` | ⭐ HMAC pepper for phone/email/name lookup tokens (D-19/F-3) | ⚠ **Rotating invalidates every stored token.** `scripts/database/rehash_search_tokens.py` must run on that box, or lookup silently returns nothing and raises nothing |
-| `POSTGRES_PASSWORD` | Database superuser | |
-| `OPS_DB_PASSWORD` | Scoped `ops_app` role | |
-| `REDIS_PASSWORD` | Broker + result backend | |
-| `TICKETING_SECRET_KEY` | Ticketing ↔ chatbot webhook | |
-| `MESSAGING_API_KEY` | Messaging API — **also guards `GET /api/grievance/{id}`, which serves plaintext PII** | |
-| `KEYCLOAK_CLIENT_SECRET` | OIDC client | |
-| `KEYCLOAK_ADMIN_PASSWORD` | ⭐ Realm admin — **can mint officer accounts** | |
-| `KEYCLOAK_WEBHOOK_SECRET` | Onboarding webhook | |
-| `SMTP_PASSWORD` | Officer-invite mail relay | |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | SNS (complainant SMS) | |
-| `LLM_API_KEY` / `ASR_API_KEY` | Model provider. ⚠ **Grievance text is sent to whoever this authenticates against** | Also copied into the GitHub secret `HF_TOKEN` |
+| `.env` | ✅ committed, **plaintext** | **Non-secrets only** — feature flags, log levels, ports, public URLs, `NEXT_PUBLIC_*`, plus all comments and section headers |
+| `secrets.enc.env` | ✅ committed, **SOPS-encrypted** | Credentials only |
+| `.sops.yaml` | ✅ committed | `path_regex: \.enc\.env$`, **age public keys only** |
+| `.gitignore` | ✅ committed | Must cover `.env.local` and `*.decrypted` |
 
-### 5.2 ⚠ `env.local` cannot be eliminated — it can only be generated
+⚠ **Comments and structure live in `.env`, not in the encrypted file.** A SOPS-encrypted file is a
+poor place to read documentation, and its diffs are unreadable — so the plaintext half carries the
+explanation and the encrypted half carries only values.
 
-**Ten compose services declare `env_file: env.local`** (`docker-compose.yml` ×6,
-`docker-compose.grm.yml` ×4). Containers read that **file**, not the ambient shell environment, so
-`bws run -- docker compose up` would inject variables the containers never see.
+#### Secret vs non-secret
 
-⚠ **This rules out the "never write the file" pattern** until those ten service definitions are
-converted to `environment:` with `${VAR}` substitution. That is a real refactor with a real
-regression risk, and it is **not** currently worth doing — so the shape is *generate the file*, not
-*replace the file*:
+**A value is a secret if it would help someone who obtained it.**
 
-```bash
-# Regenerate env.local from the vault. Same file the stack already reads.
-export BWS_ACCESS_TOKEN=…                      # scoped to ONE project
-bws secret list "$GRM_BWS_PROJECT" -o env > env.local
-chmod 600 env.local
-```
-
-**What that buys, stated honestly, because it is less than "the copy disappears":**
-
-| | |
+| Always secret | Never secret |
 |---|---|
-| ✅ **Rotation** | regenerate and ship, instead of SSH-and-edit |
-| ✅ **Provenance** | the env is derived from a known vault state, not from whatever someone typed in March |
-| ✅ **Drift detection** | regenerate to a temp file and `diff` against what is on the box |
-| ❌ **Encryption at rest** | **unchanged.** `env.local` is still plaintext on every machine that has one |
+| API keys, tokens, passwords | `NEXT_PUBLIC_*` — **these ship to the browser** |
+| Database URLs with embedded credentials | Feature flags |
+| SMTP credentials | Log levels |
+| Webhook signing secrets | Ports, public URLs |
+| OAuth client secrets | |
+| ⚠ **Usernames and account identifiers *when paired with a credential for the same service*** — e.g. `SMTP_USERNAME` beside `SMTP_PASSWORD` | |
 
-Getting plaintext off the boxes needs a different mechanism entirely (Docker secrets, systemd
-credentials, a KMS). Out of scope, and named here so nobody assumes this bought it.
+#### Key management
 
-### 5.3 Stage and production — inject on the developer machine, ship the file
+- **One age keypair per person**, at **`~/.config/sops/age/keys.txt`** in the **WSL filesystem**.
+- ⚠ **Never under `/mnt/c/`, `/mnt/g/`, or inside `G:\My Drive\`.** Google Drive mirror mode would
+  sync the private key **in plaintext** to Google. This is the single most damaging misplacement
+  available, because it is silent and it is a backup feature working as designed.
+- **A separate keypair per server**, rather than copying the personal key onto hosts. A compromised
+  host then costs one host, not every secret you can read.
+- Private key backed up as a **Proton Pass secure note**, with a **paper copy for the personal key
+  only**.
 
-`make aws-deploy` and `make prod-deploy` run `git pull && docker compose up` **on the box** and never
-touch `env.local`. Each box's copy is hand-maintained over SSH. That is the thing worth changing, and
-the safe way is to keep vault resolution **on the developer machine**:
+#### Proton account hardening
 
-```
-bws secret list <project> -o env  →  env.local (0600)  →  scp to box  →  deploy
-```
+- 2FA enabled via an **external authenticator app** — ⚠ **not Proton Pass's own TOTP feature.**
+  Storing the Proton account's second factor inside Proton Pass is circular: losing access to Proton
+  loses the means of regaining access to Proton.
+- **Recovery codes stored outside Proton.**
 
-⚠ **Do not run `bws` on the DOR box.** It would add a **runtime dependency on Bitwarden being
-reachable from Nepal government infrastructure** for services to start — on a host reached only via
-VPN with a password prompt. Resolving on the laptop fails *before* anything ships; resolving on the
-box fails at 2am during an incident. The machine-account token also never leaves your machine.
+### 5.3 Inventory
 
-**Keep secret rotation a separate `make` target from deploy.** Shipping code and rotating credentials
-are different operations with different blast radii, and coupling them means every deploy rewrites
-production's environment.
+Discovered 2026-08-20 by scanning every git repository under `~/projects/`. **Values were never
+read or compared directly** — cross-repo sameness was established by hashing, so this table records
+*that* two things match, never *what* they are.
 
-### 5.4 ⚠ CI: keep the GitHub secret — but the reason is narrower than it looks
+⚠ **`Authoritative store` is the TARGET store** per §5.2. Today every row lives in a plaintext
+gitignored file; the migration is §5.7.
 
-`HF_TOKEN` is the **only** GitHub Actions secret in this repository. The standing rule:
+#### 5.3.1 Nepal GRM — `nepal_chatbot` (ADB Loan 52097-003)
 
-> **Anyone with repository *write* access can print a GitHub Actions secret** by editing a workflow.
-> So a CI secret is exposed to the union of everyone who can push — a wider set than everyone who can
-> reach production.
+| # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
+|---|---|---|---|---|---|---|---|
+| 1 | `DB_ENCRYPTION_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · AWS staging · DOR prod | `backend` **only** (T3-04) | ⚠ **Not a simple rotate** — pgcrypto values must be decrypted with the old key and re-encrypted with the new. No script exists. Treat as a migration | TBC |
+| 2 | `SEARCH_TOKEN_PEPPER` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local `env.local`** | `base_manager.py` HMAC lookup tokens | Change value, then **run `scripts/database/rehash_search_tokens.py` on that box**. ⚠ Skipping it makes phone/email lookup return nothing, silently | TBC |
+| 3 | `POSTGRES_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Postgres, all services | `ALTER ROLE … PASSWORD`, update the file, restart the stack | TBC |
+| 4 | `OPS_DB_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `ops` container (`ops_app` role) | As #3, for the scoped role | TBC |
+| 5 | `REDIS_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Broker + result backend | Update `requirepass`, update the file, restart Redis and every worker | TBC |
+| 6 | `TICKETING_SECRET_KEY` | TBC | `secrets.enc.env` (SOPS) | ✅ **Empty locally by design** — the dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active; **checked, it fails closed** elsewhere (`grievance.py:251-263` raises without a key) · staging · prod | Ticketing ↔ chatbot webhook | `python -c "import secrets; print(secrets.token_urlsafe(32))"`, update both sides | TBC |
+| 7 | `MESSAGING_API_KEY` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** | Generate, update caller and callee together | TBC |
+| 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | ⭐ Realm admin — **can mint officer accounts** | Keycloak admin console → user → Credentials → reset | TBC |
+| 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | OIDC client | Keycloak → Clients → Credentials → Regenerate; update every consumer | TBC |
+| 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Onboarding webhook | Generate, update Keycloak event listener config and the receiver | TBC |
+| 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Officer-invite mail relay | Mail provider console → rotate app password | TBC |
+| 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | SNS (complainant SMS), Pinpoint | IAM → Security credentials → create new key → update every copy → **delete old key** | TBC |
+| 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` local | Closed LLM config (the benchmark baseline) | platform.openai.com → API keys → revoke + create | TBC |
+| 14 | `HG_TOKEN` (+ `HG_USERNAME`) | me | `secrets.enc.env` (SOPS) | `env.local` local · **GitHub Actions secret `HF_TOKEN`** | Open LLM config; `dpg-platform-independence` CI job | huggingface.co/settings/tokens → revoke + create → **also re-paste the GitHub secret** | TBC |
 
-That is acceptable for `HF_TOKEN`: **scoped** to inference, **capped** (extra usage is pre-paid, so
-the loaded balance is the ceiling), **cheap to rotate**, and nothing stored depends on it.
+#### 5.3.2 `frank` — Vercel + Supabase (Hetzner on the M2 roadmap, not yet live)
 
-**Why not resolve it from the vault in CI instead?** ⚠ **Not for the reason first written here.** The
-original argument was that a vault session unlocks everything — true of a whole-vault credential, and
-**not true of `bws`**, whose machine accounts are scoped per project. A `grm-ci` project containing
-only the model keys yields a token whose blast radius equals the token it replaces. The blast-radius
-objection largely dissolves.
+| # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
+|---|---|---|---|---|---|---|---|
+| 15 | `SUPABASE_SERVICE_ROLE_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env | Server-side Supabase — ⭐ **bypasses RLS entirely** | Supabase dashboard → Project Settings → API → rotate, **then update Vercel env** | TBC |
+| 16 | `SUPABASE_ACCESS_TOKEN` | TBC | **Proton Pass** (personal account token) | `.env` local | Supabase **management API** — ⭐ can create/delete projects | supabase.com → Account → Access Tokens → revoke + generate | TBC |
+| 17 | `DATABASE_URL` | TBC | **Supabase secrets** | `.env` local · Vercel env | Direct Postgres — ⚠ **embeds credentials** | Rotate the DB password in Supabase, then re-derive the URL everywhere | TBC |
+| 18 | `ANTHROPIC_API_KEY` | me | **Vercel env** | `.env` local | Claude calls | console.anthropic.com → API keys → revoke + create | TBC |
+| 19 | `DEEPSEEK_API_KEY` | me | **Vercel env** | `.env` local | Fallback model | DeepSeek console → API keys → revoke + create | TBC |
+| 20 | `FRANK_SERVICE_KEY` | TBC | **Vercel env** | `.env` local | Internal service-to-service auth | Self-issued: generate, update both sides | TBC |
+| 21 | `SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env · **the browser, by design** | Client-side Supabase | ✅ **Public by contract** — RLS is the control, not secrecy. Rotate only if RLS was found misconfigured | n/a |
 
-What remains is smaller and still decisive **today**:
+#### 5.3.3 `agents/plant_care_v1` — personal, no deploy target detected
 
-- it is **one secret for one secret** — `BWS_ACCESS_TOKEN` instead of `HF_TOKEN`, no net reduction;
-- it adds a **dependency on Bitwarden being up** for every CI run;
-- and it adds indirection for no present gain.
+| # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
+|---|---|---|---|---|---|---|---|
+| 22 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | LLM calls | platform.openai.com → API keys. ⚠ **Distinct from #13** — verified different | TBC |
+| 23 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | S3, SES, Pinpoint | IAM → create new → update → delete old. ⚠ **Distinct from #12** — verified different | TBC |
+| 24 | `HUGGINGFACE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | HF inference | huggingface.co/settings/tokens. ⚠ **Distinct from #14** — verified different | TBC |
+| 25 | `GOOGLE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Calendar / Sheets | Google Cloud Console → APIs & Services → Credentials | TBC |
+| 26 | `GOOGLE_CLIENT_SECRET` (+ `GOOGLE_CLIENT_ID`) | me | `secrets.enc.env` (SOPS) | `.env` local | OAuth client | Google Cloud Console → Credentials → OAuth client → reset secret | TBC |
+| 27 | `GSHEET_BEARER_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Sheets access | TBC — depends how it was issued | TBC |
+| 28 | `TELEGRAM_BOT_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Telegram bot | BotFather → `/revoke` → new token | TBC |
+| 29 | `DISCORD_WEBHOOK_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Notifications — ⚠ **the URL *is* the credential** | Discord → Channel → Integrations → Webhooks → delete + recreate | TBC |
+| 30 | `OPENWEATHER_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Weather API | openweathermap.org → API keys | TBC |
+| 31 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | me | `secrets.enc.env` (SOPS) | `.env` local | Mail | Provider console. ⚠ Username **matches** #11; **password does not** — see finding F2 | TBC |
+| 32 | `DATABASE_URL` / `TEST_DATABASE_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Local DB | ⚠ Short values — likely a SQLite path, not a credential. **Verify** and reclassify to `.env` if so | n/a |
 
-⭐ **The flip point is worth writing down, because it will arrive:** once CI needs **three or more**
-secrets, central rotation beats pasting, and a project-scoped `bws` machine account becomes the
-better answer. Revisit then — and until then this is a *no payoff yet* decision, not a *dangerous*
-one.
+#### 5.3.4 `stratcon` — Vercel (website) + Hetzner (API, `make hetzner-deploy`)
+
+| # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
+|---|---|---|---|---|---|---|---|
+| 33 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC — **client?** | **Supabase secrets** | `website/.env.local` · Vercel env · **the browser, by design** | Client-side Supabase | ✅ Public by contract; RLS is the control. ⚠ **Different value and format from #21** — a separate Supabase project | n/a |
+| 34 | `VERCEL_OIDC_TOKEN` | n/a — machine-issued | **not managed** | `website/.env.local` | `vercel dev` local auth | ⚠ **Do not manage.** Auto-issued by the Vercel CLI and short-lived; it regenerates on `vercel link`/`vercel dev` | n/a |
+| 35 | Hetzner API/deploy credentials | TBC — **client?** | TBC | TBC | `make hetzner-deploy`, Celery workers | TBC | TBC |
+
+#### 5.3.5 SSH keys — `~/.ssh/`
+
+Contents never read. ⚠ **`~/.ssh/config` is empty**, so the host↔key mapping below is inferred from
+file names and public-key comments and **must be confirmed**.
+
+| # | Key | Owner | Authoritative store | Corresponds to | Rotation procedure | Last rotated |
+|---|---|---|---|---|---|---|
+| 36 | `nepal_gms_prod` (comment `philg@ZEPHYRUS-PG`) | TBC | Proton Pass (backup) | DOR production, inferred | `ssh-keygen` new pair → append pub to `authorized_keys` → verify login → **remove old pub** | TBC |
+| 37 | `hetzner-stratcon` (comment `stratcon-hetzner`) | TBC — **client?** | Proton Pass (backup) | Stratcon Hetzner box | As #36 | TBC |
+| 38 | `aws-key.pem` | TBC | Proton Pass (backup) | AWS staging, inferred | EC2 key pairs cannot be rotated in place — add a new pub to `authorized_keys`, then retire | TBC |
+| 39 | `pg_rasa_train.pem` | TBC | Proton Pass (backup) | TBC — a training box? ⚠ **May be obsolete** | As #38, or **delete if the host is gone** | TBC |
+
+### 5.4 Engagement offboarding
+
+| Engagement | Client-owned credentials | My access to remove | Client-allocated email? | Status |
+|---|---|---|---|---|
+| Nepal GRM (ADB / DOR) | rows 1–12 | `nepal_gms_prod` SSH key · DOR VPN · Keycloak admin | TBC | active |
+| Stratcon | rows 33, 35 | `hetzner-stratcon` SSH key · Vercel project · Supabase project | TBC | TBC |
+| `frank` | rows 15–17, 20 — **if client-owned** | Supabase project · Vercel project | TBC | TBC — ⚠ ownership unresolved |
+| `visionlife-bm` | TBC — no credentials found | TBC | TBC | TBC |
+
+#### Execution checklist
+
+Run **in this order**. The ordering is not cosmetic — step 6 is the one that strands you if it is
+done late.
+
+1. **Rotate client-owned credentials.** ⭐ **The client does it where possible** — that way the new
+   value never passes through my hands, and the rotation is provably complete from their side.
+2. **Remove my age key from `.sops.yaml`** and run `sops updatekeys` on every encrypted file in
+   that repository.
+   > ⚠ **This is not a rotation.** It stops *future* decrypts. Every secret I could previously read
+   > remains valid until step 1 rotates it. If step 1 was skipped, this step accomplishes nothing
+   > of substance — see §5.1.
+3. **Remove IAM / KMS grants** — including any KMS recipient used for SOPS.
+4. **Remove my SSH public keys** from `authorized_keys` on every host in the engagement.
+5. **Delete local clones and any decrypted files** (`*.decrypted`, generated `.env.local`).
+6. ⚠ **BEFORE any client-allocated email is deactivated**, confirm nothing depends on it for
+   recovery — password resets, 2FA recovery, platform account ownership, domain registrar contact.
+   **An account whose recovery address no longer exists cannot be recovered by anyone**, including
+   the client.
+7. **Mark inventory rows retired with a date** in §5.3 — ⚠ **do not delete them.** A deleted row
+   destroys the record of what was once exposed, which is exactly what a later incident review needs.
+
+### 5.5 Incident response
+
+**Rotate first, investigate second.** Investigation is unbounded; exposure is not.
+
+1. **Rotate the credential immediately**, before establishing scope or cause.
+2. **Enumerate every copy using §5.3** — the `Other copies` column exists for this moment. Update
+   each one. A rotation that misses a copy is an outage *and* an unrotated credential.
+3. ⚠ **Check for anything still valid that was issued *using* the credential.** Rotating a parent
+   does not invalidate its children: sessions, downstream tokens, signed URLs, cached OAuth grants,
+   and anything minted by `KEYCLOAK_ADMIN_PASSWORD` or `SUPABASE_ACCESS_TOKEN` survive their
+   parent's rotation.
+4. **Notify the owner** — the client for client-owned credentials, promptly and before they discover it.
+5. **Record the cause** in the deviation log, and add whatever control would have caught it.
+
+⚠ **Assume the credential was used.** Absence of evidence in a log is not evidence of absence — most
+of these providers do not log reads at all, which is precisely why §5.2 prefers a KMS recipient for
+client production: it is the only option here that produces a decrypt audit trail.
+
+### 5.6 Review triggers
+
+**Last reviewed: 2026-08-20.**
+
+Revisit the no-hosted-vault decision when **either** becomes true:
+
+| Trigger | Why it changes the answer |
+|---|---|
+| **(a)** A credential must be issued **short-lived and per-session** (dynamic secrets) | SOPS encrypts a value at rest; it cannot mint one. Dynamic secrets need an issuer, which is a different class of tool |
+| **(b)** Enough people are involved that **"who read what" cannot be reconstructed from memory** | An age recipient list records *who can*, never *who did*. Past that scale, an audit trail stops being optional |
+
+⚠ **Explicitly NOT triggers**, because both are already solved:
+
+- **Sharing with one person** — add their age public key as a co-recipient.
+- **Cutting off their future access** — remove the key and run `sops updatekeys`, **then rotate**
+  (§5.1). SOPS with multiple recipients and a KMS backend handles both cases without a vault.
+
+### 5.7 ⚠ Getting from here to there
+
+Nothing in §5.2 is in place yet. In dependency order:
+
+1. **Install `sops` and `age`.** Neither is present.
+2. **Generate the personal age keypair** at `~/.config/sops/age/keys.txt` — ⚠ **in the WSL
+   filesystem**, never under `/mnt/c/`, `/mnt/g/`, or `G:\My Drive\` (§5.2). Back it up to Proton
+   Pass and on paper.
+3. **Fix the `.gitignore` gaps first** (findings F4/F5) — before any file is created, so the window
+   where a plaintext file is committable never opens.
+4. **Split each `.env`** into non-secret `.env` (committed) + `secrets.enc.env` (SOPS) per §5.2.
+5. **Fill in the `TBC` cells** in §5.3, particularly `Owner`, which decides what §5.4 applies to.
+6. **Record a `Last rotated` date for every row** — even if the honest entry is *"unknown, treat as
+   never"*, which is itself the argument for a first pass of rotations.
+
 
 ---
 
