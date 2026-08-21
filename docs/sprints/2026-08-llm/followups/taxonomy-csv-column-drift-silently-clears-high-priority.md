@@ -4,9 +4,61 @@
 > The set labels each item's severity from the taxonomy, so the taxonomy had to be read — and it
 > disagreed with itself.
 > **Logged as deviation D-49** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** ⬜ **OPEN.** Not fixed here: it changes ticket priority and therefore SLA behaviour on
-> a live path, which is a product decision, not a benchmark decision.
-> **Size:** S to fix, M to verify (seeded data, SLA expectations and demo scenarios all move with it).
+> **Status:** ✅ **CLOSED 2026-08-21** — the owner approved the priority change, and the CSV was
+> repaired at source. See §The fix, as built.
+> **Size, in the event:** S for the repair, and the verification was cheaper than feared because the
+> seeder reads the CSV directly rather than through the broken loader.
+
+---
+
+## ✅ The fix, as built (2026-08-21)
+
+**Repaired the CSV, not the parser** — as this document recommended, because a header that does not
+describe its rows is the defect and a tolerant parser only hides the next one.
+
+The five ragged rows turned out to have three different shapes, and the repair is lossless in each:
+
+| Row | Was | Repair |
+|---|---|---|
+| `Wildlife Destruction` (16) | a genuine **third** follow-up pair, plus one stray empty field | pair preserved in new columns; empty field dropped |
+| `Air Pollution` (15) | a genuine third follow-up pair | pair preserved in new columns |
+| `Cutting of Trees` (14) | `[12]` **duplicated** `[11]` | duplicate dropped — asserted identical before dropping |
+| `Fire Incidents` (14) | same duplication | same |
+| `Gender Discrimination and harrassment` (7) | short: only 6 fields then the flag | padded with 6 empty fields, flag recovered |
+
+The header now declares `follow_up_question_extra` / `_ne`, and **`high_priority` is last** — which is
+where every malformed row already had it, so the repair rule was *"the final field is the authored
+flag"*, applied uniformly.
+
+**Four categories are now high priority as authored:** `Environmental - Air Pollution`,
+`Gender - Gender Discrimination And Harrassment`, `Environmental, Social - Cutting Of Trees`,
+`Wildlife, Environmental - Wildlife Destruction`.
+
+### The canary is gone, replaced by two positive pins
+
+`test_the_taxonomy_parse_defect_is_still_present_and_still_logged` did its job and was deleted.
+
+- `test_the_csv_loader_reads_the_authored_high_priority_flags` — asserts **no row is ragged**, so it
+  catches a *new* malformed row rather than only the five known ones.
+- `test_the_seeded_taxonomy_matches_the_authored_csv` (`@integration`) — ⚠ the half that matters
+  operationally: the DB copy is preferred over the CSV, so **repairing the CSV alone changes nothing
+  in a running system.** This fails when an environment has drifted.
+
+### ⚠ Outstanding — the fix is not live until each environment is re-seeded
+
+| Environment | State |
+|---|---|
+| CSV (source of truth) | ✅ repaired |
+| Local dev DB | ✅ updated (`high_priority` column only, 24 rows) |
+| **AWS staging** | ⬜ **needs re-seed** — `python dev-scripts/seed_reference_data.py` |
+| **DOR production** | ⬜ **needs re-seed** — same, and ⚠ **it changes SLA clocks and queue badges** for four categories, so do it in a known window rather than inside a deploy |
+
+⚠ **Air Pollution is the highest-volume category on a road project.** Expect queue composition to
+shift visibly the day production is re-seeded — that is the fix working, not a regression.
+
+---
+
+## The original finding (kept — the analysis is what made the repair safe)
 
 ---
 
