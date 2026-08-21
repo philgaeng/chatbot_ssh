@@ -116,3 +116,6 @@ backend/actions/utils/utterance_mapping_translation_checks/mapping_with_latest_t
 
 .smoke_open.json
 .bench_*.json
+
+# Secrets hygiene (added 2026-08-20, docs/deployment/13_security.md §5.2)
+*.decrypted

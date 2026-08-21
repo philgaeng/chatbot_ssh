@@ -220,16 +220,16 @@ gitignored file; the migration is §5.7.
 | 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` local | Closed LLM config (the benchmark baseline) | platform.openai.com → API keys → revoke + create | TBC |
 | 14 | `HG_TOKEN` (+ `HG_USERNAME`) | me | `secrets.enc.env` (SOPS) | `env.local` local · **GitHub Actions secret `HF_TOKEN`** | Open LLM config; `dpg-platform-independence` CI job | huggingface.co/settings/tokens → revoke + create → **also re-paste the GitHub secret** | TBC |
 
-#### 5.3.2 `frank` — Vercel + Supabase (Hetzner on the M2 roadmap, not yet live)
+#### 5.3.2 `frank` — **mine** · Vercel + Supabase (Hetzner on the M2 roadmap, not yet live)
 
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
-| 15 | `SUPABASE_SERVICE_ROLE_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env | Server-side Supabase — ⭐ **bypasses RLS entirely** | Supabase dashboard → Project Settings → API → rotate, **then update Vercel env** | TBC |
-| 16 | `SUPABASE_ACCESS_TOKEN` | TBC | **Proton Pass** (personal account token) | `.env` local | Supabase **management API** — ⭐ can create/delete projects | supabase.com → Account → Access Tokens → revoke + generate | TBC |
-| 17 | `DATABASE_URL` | TBC | **Supabase secrets** | `.env` local · Vercel env | Direct Postgres — ⚠ **embeds credentials** | Rotate the DB password in Supabase, then re-derive the URL everywhere | TBC |
+| 15 | `SUPABASE_SERVICE_ROLE_KEY` | me | **Supabase secrets** | `.env` local · Vercel env | Server-side Supabase — ⭐ **bypasses RLS entirely** | Supabase dashboard → Project Settings → API → rotate, **then update Vercel env** | TBC |
+| 16 | `SUPABASE_ACCESS_TOKEN` | me | **Proton Pass** (personal account token) | `.env` local | Supabase **management API** — ⭐ can create/delete projects | supabase.com → Account → Access Tokens → revoke + generate | TBC |
+| 17 | `DATABASE_URL` | me | **Supabase secrets** | `.env` local · Vercel env | Direct Postgres — ⚠ **embeds credentials** | Rotate the DB password in Supabase, then re-derive the URL everywhere | TBC |
 | 18 | `ANTHROPIC_API_KEY` | me | **Vercel env** | `.env` local | Claude calls | console.anthropic.com → API keys → revoke + create | TBC |
 | 19 | `DEEPSEEK_API_KEY` | me | **Vercel env** | `.env` local | Fallback model | DeepSeek console → API keys → revoke + create | TBC |
-| 20 | `FRANK_SERVICE_KEY` | TBC | **Vercel env** | `.env` local | Internal service-to-service auth | Self-issued: generate, update both sides | TBC |
+| 20 | `FRANK_SERVICE_KEY` | me | **Vercel env** | `.env` local | Internal service-to-service auth | Self-issued: generate, update both sides | TBC |
 | 21 | `SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env · **the browser, by design** | Client-side Supabase | ✅ **Public by contract** — RLS is the control, not secrecy. Rotate only if RLS was found misconfigured | n/a |
 
 #### 5.3.3 `agents/plant_care_v1` — personal, no deploy target detected
@@ -248,13 +248,22 @@ gitignored file; the migration is §5.7.
 | 31 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | me | `secrets.enc.env` (SOPS) | `.env` local | Mail | Provider console. ⚠ Username **matches** #11; **password does not** — see finding F2 | TBC |
 | 32 | `DATABASE_URL` / `TEST_DATABASE_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Local DB | ⚠ Short values — likely a SQLite path, not a credential. **Verify** and reclassify to `.env` if so | n/a |
 
-#### 5.3.4 `stratcon` — Vercel (website) + Hetzner (API, `make hetzner-deploy`)
+#### 5.3.4 `stratcon` — **mine today, migrating to a client soon** · Vercel (website) + Hetzner (API, `make hetzner-deploy`)
+
+> ⭐ **Act on this before the migration, not after.** §5.2 requires the client's age public key added
+> as a **co-recipient from day one**. For this repository "day one" is a date in the near future and
+> it is knowable now — so add the recipient as part of the handover, not once they are already
+> waiting to read something they cannot.
+>
+> ⚠ And rows 33/35 change owner at that moment. **Rotate at handover** regardless of whether anything
+> is suspected: every credential I hold today is one the client did not choose to share with me
+> (§5.1 — revocation is not rotation).
 
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
-| 33 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC — **client?** | **Supabase secrets** | `website/.env.local` · Vercel env · **the browser, by design** | Client-side Supabase | ✅ Public by contract; RLS is the control. ⚠ **Different value and format from #21** — a separate Supabase project | n/a |
+| 33 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | me → **client at handover** | **Supabase secrets** | `website/.env.local` · Vercel env · **the browser, by design** | Client-side Supabase | ✅ Public by contract; RLS is the control. ⚠ **Different value and format from #21** — a separate Supabase project | n/a |
 | 34 | `VERCEL_OIDC_TOKEN` | n/a — machine-issued | **not managed** | `website/.env.local` | `vercel dev` local auth | ⚠ **Do not manage.** Auto-issued by the Vercel CLI and short-lived; it regenerates on `vercel link`/`vercel dev` | n/a |
-| 35 | Hetzner API/deploy credentials | TBC — **client?** | TBC | TBC | `make hetzner-deploy`, Celery workers | TBC | TBC |
+| 35 | Hetzner API/deploy credentials | me → **client at handover** | TBC | TBC | `make hetzner-deploy`, Celery workers | TBC | TBC |
 
 #### 5.3.5 SSH keys — `~/.ssh/`
 
@@ -273,8 +282,8 @@ file names and public-key comments and **must be confirmed**.
 | Engagement | Client-owned credentials | My access to remove | Client-allocated email? | Status |
 |---|---|---|---|---|
 | Nepal GRM (ADB / DOR) | rows 1–12 | `nepal_gms_prod` SSH key · DOR VPN · Keycloak admin | TBC | active |
-| Stratcon | rows 33, 35 | `hetzner-stratcon` SSH key · Vercel project · Supabase project | TBC | TBC |
-| `frank` | rows 15–17, 20 — **if client-owned** | Supabase project · Vercel project | TBC | TBC — ⚠ ownership unresolved |
+| Stratcon | rows 33, 35 | `hetzner-stratcon` SSH key · Vercel project · Supabase project | TBC | ⭐ **migration to client PENDING** — add their age key as co-recipient now, rotate at handover |
+| `frank` | none — **mine** | n/a | n/a | ✅ not an engagement; §5.4 does not apply |
 | `visionlife-bm` | TBC — no credentials found | TBC | TBC | TBC |
 
 #### Execution checklist
