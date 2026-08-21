@@ -150,7 +150,7 @@ The **same run's 105 detection calls all completed**, because the detection prom
 
 **That contrast is the finding.** The classification prompt is ~20,700 characters *before the
 grievance is added*, because it injects the 24-category catalogue **twice, in two shapes**
-(`LLM_services.py:263-267`). So:
+(`LLM_services.py:275-296`). So:
 
 - §6's cost lever is not only about money — **the same duplication is what makes the open path
   hit a rate limit that the detection path sails through**;
@@ -203,9 +203,78 @@ independent models keep reaching for the category a road project would expect to
 invented values, *and* take the gap to the project owner as a taxonomy question. On this evidence the
 second half is the more interesting one.
 
+### 3.7 ⭐ Prompt reduction + the Road Hazard categories — measured before and after (2026-08-21)
+
+Two changes shipped together on the owner's decision: the six `Road Hazard - *` categories D-51
+argued for, and four token reductions to the classification prompt. Both were measured on the same
+105 items against the same model.
+
+| | Before | After | |
+|---|---|---|---|
+| **Items with an invented category** | **18 / 105** | **4 / 105** | ⭐ **−78%** |
+| …of which a genuinely *new concept* | 18 | **1** | the other 3 are truncated real categories |
+| Set-level precision | 0.740 | **0.773** | ↑ |
+| Set-level recall | 0.805 | 0.752 | ↓ |
+| Category-set **F1** | 0.771 | **0.762** | −0.009 — flat within noise |
+| Exact-set accuracy | 0.676 | **0.686** | ↑ |
+| p95 latency | 24.6 s | **20.3 s** | ↑ |
+| **p99 latency** | **40.6 s** | **24.5 s** | ⭐ **inside the 30 s budget for the first time** |
+| Share over 30 s | 1.9% | **0.9%** | ↑ |
+| **Prompt tokens per classification** | ~10,900 | **3,277** | ⭐ **−70%** |
+| Categories in the taxonomy | 24 | **30** | +6 |
+
+⚠ **This is not a clean A/B, and the F1 line must not be read as one.** Three things changed at once
+— the prompt, the taxonomy, and the benchmark's acceptable-alternate lists. The −0.009 in F1 cannot
+be attributed to any single one of them, and with 105 items it is inside the noise floor either way.
+**The robust findings are the ones that moved by a lot**: invention, latency and token count.
+
+#### What the prompt change was
+
+The catalogue was sent **three** times — a flat list twice plus the full dictionary once — and the
+dictionary was **51,213 characters for an English grievance against 15,121 for a Nepali one.**
+
+⚠ **That asymmetry was a bug.** The filter read `if "_" + language_code not in k`, which strips the
+`_ne` keys for a Nepali grievance and strips **nothing** for an English one, because no key contains
+`_en`. Every English classification therefore carried every Nepali translation, JSON-escaped to
+`\uXXXX` at six bytes per character, for a model that never used them.
+
+Four changes, all four applied:
+
+1. **Fix the language filter** — the dictionary is a classification aid and categories come back in
+   English, so only English fields belong in it. Nepali grievances see exactly what they saw before.
+2. **Send the flat list once**, not twice.
+3. **Drop three fields** — `high_priority` is downstream routing metadata and never a classification
+   signal; `short_description` restates `description`; the `*_extra` question pair serves two
+   categories and was charged to all thirty.
+4. **Drop the flat list entirely** — the model now chooses from the dictionary **keys**.
+   ⭐ **This is a correctness fix as much as a saving:** the flat list was built from *raw* CSV values
+   (`Relocation issues - Poor housing…`) while every downstream consumer matches the *canonical* key
+   (`Relocation Issues - Poor Housing…`). The model was shown one form and read in another.
+
+**Net: 62,736 → 13,147 characters for an English grievance (−79%), 18,567 → 13,147 for a Nepali one
+(−29%) — while adding six categories.**
+
+#### ⭐ D-51's hypothesis was right, and the residue is more interesting than the headline
+
+Adding the categories the models kept inventing **stopped them inventing**: 18 items → 4. And 3 of
+those 4 are not new concepts at all — they are `Cultural Site Disturbances` and `Wildlife Passage`,
+which are **real categories with the classification half missing**. That is a formatting failure, not
+a taxonomy gap, and it predates this change.
+
+**Exactly one genuinely new concept survived: `Road Hazard - Noise Pollution`.** The model is asking
+for a seventh subcategory. One occurrence is not a mandate — but it is the same signal that produced
+this change, and it is worth watching rather than dismissing.
+
+All six new categories were used, 20 predictions across the set, so none is dead weight.
+
+⚠ **What is still unmeasured:** the six have **no gold items** — they appear only as acceptable
+alternates, so nothing here scores whether a model picks them *correctly*, only that it stops
+inventing them.
+[Logged](../sprints/2026-08-llm/followups/road-hazard-categories-have-no-benchmark-items.md).
+
 ---
 
-## 4. ⚠ Latency: p95 passes, p99 does not
+## 4. ⚠ Latency: p95 passes, p99 does not — *superseded by §3.7*
 
 | | classify | detect |
 |---|---|---|
@@ -281,7 +350,7 @@ output length understates this system by roughly 16×**, and any token cap sized
 answer returns empty content (D-40).
 
 ⚠ **Cost scales with the taxonomy, not with the grievance.** The classification prompt injects the
-24-category catalogue **twice, in two shapes** (`LLM_services.py:263-267`) — about 20,700 characters
+24-category catalogue **twice, in two shapes** (`LLM_services.py:275-296`) — about 20,700 characters
 before the complaint is added. Adding categories raises the per-grievance cost of every grievance.
 **This is the single most promising cost lever in the system** and it is a prompt change, not a
 model change.

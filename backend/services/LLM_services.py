@@ -259,14 +259,41 @@ def classify_and_summarize_grievance(
                 "skipped": "too_short",
             }
 
-        # Use provided categories or default to CLASSIFICATION_DATA
-        category_list = [f"{item.get('classification')} - {item.get('generic_grievance_name')}" for item in CLASSIFICATION_DATA.values()]
-        result_dict = {}
-        for key, value in CLASSIFICATION_DATA.items():
-            result_dict[key] = {k:v for k,v in value.items() if "_"+language_code not in k}
-        #transform the dict into a string using json.dumps
-        category_list_str = json.dumps(category_list)
-        result_dict_str = json.dumps(result_dict)
+        # ── The catalogue, sent ONCE and trimmed (2026-08-21) ────────────────────────────────
+        # Measured before/after on the 30-category taxonomy. What this replaced sent the catalogue
+        # THREE times — a flat list twice plus the full dictionary once — and the dictionary was
+        # 51,213 characters for an English grievance against 15,121 for a Nepali one.
+        #
+        # ⚠ **That asymmetry was a bug, not a design.** The filter was
+        # `if "_" + language_code not in k`, which strips the `_ne` keys when the grievance is
+        # Nepali and strips **nothing** when it is English — because no key contains `_en`. So every
+        # English classification carried every Nepali translation, JSON-escaped to `\uXXXX` at six
+        # bytes per character, for a model that never used them.
+        #
+        # The dictionary is a **classification aid** and the categories come back in English, so only
+        # the English fields belong in it. Nepali grievances see exactly what they saw before.
+        _CLASSIFY_FIELDS = (
+            "classification",
+            "generic_grievance_name",
+            "description",
+            "follow_up_question_description",
+            "follow_up_question_quantification",
+        )
+        # Dropped deliberately: `high_priority` is downstream routing metadata and never a
+        # classification signal; `short_description` restates `description`; the `*_extra` question
+        # pair exists for two categories and was charged to all thirty.
+        catalogue = {
+            key: {k: v for k, v in value.items() if k in _CLASSIFY_FIELDS}
+            for key, value in CLASSIFICATION_DATA.items()
+        }
+        # ⚠ There is **no separate flat list** any more. The model chooses from the KEYS of this
+        # dictionary, and that is a correctness fix as well as a saving: the old flat list was built
+        # from raw CSV values (`Relocation issues - Poor housing…`) while every downstream consumer
+        # matches the canonical key (`Relocation Issues - Poor Housing…`). The model was being shown
+        # one form and read in another.
+        # `ensure_ascii=False` is a no-op while no `_ne` field survives the filter — it is here so
+        # that re-adding one cannot silently reintroduce six-bytes-per-character escaping.
+        catalogue_str = json.dumps(catalogue, ensure_ascii=False)
         
         # DPG-14.2: this used to build a SECOND client here, shadowing the module-level one,
         # with its own OPENAI_CLASSIFICATION_TIMEOUT — then guard it with `if not client`, which
@@ -291,12 +318,12 @@ def classify_and_summarize_grievance(
                 {"role": "user", "content": f"""
                     Step 1:
                     Categorize this grievance: "{grievance_text}"
-                    Only choose from the following categories:
-                    {category_list_str}. The categories response is always in English for consistency. Another process will be used to translate the categories to the language of the grievance for the bot.
+                    Only choose from the keys of the category dictionary given at the end of this message.
+                    The categories response is always in English for consistency, and must reproduce the dictionary key exactly. Another process will be used to translate the categories to the language of the grievance for the bot.
                     Do not create new categories.
                     Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
                     [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt.
-                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories are only coming from the following list: {category_list_str}.
+                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories must also be keys of that same dictionary.
                     Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
                     For the summary, reply in the language of the grievance eg if the input is in English, reply in English, if the input is in Nepali, reply in Nepali.
                     Step 3: Prepare a follow up question that the complainant can answer to provide more information about the grievance especially quantifying the impact of the grievance (health, economic, etc). Sample questions are provided in the dictionary. The follow up question is in the language of the grievance.
@@ -308,7 +335,7 @@ def classify_and_summarize_grievance(
                         "grievance_categories_alternative": ["Category 3", "Category 4", "Category 5"] in English
                         "follow_up_question": "Follow up question in the language of the grievance"
                     }}
-                    Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
+                    Category dictionary — the keys are the only permitted categories, and the values describe each one and give sample follow-up questions: {catalogue_str}
                 """}
             ],
         )
@@ -329,7 +356,11 @@ def classify_and_summarize_grievance(
             # one place the four translations live, and exactly what its `"{}"` branch was for.
             return parse_llm_response("grievance_response", "{}", language_code)
 
-        _warn_about_unlisted_categories(validated.grievance_categories, category_list)
+        # ⚠ Checked against the CANONICAL keys the model is now shown, not against the old raw
+        # flat list. Those two forms differ (`Relocation issues - Poor housing…` versus
+        # `Relocation Issues - Poor Housing…`), so validating against the wrong one would have
+        # reported every correct answer as invented.
+        _warn_about_unlisted_categories(validated.grievance_categories, list(catalogue))
         return validated.model_dump()
 
     except Exception as e:

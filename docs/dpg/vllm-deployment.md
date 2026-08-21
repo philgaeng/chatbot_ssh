@@ -133,7 +133,7 @@ no plausible correction to a per-district rate closes that.
 
 ⚠ **11,358 of the 14,719 tokens per grievance are prompt**, and most of that is the category
 catalogue, which the classification prompt injects **twice, in two shapes**
-(`LLM_services.py:263-267`) — about 20,700 characters before the complaint is added. **Deduplicating
+(`LLM_services.py:275-296`) — about 20,700 characters before the complaint is added. **Deduplicating
 it is a prompt change, not a model change, and it is worth more than any tier decision on this
 page.** It is also the reason adding taxonomy categories raises the cost of every grievance.
 

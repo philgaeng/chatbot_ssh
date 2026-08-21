@@ -19,6 +19,12 @@ Relocation Issues - Poor Housing Quality Of The Resettlement Site
 Relocation Issues - Poor Location Of The Resettlement Site
 Relocation Of Public Utilities - Access To Electricity
 Relocation Of Public Utilities - Access To Water
+Road Hazard - Accident
+Road Hazard - Animal On Road
+Road Hazard - Dust
+Road Hazard - Flood And Landslide
+Road Hazard - Others
+Road Hazard - Potholes
 Safety - Road Safety Provisions
 Wildlife, Environmental - Wildlife Destruction
 Wildlife, Environmental - Wildlife Passage

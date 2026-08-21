@@ -22,6 +22,10 @@ __pycache__/
 # variables. `.env` (exact match, above) does not cover them; that was checked, not assumed.
 create_env.sh
 env.local
+# env.local is now a GENERATED artefact (make env-local). Per-developer / per-host
+# values that must NOT be committed — PROD_SERVER_USER, PROD_HOST, PROD_SSH_KEY —
+# go in env.local.extra, which the generator appends verbatim.
+env.local.extra
 env.local.example
 .env.local
 aws_local.local

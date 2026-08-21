@@ -203,50 +203,66 @@ gitignored file; the migration is §5.7.
 
 #### 5.3.1 Nepal GRM — `nepal_chatbot` (ADB Loan 52097-003)
 
-| # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
-|---|---|---|---|---|---|---|---|
-| 1 | `DB_ENCRYPTION_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · AWS staging · DOR prod | `backend` **only** (T3-04) | ⚠ **Not a simple rotate** — pgcrypto values must be decrypted with the old key and re-encrypted with the new. No script exists. Treat as a migration | TBC |
-| 2 | `SEARCH_TOKEN_PEPPER` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local `env.local`** | `base_manager.py` HMAC lookup tokens | Change value, then **run `scripts/database/rehash_search_tokens.py` on that box**. ⚠ Skipping it makes phone/email lookup return nothing, silently | TBC |
-| 3 | `POSTGRES_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Postgres, all services | `ALTER ROLE … PASSWORD`, update the file, restart the stack | TBC |
-| 4 | `OPS_DB_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `ops` container (`ops_app` role) | As #3, for the scoped role | TBC |
-| 5 | `REDIS_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Broker + result backend | Update `requirepass`, update the file, restart Redis and every worker | TBC |
-| 6 | `TICKETING_SECRET_KEY` | TBC | `secrets.enc.env` (SOPS) | ✅ **Empty locally by design** — the dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active; **checked, it fails closed** elsewhere (`grievance.py:251-263` raises without a key) · staging · prod | Ticketing ↔ chatbot webhook | `python -c "import secrets; print(secrets.token_urlsafe(32))"`, update both sides | TBC |
-| 7 | `MESSAGING_API_KEY` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** | Generate, update caller and callee together | TBC |
-| 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | ⭐ Realm admin — **can mint officer accounts** | Keycloak admin console → user → Credentials → reset | TBC |
-| 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | OIDC client | Keycloak → Clients → Credentials → Regenerate; update every consumer | TBC |
-| 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Onboarding webhook | Generate, update Keycloak event listener config and the receiver | TBC |
-| 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | Officer-invite mail relay | Mail provider console → rotate app password | TBC |
-| 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` local · staging · prod | SNS (complainant SMS), Pinpoint | IAM → Security credentials → create new key → update every copy → **delete old key** | TBC |
-| 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` local | Closed LLM config (the benchmark baseline) | platform.openai.com → API keys → revoke + create | TBC |
-| 14 | `HG_TOKEN` (+ `HG_USERNAME`) | me | `secrets.enc.env` (SOPS) | `env.local` local · **GitHub Actions secret `HF_TOKEN`** | Open LLM config; `dpg-platform-independence` CI job | huggingface.co/settings/tokens → revoke + create → **also re-paste the GitHub secret** | TBC |
+**Migrated to SOPS + age on 2026-08-21** — see [`18_sops_migration_handover.md`](18_sops_migration_handover.md).
+`env.local` is now a **generated artefact** (`make env-local`), not a source; the committed halves are
+`.env.shared` (plaintext, no credentials) and `secrets.enc.env` (SOPS-encrypted).
+
+> ⚠ **This table records WHERE each secret lives. It does not record how to rotate it.**
+> Rotation procedure, cadence, impact-if-lost, impact-if-leaked and `Last rotated` live in
+> **[`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md) §1**, which is the single
+> authority. Until 2026-08-21 both documents carried rotation columns, they disagreed, and neither
+> was complete — two procedures for one credential is how the wrong one gets followed during an
+> incident. **Do not re-add a rotation column here.**
+
+| # | Secret | Owner | Authoritative store | Other copies | Consumed by |
+|---|---|---|---|---|---|
+| 1 | `DB_ENCRYPTION_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · AWS staging · DOR prod | `backend` **only** (T3-04) |
+| 2 | `SEARCH_TOKEN_PEPPER` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `base_manager.py` HMAC lookup tokens |
+| 3 | `POSTGRES_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Postgres, all services |
+| 4 | `OPS_DB_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `ops` container (`ops_app` role) |
+| 5 | `REDIS_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Broker + result backend |
+| 6 | `TICKETING_SECRET_KEY` | TBC | `secrets.enc.env` (SOPS) | ✅ **Empty locally by design** — the dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active; **checked, it fails closed** elsewhere (`grievance.py:251-263` raises without a key) · staging · prod | Ticketing ↔ chatbot webhook |
+| 7 | `MESSAGING_API_KEY` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** |
+| 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | ⭐ Realm admin — **can mint officer accounts** |
+| 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | OIDC client |
+| 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Onboarding webhook |
+| 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Officer-invite mail relay |
+| 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | SNS (complainant SMS), Pinpoint |
+| 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` (generated) | Closed LLM config (the benchmark baseline) |
+| 14 | `HG_TOKEN` (+ `HG_USERNAME`) | me | `secrets.enc.env` (SOPS) | `env.local` (generated) · **GitHub Actions secret `HF_TOKEN`** | Open LLM config; `dpg-platform-independence` CI job |
+| 15 | `GITHUB_TOKEN` (optional) | me | `secrets.enc.env` (SOPS) | **GitHub PAT** — reissued, not copied | Dependabot alerts API (security monitoring) |
+
+⚠ Rows 2, 4, 7, 8, 9, 10 are **not present in local `env.local`** — the local stack runs the dev
+bypass. They exist only on staging and production, so a local `secrets.enc.env` round-trip does not
+prove those hosts are covered. Migrate each host explicitly.
 
 #### 5.3.2 `frank` — **mine** · Vercel + Supabase (Hetzner on the M2 roadmap, not yet live)
 
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
-| 15 | `SUPABASE_SERVICE_ROLE_KEY` | me | **Supabase secrets** | `.env` local · Vercel env | Server-side Supabase — ⭐ **bypasses RLS entirely** | Supabase dashboard → Project Settings → API → rotate, **then update Vercel env** | TBC |
-| 16 | `SUPABASE_ACCESS_TOKEN` | me | **Proton Pass** (personal account token) | `.env` local | Supabase **management API** — ⭐ can create/delete projects | supabase.com → Account → Access Tokens → revoke + generate | TBC |
-| 17 | `DATABASE_URL` | me | **Supabase secrets** | `.env` local · Vercel env | Direct Postgres — ⚠ **embeds credentials** | Rotate the DB password in Supabase, then re-derive the URL everywhere | TBC |
-| 18 | `ANTHROPIC_API_KEY` | me | **Vercel env** | `.env` local | Claude calls | console.anthropic.com → API keys → revoke + create | TBC |
-| 19 | `DEEPSEEK_API_KEY` | me | **Vercel env** | `.env` local | Fallback model | DeepSeek console → API keys → revoke + create | TBC |
-| 20 | `FRANK_SERVICE_KEY` | me | **Vercel env** | `.env` local | Internal service-to-service auth | Self-issued: generate, update both sides | TBC |
-| 21 | `SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env · **the browser, by design** | Client-side Supabase | ✅ **Public by contract** — RLS is the control, not secrecy. Rotate only if RLS was found misconfigured | n/a |
+| 16 | `SUPABASE_SERVICE_ROLE_KEY` | me | **Supabase secrets** | `.env` local · Vercel env | Server-side Supabase — ⭐ **bypasses RLS entirely** | Supabase dashboard → Project Settings → API → rotate, **then update Vercel env** | TBC |
+| 17 | `SUPABASE_ACCESS_TOKEN` | me | **Proton Pass** (personal account token) | `.env` local | Supabase **management API** — ⭐ can create/delete projects | supabase.com → Account → Access Tokens → revoke + generate | TBC |
+| 18 | `DATABASE_URL` | me | **Supabase secrets** | `.env` local · Vercel env | Direct Postgres — ⚠ **embeds credentials** | Rotate the DB password in Supabase, then re-derive the URL everywhere | TBC |
+| 19 | `ANTHROPIC_API_KEY` | me | **Vercel env** | `.env` local | Claude calls | console.anthropic.com → API keys → revoke + create | TBC |
+| 20 | `DEEPSEEK_API_KEY` | me | **Vercel env** | `.env` local | Fallback model | DeepSeek console → API keys → revoke + create | TBC |
+| 21 | `FRANK_SERVICE_KEY` | me | **Vercel env** | `.env` local | Internal service-to-service auth | Self-issued: generate, update both sides | TBC |
+| 22 | `SUPABASE_ANON_KEY` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | TBC | **Supabase secrets** | `.env` local · Vercel env · **the browser, by design** | Client-side Supabase | ✅ **Public by contract** — RLS is the control, not secrecy. Rotate only if RLS was found misconfigured | n/a |
 
 #### 5.3.3 `agents/plant_care_v1` — personal, no deploy target detected
 
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
-| 22 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | LLM calls | platform.openai.com → API keys. ⚠ **Distinct from #13** — verified different | TBC |
-| 23 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | S3, SES, Pinpoint | IAM → create new → update → delete old. ⚠ **Distinct from #12** — verified different | TBC |
-| 24 | `HUGGINGFACE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | HF inference | huggingface.co/settings/tokens. ⚠ **Distinct from #14** — verified different | TBC |
-| 25 | `GOOGLE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Calendar / Sheets | Google Cloud Console → APIs & Services → Credentials | TBC |
-| 26 | `GOOGLE_CLIENT_SECRET` (+ `GOOGLE_CLIENT_ID`) | me | `secrets.enc.env` (SOPS) | `.env` local | OAuth client | Google Cloud Console → Credentials → OAuth client → reset secret | TBC |
-| 27 | `GSHEET_BEARER_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Sheets access | TBC — depends how it was issued | TBC |
-| 28 | `TELEGRAM_BOT_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Telegram bot | BotFather → `/revoke` → new token | TBC |
-| 29 | `DISCORD_WEBHOOK_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Notifications — ⚠ **the URL *is* the credential** | Discord → Channel → Integrations → Webhooks → delete + recreate | TBC |
-| 30 | `OPENWEATHER_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Weather API | openweathermap.org → API keys | TBC |
-| 31 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | me | `secrets.enc.env` (SOPS) | `.env` local | Mail | Provider console. ⚠ Username **matches** #11; **password does not** — see finding F2 | TBC |
-| 32 | `DATABASE_URL` / `TEST_DATABASE_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Local DB | ⚠ Short values — likely a SQLite path, not a credential. **Verify** and reclassify to `.env` if so | n/a |
+| 23 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | LLM calls | platform.openai.com → API keys. ⚠ **Distinct from #13** — verified different | TBC |
+| 24 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | S3, SES, Pinpoint | IAM → create new → update → delete old. ⚠ **Distinct from #12** — verified different | TBC |
+| 25 | `HUGGINGFACE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | HF inference | huggingface.co/settings/tokens. ⚠ **Distinct from #14** — verified different | TBC |
+| 26 | `GOOGLE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Calendar / Sheets | Google Cloud Console → APIs & Services → Credentials | TBC |
+| 27 | `GOOGLE_CLIENT_SECRET` (+ `GOOGLE_CLIENT_ID`) | me | `secrets.enc.env` (SOPS) | `.env` local | OAuth client | Google Cloud Console → Credentials → OAuth client → reset secret | TBC |
+| 28 | `GSHEET_BEARER_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Sheets access | TBC — depends how it was issued | TBC |
+| 29 | `TELEGRAM_BOT_TOKEN` | me | `secrets.enc.env` (SOPS) | `.env` local | Telegram bot | BotFather → `/revoke` → new token | TBC |
+| 30 | `DISCORD_WEBHOOK_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Notifications — ⚠ **the URL *is* the credential** | Discord → Channel → Integrations → Webhooks → delete + recreate | TBC |
+| 31 | `OPENWEATHER_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Weather API | openweathermap.org → API keys | TBC |
+| 32 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | me | `secrets.enc.env` (SOPS) | `.env` local | Mail | Provider console. ⚠ Username **matches** #11; **password does not** — see finding F2 | TBC |
+| 33 | `DATABASE_URL` / `TEST_DATABASE_URL` | me | `secrets.enc.env` (SOPS) | `.env` local | Local DB | ⚠ Short values — likely a SQLite path, not a credential. **Verify** and reclassify to `.env` if so | n/a |
 
 #### 5.3.4 `stratcon` — **mine today, migrating to a client soon** · Vercel (website) + Hetzner (API, `make hetzner-deploy`)
 
@@ -261,9 +277,9 @@ gitignored file; the migration is §5.7.
 
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
-| 33 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | me → **client at handover** | **Supabase secrets** | `website/.env.local` · Vercel env · **the browser, by design** | Client-side Supabase | ✅ Public by contract; RLS is the control. ⚠ **Different value and format from #21** — a separate Supabase project | n/a |
-| 34 | `VERCEL_OIDC_TOKEN` | n/a — machine-issued | **not managed** | `website/.env.local` | `vercel dev` local auth | ⚠ **Do not manage.** Auto-issued by the Vercel CLI and short-lived; it regenerates on `vercel link`/`vercel dev` | n/a |
-| 35 | Hetzner API/deploy credentials | me → **client at handover** | TBC | TBC | `make hetzner-deploy`, Celery workers | TBC | TBC |
+| 34 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | me → **client at handover** | **Supabase secrets** | `website/.env.local` · Vercel env · **the browser, by design** | Client-side Supabase | ✅ Public by contract; RLS is the control. ⚠ **Different value and format from #21** — a separate Supabase project | n/a |
+| 35 | `VERCEL_OIDC_TOKEN` | n/a — machine-issued | **not managed** | `website/.env.local` | `vercel dev` local auth | ⚠ **Do not manage.** Auto-issued by the Vercel CLI and short-lived; it regenerates on `vercel link`/`vercel dev` | n/a |
+| 36 | Hetzner API/deploy credentials | me → **client at handover** | TBC | TBC | `make hetzner-deploy`, Celery workers | TBC | TBC |
 
 #### 5.3.5 SSH keys — `~/.ssh/`
 
@@ -272,10 +288,10 @@ file names and public-key comments and **must be confirmed**.
 
 | # | Key | Owner | Authoritative store | Corresponds to | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|
-| 36 | `nepal_gms_prod` (comment `philg@ZEPHYRUS-PG`) | TBC | Proton Pass (backup) | DOR production, inferred | `ssh-keygen` new pair → append pub to `authorized_keys` → verify login → **remove old pub** | TBC |
-| 37 | `hetzner-stratcon` (comment `stratcon-hetzner`) | TBC — **client?** | Proton Pass (backup) | Stratcon Hetzner box | As #36 | TBC |
-| 38 | `aws-key.pem` | TBC | Proton Pass (backup) | AWS staging, inferred | EC2 key pairs cannot be rotated in place — add a new pub to `authorized_keys`, then retire | TBC |
-| 39 | `pg_rasa_train.pem` | TBC | Proton Pass (backup) | TBC — a training box? ⚠ **May be obsolete** | As #38, or **delete if the host is gone** | TBC |
+| 37 | `nepal_gms_prod` (comment `philg@ZEPHYRUS-PG`) | TBC | Proton Pass (backup) | DOR production, inferred | `ssh-keygen` new pair → append pub to `authorized_keys` → verify login → **remove old pub** | TBC |
+| 38 | `hetzner-stratcon` (comment `stratcon-hetzner`) | TBC — **client?** | Proton Pass (backup) | Stratcon Hetzner box | As #36 | TBC |
+| 39 | `aws-key.pem` | TBC | Proton Pass (backup) | AWS staging, inferred | EC2 key pairs cannot be rotated in place — add a new pub to `authorized_keys`, then retire | TBC |
+| 40 | `pg_rasa_train.pem` | TBC | Proton Pass (backup) | TBC — a training box? ⚠ **May be obsolete** | As #38, or **delete if the host is gone** | TBC |
 
 ### 5.4 Engagement offboarding
 

@@ -257,9 +257,25 @@ def test_readme_records_the_uncovered_taxonomy_category(general, live_categories
     """
     covered = {c for d in general for c in d["categories"]}
     uncovered = live_categories - covered
-    assert uncovered == {"Gender - Gender Discrimination And Harrassment"}, (
-        f"coverage changed: {sorted(uncovered)} uncovered. Update README §1, which explains why "
-        "exactly one category is empty and what the committed set carries in its place."
+    expected = {
+        # Held by the owner, never committed — §0.2. The set carries the confusable negatives instead.
+        "Gender - Gender Discrimination And Harrassment",
+        # Added 2026-08-21 (D-51) after BOTH candidate models independently invented a road-hazard
+        # category. ⚠ They have **no gold items yet** — they appear only as acceptable alternates on
+        # existing items, so nothing here measures whether a model picks them correctly. Authoring
+        # gold items for them is a logged follow-up, not an oversight.
+        "Road Hazard - Dust",
+        "Road Hazard - Potholes",
+        "Road Hazard - Flood And Landslide",
+        "Road Hazard - Accident",
+        "Road Hazard - Animal On Road",
+        "Road Hazard - Others",
+    }
+    assert uncovered == expected, (
+        f"coverage changed: {sorted(uncovered - expected)} newly uncovered, "
+        f"{sorted(expected - uncovered)} newly covered. Update README §1 and this list together — "
+        "the README explains WHY each uncovered category is uncovered, and a silent change here "
+        "leaves that explanation wrong."
     )
 
 

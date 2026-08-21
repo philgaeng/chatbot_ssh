@@ -1,0 +1,12 @@
+# SOPS encryption rules — see docs/deployment/13_security.md §5.2
+#
+# Only *.enc.env is encrypted. The plaintext half (.env.shared) is deliberately
+# NOT matched: it carries comments, structure and non-secret values, and must stay
+# readable and diffable.
+#
+# 'age:' holds PUBLIC keys only. Adding a recipient (a colleague, a server key, a
+# client) requires re-encrypting: sops updatekeys secrets.enc.env
+creation_rules:
+  - path_regex: \.enc\.env$
+    age: >-
+      age1ke0hk5ej8sxwq4676g8exr5xr2xkk4h3urg3tsyrpg2z5am6049sprz95h

@@ -29,10 +29,16 @@ owner's decision of 2026-08-19 and written up in
 pack and it is the right trade. Do not "fix" it by committing the SEAH set, and do not drop the SEAH
 numbers either — sensitive-content recall is the one metric with a safeguarding consequence.
 
-**What this means for the taxonomy.** The live taxonomy has 24 categories. This set covers **23**.
-`Gender - Gender Discrimination And Harrassment` has **zero** items here on purpose: it is the
-category the SEAH route keys on, so authoring realistic items for it would be authoring the very
-material §3.3 excludes.
+**What this means for the taxonomy.** The live taxonomy has **30** categories. This set has gold
+items for **23**, and seven are uncovered for two different reasons:
+
+| Uncovered | Why |
+|---|---|
+| `Gender - Gender Discrimination And Harrassment` | **Deliberate and permanent.** It is the category the SEAH route keys on, so authoring realistic items for it would be authoring the very material §3.3 excludes |
+| The six `Road Hazard - *` categories | ⚠ **A gap, not a decision.** Added 2026-08-21 (D-51) after *both* candidate models independently invented a road-hazard category. They appear here only as **acceptable alternates** on existing items, so **nothing in this set measures whether a model picks them correctly.** Authoring gold items for them is [a logged follow-up](../../../docs/sprints/2026-08-llm/followups/road-hazard-categories-have-no-benchmark-items.md) |
+
+⚠ **Do not read the headline accuracy as covering the whole taxonomy.** It covers 23 of 30, and the
+seven it does not cover include the newest and least-tested.
 
 **What this set does carry, and why it matters more than it looks:** eight `seah_confusable` items —
 gender-related grievances that are emphatically **not** harassment (unequal pay, no separate

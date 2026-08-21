@@ -508,7 +508,7 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 
 - **Sensitive-content detection is recall-first, not accuracy-first.** A missed harassment report is a
   safeguarding failure; a false positive is an officer reading one extra case. The current prompt already
-  encodes this (*"be extra sensitive as awareness around the issue is low"*, `LLM_services.py:388`).
+  encodes this (*"be extra sensitive as awareness around the issue is low"*, `LLM_services.py:580`).
   Score it accordingly, and set the threshold accordingly.
 - **Multi-label classification.** The system returns `grievance_categories` **and**
   `grievance_categories_alternative`. Single-label accuracy would misrepresent it. Score set-level.

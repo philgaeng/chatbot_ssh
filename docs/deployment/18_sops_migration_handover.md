@@ -4,9 +4,84 @@
 > **Scope:** **`nepal_chatbot` only.** The policy in
 > [`13_security.md`](13_security.md) §5 covers every repository under `~/projects/`; this document is
 > the slice for this one, so the issue can be closed here without waiting on the others.
-> **Written:** 2026-08-20. **Status:** ⬜ not started.
+> **Written:** 2026-08-20. **Status:** 🟨 **steps 0–5 done 2026-08-21; step 6 (rotation) and the
+> staging/production migration are not.** See *What actually happened* below before doing anything.
 > **Prerequisite that is not yours:** the owner answers the `TBC` cells in `13_security.md` §5.3.1.
 > You can do steps 1–4 without them; step 6 needs them.
+
+---
+
+## ⬛ What actually happened — 2026-08-21
+
+**Done, locally:**
+
+| Step | Outcome |
+|---|---|
+| 0 · Task zero | Reconciled. [`14_…`](14_key_and_secret_lifecycle.md) §1 is now the **single authority** (15 rows, one per secret, with impact + cadence + procedure + `Last rotated`); [`13_security.md`](13_security.md) §5.3.1 keeps location columns only and points at it |
+| 1 · Tooling | `sops` 3.13.3 + `age` 1.1.1 in `~/.local/bin` (no sudo). **Provenance verified** — sops against its published `checksums.txt`, age against the **GPG-signed Ubuntu archive index** |
+| 2 · Keypair | `~/.config/sops/age/keys.txt`, mode 0600, dir 0700, on **ext4** (checked `df -T`, and that the path does not resolve under `/mnt`). Public key `age1ke0hk5e…rz95h` |
+| 3 · `.gitignore` | Verified, plus `env.local.extra` added (see below) |
+| 4 · Split | `.env.shared` (32 vars, committed plaintext) + `secrets.enc.env` (11 vars, SOPS) + `.sops.yaml`; `make env-local` / `make secrets-edit`; generator `scripts/ops/gen_env_local.sh` |
+| 5 · Verify | `make wsl-up` green — **14/14 containers healthy**, 0 compose "variable is not set" warnings; regenerated `env.local` has **all 43 names and every value identical** to the pre-migration file; regeneration is idempotent |
+
+### ⚠ Four places this document was wrong, and what was done instead
+
+1. **`.env` cannot be the plaintext half — it is gitignored on purpose** (`.gitignore:29`, CL-03, with
+   a comment saying it was checked deliberately). Committing it needs a `!.env` negation, which
+   deletes the safety net that stops the universal "secrets go in `.env`" reflex from committing a
+   secret. **The plaintext half is `.env.shared`**, which matches the tracked `.env.*` family
+   (`.env.example`, `.env.open`, `.env.openai`). Everything else in §4 stands.
+2. **"8 of them secret-class" undercounts. It is 11.** The encrypted half was defined as *this
+   project's own secret inventory* (§5.3.1) intersected with `env.local` — a rule that can be
+   restated, rather than a hand-picked list. That adds `TICKETING_SECRET_KEY` (empty locally, but
+   secret-class everywhere else — leaving it in the committed plaintext half is a trap for whoever
+   sets it on a host) and `HG_USERNAME` (§5.3.1 groups it with `HG_TOKEN` exactly as it groups
+   `SMTP_USERNAME` with `SMTP_PASSWORD`, which §4 *did* catch). `POSTGRES_USER` and
+   `PINPOINT_APPLICATION_ID` were left in the plaintext half: they are resource addresses, not
+   authentication principals.
+3. **Task zero says five rows are missing from §14. It is six** — `KEYCLOAK_CLIENT_SECRET` was absent
+   from both lists' reconciliation notes. This is the defect the section is about, one level down.
+4. **The DoD asked for `Last rotated` in §5.3.1 *and* for §5.3.1 to stop owning rotation.** Those
+   contradict. `Last rotated` is rotation state, so it went to §14 §1 with the rest.
+
+### ⚠ And one thing that is worse than anything this migration fixed
+
+**`POSTGRES_PASSWORD` is hardcoded as `password` in 11 compose sites and is not overridden by the
+staging or production overlays.** Compose's `environment:` beats `env_file:`, so the value this
+migration encrypted **is read by nothing**, and `db` publishes `0.0.0.0:5433` on every host running
+the GRM overlay. `security-preflight.sh` asserts the password is non-default — against the inert
+copy — so the promotion gate reports green on a variable nothing consumes.
+
+**And the value itself is already public.** `env.local`'s `POSTGRES_PASSWORD` is byte-identical to a
+literal committed in **six tracked files** — `backend/config/constants.py:519`,
+`scripts/database/config.sh:32`, `legacy_rasa_config/endpoints.yml`, `tests/ticketing/test_host_env.py:34`,
+an archived findings doc, and ⚠ **`.claude/settings.local.json`**, a tracked Claude Code permission
+rule that embeds it in a `PGPASSWORD=` command. `SMTP_USERNAME` is committed in three places.
+**Encrypting a value that is already in the working tree and in git history protects nothing** — it
+has to be *rotated*, and the literals removed in the same change.
+
+⚠ **Do not rotate `POSTGRES_PASSWORD` (step 6 item 5) as a lone edit to `secrets.enc.env`** — nothing
+reads that copy, so it would change nothing while writing a false `Last rotated` date. Fix the compose
+hardcoding first, then rotate, then purge the literals.
+Full analysis and the fix order: [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+
+### New: `env.local.extra`
+
+`env.local` is now generated, so anything hand-added to it is discarded on the next `make env-local`
+— and the Makefile itself tells you to put `PROD_SERVER_USER` / `PROD_HOST` / `PROD_SSH_KEY` there.
+Those go in **`env.local.extra`** (gitignored), which the generator appends verbatim.
+
+### Still open — and who owns it
+
+| # | Outstanding | Owner |
+|---|---|---|
+| 1 | ⚠ **Back up the age private key** to Proton Pass + a paper copy. **Until this is done, one disk failure makes `secrets.enc.env` permanently unreadable.** Nothing else here is urgent; this is | you, today |
+| 2 | Fill the `Owner` `TBC` cells in §5.3.1 | you |
+| 3 | The rotation pass (§6) — every credential is "unknown, treat as never" | you (external consoles) |
+| 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ Six secrets (§5.3.1 rows 2, 4, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet | you |
+| 5 | The compose-password fix above | deployment |
+
+⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models`.
 
 ---
 
@@ -81,6 +156,10 @@ the window in which a decrypted file is committable never opens.
 ## 4. Split `env.local`
 
 Per `13_security.md` §5.2. Current `env.local` holds **43 variables, 8 of them secret-class**.
+
+> ⚠ **Superseded in two ways on 2026-08-21** — the plaintext half is **`.env.shared`** (`.env` is
+> gitignored on purpose), and the encrypted half holds **11** variables, not 8. The reasoning is in
+> *What actually happened* above; the table below is kept as the original intent.
 
 | Destination | Contents |
 |---|---|
@@ -160,18 +239,22 @@ each one**:
 
 ## 8. Definition of done
 
-- [ ] The two inventories reconciled — one authority, the other points at it (Task zero)
-- [ ] `sops` + `age` installed; keypair in the **WSL** filesystem; backed up to Proton Pass + paper
-- [ ] `.gitignore` covers `*.decrypted`
-- [ ] `.env` (plaintext, committed) + `secrets.enc.env` (encrypted, committed) + `.sops.yaml`
-- [ ] `make env-local` regenerates a working `env.local`; `make wsl-up` green on it
-- [ ] All 43 variable names present after the split — verified by name, never by value
-- [ ] `secrets.enc.env` verified encrypted **in the committed object**, not just on disk
+- [x] The two inventories reconciled — one authority, the other points at it (Task zero)
+- [x] `sops` + `age` installed, **provenance verified**; keypair in the **WSL/ext4** filesystem
+- [ ] ⚠ **age private key backed up to Proton Pass + paper** — *the one urgent item*
+- [x] `.gitignore` covers `*.decrypted` (and now `env.local.extra`)
+- [x] `.env.shared` (plaintext, committed) + `secrets.enc.env` (encrypted, committed) + `.sops.yaml`
+      — ⚠ **`.env.shared`, not `.env`**; see *What actually happened*
+- [x] `make env-local` regenerates a working `env.local`; `make wsl-up` green on it (14/14 healthy)
+- [x] All 43 variable names present after the split — and every value byte-identical, verified by
+      comparison, never printed
+- [x] `secrets.enc.env` verified encrypted **in the committed object**, not just on disk
 - [ ] Rotation pass complete for the five in §6, with dates recorded in `14_…` §1
-- [ ] `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` **deliberately skipped**, and that recorded
-- [ ] Staging and production migrated only after local is green
-- [ ] `13_security.md` §5.3.1 `Last rotated` cells filled — *"unknown, treat as never"* is a valid
-      entry for anything not rotated
+      — ⚠ **blocked on the compose-password fix for `POSTGRES_PASSWORD`**
+- [x] `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` **deliberately skipped**, and that recorded
+      (`14_…` §3)
+- [ ] Staging and production migrated only after local is green — **local is green; hosts not started**
+- [x] `Last rotated` recorded as *"unknown — treat as never"* — in **`14_…` §1**, not §5.3.1
 
 ## 9. ⚠ Never
 

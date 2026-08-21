@@ -226,7 +226,7 @@ cd $(1) && \
 $(REMOTE_COMPOSE) run --rm --no-deps backend $(SEAH_PROVIDERS_SEED_CMD)
 endef
 
-.PHONY: help \
+.PHONY: help env-local secrets-edit \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
 	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
@@ -243,6 +243,10 @@ endef
 
 # ── Help ───────────────────────────────────────────────────────────────────────
 help:
+	@echo "Secrets:"
+	@echo "  make env-local        regenerate env.local from .env.shared + secrets.enc.env"
+	@echo "  make secrets-edit     edit secrets.enc.env in place (SOPS), then run make env-local"
+	@echo ""
 	@echo "WSL (local Docker):"
 	@echo "  make wsl-up           chatbot + GRM single stack — :3001 UI, :5002 API (dev bypass)"
 	@echo "  make wsl-demo-bypass  GRM only — :3001 UI, :5002 API (dev bypass, no Keycloak)"
@@ -284,6 +288,21 @@ help:
 	@echo "  make wsl-keycloak-ps  show Keycloak container status (after wsl-auth)"
 	@echo "  make wsl-auth-ps      show Keycloak + grm_ui + ticketing_api"
 	@echo "  make keycloak-setup   bootstrap GRM realm (once, after Keycloak is healthy)"
+
+# ── Secrets (SOPS + age) — docs/deployment/13_security.md §5 ───────────────────
+# env.local is a GENERATED artefact:
+#     .env.shared (committed, plaintext) + secrets.enc.env (committed, SOPS) -> env.local
+# Never hand-edit env.local: the next regeneration discards the edit, and a secret typed
+# there never reaches staging or production.
+env-local:
+	scripts/ops/gen_env_local.sh
+
+# Edit the encrypted half. Decrypts to a temp file, re-encrypts on save — plaintext
+# never touches the working tree. Run `make env-local` afterwards to apply.
+secrets-edit:
+	sops secrets.enc.env
+	@echo ""
+	@echo "Now run: make env-local"
 
 # ── WSL ────────────────────────────────────────────────────────────────────────
 # Full local stack: chatbot + single GRM stack (dev bypass). REST webchat: http://localhost:8080/
