@@ -108,6 +108,14 @@ False rotation records are worse than "unknown — treat as never".
 no hardcoded override. Verified live: `redis-cli -a "$REDIS_PASSWORD" ping` → `PONG` against the value
 that came out of `secrets.enc.env`. Its encrypted copy is real.
 
+> ⚠ **Correct about the wiring, and it was not the whole question.** A later history scan found that
+> the *value* was sitting in **public git history** in 9 now-deleted files, so the encrypted copy was
+> protecting a credential anyone could already read. **Rotated 2026-08-23.** The distinction is worth
+> keeping: `POSTGRES_PASSWORD` was an **inert variable** (correct value, read by nothing);
+> `REDIS_PASSWORD` was the opposite — **a live variable carrying an exposed value**. Checking one does
+> not check the other, and this section is what happens when you check only the first.
+> See [`secrets-in-public-git-history.md`](secrets-in-public-git-history.md).
+
 ---
 
 ## What was done, 2026-08-21
