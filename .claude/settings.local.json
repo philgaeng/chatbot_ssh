@@ -97,7 +97,6 @@
       "Bash(gh auth *)",
       "Bash(gh run *)",
       "Bash(echo \"=== roster endpoint \\(demo switcher source\\) ===\" && grep -rniE \"roster\" --include=\"*.py\" ticketing/api/routers/ 2>/dev/null | head; echo \"--- route.ts proxy identity block ---\"; sed -n '40,75p' channels/ticketing-ui/app/api/v1/[...path]/route.ts)",
-      "Bash(export PGPASSWORD='K9!mP2$vL5nX8&qR4jW7')",
       "Bash(psql -h localhost -p 5432 -U nepal_grievance_admin -d grievance_db -c \"SELECT current_database\\(\\), current_user;\")",
       "Bash(psql --version)",
       "Bash(python3 -c \"import alembic, sqlalchemy, psycopg2; print\\('alembic', alembic.__version__, 'sqlalchemy', sqlalchemy.__version__\\)\")",

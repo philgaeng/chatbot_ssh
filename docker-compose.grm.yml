@@ -53,10 +53,10 @@ services:
       - ./deployment/keycloak/themes/grm:/opt/keycloak/themes/grm:ro
     environment:
       KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://db:5432/app_db
+      KC_DB_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:?}
       KC_DB_SCHEMA: keycloak
-      KC_DB_USERNAME: user
-      KC_DB_PASSWORD: password
+      KC_DB_USERNAME: ${POSTGRES_USER:?}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD:?}
       KC_HTTP_PORT: "8080"
       KC_HEALTH_ENABLED: "true"
       # Canonical browser-facing URL — bakes into tokens' `iss` claim and the
@@ -148,9 +148,9 @@ services:
       # Override to use the Docker db service (user/password/app_db)
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       # Keycloak (used only when AUTH_MODE=keycloak; ignored under dev bypass).
@@ -199,9 +199,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       PYTHONPATH: /app
@@ -236,9 +236,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
     depends_on:
@@ -269,10 +269,10 @@ services:
     environment:
       POSTGRES_HOST: db
       POSTGRES_PORT: "5432"
-      POSTGRES_DB: app_db
+      POSTGRES_DB: ${POSTGRES_DB:?}
       # Admin creds (used only if OPS_DB_* unset; ops_app is the runtime role).
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
       # Scoped least-privilege role created by ops001 migration.
       OPS_DB_USER: ${OPS_DB_USER:-ops_app}
       OPS_DB_PASSWORD: ${OPS_DB_PASSWORD:-}

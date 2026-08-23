@@ -151,7 +151,7 @@ DB_CONFIG = {
     'host':     os.getenv('POSTGRES_HOST', 'localhost'),
     'database': os.getenv('POSTGRES_DB', 'grievance_db'),
     'user':     os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
+    'password': os.getenv('POSTGRES_PASSWORD', '<redacted — credential rotated 2026-08-21>'),
     'port':     os.getenv('POSTGRES_PORT', '5432'),
 }
 ```

@@ -513,10 +513,14 @@ REDIS_DB = os.getenv('REDIS_DB', '0')
 
 # Database configuration from environment variables
 DB_CONFIG = {
+    # Every value comes from the environment, which compose interpolates from env.local
+    # with ${VAR:?}. The fallbacks are the identity the deployed volumes actually hold.
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'database': os.getenv('POSTGRES_DB', 'grievance_db'),
-    'user': os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
+    'database': os.getenv('POSTGRES_DB', 'app_db'),
+    'user': os.getenv('POSTGRES_USER', 'user'),
+    # No fallback, deliberately. A default password here is read by nothing when the
+    # environment is set and leaks a live credential into git when it is not.
+    'password': os.getenv('POSTGRES_PASSWORD', ''),
     'port': os.getenv('POSTGRES_PORT', '5432')
 }
 

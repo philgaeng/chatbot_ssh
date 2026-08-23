@@ -44,7 +44,15 @@
 4. **The DoD asked for `Last rotated` in §5.3.1 *and* for §5.3.1 to stop owning rotation.** Those
    contradict. `Last rotated` is rotation state, so it went to §14 §1 with the rest.
 
-### ⚠ And one thing that is worse than anything this migration fixed
+### ⚠ And one thing that was worse than anything this migration fixed — ✅ now fixed locally
+
+> **Resolved 2026-08-21**, after this section was written and because of it. All 19 compose literals
+> (including **Keycloak's `KC_DB_*`**, which the count below misses) now interpolate from `env.local`
+> with `${VAR:?}`; the credential is **rotated**; the literal is gone from all six tracked files; and
+> `security-preflight.sh` checks what a **container** resolves rather than the inert copy. ⚠ **Staging
+> and DOR prod are not done and will fail to start on the next deploy** — see the coordinated runbook in
+> [`db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+> The description below is kept as the finding, in its original terms.
 
 **`POSTGRES_PASSWORD` is hardcoded as `password` in 11 compose sites and is not overridden by the
 staging or production overlays.** Compose's `environment:` beats `env_file:`, so the value this
@@ -79,9 +87,9 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 | 2 | Fill the `Owner` `TBC` cells in §5.3.1 | you |
 | 3 | The rotation pass (§6) — every credential is "unknown, treat as never" | you (external consoles) |
 | 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ Six secrets (§5.3.1 rows 2, 4, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet | you |
-| 5 | The compose-password fix above | deployment |
+| 5 | ~~The compose-password fix above~~ ✅ **done locally 2026-08-21** — ⚠ but it makes item 4 a **prerequisite for the next deploy**, not a nice-to-have: `${VAR:?}` stops the stack when the value is missing, and neither host can run `make env-local` until its age key is a recipient | deployment |
 
-⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models`.
+⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models` — and that is now load-bearing rather than incidental: the compose change in item 5 is **breaking for any host whose database still holds the old credential**, which is both of them.
 
 ---
 

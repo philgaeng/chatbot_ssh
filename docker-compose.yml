@@ -21,12 +21,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -58,12 +58,12 @@ services:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       SOCKETIO_REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -94,9 +94,9 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       db:
         condition: service_healthy
@@ -118,12 +118,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -156,12 +156,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -191,12 +191,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -236,13 +236,13 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d app_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5

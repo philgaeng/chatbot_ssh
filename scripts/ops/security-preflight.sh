@@ -56,9 +56,51 @@ for k in REDIS_PASSWORD TICKETING_SECRET_KEY MESSAGING_API_KEY KEYCLOAK_WEBHOOK_
   fi
 done
 
-# 4. POSTGRES_PASSWORD != default.
+# 4. POSTGRES_PASSWORD: non-default in the env file, AND actually reaching the containers.
+#
+# ⚠ The second half is the point. This check read only $ENV_FILE for months and passed
+# the whole time, while eleven compose services set POSTGRES_PASSWORD in their own
+# `environment:` blocks — which override `env_file:` — so the value it was asserting on
+# was read by nobody and every deployed database ran as `user`/`password`. A gate that
+# reports green on a variable nothing consumes is worse than no gate, because it is
+# quoted as evidence. Checking the env file alone cannot detect that; checking the
+# compose files for a literal is what detects it, and needs no running stack.
 PG="$(getenv POSTGRES_PASSWORD)"
-[[ "$PG" == "password" || -z "$PG" ]] && fail "POSTGRES_PASSWORD is default/empty" || pass "POSTGRES_PASSWORD non-default"
+[[ "$PG" == "password" || -z "$PG" ]] && fail "POSTGRES_PASSWORD is default/empty in $ENV_FILE" || pass "POSTGRES_PASSWORD non-default in $ENV_FILE"
+
+# 4b. No compose file may pin the DB credentials to a literal — that makes $ENV_FILE inert.
+#     A value is acceptable only if it interpolates (`${VAR...}`); anything else is a literal.
+CRED_KEYS='POSTGRES_PASSWORD|POSTGRES_USER|POSTGRES_DB|KC_DB_PASSWORD|KC_DB_USERNAME'
+hardcoded=0
+for f in $COMPOSE_FILES; do
+  [[ -f "$f" ]] || continue
+  while IFS= read -r hit; do
+    [[ -n "$hit" ]] || continue
+    fail "$f hardcodes a DB credential (overrides env_file, making $ENV_FILE inert): ${hit%%:*}"
+    hardcoded=1
+  done < <(grep -nE "^[[:space:]]+($CRED_KEYS):[[:space:]]*[^\$[:space:]]" "$f" || true)
+  # DATABASE_URL with inline credentials is the same defect wearing a URL.
+  while IFS= read -r hit; do
+    [[ -n "$hit" ]] || continue
+    fail "$f embeds credentials in DATABASE_URL: ${hit%%:*}"
+    hardcoded=1
+  done < <(grep -nE "^[[:space:]]+DATABASE_URL:[[:space:]]*[a-z+]+://[^$]*:[^$@]*@" "$f" || true)
+done
+(( hardcoded == 0 )) && pass "no compose file hardcodes DB credentials"
+
+# 4c. Best effort, and only when a stack is up: what a container holds must match $ENV_FILE.
+#     Hashes are compared so no secret is ever printed or logged.
+if command -v docker >/dev/null 2>&1 && [[ -n "$PG" ]]; then
+  cf=""; for f in $COMPOSE_FILES; do [[ -f "$f" ]] && cf="$cf -f $f"; done
+  live="$(docker compose --env-file "$ENV_FILE" $cf exec -T backend printenv POSTGRES_PASSWORD 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "$live" ]]; then
+    echo "  SKIP: container check (no running backend) — 4b still covers the literal case"
+  elif [[ "$(printf %s "$live" | sha256sum)" == "$(printf %s "$PG" | sha256sum)" ]]; then
+    pass "the running backend holds $ENV_FILE's POSTGRES_PASSWORD"
+  else
+    fail "the running backend's POSTGRES_PASSWORD differs from $ENV_FILE — $ENV_FILE is inert"
+  fi
+fi
 
 # 5. CORS allowlist not '*'.
 CORS="$(getenv CORS_ALLOWED_ORIGINS)"

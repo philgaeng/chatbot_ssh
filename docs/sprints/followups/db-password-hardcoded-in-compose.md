@@ -1,8 +1,27 @@
 # Follow-up — `POSTGRES_PASSWORD` is hardcoded in the compose files, so the encrypted copy is inert
 
 **Logged:** 2026-08-21, during the SOPS + age migration ([`18_sops_migration_handover.md`](../../deployment/18_sops_migration_handover.md)).
-**Owner:** deployment · **Size:** medium (11 compose sites + a coordinated DB password change on two hosts)
-**Severity:** the highest-value thing found by that migration, and it is **not** what the migration set out to fix.
+**Owner:** deployment · **Severity:** the highest-value thing found by that migration, and it is **not** what
+the migration set out to fix.
+
+> ## ✅ Fixed locally, 2026-08-21 — ⚠ **and this change will stop staging and DOR prod from starting**
+>
+> The variable is live: every compose service now interpolates `POSTGRES_USER` / `POSTGRES_PASSWORD` /
+> `POSTGRES_DB` from `env.local` with `${VAR:?}`, the credential has been **rotated**, and the literal is
+> gone from all six tracked files. Verified, not assumed — the running `backend` and `ticketing_api`
+> containers hold `env.local`'s value (compared by hash), all 14 services are healthy, and Keycloak
+> reconnected with both realms intact.
+>
+> ⚠ **Read [§Deploying this to staging and DOR prod](#deploying-this-to-staging-and-dor-prod) before the
+> next deploy to either host.** `${VAR:?}` fails the stack loudly when the variable is missing or wrong,
+> which is the intended behaviour and is exactly what those two hosts will hit: their databases still
+> answer to the old credential. **This is a coordinated change, not a pull-and-restart.**
+>
+> **What is still open:** the role and database rename (`user`/`app_db` → `nepal_grievance_admin`/
+> `grievance_db`), which is cosmetic alignment with the documentation and carries a three-host migration
+> with no security payoff; `SMTP_USERNAME`, still committed in three places; and the git history, which
+> still contains the old password — rotation is what makes those historical copies worthless, and purging
+> history is a separate decision about rewriting shared history.
 
 ## The finding
 
@@ -88,3 +107,58 @@ False rotation records are worse than "unknown — treat as never".
 `REDIS_PASSWORD` is wired correctly — `${REDIS_PASSWORD:-}` interpolation from `--env-file env.local`,
 no hardcoded override. Verified live: `redis-cli -a "$REDIS_PASSWORD" ping` → `PONG` against the value
 that came out of `secrets.enc.env`. Its encrypted copy is real.
+
+---
+
+## What was done, 2026-08-21
+
+| # | Step | Result |
+|---|---|---|
+| 1 | `security-preflight.sh` no longer checks only `env.local` | Added two checks: **no compose file may pin a DB credential to a literal** (static, needs no running stack), and — when a stack is up — **the running `backend`'s value must match `env.local`**, compared by hash so no secret is printed. Both were mutation-tested: reintroducing `POSTGRES_PASSWORD: password` and an inline-credential `DATABASE_URL` each turn the gate red |
+| 2 | 19 literals replaced with `${VAR:?}` | `docker-compose.yml` (7 × `POSTGRES_*` blocks + 5 `DATABASE_URL`) and `docker-compose.grm.yml` (4 blocks + Keycloak's `KC_DB_URL` / `KC_DB_USERNAME` / `KC_DB_PASSWORD`). ⭐ **Keycloak was not in the original count** — it holds its own copy and would have been missed. The `db` healthcheck now reads `pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB` rather than repeating the names |
+| 3 | `.env.shared` set to the identity the volumes actually hold | `POSTGRES_DB=app_db`, `POSTGRES_USER=user`. ⚠ It said `grievance_db` / `nepal_grievance_admin` — values no database on any host has ever answered to. `POSTGRES_HOST` / `POSTGRES_PORT` stay as they were: they are container topology, not credentials, and every service overrides them |
+| 4 | Password rotated | 40 alphanumeric characters. **Alphanumeric deliberately** — it is embedded in `DATABASE_URL`, so any reserved character (`@ : / # %`) would corrupt the connection string in a way that looks like a network fault. Set via `sops secrets.enc.env`, applied with `ALTER ROLE`, and TCP authentication verified before the stack was restarted |
+| 5 | The literal removed from all six tracked files | `backend/config/constants.py` (no fallback password at all now), `scripts/database/config.sh` (both branches), the archived Rasa `endpoints.yml`, `tests/ticketing/test_host_env.py`, `.claude/settings.local.json`, and the archived findings doc. Verified with a repo-wide search for the old value: gone. And the **new** value appears in no tracked file |
+| 6 | The host test bootstrap inverted | ⭐ **The one that was not on the list.** `tests/ticketing/_host_env.py` deliberately *ignored* `env.local` and hardcoded `user`/`password`/`app_db`, for a reason that was correct when written: env.local was dead config, so honouring it was the one way host pytest could disagree with the database (D-36). Making env.local live inverts that — the hardcoded fallback would now *cause* D-36 against a rotated database. It reads the identity from `env.local`, and raises an actionable error naming `make env-local` rather than guessing |
+
+**Test evidence.** `tests/ticketing/test_host_env.py` rewritten to pin the new invariant, including a test
+that fails if any `setdefault` credential returns to the bootstrap — mutation-checked, it turns two tests
+red. `tests/repo` 82 passed; SPDX coverage 593/593. The host ticketing suite is **756 passed / 13 failed**,
+and those 13 fail **identically on the pre-change commit** (verified in a throwaway worktree with the
+credentials passed explicitly): they are seed-staffing debt — *"Add a Level 1 officer"* — and the last write
+to `ticketing.tickets` was 2026-08-08.
+
+## Deploying this to staging and DOR prod {#deploying-this-to-staging-and-dor-prod}
+
+⚠ **Do not pull-and-restart.** `${POSTGRES_PASSWORD:?}` stops the stack when the value is missing, and
+authentication fails when it is wrong. Both hosts will hit one or the other: their databases still answer
+to the old credential, and neither host has been migrated to SOPS
+([handover](../../deployment/18_sops_migration_handover.md) step 4), so `make env-local` cannot run there
+until a per-server age keypair is a recipient.
+
+**Per host, in this order — the order is the whole point:**
+
+1. **Get the credential onto the host first.** Either complete the SOPS migration for that host (add its
+   age public key with `sops updatekeys`, then `make env-local`), or set `POSTGRES_USER` / `POSTGRES_DB` /
+   `POSTGRES_PASSWORD` in its existing `env.local` by hand. The values must match `.env.shared` plus the
+   rotated secret.
+2. **Change the database password to match, before restarting anything.** The running containers hold
+   live connections and are unaffected by an `ALTER ROLE`, so this is safe to do first — and doing it
+   second means an outage between the restart and the `ALTER`:
+   ```bash
+   printf "ALTER ROLE \"user\" WITH PASSWORD '%s';\n" "$(grep '^POSTGRES_PASSWORD=' env.local | cut -d= -f2-)" \
+     | docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml \
+         exec -T db psql -U user -d app_db -q -v ON_ERROR_STOP=1 -f -
+   ```
+3. **Verify the new credential authenticates over TCP** before you restart — an `ALTER ROLE` that ran is
+   not the same as a password that works.
+4. **Recreate the stack**, then **recreate Keycloak separately**: it is behind the `auth` profile, so a
+   plain `up -d` does not touch it and it keeps running on the old credential until it next restarts —
+   a latent break that looks fine for days.
+5. **Run `security-preflight.sh`.** Check 4c now compares the running container against `env.local`, which
+   is the assertion that was missing.
+
+⚠ **`OPS_DB_PASSWORD` is a separate credential** for the scoped `ops_app` role and is **not** rotated by
+this change. It is empty in the local stack, so `ops` falls back to the admin credential — which now works
+only because step 2 rotated that too. Giving `ops_app` its own password is
+[§5 of the lifecycle doc](../../deployment/14_key_and_secret_lifecycle.md) and remains outstanding.
