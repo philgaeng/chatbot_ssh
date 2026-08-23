@@ -5,7 +5,7 @@
 > consultant. It states where this platform complies, where it does not, and what we need from the
 > consultant before we can finish the work or submit.
 >
-> **Audience:** ADB DPG consultant + project team · **Date:** 2026-08-21 ·
+> **Audience:** ADB DPG consultant + project team · **Date:** 2026-08-23 ·
 > **State of the code:** branch `dpg/sprint2-open-models`, merged into `integration/stage`.
 >
 > **Companion documents.** The full evidence pack lives beside this file:
@@ -205,6 +205,8 @@ Two points a reviewer usually asks about:
 - **Secrets are encrypted at rest in the repository.** SOPS with `age` recipients encrypts
   `secrets.enc.env`; the non-secret half stays plaintext and diffable in `.env.shared`; and `env.local`
   is a generated artefact (`make env-local`) rather than a file each developer maintains by hand.
+  **Encryption alone proves nothing about what is already public**, so every live credential was also
+  hashed against every blob ever committed — see §3.5 for what that found and what it cleared.
 - **Deliberately deferred:** a governance model and a release/versioning policy. Both describe
   commitments nobody has agreed to, on a project whose IP ownership is formally open, so they wait on
   **Q17** ([followup](../sprints/2026-08-llm/followups/governance-and-versioning-policy.md)).
@@ -383,6 +385,40 @@ makes for pinning architectural claims rather than asserting them (§2.5).
 
 Full finding, remediation and the coordinated runbook for the two hosts that are not yet done:
 [`db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+
+**⭐ And a second credential, found by asking the converse question.** The audit above asked *"is this
+variable actually read?"*. It cleared the Redis broker password — correctly, on that question. So we
+then asked the opposite one — *"is this value already public?"* — by hashing every live credential
+against every blob ever committed. The broker password was **live, and sitting in nine now-deleted
+files** in a repository that has been public since January 2025. Rotated, and verified four ways: the
+new credential authenticates, **the old one is refused**, an unauthenticated connection is refused, and
+the workers answer over the rotated broker.
+
+**The pair is the transferable finding.** One was an **inert variable carrying a correct value**; the
+other a **live variable carrying an exposed value**. Checking the wiring cannot detect the second;
+checking the value cannot detect the first. An audit that does one and reports a clean bill is not
+wrong so much as incomplete, and ours was.
+
+⭐ **What the scan cleared matters more than what it caught.** The **database encryption key was never
+committed** — the one secret this platform cannot rotate, since no re-encryption path exists and a
+leak would be permanent exposure of complainant PII. The mail password, the model-provider keys and
+both cloud keys are clean too. ⚠ **A pattern scan would have misled in both directions**, and we would
+caution any reviewer against one: ours flagged seventy "secret-shaped" strings, most of them regex
+constants, while the genuinely alarming hits — a cloud key, a model-provider key and an *older*
+encryption key in a committed example file — were **superseded values that authenticate nothing**.
+Only comparison against live values separates those.
+
+⚠ **One exposure cannot be closed, and we would rather state it than have it found.** A maintainer's
+email address is in the history because it is the **git author on 865 of the repository's 1,018
+commits**. It is the username half of a mail credential whose password is clean. No amount of file
+editing removes it, and removing it from history would mean rewriting the author of every commit.
+
+**Our position on purging history: we recommend against it.** With both credentials rotated nothing
+left in the history opens a live door, and a rewrite cannot un-publish a repository that has been
+public for over a year. **Rotation removes the risk; purging removes only the evidence of it** — which
+is why the order matters, and why doing it the other way round buys the appearance of safety while the
+credential still works. Method, full table and the reasoning:
+[`secrets-in-public-git-history.md`](../sprints/followups/secrets-in-public-git-history.md).
 
 ---
 

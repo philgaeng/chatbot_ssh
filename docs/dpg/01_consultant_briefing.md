@@ -1,9 +1,10 @@
 # Nepal GRM platform — DPG qualification briefing
 
-**For:** ADB's Digital Public Goods consultant · **From:** the project team · **Date:** 2026-08-21
+**For:** ADB's Digital Public Goods consultant · **From:** the project team · **Date:** 2026-08-23
 **Subject:** a self-assessment against the [DPG Standard](https://www.digitalpublicgoods.net/standard),
-the engineering that closes the gaps, and **nineteen questions for you — four of which block us**
-(Q1, Q6, Q14, and Q4, which is the cheapest of the four to answer).
+the engineering that closes the gaps, and **nineteen questions for you — three of which block us**
+(Q1, Q6, Q14). A fourth, **Q4**, blocks nothing but is the cheapest answer on the list: a licence we
+have already applied, waiting only for you to say you have no objection.
 
 > **What this document is.** A summary, written to be read before a meeting. The full
 > indicator-by-indicator assessment, with the evidence behind every claim, is
@@ -36,8 +37,8 @@ escalation ladder up to a Grievance Redress Committee. It includes a dedicated, 
 | 5 | Documentation | ✅ **Compliant, strong** | A 365-file spec tree, a Docker runbook for 13 services, OpenAPI on both APIs, and a portable engineering starter kit another country team could reuse |
 | 6 | Data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema in three independent migration streams, XLSX and PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
 | 7 | Privacy & applicable laws | 🟠 **Partial — and nothing real has happened yet** | The assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram are written, each leg verified against code — which is how the three storage-layer defects in §5 came to light, all three now fixed. ⭐ **No genuine grievance has been processed on this platform**: every record is seed data or a demo dummy, so every exposure is **prospective**, and redaction is a **go-live precondition rather than remediation**. Still missing: that redaction, a deletion capability, a breach procedure, and a lawyer's review (Q15) |
-| 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE via self-hosted Keycloak, migrated schema, architectural invariants pinned by tests, and the hygiene set at the repo root. `SECURITY.md` routes disclosure privately rather than to a public issue, because this platform holds SEAH reports. Secrets are SOPS-encrypted in the repository. Governance and release-versioning policy deferred pending Q17 |
-| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake, and **two independent** content-detection paths. Outstanding: retention and breach policy, third-party PII redaction, a measured SEAH detector (§4), and the SEAH detector measurement (§4) |
+| 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE via self-hosted Keycloak, migrated schema, architectural invariants pinned by tests, and the hygiene set at the repo root. `SECURITY.md` routes disclosure privately rather than to a public issue, because this platform holds SEAH reports. Secrets are SOPS-encrypted in the repository, and a scan of **every blob ever committed** against every live credential confirms none of them is readable in the public history (§5). Governance and release-versioning policy deferred pending Q17 |
+| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake, and **two independent** content-detection paths. Outstanding: retention and breach policy, third-party PII redaction, and **a measured SEAH detector** — the one with a safeguarding consequence, §4 |
 
 **One blocker that is genuinely ours to close, and one that is not.** Indicator 4 is engineering that is
 mostly done and whose last step is a **measurement**, not a refactor. **Indicator 3 is a signature we have
@@ -71,7 +72,11 @@ has not started.
   that has never existed in this codebase — directly contradicting our own indicator-2 argument, on the
   most-read page in the repository.
 - Secrets encrypted at rest in the repository with SOPS and `age`; `env.local` became a generated
-  artefact rather than a file each developer maintains by hand.
+  artefact rather than a file each developer maintains by hand. **And then we checked whether that was
+  worth anything**, by hashing every live credential against every blob ever committed — which is how
+  the two findings in §5 surfaced. ⭐ **The credential that matters most came back clean:** the database
+  encryption key has never been committed, and it is the one secret this platform *cannot* rotate,
+  because no re-encryption path exists and a leak would be permanent.
 
 **Privacy** — *indicator 7*
 
@@ -459,6 +464,25 @@ Recorded so they are not re-opened, and because two of them change what we are a
   disagree with the database. Making the file live turned that safeguard into the bug it was written to prevent.
   **A control that encodes a fact about the system has to move when the fact does**, and only a test will tell
   you it has stopped being true.
+- **⭐ And a second credential, found by asking a different question of the same repository.** Having
+  fixed the one above, we scanned for the converse: not *"is the variable read?"* but *"is the value
+  already public?"* — hashing every live credential against every blob ever committed. It found the
+  **Redis broker password**, live, sitting in nine now-deleted files in a repository that has been
+  public since January 2025. Rotated.
+  ⭐ **The pair is the lesson, and we would offer it as one:** the database password was an **inert
+  variable carrying a correct value**; the broker password was a **live variable carrying an exposed
+  value**. Each audit is blind to the other's failure, and our first audit had explicitly cleared Redis
+  — correctly, on the only question it asked.
+  **What the scan cleared matters more than what it caught.** The database encryption key, the mail
+  password, and every model-provider and cloud key were never committed. ⚠ One exposure cannot be
+  closed and we would rather state it than let you find it: a maintainer's email address is in the
+  history because it is the **git author on 865 of the repository's 1,018 commits**. It is the username
+  half of a mail credential whose password is clean, and no amount of file editing removes it.
+  **Our position on purging history: we recommend against it, and the reasoning is the point.** With
+  both credentials rotated, nothing left in the history opens a live door — and a rewrite could not
+  un-publish a repository that has been public for over a year. **Rotation is what removes risk;
+  purging is what removes evidence of it.** Doing them in the wrong order buys the appearance of
+  safety while the credential still works.
 - **A licence-drift finding we surfaced ourselves and fixed.** Our Redis image tag pinned only the major
   version, so it silently followed upstream onto a non-OSI licence line — nobody edited the file; the
   licence moved underneath it. Now pinned to a minor and taken under AGPLv3. **The class of problem is more
