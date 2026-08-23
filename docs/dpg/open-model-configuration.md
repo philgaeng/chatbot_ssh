@@ -140,7 +140,8 @@ open weights **and** open training data, built for low-resource language coverag
 
 **3. ⚠ Latency varies by 30×, and the slow end is not survivable.** `gpt-oss` answers a one-sentence
 probe in **0.7 s**; `Qwen3.5-9B` takes **23.8 s** and emits 2,048 completion tokens to do it. The
-real classification prompt is ~20,700 characters before the complaint is added. **Against a 30-second
+real classification prompt was ~20,700 characters before the complaint was added — since cut to ~3,277
+prompt tokens ([`model-benchmarks.md`](model-benchmarks.md) §3.7). **Against a 30-second
 interactive budget, the Qwen family is a serious risk and `gpt-oss` has enormous headroom** — and
 that is a selection input, not a footnote, because latency here is pass/fail rather than a table row.
 
@@ -159,7 +160,7 @@ models. [The write-up](../sprints/2026-08-llm/followups/hf-router-rate-limit-rea
 
 The list lives in [`scripts/ops/llm_candidates.json`](../../scripts/ops/llm_candidates.json) as
 **data**, deliberately: the licence limb of the filter is provisional
-([`00_compliance_status.md`](00_compliance_status.md) consultant-Q5), so if restricted-use open
+([`00_compliance_status.md`](00_compliance_status.md) consultant-Q7), so if restricted-use open
 weights turn out to satisfy indicator 4, widening the field is an edit to one file rather than a
 redesign.
 
@@ -170,7 +171,7 @@ exclusion may be costing real accuracy:
 |---|---|---|
 | `google/gemma-4-31B-it`, `google/gemma-3-27b-it` | Gemma Terms of Use | Bespoke community licence with use restrictions. Among the strongest multilingual options at this size |
 | `meta-llama/Llama-3.3-70B-Instruct` | Llama 3.3 Community | Use restrictions + acceptable-use policy |
-| `CohereLabs/aya-expanse-32b` | **CC-BY-NC-4.0** | ⚠ The one that hurts. Aya is *purpose-built* for multilingual coverage and is exactly the right size — but non-commercial is incompatible with a government production deployment **however consultant-Q5 is answered**, so unlike the rows above this exclusion does not loosen |
+| `CohereLabs/aya-expanse-32b` | **CC-BY-NC-4.0** | ⚠ The one that hurts. Aya is *purpose-built* for multilingual coverage and is exactly the right size — but non-commercial is incompatible with a government production deployment **however consultant-Q7 is answered**, so unlike the rows above this exclusion does not loosen |
 | `aisingapore/Gemma-SEA-LION-v4-27B-IT` | Gemma Terms of Use | Inherits Gemma terms. Also targets South-**East** Asian languages; Nepali is not in its focus set |
 | `zai-org/GLM-4.5-Air` | MIT | Licence is fine — excluded on **size** (106B, far outside the 24 GB limb). Recorded so a later reader knows it was considered |
 
@@ -201,11 +202,14 @@ A configuration page that overstates its position is worth less than none, so:
   whole system"* is **false for audio** and true for text. Nothing breaks today because voice is
   switched off, and it would break the day it is switched on
   ([follow-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md)).
-  Nepali classification quality, translation quality and ASR word-error rate are all unmeasured.
-  [DPG-22 and DPG-23](../sprints/2026-08-llm/03-open-models-spec.md) own those numbers. ✅ **Funded as of
-  2026-08-20** (Q-19 — a few hundred USD, owner-paid, shared with the pilot's own inference), so the
-  measurements are scheduled rather than blocked. ⚠ **Until they land, nothing here may be cited as a
-  measured result** — placeholders that acquire a funding date are still placeholders.
+  ⭐ **The closed baseline is now measured in full** — 105 items, both tasks, published with every
+  figure's provenance in [`model-benchmarks.md`](model-benchmarks.md). What remains unmeasured is the
+  **open column**: Nepali classification quality on open weights, translation quality, and ASR
+  word-error rate. [DPG-22 and DPG-23](../sprints/2026-08-llm/03-open-models-spec.md) own those numbers,
+  and they are **funded** (Q-19 — a few hundred USD, owner-paid, shared with the pilot's own inference).
+  ⚠ **Until the open column lands, no model here may be selected on the evidence that exists** — and in
+  particular the open candidate's perfect SEAH false-alarm rate is uninterpretable without recall
+  (`model-benchmarks.md` §3.5).
 - ⚠ **The repository default is still the proprietary configuration**, deliberately. An open base
   URL combined with proprietary model ids is a repository that cannot serve one request on a fresh
   clone — weaker evidence than an honest default, not stronger. The flip is one line per task in the

@@ -567,7 +567,7 @@ def declared_env_vars() -> tuple[str, ...]:    # what DPG-16's drift pin reads
 > company processing a given grievance is not knowable in advance. **Production must pin a provider; CI may
 > route automatically because it sends only synthetic data** (DPG-24). Both are the same one-line registry
 > value in different environments — which is exactly the property this ticket exists to create. Reasoning:
-> [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.3a.
+> [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.6.
 
 `ticket_translate` defaulting to `translate`'s resolved value is deliberate: one knob moves translation
 everywhere, and a second knob exists for whoever needs the surfaces to differ. The

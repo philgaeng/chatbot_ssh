@@ -71,6 +71,15 @@ All marked `⚠ not deployed`.
 + detection calls: **11,358 prompt + 3,361 completion tokens per grievance** (both calls, which is
 what production makes). Tokens are the measurement; prices are quotes and are stated as such.
 
+> ⚠ **These token counts predate the prompt reduction, and the direction of the error is the useful
+> part.** [`model-benchmarks.md`](model-benchmarks.md) §3.7 cut the classification prompt by ~70%
+> (~10,900 → ~3,277 tokens), so the real per-grievance cost is now roughly **3,700 prompt + 3,361
+> completion**, not 11,358 + 3,361. **A cheaper T1 pushes the crossover *higher*** — by something like
+> 2–3× on the prompt-dominated rows — so every figure below is a **conservative floor** and the
+> conclusion is strengthened, not weakened, by the staleness. The table is left as measured rather than
+> rescaled by arithmetic, because a number nobody metered is not a measurement; re-run the meter and
+> replace it. Either way the finding is unchanged, which is the point of stating it as a range.
+
 **T2 cost is a monthly instance**, whatever the volume. So the crossover is:
 
 > crossover volume = monthly instance cost ÷ per-grievance T1 cost
@@ -131,7 +140,8 @@ no plausible correction to a per-district rate closes that.
 
 ### The one cost lever that is worth more than the tier choice
 
-⚠ **11,358 of the 14,719 tokens per grievance are prompt**, and most of that is the category
+⚠ **11,358 of the 14,719 tokens per grievance are prompt** — measured before the ~70% prompt cut
+(§3.7 of the benchmarks), which is exactly the lever this paragraph identified — and most of that is the category
 catalogue, which the classification prompt injects **twice, in two shapes**
 (`LLM_services.py:275-296`) — about 20,700 characters before the complaint is added. **Deduplicating
 it is a prompt change, not a model change, and it is worth more than any tier decision on this
@@ -149,7 +159,7 @@ Size against what is measured here instead:
 | Input | Value | Source |
 |---|---|---|
 | Requests per grievance | **2** (classify + SEAH detect) | measured |
-| Prompt tokens per grievance | **11,358** | measured |
+| Prompt tokens per grievance | **11,358** ⚠ pre-§3.7; ~3,700 today | measured (superseded) |
 | Completion tokens per grievance | **3,361**, of which **93.8% reasoning** | measured |
 | Peak shape | bursty around road works and public meetings | design, not measured |
 | Model size target | fits one 24 GB GPU at 4-bit | the candidate filter |

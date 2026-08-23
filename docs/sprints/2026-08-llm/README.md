@@ -31,7 +31,7 @@ The guide's **strategy** survives all five corrections intact. It is the *invent
 for the *project owner*, each owned by a ticket. [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §5 holds
 **Q1…Q14, unhyphenated**: questions for *ADB's DPG consultant*. **The numbers overlap and mean different
 things** — its Q4 asks whether our reading of indicator 4 is correct; our Q-04 asks which configuration
-production runs. When citing across, write "consultant-Q5", as the specs now do.
+production runs. When citing across, write "consultant-Q7", as the specs now do.
 
 ### ✅ All 20 owner questions answered — 2026-08-17
 

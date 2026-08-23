@@ -337,7 +337,7 @@ a low-resource language that leaves a handful, not a field.
 
 **What this obliges the benchmark to record**, because a shortlist is only credible if its edges are
 visible: **name every candidate considered and why each one made or missed the list** — especially the
-ones the *licence* limb excluded. That limb is provisional (consultant-Q5 asks whether restricted-use open
+ones the *licence* limb excluded. That limb is provisional (consultant-Q7 asks whether restricted-use open
 weights satisfy indicator 4), and if the answer loosens, re-running DPG-23 should be a candidate-list edit
 rather than a re-design.
 
@@ -753,7 +753,7 @@ the job header so nobody "fixes" it later by making it required.
 >
 > **The honest claim is now "most names are removed, some get through, here is the measured number"** —
 > neither "names are handled" nor "names are unaddressed". Both DPG documents were corrected, and the
-> residual is disclosed alongside the provider's own terms (consultant-Q16), because with self-hosting
+> residual is disclosed alongside the provider's own terms (consultant-Q14), because with self-hosting
 > parked that residual reaches a third party indefinitely.
 >
 > **Restore after translation** — the owner's second point — was already the design (DPG-33 step 2):
@@ -815,7 +815,7 @@ clauses of huggingface. For translation, we can replace the pseudomyzed items af
 
 **Source:** a parallel analysis the owner ran on the same question, reconciled here rather than left in two
 places disagreeing. Consultant-facing wording is in
-[`00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.3a and
+[`00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.6 and
 [`01_consultant_briefing.md`](../../dpg/01_consultant_briefing.md) §4.
 
 ---

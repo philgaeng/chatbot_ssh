@@ -1,11 +1,15 @@
 # Model benchmarks — what this system actually scores
 
-> **Status (2026-08-20): the closed baseline is complete; the open column is one metric in.** The
-> **closed baseline** — `gpt-5-nano`, the model production runs today — covers all 105 items on both
-> tasks. For the **open** configuration, `openai/gpt-oss-20b` completed **all 105 detection items**
-> and **2 of 105 classification items**: the classification prompt is ~20,700 characters, and 105 of
-> them in a few minutes exceeds the provider's token rate limit (HTTP 402 on 103 items). Every
-> unmeasured cell says `⚠ Not measured` rather than sitting blank.
+> **Status (2026-08-21): the closed baseline is complete and has been re-measured after the prompt
+> and taxonomy change; the open column is still one metric in.** The **closed baseline** —
+> `gpt-5-nano`, the model production runs today — covers all 105 items on both tasks, and §2 carries
+> the **post-change** figures with the pre-change run kept in [§3.7](#37--prompt-reduction--the-road-hazard-categories--measured-before-and-after-2026-08-21).
+> For the **open** configuration, `openai/gpt-oss-20b` completed **all 105 detection items** and
+> **2 of 105 classification items**, because the classification prompt was ~20,700 characters and 105
+> of them in a few minutes exceeded the provider's token rate limit (HTTP 402 on 103 items).
+> ⭐ **That blocker has since been removed** — the prompt is now ~3,277 tokens (§3.7) — so re-running
+> the open column is the next measurement and no longer needs anything but time. Every unmeasured cell
+> says `⚠ Not measured` rather than sitting blank.
 > **Owner:** [DPG-23](../sprints/2026-08-llm/03-open-models-spec.md#dpg-23) · **Set:**
 > [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) · **Harness:**
 > [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)
@@ -40,22 +44,24 @@ docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.
 
 ## 2. The benchmark table
 
-**Baseline:** `gpt-5-nano` (`LLM_BASE_URL=https://api.openai.com/v1`), 105 items, 2026-08-20.
-**Open:** `⚠ Not measured` — D-50.
+**Baseline:** `gpt-5-nano` (`LLM_BASE_URL=https://api.openai.com/v1`), 105 items, **2026-08-21 — after
+the prompt reduction and the six Road Hazard categories** (§3.7). The superseded 2026-08-20 run is kept
+in §3.7 as the before column, because the change is only legible as a pair.
+**Open:** `⚠ Not measured` for classification — see §3.4 and the status note above.
 
 | Metric | Current (closed) — `gpt-5-nano` | Open config | Delta |
 |---|---|---|---|
-| Classification precision *(set-level)* | **0.740** | ⚠ Not measured — 103/105 rate-limited (§3.4) | — |
-| Classification recall *(set-level)* | **0.805** | ⚠ Not measured | — |
-| Category-set **F1** *(multi-label)* | **0.771** | ⚠ Not measured | — |
-| Exact-set accuracy *(every gold label, no invented extras)* | **0.676** | ⚠ Not measured | — |
+| Classification precision *(set-level)* | **0.773** | ⚠ Not measured — 103/105 rate-limited (§3.4) | — |
+| Classification recall *(set-level)* | **0.752** | ⚠ Not measured | — |
+| Category-set **F1** *(multi-label)* | **0.762** | ⚠ Not measured | — |
+| Exact-set accuracy *(every gold label, no invented extras)* | **0.686** | ⚠ Not measured | — |
 | Sensitive-content **recall** | ⚠ **Not measured — no positive scenarios in the committed set** (§5) | ⚠ **Not measured** — same reason, and **it is the number that decides the row below** | — |
 | Sensitive-content **false-alarm rate** | **0.067** *(7 / 105)*, incl. **5 of 8** confusables | **0.000** *(0 / 105)*, incl. **0 of 8** confusables | ⚠ **Uninterpretable without recall — see §3.5** |
 | Field extraction F1 | ⚠ Not measured — the extraction path **has no production caller** (D-37) | ⚠ Not measured | — |
 | Translation quality (chrF++ / human) | ⚠ Not measured | ⚠ Not measured | — |
 | Nepali ASR **WER** | ⚠ **No baseline — voice has never been live** ([Q-13.2](../sprints/2026-08-llm/DECISIONS.md)), and there is no audio set ([followup](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md)) | ⚠ Not measured | n/a |
-| **p95 latency**, classification, vs the 30 s budget | **24.6 s — PASSES** | ⚠ Not measured (n=2) | — |
-| **p99 latency**, classification | **40.6 s — FAILS** (§4) | ⚠ Not measured | — |
+| **p95 latency**, classification, vs the 30 s budget | **20.3 s — PASSES** | ⚠ Not measured (n=2) | — |
+| **p99 latency**, classification | **24.5 s — PASSES** (§3.7; it was 40.6 s and failed before the prompt change) | ⚠ Not measured | — |
 | **p95 latency**, SEAH detection | 8.78 s | **0.49 s** | **≈18× faster** |
 | **Cost / 1,000 grievances** | **11.36 M prompt + 3.36 M completion tokens** (§6) | ⚠ Not measured | — |
 
@@ -148,9 +154,10 @@ short-window token limit, whose message says *"you have depleted your monthly in
 (the wording is misleading; see [the write-up](../sprints/2026-08-llm/followups/hf-router-rate-limit-reads-as-credit-exhaustion.md)).
 The **same run's 105 detection calls all completed**, because the detection prompt is short.
 
-**That contrast is the finding.** The classification prompt is ~20,700 characters *before the
-grievance is added*, because it injects the 24-category catalogue **twice, in two shapes**
-(`LLM_services.py:275-296`). So:
+**That contrast is the finding.** The classification prompt was ~20,700 characters *before the
+grievance was added*, because it injected the catalogue **three times**. ⭐ **Acted on in §3.7** —
+it is now ~3,277 prompt tokens, a 70% cut, while carrying six more categories. Stated in the past
+tense because the measurement above was taken against the old prompt. So, as it stood:
 
 - §6's cost lever is not only about money — **the same duplication is what makes the open path
   hit a rate limit that the detection path sails through**;
@@ -335,7 +342,7 @@ Recall is the metric with a safeguarding consequence, so:
 Tokens are the measurement and they do not drift. Prices do, so they are stated separately with the
 date they were read.
 
-| | Measured, 105 grievances × 2 model calls each |
+| | Measured, 105 grievances × 2 model calls each — ⚠ **pre-§3.7 prompt** |
 |---|---|
 | Calls | 212 |
 | Prompt tokens | 1,192,578 |
@@ -349,11 +356,14 @@ This independently reproduces D-30's 92% at 40× the sample size. **Any cost est
 output length understates this system by roughly 16×**, and any token cap sized for the visible
 answer returns empty content (D-40).
 
-⚠ **Cost scales with the taxonomy, not with the grievance.** The classification prompt injects the
-24-category catalogue **twice, in two shapes** (`LLM_services.py:275-296`) — about 20,700 characters
-before the complaint is added. Adding categories raises the per-grievance cost of every grievance.
-**This is the single most promising cost lever in the system** and it is a prompt change, not a
-model change.
+⚠ **Cost scales with the taxonomy, not with the grievance**, and this measurement predates the change
+that acted on it. When these tokens were metered the classification prompt injected the catalogue
+**three times** — about 20,700 characters before the complaint was added. §3.7 cut that to **~3,277
+prompt tokens** while *adding* six categories, so **the prompt half of the figures above is now roughly
+70% too high** and the run needs re-taking. The token counts are kept rather than deleted because they
+are what the crossover arithmetic in [`vllm-deployment.md`](vllm-deployment.md) was built on, and both
+move together. ⭐ **The lever worked, and it was a prompt change rather than a model change** — which is
+the transferable finding.
 
 **In dollars** — at a rate of `$0.05 / M` prompt and `$0.40 / M` completion, per 1,000 grievances:
 
@@ -374,7 +384,7 @@ crossover between them.
 
 | Row | Why |
 |---|---|
-| **Open-column classification** (precision, recall, F1, exact-set, latency, cost) | The provider's short-window **token** limit: 103 of 105 calls returned 402 because our classification prompt is ~20,700 characters (§3.4). ⚠ **Fixing the prompt's duplicated catalogue is the unblock**, not buying credit — the same run's 105 short detection calls all completed. Failing that, run it in paced batches |
+| **Open-column classification** (precision, recall, F1, exact-set, latency, cost) | ⭐ **The blocker is gone; the measurement is not taken.** 103 of 105 calls returned 402 on the provider's short-window **token** limit because the classification prompt was ~20,700 characters (§3.4). §3.7 cut it to ~3,277 tokens — a **70% reduction** — so the run that could not complete should now fit comfortably. **This is the next measurement in the sprint**, and it needs time rather than a decision |
 | **Open-column SEAH recall** | ⭐ **The single most important missing number in this sprint.** The open model flags **nothing** (§3.5), which is either better calibration or a detector that always says no, and the committed set cannot tell them apart. Needs the owner's held-out positive set |
 | **Every other open cell** | Only one open candidate was benchmarked (`gpt-oss-20b`, the fastest). The other five reachable candidates have **capability** measured ([configuration doc](open-model-configuration.md)) but no accuracy |
 | Sensitive-content **recall** | The committed set has no positives, by decision (§5). Needs the owner's held-out set |

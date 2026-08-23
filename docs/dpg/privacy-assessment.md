@@ -213,7 +213,7 @@ flowchart TB
     end
 
     subgraph X["🌐 Leaves the country"]
-        LLM["Model provider<br/>api.openai.com — 9 call sites"]
+        LLM["Model provider<br/>api.openai.com — 5 live call sites<br/>(+4 parked: the voice flow)"]
         SNS["AWS SNS<br/>ap-southeast-1 (Singapore)"]
         SMTP["SMTP relay<br/>destination depends on config"]
     end
@@ -523,7 +523,7 @@ to give their identity at intake. That is a different thing and the word is corr
    person who never consented.
    **What still gets through:** a name with no title, no recognisable surname and no self-identification
    frame — *"the man operating the roller"*, later named in passing — or an unusual surname the
-   gazetteer does not carry. The ML model (Q-12c / consultant-Q9) raises recall; **it is not the whole
+   gazetteer does not carry. The ML model (Q-12c / consultant-Q13) raises recall; **it is not the whole
    of name redaction, and treating it as such was a scoping error this project has already made once.**
    So the honest claim is *"most names are removed, some get through, and we will publish the measured
    residual"* — not *"names are unaddressed"*, and not *"names are handled"*.
@@ -659,7 +659,7 @@ privacy impact, not a legal characterisation.
 
 | # | Finding | Where | Severity | Owner |
 |---|---|---|---|---|
-| **F-1** | **Grievance narratives, complainant contact details and third-party names are transmitted unredacted to a commercial model provider outside Nepal, on 9 call sites, permanently** | `LLM_services.py` ×6, `llm_client.py` ×3 | 🔴 High | Sprint 3 — DPG-31/33 |
+| **F-1** | **Grievance narratives, officer notes and third-party names are transmitted unredacted to a commercial model provider outside Nepal, permanently.** ⚠ **Five live call sites, not nine** — the count must match [leg L4](#22-the-legs-verified), which established reachability per site rather than counting from the source. Live: classification and SEAH detection on the chatbot surface, and all three ticketing sites. The other four are the **parked voice flow** (ASR, contact extraction ×2, grievance translation) — complete, declared in `PARKED_TASKS`, and they egress the narrative *and* spoken contact details on the day they are unparked. **Complainant contact details do not leave today**: the live contact path is deterministic, no model involved | `LLM_services.py` ×2 live (×4 parked), `llm_client.py` ×3 | 🔴 High | Sprint 3 — DPG-31/33 |
 | **F-2** | **Encryption at rest fails open.** `_encrypt_field` returns the **plaintext value unchanged** when `DB_ENCRYPTION_KEY` is unset *and* when the pgcrypto call raises — the error is logged, the write proceeds. A misconfigured or degraded deployment silently stores complainant PII in the clear, and nothing downstream can tell the difference | `base_manager.py:266-297` | 🔴 High | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** Encryption now fails **closed**: with a key configured, a pgcrypto failure raises `EncryptionUnavailableError` and abandons the write. The keyless dev mode survives but warns once per process instead of never. |
 | **F-3** | **Unsalted SHA-256 of phone, email, name and address** stored as `*_hash` search tokens. Nepal's mobile number space is small enough to enumerate exhaustively in seconds; the hash of a phone number is therefore reversible, so these columns are personal data, not pseudonyms | `base_manager.py:559-573`, used at `complainant_manager.py:121` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** Tokens are `HMAC-SHA256(pepper, value)` — `SEARCH_TOKEN_PEPPER`, falling back to the encryption key — which keeps the equality lookup and removes the reversibility. ⚠ Existing tokens must be re-derived: `scripts/database/rehash_search_tokens.py`. |
 | **F-4** | **Backups are unencrypted by default.** `pg_dump` of the whole database plus a tar of the uploads volume; GPG/passphrase encryption only if an env var is set; off-box destination unspecified in the repo. Contact columns stay ciphertext, but the narrative, all officer notes, and every voice recording and photograph are in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | [`storage-layer-privacy-defects.md`](../sprints/2026-08-llm/followups/storage-layer-privacy-defects.md) · ✅ **FIXED 2026-08-19.** The script now **discards** an unencryptable dump *and* the uploads archive unless `BACKUP_ALLOW_UNENCRYPTED=1` is set deliberately. The uploads tar — voice notes and photographs — is encrypted too, which it never was before. |

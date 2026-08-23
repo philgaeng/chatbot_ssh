@@ -1,68 +1,55 @@
 # DPG compliance status — Nepal GRM platform
 
-> **Purpose.** Briefing document for the discussion with ADB's Digital Public Goods consultant.
-> It states, indicator by indicator, **where this platform already complies**, **where it does not
-> yet**, and **which questions we need the consultant to answer** before we can finish the work or
-> submit.
+> **Purpose.** An indicator-by-indicator self-assessment against the
+> [DPG Standard](https://www.digitalpublicgoods.net/standard), written for ADB's Digital Public Goods
+> consultant. It states where this platform complies, where it does not, and what we need from the
+> consultant before we can finish the work or submit.
 >
-> **Audience:** ADB DPG consultant + project team. **Date:** 2026-08-17.
-> **Status of this document:** self-assessment against the
-> [DPG Standard](https://www.digitalpublicgoods.net/standard) v1.x, written from a direct read of the
-> codebase. Rows marked ⚠ are claims we have **not** yet mechanically verified; they are stated as
-> expectations, not evidence.
+> **Audience:** ADB DPG consultant + project team · **Date:** 2026-08-21 ·
+> **State of the code:** branch `dpg/sprint2-open-models`, merged into `integration/stage`.
 >
-> **Companion documents.** The engineering plan that closes the gaps below is already written and
-> costed: [`docs/sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md) — 27 tickets across four
-> sub-sprints. This document is the *external* view; that folder is the *internal* one.
+> **Companion documents.** The full evidence pack lives beside this file:
+> [`privacy-assessment.md`](privacy-assessment.md) (13 data-flow legs, 17 findings),
+> [`dependency-licenses.md`](dependency-licenses.md) (153 packages, generated),
+> [`open-model-configuration.md`](open-model-configuration.md) (how to run this system on open
+> weights), [`model-benchmarks.md`](model-benchmarks.md) (what the models actually score), and
+> [`vllm-deployment.md`](vllm-deployment.md) (self-hosting, designed and costed). The engineering
+> plan behind them is [`docs/sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md) — 31 tickets
+> across four sub-sprints, of which Sprints 0, 1 and 2 have landed.
 >
-> **Reconciled both ways, 2026-08-17.** This document was written later than the specs and from a fresh
-> read of the code, so it found things they missed — **container-image licences** (the fourth dependency set,
-> and the one where drift actually happened), **project hygiene**, and the **stale root README**. Those are
-> now sprint tickets DPG-02 (extended), **DPG-05** and **DPG-06**. It also asserted four things the specs had
-> right, now corrected here: `.env.example` **does** exist (§3.3), there are **nine** model calls not eight
-> (§4.1), and the ticket count is 27 not 22. Where a fact is disputed, neither document wins by seniority —
-> **both cite the code.**
->
-> **Owner decisions taken 2026-08-17** — after this document was drafted, and three of them change what it
-> says. **(a) T2 is parked** for want of a funded operator, so §4.5's ladder no longer has a production
-> target and the third-party exposure in §4.3 is **permanent, not transitional**. **(b) Production will run
-> the open configuration** on cost grounds — *stronger* than indicator 4 requires. **(c) There is no LLM
-> budget**, which is why voice transcription is not live and why the benchmark and CI evidence in §4.6 need
-> a metered inference line to exist at all. All twenty questions are answered in
-> [`QUESTIONS.md`](../sprints/2026-08-llm/QUESTIONS.md), now a decision register.
->
-> **⚠ Note on question numbers.** §5's **Q1…Q14** are for the DPG consultant. The sprint folder's
-> [`QUESTIONS.md`](../sprints/2026-08-llm/QUESTIONS.md) uses **Q-01…Q-18, hyphenated**, for the project
-> owner. The numbers overlap and mean different things; the specs cite these as "consultant-Q*n*".
+> **A summary of this document, written to be read before a meeting**, is
+> [`01_consultant_briefing.md`](01_consultant_briefing.md).
 
 ---
 
 ## How to read this
 
-We have deliberately **not** written this as a compliance pitch. Two of the nine indicators have real
-gaps, one of them cannot be closed by anyone on the engineering team, and the AI-specific reading of
-indicator 4 is the substance of the meeting. The honest version is more useful to us than the
-flattering one.
+This is not a compliance pitch. Two of the nine indicators have real gaps, one of them cannot be
+closed by anyone on the engineering team, and the AI-specific reading of indicator 4 is the substance
+of the meeting. The honest version is more useful to us than the flattering one.
 
 **The short version:**
 
-- **The code and its dependency tree are in good shape.** Everything we build on is open source, and
-  the runtime stack has no proprietary components at all — no closed database, no closed identity
-  provider, no closed framework, no vendored SDK we could not replace. We can serve indicator 2 with a
-  dependency scan and very little argument.
-- **The AI layer is our one genuine closed dependency**, and it is the one the DPG Standard scrutinises
-  hardest for AI systems. Today all **nine** of our model calls go to OpenAI, with the model names
-  hard-coded in Python. That is an indicator-4 problem and, because grievance narratives are the
-  payload, an indicator-7 problem as well.
-- **Two items need people, not code:** the IP-ownership determination (indicator 3) and the privacy
-  assessment against Nepal's Individual Privacy Act 2018 (indicator 7).
-- **Two decisions taken 2026-08-17 that change what we are asking you.** **(a) Self-hosted inference (T2)
-  is parked** — no owner for the run costs, and we will not start a system nobody funds. A hosted
-  open-weights provider is therefore the **steady state**, so grievance text crosses a border
-  indefinitely rather than during a transition, and redaction becomes the only control on it.
-  **(b) Production will run the open configuration**, on cost grounds. That is *more* than indicator 4
-  asks for. **What we now need instead of a GPU budget is a small metered inference budget** — see Q15,
-  and it is the only ask on this list that blocks work rather than paperwork.
+- **The code and its dependency tree are in good shape.** There is no proprietary component anywhere
+  in the runtime stack — no closed database, no closed identity provider, no closed framework, no
+  vendored SDK we could not replace. A generated audit over 153 packages in four dependency sets
+  returns **zero** unknown and **zero** non-OSI licences.
+- **The AI layer was our one genuine closed dependency, and the mechanism that removes it is now
+  built and running.** Every model this system calls is a configuration value: nine call sites across
+  two independent subsystems resolve through one registry, and the product's own code paths have been
+  executed live against an open-weights provider. **What is not done is the *choice*** — the
+  comparative benchmark that would let us name an open model is unfinished, so the repository default
+  is still the proprietary configuration. §4 is entirely about this, clause by clause.
+- **Two items need people, not code:** the IP-ownership determination (indicator 3) and a legal review
+  of the privacy assessment (indicator 7).
+- **Grievance text still leaves Nepal unredacted on every model call**, and because self-hosted
+  inference is parked for want of a funded operator, that egress is **permanent rather than
+  transitional**. Redaction — Sprint 3, not yet started — is therefore the only remaining control
+  rather than a defence in depth.
+- **Nothing real has been processed yet.** Every grievance record in every environment is AI-generated
+  seed data or a dummy complaint filed during a demo. That makes every exposure below **prospective**,
+  and it puts the redaction work in the window where it is a go-live precondition rather than a
+  remediation.
 
 ---
 
@@ -71,21 +58,21 @@ flattering one.
 | # | Indicator | Status | What is missing |
 |---|---|---|---|
 | 1 | Relevance to SDGs | ✅ **Compliant** | Needs writing up, not building. SDG 16.6 / 16.10, SDG 9.1 |
-| 2 | Use of approved open licence | 🟠 **Gap — trivial, now waiting on us both** | The repo is **public with no `LICENSE` file**. Dependency tree is clean; the Redis drift is fixed (§3.1b), `psycopg2-binary` is the only flag. ⚠ **We need two answers before the file can land:** which licence (yours — Apache-2.0 recommended) and which copyright holder (ADB OGC, Q1) |
-| 3 | Clear ownership | 🔴 **Blocked — external** | Written IP determination from ADB. **Nobody on the project can resolve this** |
-| 4 | Platform independence | 🔴 **Gap — the main work** | Model provider is hard-coded in **9 call sites across 2 subsystems, in 4 files**. §4 is entirely about this |
-| 5 | Documentation | ✅ **Compliant, strong** | A ~200-file spec tree, Docker runbook, OpenAPI on both APIs. Deployability warts (§3.3) — the root `README.md` still advertises a Rasa service that does not exist, which works against §2.2. Sprint ticket **DPG-06** |
-| 6 | Mechanism for data extraction | ✅ **Compliant** | PostgreSQL, documented schema in 3 migration streams, XLSX + PDF exports, REST APIs |
-| 7 | Privacy & applicable laws | 🟠 **Partial** | Encryption and access control are built. **Missing:** legal assessment, data-flow diagram, and free-text PII leaves the country on every model call — ⚠ and with T2 parked that egress is now **permanent, not transitional** (§4.5) |
-| 8 | Standards & best practices | ✅ **Compliant** *(2026-08-18)* | OpenAPI, OIDC/Keycloak, Alembic-migrated schema — **and the project hygiene files now exist**: `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `.github/ISSUE_TEMPLATE/` + PR template (DPG-05). Governance model + release/versioning deliberately deferred pending **Q10** ([followup](../sprints/2026-08-llm/followups/governance-and-versioning-policy.md)) |
-| 9 | Do no harm by design | 🟢 **Mostly compliant** | RBAC, audit log, SEAH isolation, anonymous intake are built. Retention/breach policy and third-party-PII redaction outstanding |
+| 2 | Use of an approved open licence | 🟢 **Closed, provisionally** | `LICENSE` (Apache-2.0), `NOTICE`, an SPDX header on **593 source files** maintained by a script and pinned by a test, and a **generated** audit over 153 packages. Two things stay provisional: the **licence text** is delegated to the consultant (**Q4**), and the **copyright holder** is blank pending indicator 3 — `NOTICE` says so rather than guessing |
+| 3 | Clear ownership | 🔴 **Blocked — external** | A written IP determination from ADB. **Nobody on this project can resolve it.** It is the only thing standing between us and a complete licensing story |
+| 4 | Platform independence | 🟡 **Mechanism built and executing; the model choice is not made** | Every model is a configuration value across both LLM surfaces, proven by tests and by a live CI job. **But** the repository default is still proprietary, no open model has been selected, and the open configuration cannot transcribe audio at all. §4 states this clause by clause |
+| 5 | Documentation | ✅ **Compliant, strong** | A 365-file spec tree, a Docker runbook covering 13 services, OpenAPI on both APIs, and a portable engineering starter kit another country team could reuse |
+| 6 | Mechanism for data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema in three independent migration streams, XLSX + PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
+| 7 | Privacy & applicable laws | 🟠 **Partial** | The assessment and the data-flow diagram exist and three storage-layer defects they found are fixed. **Outstanding:** unredacted egress to a third-party model provider, no deletion capability anywhere, no breach procedure, and no legal review of the assessment (**Q15**) |
+| 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE via self-hosted Keycloak, Alembic-migrated schema, architectural invariants pinned by tests, and the project-hygiene set at the repo root. Governance model and a release/versioning policy are deliberately deferred pending **Q17** |
+| 9 | Do no harm by design | 🟢 **Mostly compliant** | Access control, audit log, SEAH isolation and anonymous intake are built, and content detection has two independent paths. **Outstanding:** retention/breach policy, third-party-PII redaction, and a measured SEAH detector |
 
-**Two blockers, one of them ours:** indicator 3 is a signature we have to ask for; indicator 4 is
-engineering we have already specced.
+**Two blockers, one of them ours.** Indicator 3 is a signature we have to ask for. Indicator 4 is
+engineering that is mostly done and whose last step is a measurement, not a refactor.
 
 ---
 
-## 2. Where we already comply
+## 2. Where the platform already complies
 
 ### 2.1 Indicator 1 — Relevance to SDGs ✅
 
@@ -98,170 +85,135 @@ service-level deadlines and an escalation ladder up to a Grievance Redress Commi
 - **SDG 16.10** — public access to information
 - **SDG 9.1** — sustainable infrastructure with attention to affected populations
 
-It also implements ADB's own Accountability Mechanism expectations, and a dedicated, access-isolated
-SEAH (sexual exploitation, abuse and harassment) intake stream. **This indicator needs a page of
-writing, not a change to the product.**
+It also implements ADB's own Accountability Mechanism expectations, and carries a dedicated,
+access-isolated SEAH (sexual exploitation, abuse and harassment) intake stream. **This indicator needs
+a page of writing, not a change to the product.**
 
-### 2.2 Indicator 2 — Open licensing: the dependency tree ✅ (the licence file itself is §3.1)
+### 2.2 Indicator 2 — Open licensing 🟢
 
-This is our strongest card and the reason we think DPG qualification is realistic. **There is no
-proprietary component anywhere in the runtime stack.** Every layer is a permissively-licensed open
-source project that a third party could self-host without a commercial relationship with anyone.
+**(a) The repository's own licence.** `LICENSE` is Apache-2.0, chosen over MIT for its express patent
+grant, which matters when a government adopts the code and other country teams fork it. `NOTICE` sits
+beside it and **names no copyright holder**, carrying an explicit `⚠ PENDING IP DETERMINATION` marker
+instead of a guess — see indicator 3. **593 in-scope source files carry an SPDX header**, applied by a
+committed, idempotent script (`scripts/ops/add_spdx_headers.py`) and held in place by a test that
+imports the script's own scope definition rather than restating it, so coverage cannot decay the first
+week someone adds a module.
 
-| Layer | What we use | Licence |
+Two things about this are provisional and we would rather say so:
+
+- **The licence text is delegated to you (Q4).** We had treated Apache-2.0 as decided; the project
+  owner has referred the choice to the consultant. Since indicator 2 fails outright with *no* licence,
+  **if you have no objection to Apache-2.0, saying so is the cheapest unblock on this list.**
+- **The copyright holder is blocked on indicator 3**, and will stay blank until ADB rules.
+
+**(b) The dependency tree.** This is our strongest card. **There is no proprietary component anywhere
+in the runtime stack** — every layer is a permissively-licensed open source project that a third party
+could self-host with no commercial relationship with anyone.
+
+| Layer | What it is | Licence |
 |---|---|---|
 | Web frameworks | FastAPI, Uvicorn, Starlette, Pydantic v2 | MIT / BSD-3-Clause |
-| Database | **PostgreSQL 15** | PostgreSQL Licence (OSI) |
-| ORM & migrations | SQLAlchemy 2, Alembic (3 independent streams) | MIT |
+| Database | PostgreSQL 15 | PostgreSQL Licence (OSI) |
+| ORM & migrations | SQLAlchemy 2, Alembic (three independent streams) | MIT |
 | Task queue | Celery 5.5, Flower | BSD-3-Clause |
-| Cache / broker | **Redis 8.10** (pinned minor) | **AGPLv3** at our election — Redis 8 is tri-licensed RSALv2 / SSPLv1 / AGPLv3; only AGPLv3 is OSI-approved. See §3.1(b) |
-| Identity | **Keycloak 26** (OIDC + PKCE, self-hosted) | Apache-2.0 |
+| Cache / broker | Redis 8.10 (minor pinned) | **AGPLv3 at our election** — Redis 8 is tri-licensed RSALv2 / SSPLv1 / AGPLv3; only AGPLv3 is OSI-approved. See §3.2 |
+| Identity | Keycloak 26, self-hosted (OIDC + PKCE) | Apache-2.0 |
 | Reverse proxy | nginx stable | BSD-2-Clause |
 | Officer frontend | Next.js 16, React 19, Tailwind v4, lucide-react | MIT / ISC |
 | Reports & documents | openpyxl (XLSX), ReportLab (PDF) | MIT / BSD-3-Clause |
 | Images | pyvips / libvips | MIT / LGPL-2.1 (separate process, dynamic link) |
-| Chatbot state machine | Hand-rolled; `rasa-sdk` used only for `Tracker`/`CollectingDispatcher` types | Apache-2.0 |
+| Chatbot state machine | This project's own code; `rasa-sdk` survives only as a type shim | Apache-2.0 |
 | Container orchestration | Docker Compose | Apache-2.0 |
 
-Points worth making to a reviewer:
+**The audit is generated, not asserted.** [`dependency-licenses.md`](dependency-licenses.md) was
+produced **inside the running containers**, against the resolved trees, and the ops container re-runs
+the scan nightly so it cannot go stale:
 
-- **Identity is self-hosted, not federated to a vendor.** An earlier plan used AWS Cognito; we
-  migrated to Keycloak during the build. That decision was made on other grounds but it removes what
-  would have been a hard indicator-4 dependency at the authentication layer.
-- **There is no Rasa server and no TensorFlow.** The conversational state machine is our own code.
-  `rasa-sdk` (Apache-2.0) survives only as a type shim. An earlier assessment flagged Rasa's licence
-  as a major risk; it is a non-issue.
-- **The only ML dependency in the entire tree is the `openai` SDK** (Apache-2.0 — the *client* is open;
-  the *service* it calls is not). See §4.
-- **Full inventory in Appendix A.**
+| Set | Packages | Non-OSI | Unknown |
+|---|---|---|---|
+| Python — declared in the two manifests | 35 | 0 | 0 |
+| Python — transitive | 98 | 0 | 0 |
+| npm — production tree | 16 | 0 | 0 |
+| Container images | 4 | 0 | 0 |
+| **Total** | **153** | **0** | **0** |
 
-⚠ **Not yet mechanically verified.** The licences above are stated from the manifests and our
-knowledge of the packages. The deliverable is a generated `pip-licenses` + `license-checker` report
-committed as `docs/dpg/dependency-licenses.md`, wired into the existing scheduled `ops/security.py`
-scan so it cannot go stale. That is one day of work (sprint ticket DPG-02) and we would rather show
-the consultant the machine output than our assertion.
+Reading the manifests instead would have missed 98 of the 133 Python packages, and with them the
+three copyleft findings in §3.2 — **none of which is anyone's declared dependency.** A licence
+obligation does not care how a package arrived.
+
+Two points a reviewer usually asks about:
+
+- **Identity is self-hosted, not federated to a vendor.** An earlier plan used AWS Cognito; the build
+  moved to Keycloak. That decision was made on other grounds, but it removes what would have been a
+  hard indicator-4 dependency at the authentication layer
+  ([`16_auth_keycloak.md`](../deployment/16_auth_keycloak.md)).
+- **There is no Rasa server and no TensorFlow.** The conversational state machine is this project's
+  own code; `rasa-sdk` (Apache-2.0) is installed only for its `Tracker` / `CollectingDispatcher`
+  types. An earlier assessment flagged Rasa's licence as a week-one emergency; resolved mechanically
+  from the resolved tree, it is a non-issue.
 
 ### 2.3 Indicator 5 — Documentation ✅
 
-- `docs/` — a structured spec tree with per-domain indices ([`docs/README.md`](../README.md)):
-  deployment runbooks, service contracts, ticketing product specs, chatbot architecture, SEAH privacy
-  model, plus an [`engineering/`](../engineering/00_engineering_index.md) set that documents *how* the
-  system is built (database rules, service-layer patterns, API conventions, testing pyramid,
-  documentation lifecycle).
-- **A portable starter kit** ([`docs/_starter_kit/`](../_starter_kit/README.md)) — the engineering
-  standards, design system and copy guide stripped of anything project-specific, so another country
-  team can reuse the method, not just the code. This is unusually good evidence for indicator 5 and
-  we should point at it explicitly.
-- `docs/deployment/DOCKER.md` — full build / migrate / seed / debug runbook. The whole stack (11
-  services) comes up with Compose.
-- **OpenAPI** served by both FastAPI apps (`/docs` on the ticketing API).
-- **CI** with four gates: backend tests against real Postgres and Redis with all three migration
-  streams applied, UI type-check + lint + unit + build, webchat tests, and a documentation link
-  checker.
+- **`docs/`** — a 365-file structured spec tree with per-domain indices
+  ([`docs/README.md`](../README.md)): deployment runbooks, service contracts, ticketing product specs,
+  chatbot architecture, the SEAH privacy model, and an
+  [`engineering/`](../engineering/00_engineering_index.md) set documenting *how* the system is built
+  (database rules, service-layer patterns, API conventions, testing pyramid, documentation lifecycle).
+- **A portable starter kit** ([`docs/_starter_kit/`](../_starter_kit/README.md)) — those engineering
+  standards, the design system and the copy guide, stripped of anything project-specific, so another
+  country team can reuse the method rather than only the code. This is unusually good indicator-5
+  evidence and we would point at it explicitly.
+- **[`DOCKER.md`](../deployment/DOCKER.md)** — a full build / migrate / seed / debug runbook. The
+  whole stack comes up with Compose; the service table is **13 services, verified against
+  `docker compose config --services`** rather than remembered.
+- **OpenAPI** served by both FastAPI applications.
+- **CI with five gates**: backend tests against real Postgres and Redis with all three migration
+  streams applied; UI type-check, lint, unit and build; webchat tests; a documentation link checker;
+  and the platform-independence job described in §4.5.
 
 ### 2.4 Indicator 6 — Data extraction ✅
 
-- **All data in PostgreSQL**, no proprietary store. Schema is explicit and version-controlled through
-  three separately-owned Alembic streams (`public.*` chatbot, `ticketing.*`, `ops.*`).
-- **Non-proprietary exports already built:** quarterly XLSX reports (`ticketing/services/quarterly_report.py`,
-  `report_export.py`), complainant case-closure PDFs (`closure_pdf.py`), and REST APIs over the whole
-  domain.
-- **No lock-in on file storage** — attachments are on the filesystem with a documented archive-tiering
-  policy ([`docs/ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md)), not in a vendor bucket
-  with a proprietary layout.
-- `pg_dump` produces a complete, portable extract. Nothing about the data model requires our code to
-  read it.
+- **All data in PostgreSQL**, no proprietary store. The schema is explicit and version-controlled
+  through three separately-owned Alembic streams (`public.*` chatbot, `ticketing.*`, `ops.*`), which
+  never share ownership of a table.
+- **Non-proprietary exports already built:** quarterly XLSX reports, complainant case-closure PDFs,
+  and REST APIs over the whole domain.
+- **No lock-in on file storage** — attachments sit on the filesystem under a documented archive-tiering
+  policy ([`ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md)), not in a vendor bucket with a
+  proprietary layout.
+- `pg_dump` produces a complete, portable extract. Nothing about the data model requires this codebase
+  to read it.
 
-### 2.5 Indicator 8 — Standards & best practices 🟢
+### 2.5 Indicator 8 — Standards & best practices ✅
 
-- **OpenAPI** for both HTTP surfaces.
-- **OpenID Connect with PKCE** via Keycloak; JWT verification against JWKS.
+- **OpenAPI** for both HTTP surfaces; **OpenID Connect with PKCE** via Keycloak, with JWT verification
+  against JWKS.
 - **UTC timestamps** with timezone throughout; UUID4 primary keys; Bikram Sambat dates presented in
   the UI where users expect them.
-- **Documented architectural invariants pinned by tests** — e.g. the boundary policy that stops
-  complainant PII being copied into the ticketing schema is enforced by a test that parses the
-  architecture document and fails when code and document disagree
-  (`tests/ticketing/test_boundary_policy.py`, `test_pii_boundary.py`). We think this is worth showing;
-  it is the sort of thing that makes a "do no harm" claim checkable rather than aspirational.
-- Missing: the open-source project hygiene files — see §3.4.
-
-### 2.6 Indicator 9 — Do no harm 🟢
-
-| Requirement | What is built |
-|---|---|
-| **9a — Data privacy & security** | PII encrypted at rest with pgcrypto, decrypted only server-side at a single boundary; the ticketing subsystem holds **no** encryption key and has no accessor for one (pinned by test); TLS in transit; Keycloak-authenticated officer access with a jurisdiction gate |
-| **9b — Inappropriate content** | **Two independent detection paths, not one** — corrected 2026-08-17 after verifying the code. (i) A **deterministic, scored keyword detector** (`backend/shared_functions/keyword_detector.py:259`, scoring at `:343`) runs **synchronously as slot validation inside the conversation**, with no LLM involved; (ii) `detect_sensitive_content_llm` runs asynchronously on Celery as a second pass. So a model outage **degrades the second pass rather than removing detection** — which is also why the LLM leg's fail-open default is acceptable rather than a gap. An earlier draft credited only the LLM path and **understated this control** |
-| **9c — Protection from harassment** | Anonymous grievance submission is supported end-to-end; the **SEAH workflow is access-isolated** — configurable by administrators who cannot themselves read the cases; four-tier admin ladder with scoped permissions; full `admin_audit_log` + per-ticket event timeline |
-
-Outstanding for indicator 9: a written **retention and deletion policy** and a **breach procedure**
-(both are documentation, gated on the privacy assessment), and **redaction of third-party PII before
-model calls** (§4.3).
+- **Architectural invariants pinned by tests.** The boundary policy that stops complainant PII being
+  copied into the ticketing schema is enforced by a test that *parses the architecture document* and
+  fails when code and document disagree (`tests/ticketing/test_boundary_policy.py`,
+  `test_pii_boundary.py`). We think this is worth showing: it makes a "do no harm" claim checkable
+  rather than aspirational. The same pattern now guards the LLM registry, the SPDX coverage, the CI
+  job's own properties, and every `file.py:line` citation in this evidence pack.
+- **Project hygiene at the repo root:** `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
+  `.github/ISSUE_TEMPLATE/` with blank issues disabled and a security redirect, and a PR template.
+  **`SECURITY.md` is the one that is not boilerplate here.** This platform holds SEAH disclosures, so a
+  disclosure route that tells a finder to open a public GitHub issue is the wrong answer: it names a
+  private channel, a recipient, a response window, and an explicit scope boundary — the platform is in
+  scope, the grievances are not.
+- **Secrets are encrypted at rest in the repository.** SOPS with `age` recipients encrypts
+  `secrets.enc.env`; the non-secret half stays plaintext and diffable in `.env.shared`; and `env.local`
+  is a generated artefact (`make env-local`) rather than a file each developer maintains by hand.
+- **Deliberately deferred:** a governance model and a release/versioning policy. Both describe
+  commitments nobody has agreed to, on a project whose IP ownership is formally open, so they wait on
+  **Q17** ([followup](../sprints/2026-08-llm/followups/governance-and-versioning-policy.md)).
 
 ---
 
 ## 3. Gaps we know how to close ourselves
 
-### 3.1 The licence file, and two dependency flags 🟠 (one now closed)
-
-> ⚠ **And we would now like the licence choice itself confirmed by you (2026-08-17).** We had treated
-> Apache-2.0 as decided; the project owner has referred the choice to you. So `LICENSE` is currently blocked on
-> **two** external answers — which licence text (you) and which copyright holder (ADB OGC, Q1). Given that
-> indicator 2 fails outright with **no** licence at all, **if you have no objection to Apache-2.0, saying so
-> is the single cheapest unblock available on this list.**
-
-**(a) The repository is public and has no `LICENSE` file.** Under default copyright that means
-"all rights reserved" — visible source, no grant of rights. This is the single cheapest and most
-urgent fix on the list, and it is arguably worse than a private repo because it invites use it does
-not permit. Planned: **Apache-2.0** (chosen over MIT for its express patent grant, which matters when
-a government adopts the code and other country teams fork it), plus `NOTICE` and SPDX headers.
-**Blocked on indicator 3** — we cannot name a copyright holder until ownership is determined.
-
-**(b) ✅ `redis:7` was a floating tag onto a non-OSI licence. Fixed — now pinned `redis:8.10`.**
-Redis 7.2 and earlier are BSD-3-Clause; **Redis 7.4 and later are RSALv2 / SSPLv1, neither of which is
-OSI-approved**, and our `docker-compose.yml` pinned only the major, so the tag silently followed
-upstream onto that line. Nobody edited the file — the tag moved underneath it. We surfaced this while
-writing this document; it was not in our sprint plan.
-
-**Redis 8 is tri-licensed — RSALv2 *or* SSPLv1 *or* AGPLv3 — and the licensee elects.** We elect
-**AGPLv3, the one OSI-approved option of the three**, and that is what answers indicator 2. Worth
-stating explicitly, because a reviewer who remembers the 2024 relicensing may see "Redis 8" and assume
-the source-available terms still apply.
-
-The fix is cheap, and it is worth showing why rather than asserting it. We audited what we actually
-ask Redis to do: `PING`, `INFO memory`, `LLEN`, `GET`, `SET … EX`, one redis-py mutex, and pub/sub for
-Socket.IO and the Celery broker. **No modules** (JSON, Search, TimeSeries, Bloom), no Streams, no
-cluster mode — and **no persistence volume is declared**, so the broker and cache are entirely
-ephemeral. Redis is a network service behind a process boundary: we neither link it nor modify it, and
-there is no stored dataset to migrate.
-
-⭐ **Done: `redis:8.10` in both `docker-compose.yml` and the CI service definition.** Redis 8 needs no
-renaming, no runbook churn and no operational retraining — the binaries are still `redis-server` /
-`redis-cli` — and it keeps the Docker Official Image provenance chain, which matters for a deployment
-on Government of Nepal infrastructure. AGPLv3 imposes nothing on this repository's own licensing, or on
-a downstream fork's: we run an unmodified upstream image as a separate service and convey no Redis
-source. The image is ~55 MB compressed, so the bundled Redis 8 data structures cost no meaningful host
-capacity.
-
-**We pinned the minor (`8.10`), not `redis:8`,** because the *shape* of this finding was a floating tag,
-not Redis specifically: a two-segment pin still receives patches, but a future relicence becomes
-something we opt into rather than something that arrives on the next `docker pull`. Redis ships minors
-quickly and 8.10 drops to security-only maintenance when the next one lands; if the agency later wants
-a longer stable window over current features, **Redis 8.2 carries security support to September 2030**
-and is the same licence election. Either is defensible; the floating tag was not.
-
-**If AGPL is flagged, the fallback is Valkey** (BSD-3-Clause, the Linux Foundation fork,
-protocol-compatible with the 7.2 line our command set comes from). That cost is small but real: four
-call sites hardcode `redis-server` / `redis-cli` (the Compose command and its healthcheck, the CI
-service healthcheck, and `scripts/ops/host_watchdog.sh`), roughly ten runbook references would need
-updating, and `valkey/valkey` is community-published rather than a Docker Official Image. We would
-rather not pay that speculatively. **Ruled out:** pinning `redis:7.2` — BSD-3-Clause, but an
-end-of-life line we would have to revisit anyway. See **Q7**.
-
-**(c) `psycopg2-binary` is LGPL-3.0-with-exceptions.** Copyleft, but library-level with a linking
-exception and standard practice across the Python ecosystem. We do not expect this to be an issue; we
-raise it so the consultant can tell us if the DPGA reads it differently (Q7).
-
-### 3.2 Indicator 3 — Ownership 🔴 **the hard blocker**
+### 3.1 Indicator 3 — Ownership 🔴 **the hard blocker**
 
 Indicator 3 is categorical: a DPG must have clear, documented ownership. Parts of this platform were
 developed in the context of an ADB-financed engagement. **If the IP vests in ADB, or is jointly held,
@@ -269,90 +221,172 @@ it may not be ours to license.** No amount of engineering resolves this — it n
 determination from ADB's Office of the General Counsel, and it has the longest lead time of anything
 on this list.
 
-It blocks: the `LICENSE` file's copyright holder, the `NOTICE` file, and the submission itself. It
-blocks **no code work**, which is why we are proceeding with the engineering in parallel.
+It blocks: the copyright holder in `LICENSE` and `NOTICE`, the formal identification of the data
+controller in the privacy assessment, and the submission itself. It blocks **no code work**, which is
+why the engineering has proceeded in parallel.
 
-**This is the single most valuable thing the consultant can help us with** — see Q1–Q3.
+⚠ **One process note we would rather flag than have discovered.** The project owner has written to the
+DPG consultant about this. **That is not the ADB OGC channel an IP determination requires**, and we do
+not know who opens that channel. **This is the single most valuable thing the consultant can help us
+with** — Q1 to Q3.
 
-### 3.3 Indicator 5 — Deployability warts 🟡
+### 3.2 Three dependency-licence readings we would like confirmed 🟡
 
-Documentation is strong; *reproducibility by a stranger* has rough edges we should fix before a
-reviewer clones the repo:
+Ten packages across the four sets carry conditions beyond simple attribution; all ten are dispositioned
+in [`dependency-licenses.md`](dependency-licenses.md). Three are worth the consultant's eye (**Q10**):
 
-- ~~`backend/services/LLM_services.py` calls `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` — a
-  hard-coded absolute path from the original AWS host.~~ ✅ **Deleted 2026-08-18 (DPG-11).** It was
-  harmless in Docker but read as machine-specific to anyone evaluating portability, which for an
-  indicator-4 reviewer is the point. Configuration now arrives through compose `env_file:` only.
-- **Correction (2026-08-17):** an earlier draft of this section said *"No `.env.example`"*. **It exists**
-  — 5,982 bytes, tracked, with `OPENAI_API_KEY=` at `:61`. The real gap is narrower and still worth fixing:
-  it documents the **key** and nothing about the endpoint or the model names, so a stranger cannot tell from
-  it that the provider is configurable — because today it is not. DPG-16 replaces that single line with the
-  full configuration surface.
-- The root `README.md` is stale in a way that **works against §2.2 of this document**: it names
-  `feature/grm-ticketing` as the active branch, describes intake as "Rasa + FastAPI" (`:6`), and carries a
-  **service-table row for "Rasa | Rasa 3 | 5005 | NLU + dialogue"** plus an Action Server on 5055 (`:46-47`),
-  with `rasa_chatbot/` in the folder tree (`:76`). We argue below that there is no Rasa server; the repo's
-  front page says there is one, with a port number. A reviewer who notices that stops trusting the licence
-  section. Now sprint ticket **DPG-06**, and it should land before the consultant meeting.
+**(a) Redis 8.10, taken under AGPLv3.** Redis 7.2 and earlier are BSD-3-Clause; **Redis 7.4 and later
+are RSALv2 / SSPLv1**, neither OSI-approved. Our compose file pinned `redis:7` — the major only — so
+the tag silently followed upstream onto that line. **Nobody edited the file; the licence moved
+underneath it.** Redis 8 is tri-licensed RSALv2 *or* SSPLv1 *or* **AGPLv3**, and the licensee elects.
+We elect AGPLv3, the one OSI-approved option, and that is what answers indicator 2.
 
-### 3.4 Indicator 8 — Open-source project hygiene 🟡
+The election is defensible on what we actually ask Redis to do: `PING`, `INFO memory`, `LLEN`, `GET`,
+`SET … EX`, one redis-py mutex, and pub/sub for Socket.IO and the Celery broker. **No modules, no
+Streams, no cluster mode, and no persistence volume is declared** — the broker and cache are entirely
+ephemeral. We run an unmodified upstream image as a separate network service and convey no Redis
+source, so AGPLv3 imposes nothing on this repository's licensing or on a downstream fork's.
 
-Absent — verified at the repo root: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md` (vulnerability
-disclosure), `.github/ISSUE_TEMPLATE/`, PR template, public roadmap. All cheap, and now sprint ticket
-**DPG-05** (added 2026-08-17 — no ticket covered this before the audit).
+We pinned the **minor** (`8.10`), not `redis:8`, because the *shape* of the finding was a floating tag
+rather than Redis specifically: a two-segment pin still receives patches, but a future relicence
+becomes something we opt into rather than something that arrives on the next `docker pull`. **The
+dependency audit now carries a pin-drift check** for the same reason.
 
-**`SECURITY.md` is the one that is not boilerplate here.** This platform holds SEAH disclosures, so a
-disclosure route that tells a finder to open a public GitHub issue is the wrong answer: it needs a private
-channel, a named recipient, a response window, and an explicit scope boundary (the platform is in scope;
-the grievances are not — a researcher must not go fishing in production data). **Q10** asks which of the
-rest the DPGA actually requires versus merely likes; we plan to ship the cheap uncontroversial set now and
-defer the governance model and a release/versioning policy until you answer, since those carry real process
-commitments.
+**If AGPL is flagged, the costed fallback is Valkey** (BSD-3-Clause, the Linux Foundation fork,
+protocol-compatible with the 7.2 line our command set comes from). The cost is small but real: four
+call sites hardcode `redis-server` / `redis-cli`, roughly ten runbook references would change, and
+`valkey/valkey` is community-published rather than a Docker Official Image. We would rather not pay
+that speculatively.
 
-### 3.5 Indicator 7 — Privacy 🟠
+**(b) `psycopg2-binary` — LGPL-3.0 with a linking exception.** Copyleft, but library-level with an
+exception that exists for exactly this use, and standard across the Python ecosystem. We do not expect
+an issue; we raise it in case the DPGA reads it differently.
 
-> ✅ **UPDATED 2026-08-18 — the assessment and the diagram now exist**:
-> [`privacy-assessment.md`](privacy-assessment.md) (DPG-04). Thirteen data-flow legs verified at file
-> and line, an Individual Privacy Act 2018 assessment, and a **17-item findings register**.
-> ⚠ It carries a mandatory honesty marker — drafted by an AI agent, **no legal review** — and three of
-> its findings were **previously unknown**: encryption at rest **fails open** when `DB_ENCRYPTION_KEY`
-> is unset or pgcrypto raises; the `*_hash` search tokens are **unsalted SHA-256** of phone/email/name/
-> address, so the phone hash is reversible and those columns are personal data rather than pseudonyms;
-> and backups are **unencrypted by default**. **This indicator stays 🟠, not 🟢** — the document is
-> written, the gaps it names are not closed.
+**(c) Two transitive LGPL dependencies no manifest would have shown.** `jwcrypto` (LGPL-3.0-or-later)
+arrives through the Keycloak JWT path, and `@img/sharp-libvips-linux*-x64` (LGPL-3.0-or-later) arrives
+through Next.js image optimisation. Both are unmodified, dynamically loaded, and used as the LGPL's own
+terms contemplate. **Neither is anyone's declared dependency** — which is the clearest single argument
+for the generated audit existing.
 
-> ⭐ **And the timing, confirmed by the owner 2026-08-18: no genuine grievance has been processed yet.**
-> Every record in every environment is AI-generated seed data or a dummy complaint filed during a demo.
-> So every exposure below is **prospective, not realised** — no real complainant's words have reached a
-> model provider and no real third party has been named to one. **That makes the Sprint 3 redaction work
-> a go-live precondition rather than remediation**, and it puts these findings in the window where they
-> are ordinary engineering tasks rather than a breach notification. ⚠ Two caveats: a demo participant may
-> have entered their **own** genuine contact details, and **the statement expires on first production
-> use** — see [`privacy-assessment.md`](privacy-assessment.md) §0.5.
+### 3.3 Indicator 7 — Privacy 🟠
 
-Built: encryption at rest and in transit, single-boundary server-side decryption, an architecturally
-enforced PII boundary, scoped officer access, reveal-contact actions written to an audit log.
+**The assessment exists.** [`privacy-assessment.md`](privacy-assessment.md) covers **13 data-flow legs
+verified against the code**, an assessment against Nepal's Individual Privacy Act 2018, and a
+**17-item findings register**.
 
-Still missing after the assessment — and now specific rather than general:
+⚠ **It carries a mandatory honesty marker at the top: it was drafted by an AI agent, no lawyer has read
+it, and every statutory section reference is marked unverified** because the numbering was not checked
+against the Nepal Law Commission text. It is thorough on the *system* and explicitly a lay reading of
+the *law*. **Q15** asks who should review it.
 
-- ~~A formal assessment against Nepal's Individual Privacy Act 2018~~ ✅ **written**; **a legal review
-  of it is not**, and the document says so at the top.
-- ~~A data-flow diagram~~ ✅ **written**, and DPG-30 will verify it against the code.
-- **Retention and deletion policy** — ⚠ sharper than we thought: archiving is implemented and is **not**
-  deletion. [`ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) §5.3/§10 put hard delete out of
-  scope for v1, so **no code path deletes personal data anywhere in this platform**. That needs a legal
-  position, not a document.
-- **A breach procedure** — ⚠ and `SECURITY.md` now promises reporters that one will be followed, so it
-  is a promise made against a procedure that does not exist yet.
-- **The live gap: grievance narratives leave Nepal on every model call**, unredacted, to a third-party
-  provider. See §4.3 — the same finding as indicator 4, seen from the privacy side. ⚠ **And it is now
-  permanent rather than transitional:** with self-hosting parked (§4.5), the provider changes and the
-  cross-border transfer does not. That raises the bar on the assessment: it has to justify an indefinite
-  arrangement, and redaction stops being defence-in-depth and becomes the control.
+⭐ **The timing matters, and it is the most important fact in the privacy picture: no genuine grievance
+has been processed on this platform.** Every record in every environment is AI-generated seed data or a
+dummy complaint filed during a demo. So every exposure below is **prospective, not realised** — no real
+complainant's words have reached a model provider and no real third party has been named to one. That
+makes the redaction work a **go-live precondition rather than remediation**. ⚠ Two caveats: a demo
+participant may have entered their **own** genuine contact details, so narratives are synthetic while
+some contact fields may be real; and **the statement expires on first production use.**
+
+**What is built:** encryption at rest with pgcrypto and in transit with TLS; server-side decryption at a
+single boundary, with the ticketing subsystem holding no encryption key and having no accessor for one
+(pinned by test); an architecturally enforced PII boundary; Keycloak-authenticated officer access behind
+a jurisdiction gate; reveal-contact actions written to an audit log.
+
+**Three storage-layer defects the assessment found are fixed.** They shared a root cause worth stating:
+every privacy document in this repository described the *architecture* — which schema owns what, who may
+decrypt, where the boundary sits — and all of it was accurate. **None described what the storage layer
+does when a write fails.** That is where all three lived.
+
+| Finding | What it was | Now |
+|---|---|---|
+| **F-2** — encryption failed open | `_encrypt_field` logged the pgcrypto error and returned the **plaintext**, and the decrypt path mirrored it, so reads came back correct and nothing downstream could tell. A degraded deployment could store complainant PII in the clear and look healthy | ✅ Fails **closed** — a pgcrypto failure with a key configured raises and abandons the write. The keyless developer mode survives deliberately, but now warns once per process instead of never |
+| **F-3** — unsalted SHA-256 search tokens | Phone, email, name and address were stored as bare SHA-256 `*_hash` columns. Nepal's mobile number space is a few tens of millions of candidates behind a fixed prefix, so the phone hash was **reversible** and those columns were personal data, not pseudonyms | ✅ **HMAC-SHA256** keyed on a pepper, keeping the equality lookup and removing the reversibility. ⚠ Existing tokens must be re-derived or phone lookup breaks silently; a migration script ships with it |
+| **F-4** — backups unencrypted by default | `pg_dump` plus a tar of the uploads volume, encrypted only if an operator happened to set one of two variables. Contact columns stayed ciphertext, but the narrative, every officer note, and **every voice recording and photograph** did not | ✅ The script **discards** an unencryptable dump *and* the uploads archive unless an explicit override says otherwise. The uploads tar is encrypted too, which it never was |
+
+**What is still missing, and it is specific rather than general:**
+
+- **The live gap: grievance narratives leave Nepal on every model call, unredacted**, to a third-party
+  provider — along with officer notes and whole case timelines including SEAH cases. This is the same
+  finding as indicator 4, seen from the privacy side. ⚠ **It is now permanent rather than
+  transitional**: with self-hosting parked (§4.7), the provider changes and the cross-border transfer
+  does not. That raises the bar on the assessment — it has to justify an indefinite arrangement — and it
+  makes redaction the control rather than a defence in depth.
+- **A legal review of the assessment.** Q15.
+- **Retention and deletion.** ⚠ Sharper than it sounds: archiving is implemented and is **not**
+  deletion. [`ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) puts hard delete out of scope
+  for v1, so **no code path deletes personal data anywhere in this platform**, and no retention period
+  has been chosen. That needs a legal position before it needs code.
+- **A breach procedure** — and `SECURITY.md` already promises reporters that one will be followed, so it
+  is a promise made against a procedure that does not exist.
+- **Model inputs and outputs are not redacted on the logging path either**, so grievance text can reach
+  application logs and Celery payloads in Redis. In our experience that is the leak that actually
+  happens, as opposed to the one everyone designs against.
+- **Third parties named in grievances have not consented and cannot exercise any right** over data
+  already held. Redaction reduces future exposure; it does not answer this.
+- **Intake does not disclose that grievance text is sent to an external AI provider.** Consent is
+  genuinely collected, but not for that. Cheap to fix, and it should be.
+- **The provider's own data terms are not recorded anywhere**, and **the jurisdiction of execution is
+  not knowable** — see §4.6.
+
+### 3.4 Indicator 9 — Do no harm 🟢
+
+| Requirement | What is built |
+|---|---|
+| **9a — Data privacy & security** | PII encrypted at rest, decrypted only server-side at a single boundary; the ticketing subsystem holds no encryption key and cannot obtain one; TLS in transit; Keycloak-authenticated officer access with a jurisdiction gate; the three storage-layer fixes above |
+| **9b — Inappropriate content** | **Two independent detection paths, not one.** A **deterministic, scored keyword detector** runs synchronously as slot validation inside the conversation, with no model involved; `detect_sensitive_content_llm` runs asynchronously on Celery as a second pass. A model outage therefore **degrades the second pass rather than removing detection**, which is also why the LLM leg's fail-open default is acceptable rather than a gap |
+| **9c — Protection from harassment** | Anonymous grievance submission end to end; the **SEAH workflow is access-isolated** — configurable by administrators who cannot themselves read the cases; a four-tier admin ladder with scoped permissions; a full `admin_audit_log` plus a per-ticket event timeline |
+
+**Three things outstanding under this indicator, and the second is the one we would want raised in the
+meeting rather than buried:**
+
+1. A written **retention and deletion policy** and a **breach procedure** — both documentation, both
+   gated on the privacy assessment's legal review.
+2. ⚠ **The SEAH detector over-flags, and the SEAH route is access-isolated, so an over-flag is not a
+   labelling error — it is a disappearance.** Measured over 105 benchmark items, the detector flagged
+   **five of eight items authored specifically as the hard case**: no separate toilet for women workers,
+   an unlit route home, unequal pay for the same work, one tap for a whole labour camp, and refused work
+   for being a woman. Every one is a women's access or discrimination grievance on an infrastructure
+   project — precisely the class a GRM exists to surface — and a flagged grievance moves into a channel
+   **most officers cannot see**. ⚠ **And the recall half is unmeasured**, so this cannot be fixed by
+   simply loosening the prompt. Full detail and the confusion matrix:
+   [`model-benchmarks.md`](model-benchmarks.md) §3.2 and §3.5.
+3. **Redaction of third-party PII before model calls** — §4.6.
+
+### 3.5 One deployment-credential defect, found and closed
+
+We include this because the method that found it is the point, and because a reviewer who clones the
+repository would have read the defect in seven lines of `docker-compose.yml`.
+
+**What it was.** Every service that talks to Postgres set `POSTGRES_PASSWORD` in its own compose
+`environment:` block — 19 sites across the two files once Keycloak's copy is counted — and Compose's
+`environment:` **overrides `env_file:`**. So the strong, SOPS-encrypted password in the environment file
+was **read by nothing**, and every deployed database ran on a literal committed in the clear.
+
+**Three things each looked like the reassurance, and none was.** The environment file held a strong
+password. A promotion gate asserted the password was not the default and **passed — because it read the
+inert copy**. And an earlier sprint had found half of this and closed it as a test-fixture problem,
+without carrying it across to the question of what the password actually was on a deployed host.
+
+**What was done.** The literals were replaced with `${VAR:?}` interpolation, which fails the stack loudly
+rather than falling back to a default; the environment file was set to the identity the deployed volumes
+actually hold, having named a role and a database that existed nowhere; the credential was **rotated**;
+and the literal was removed from all six tracked files that carried it. The promotion gate now checks
+what a **container** resolves rather than what the file says, and both of its new checks were verified by
+reintroducing the defect and watching them turn red.
+
+⭐ **The part worth generalising.** Fixing it inverted a test bootstrap that had hardcoded the credential
+*deliberately*: while the environment file was dead config, honouring it was the one way host tests could
+disagree with the database they talked to. Making the file live turned that safeguard into the bug it was
+written to prevent. **A control that encodes a fact about the system has to move when the fact does**, and
+nothing but a test will tell you it has stopped being true — which is the same argument this document
+makes for pinning architectural claims rather than asserting them (§2.5).
+
+Full finding, remediation and the coordinated runbook for the two hosts that are not yet done:
+[`db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
 
 ---
 
-## 4. The LLM question — how we query models today, and what we want to change
+## 4. Indicator 4 — the AI layer
 
 This is the substance of the meeting. **For AI systems the DPG Standard's platform-independence
 questionnaire asks about the code, the model *and* the data**, and the requirement is specific:
@@ -364,308 +398,499 @@ questionnaire asks about the code, the model *and* the data**, and the requireme
 > alternatives **with minimal configuration changes, without requiring a major overhaul of the entire
 > system.**
 
-Our reading — which we still want confirmed (**Q4**) — is that **the Standard does not require us to run
+Our reading — which we still want confirmed (**Q6**) — is that **the Standard does not require us to run
 open models in production. It requires us to demonstrate that we could, with a configuration change.**
 
-✅ **Decided 2026-08-17, and it makes the question easier rather than harder: we intend to run the open
-configuration in production anyway** — on cost grounds, with the commercial provider retained as a
-configurable fallback if government users report quality problems. So whichever way Q4 is answered, we expect
-to satisfy the stricter reading. We would still like the answer, because it determines how much benchmark
-evidence the submission needs before we can claim it.
+As it happens, the project has decided to run the open configuration in production anyway, on cost
+grounds, with the commercial provider retained as a configurable fallback if government users report
+quality problems. So whichever way Q6 is answered we expect to satisfy the stricter reading — **once an
+open model has been chosen**, which is the one thing this work has not yet done.
 
-### 4.1 Exactly how we query LLMs today
+### 4.1 How the system queries models
 
-**Nine** call sites, six distinct models, **two independent subsystems**, and **not one of them reads a
-configurable endpoint or model name**. Every model string is a Python literal. (An earlier draft said
-eight: the table below merges the two ticketing findings/summary calls into row 8. Verified by
-`grep -n "\.create(" ` — six in `LLM_services.py`, three in `ticketing/clients/llm_client.py`.)
+**Nine call sites, two independent subsystems, and not one of them names a model, a provider or an
+endpoint.** All nine resolve through a single registry,
+[`backend/config/llm_config.py`](../../backend/config/llm_config.py), which both surfaces import and
+neither owns.
 
-| # | Subsystem | Function | Model (hard-coded) | What data is sent to the provider |
-|---|---|---|---|---|
+| # | Subsystem | Function | Task key | Live? | What is sent to the provider |
+|---|---|---|---|---|---|
+| 1 | chatbot | `transcribe_audio_file` | `asr` | ⏸ parked | Raw complainant voice recording |
+| 2 | chatbot | `extract_contact_info` | `extract` | ⏸ parked | Complainant name and phone number, free text |
+| 3 | chatbot | `extract_all_contact_info` | `extract` | ⏸ parked | As above |
+| 4 | chatbot | `classify_and_summarize_grievance` | `classify` | ✅ **live** | **Full grievance narrative** + district + province |
+| 5 | chatbot | `translate_grievance_to_english_LLM` | `translate` | ⏸ parked | Full grievance narrative |
+| 6 | chatbot | `detect_sensitive_content_llm` | `detect` | ✅ **live** | Grievance text, including potential SEAH disclosures |
+| 7 | ticketing | `translate_to_english` | `ticket_translate` | ✅ **live** | **Officer case notes**, verbatim |
+| 8 | ticketing | `generate_case_findings` | `ticket_findings` | ✅ **live** | **Whole case timeline**, including SEAH cases |
+| 9 | ticketing | `generate_resolved_case_summary_llm` | `ticket_findings` / `…_seah` | ✅ **live** | Whole case timeline; the output is shown to the complainant |
 
-> ⚠ **Corrected 2026-08-18 — four of these nine are PARKED, and this table is where a
-> reviewer will count them.** Live: **rows 4 and 6** on the chatbot surface (classification on
-> `gpt-5-nano`; SEAH detection on `gpt-3.5-turbo`) and **rows 7–9** on ticketing. Not live:
-> the four paths of the **voice-notes flow** — ASR, contact extraction ×2 and grievance translation.
-> ⏸ **Parked, not rotted**: complete, switched off for lack of a transcription budget, and recorded
-> as such in the code — `registered_tasks.py:157`, *"CB-01 proto: store audio only;
-> transcription/classification deferred to officers"*. Unparking is a budget decision, not a
-> migration: they resolve models through the same registry as the live paths.
-> **Five live call sites, not nine.** The indicator-4 claim is unaffected — every one of them
-> routes through the same registry — but the *exposure* figure was overstated, and
-> `privacy-assessment.md` leg L4 has been corrected from six chatbot paths to two.
-> Sprint tracker: **D-38** · cleanup: [DPG-19b](../sprints/2026-08-llm/02-llm-agnostic-spec.md#dpg-19b).
+**Five call sites are live, not nine**, and the distinction is declared in code rather than in a
+document: the four parked paths are the **voice-notes flow**, switched off in the prototype for want of
+a transcription budget. They are listed in a `PARKED_TASKS` mapping with a reason each, and a test
+enforces the only two acceptable states — **enqueued in production, or declared parked. Nothing else.**
+They are complete and unrotted; unparking is a budget decision, not a migration, because they resolve
+models through the same registry as the live paths.
 
-| 1 | chatbot | `transcribe_audio_file` — `LLM_services.py:47` | `whisper-1` | **Raw complainant voice recording.** ⚠ **This path is not live** — voice transcription is switched off for lack of inference budget, so no audio is currently sent. It also means we have **no baseline** to benchmark open ASR against, and a suspected SDK-argument bug on this path has never been exercised in the field |
-| 2 | chatbot | `extract_contact_info` — `:79` | `gpt-3.5-turbo` | **Complainant name and phone number**, free text |
-| 3 | chatbot | `extract_all_contact_info` — `:116` | `gpt-3.5-turbo` | As above |
-| 4 | chatbot | `classify_and_summarize_grievance` — `:232` | `gpt-5-nano` | **Full grievance narrative** + district + province |
-| 5 | chatbot | `translate_grievance_to_english_LLM` — `:324` | `gpt-4` | Full grievance narrative |
-| 6 | chatbot | `detect_sensitive_content_llm` — `:385` | `gpt-3.5-turbo` | Grievance text, including potential SEAH disclosures |
-| 7 | ticketing | `translate_to_english` — `llm_client.py:152` | `gpt-4` | **Officer case notes**, verbatim |
-| 8 | ticketing | `generate_case_findings`, `generate_resolved_case_summary_llm` — `llm_client.py:230, 309` | `gpt-4o-mini` (standard) / `gpt-4o` (SEAH) | **Whole case timeline**, including SEAH cases |
+**Two models, not six.** Every text task resolves to `gpt-5-nano` and transcription to `whisper-1`.
+Eight task keys, two values — which is what makes a provider swap a small diff rather than a survey.
 
-Four things follow from this table that we should be candid about:
+### 4.2 What is built — one registry, two factories
 
-1. **There are two LLM surfaces and four files, not one file.** `ticketing/clients/llm_client.py` is a
-   second, independent OpenAI client with its own settings object and its own hard-coded models. Any claim
-   about platform independence is a claim about the whole product — a reviewer who redirects one and finds
-   the other still calling `api.openai.com` has found a false statement in our submission.
-   **And two further modules keep their own copies of the model names**, which is worse than untidy:
-   `ticketing/services/resolved_summary_builder.py:301` writes a model name into the **stored** resolved-case
-   summary as `llm.model`, computed from a duplicated constant in a different module from the one that made
-   the call. Change the client and miss that file and every resolved case records a model that never ran it —
-   a grievance mechanism publishing false provenance. Our answer is **two client factories but one config
-   file** (`backend/config/llm_config.py`, sprint ticket DPG-17): every model name, endpoint and timeout
-   declared once, with a test that a single `LLM_BASE_URL` change moves both surfaces. Without that, the
-   indicator-4 claim is a promise made in two places that can drift apart silently.
-2. **`OpenAI(api_key=…)` is constructed with no `base_url` anywhere.** The OpenAI Python SDK accepts a
-   `base_url`, and most open-weights serving stacks (vLLM, Hugging Face Inference Providers, Together,
-   Fireworks) expose an OpenAI-compatible API. **The fix is genuinely a configuration refactor, not a
-   rewrite** — which is exactly the "minimal configuration changes" the Standard asks about. We are not
-   asking for credit for work we have not done, but we are also not facing an architectural overhaul.
-3. **Structured output is done two different ways, and one of them is fragile.** Five call sites use
-   `response_format={"type": "json_object"}`; the classification call — the primary AI path in the
-   product — uses neither, and simply instructs the model to return JSON in the prompt. Prompt-only
-   JSON is the least portable choice available: it is precisely what breaks when you change models.
-   Moving to schema-constrained decoding with server-side validation is on our list (DPG-13) and it
-   *improves* portability rather than trading it away.
-4. **The AI paths are already fail-soft, which lowers the risk of switching providers.** Intake writes
-   the grievance to Postgres *before* any model call; classification runs as a Celery task with retry
-   and explicit `LLM_FAILED` / `LLM_SKIPPED` status codes; the chatbot waits on a bounded 20-second
-   deadline rather than indefinitely. A grievance is never lost because a model was unavailable. This
-   matters for the open-model conversation: a model that is occasionally slower degrades throughput,
-   not intake.
+The registry declares every endpoint, model, deadline and structured-output capability in the product,
+once. Two client factories — one per surface — construct clients from it. **A factory decides how to
+construct a client; it never decides what to call.**
 
-**And the thing we are least comfortable with:** there is **not a single automated test** covering
-either LLM surface. Zero. So the first ticket of this work is a characterization-test net, before any
-refactor. We mention it because it also means our current claims about model behaviour rest on manual
-observation, not on evidence we could hand a reviewer.
+That separation is not tidiness. Before it existed, the standard/SEAH model pair was written out in
+**four** places, one of them a *persisted provenance field*: a resolved-case summary recorded the model
+name from a duplicated constant in a different module from the one that made the call. Change the client
+and miss that file, and every resolved case records a model that never ran it — **a grievance mechanism
+publishing false provenance.**
 
-### 4.2 The three closed dependencies, named precisely
+| Group | Variables |
+|---|---|
+| Chat endpoint | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_TIMEOUT`, `LLM_MAX_RETRIES` |
+| ASR endpoint | `ASR_BASE_URL`, `ASR_API_KEY`, `ASR_TIMEOUT` — falls back to the chat endpoint field by field |
+| Models | `MODEL_CLASSIFY`, `MODEL_EXTRACT`, `MODEL_TRANSLATE`, `MODEL_DETECT`, `MODEL_ASR`, `MODEL_TICKET_TRANSLATE`, `MODEL_TICKET_FINDINGS`, `MODEL_TICKET_FINDINGS_SEAH` |
+| Deadlines | `TIMEOUT_CLASSIFY`, `TIMEOUT_TICKET` — per task; 0 means the endpoint's |
+| Structured output | `LLM_STRUCTURED_OUTPUT` plus a per-task capability flag |
+| Deprecated | `OPENAI_API_KEY`, `OPENAI_CLASSIFICATION_TIMEOUT` — still honoured, with one warning each |
 
-| Closed component | Where it binds | Open alternative | Confidence |
-|---|---|---|---|
-| **Inference API** (`api.openai.com`) | 9 call sites, no configurable base URL | Any OpenAI-compatible endpoint — self-hosted vLLM, or a hosted open-weights provider | **High.** Well-trodden; the SDK supports it directly |
-| **Model weights** (`gpt-4`, `gpt-4o`, `gpt-4o-mini`, `gpt-3.5-turbo`, `gpt-5-nano`) | Same call sites | Apache-2.0 / MIT open-weights instruction models in the 27–31B class, 4-bit quantised | **Medium.** Portable in principle; **unmeasured on Nepali** — see §4.4 |
-| **ASR** (`whisper-1`, hosted) | Voice intake, 1 call site | Whisper large-v3 weights (MIT) self-hosted, or newer open multilingual ASR | **Medium-low.** Weights are open, but **Nepali word-error rates are poor across the board**, including for the hosted model we use today |
+**What backs the claim, in order of how hard it is to argue with:**
 
-There is a fourth dimension the questionnaire raises that we want to discuss (**Q5**): **data**. We do
-no training and no fine-tuning — every call is zero-shot prompting with instructions and a category
-taxonomy we author. So we have no training-data licence question at all. What we *lack* is an
-evaluation set, which is what we would need to substantiate any quality claim about a swap.
+| Evidence | Where |
+|---|---|
+| One environment change moves **both** surfaces — both clients constructed in a single test and asserted onto the same endpoint | `tests/ticketing/test_llm_client.py` |
+| No model name exists outside the registry — **AST-parsed**, not grepped, across `backend/` and `ticketing/` | `tests/backend/test_llm_config_pins.py` |
+| No client is constructed outside the two factories | same file |
+| `.env.example` and the registry agree in **both** directions — undocumented and stale variables each fail the build | same file |
+| The two shipped configurations declare the same variables and differ only in values | same file |
+| The closed configuration is what a fresh clone gets, so the commercial fallback is one variable away rather than an intention | same file |
 
-### 4.3 The privacy dimension of the same problem
+**Switching is two committed template files.** Neither contains a secret:
 
-Indicators 4 and 7 meet here. Today, every grievance narrative, every extracted name and phone
-number, every officer note and — in the SEAH path — content that is sensitive by definition, is
-transmitted to a third-party US provider, unredacted. Additionally, nothing redacts model inputs or
-outputs on the logging path, so grievance text can reach application logs and Celery payloads in Redis.
+```bash
+cp .env.open   env.local.llm   # open weights, via Hugging Face Inference Providers
+cp .env.openai env.local.llm   # today's default
+```
 
-Two clarifications, because the two problems are often conflated:
+`diff .env.openai .env.open` is the whole delta. No code, no image rebuild, no migration, no compose
+edit.
+
+**Structured output is a per-`(endpoint, model)` property, and that is measured.** `json_schema`
+constrains generation to a grammar so a reply is guaranteed parseable. Support is not a property of the
+endpoint — which is what our own plan originally assumed. Measured against the live provider, one
+request per cell: `gpt-5-nano` and `gpt-4o-mini` accept both modes; `gpt-3.5-turbo` rejects
+`json_schema`; `gpt-4` rejects **both**. So each task declares its own capability, the endpoint sets a
+ceiling, the effective mode is the weaker of the two, and the ladder degrades `json_schema` →
+`json_object` → prompt-only with the rung logged per call. **An endpoint with no JSON mode at all still
+works.** This *improves* portability rather than trading it away: prompt-only JSON is the least portable
+choice available, and it is what breaks first when you change models.
+
+**The AI paths are fail-soft, which lowers the risk of switching providers.** Intake writes the
+grievance to PostgreSQL *before* any model call; classification runs as a Celery task with retry and
+explicit failure states; the chatbot waits on a bounded deadline rather than indefinitely. **A grievance
+is never lost because a model was unavailable**, so a slower model degrades throughput, not intake.
+
+### 4.3 What has been measured — capability
+
+A committed, re-runnable probe (`scripts/ops/llm_smoke.py`) resolves the endpoint from the same
+registry the product uses, asks each candidate six questions — one request per cell — verifies the
+licence from the model card at probe time, and prints a profile to paste into the registry. A reviewer
+can run it themselves; the command is in
+[`open-model-configuration.md`](open-model-configuration.md).
+
+| Model | Licence *(verified from the model card)* | chat | `json_object` | `json_schema` | Probe latency |
+|---|---|---|---|---|---|
+| `openai/gpt-oss-20b` | Apache-2.0 | ✅ | ✅ | ✅ | **0.73 s** |
+| `openai/gpt-oss-120b` | Apache-2.0 | ✅ | ✅ | ✅ | **0.68 s** |
+| `Qwen/Qwen3.5-27B` | Apache-2.0 | ✅ | ✅ | ✅ | 20.48 s |
+| `Qwen/Qwen3.5-35B-A3B` | Apache-2.0 | ✅ | ✅ | ✅ | 9.35 s |
+| `Qwen/Qwen3.5-9B` | Apache-2.0 | ✅ | ✅ | ⚠ **accepted, not honoured** | 23.78 s |
+| `microsoft/phi-4` | MIT | ✅ | ✅ | ✅ | 1.77 s |
+| `swiss-ai/Apertus-70B-Instruct-2509` | Apache-2.0 | ❌ **request blocked** | — | — | 0.42 s |
+| *transcription* | — | ❌ **404 — the router serves no `/v1/audio/*` route at all** | | | |
+
+**Four findings from that probe are worth the consultant's time, and two of them bear on
+safeguarding rather than on engineering:**
+
+**(a) `Qwen3.5-9B` accepts `json_schema` and silently ignores it.** HTTP 200, well-formed JSON, and
+**not one of the fields the schema declares required.** This is invisible to any probe that asks for
+*some* JSON and calls a successful parse a pass; the probe's schema requires a field the prompt never
+mentions, precisely so "returned JSON" and "was constrained" can be told apart. Had this not been
+measured, a fresh clone pointed at that model would have produced malformed output under load and
+nothing would have explained why.
+
+**(b) ⚠ `Apertus-70B` refused a grievance about children falling ill.** Its only reply to the
+capability probe was *"Your request was blocked"* — in 0.42 s, far too fast to be generation, so a
+filter in front of the model rather than the model declining. The prompt was the benchmark's flagship
+item: road construction dust entering a house, children becoming ill. **Every other candidate answered
+it.** This system's entire input distribution is human harm — dust and sick children is the *mildest*
+end; the rest is land seizure, unpaid wages, forced relocation and, on the SEAH path, sexual
+harassment. **A filter tuned to refuse discussion of harm to children refuses hardest on the reports
+that matter most**, and because the SEAH detection path fails open by design, a harassment report the
+filter blocks would be silently handled as an ordinary complaint. That is a safeguarding failure mode,
+not a quality one. It is also a genuine loss: Apertus was the strongest *DPG story* in the shortlist —
+fully open weights **and** open training data, built for low-resource language coverage.
+[Write-up](../sprints/2026-08-llm/followups/apertus-content-filter-blocks-a-grievance.md).
+
+**(c) ⚠ The open configuration cannot transcribe audio at all.** `.env.open` ships an ASR endpoint that
+returns **HTTP 404** for every model id tried. Not auth and not billing, and three controls say so:
+`GET /v1/models` returns 200, `POST /v1/chat/completions` returns 200, and the audio route returns 401
+**without** a token and 404 **with** one — so it exists and authenticates but serves nothing. The
+router's own catalogue confirms it: 132 models, **none of them audio**. Hugging Face serves ASR, but not
+through the OpenAI-compatible surface this code calls. So *"the open configuration runs the whole
+system"* is **false for audio and true for text**. Nothing breaks today because voice is switched off;
+it would break the day it is switched on.
+[Write-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md).
+
+**(d) Latency spans 30× across the shortlist** — 0.68 s to 23.8 s on a *one-sentence* prompt. Against
+a 30-second interactive budget that is pass/fail rather than a table row, and it is a selection input.
+
+**⚠ Capability is not quality.** Everything in this section measures what a model can be *told*. What it
+gets *right* is §4.4, and conflating the two is the easiest overstatement available here.
+
+**On the licence filter, and what it costs.** We filter candidates for Apache-2.0 or MIT. The excluded
+list is worth naming because on a low-resource language this may be costing real accuracy: Gemma 3/4
+and Llama 3.3 ship under bespoke community licences with use restrictions; `Gemma-SEA-LION` inherits
+Gemma's terms. **The one that hurts is `aya-expanse-32b` (CC-BY-NC-4.0)** — purpose-built for
+multilingual coverage and exactly the right size, but non-commercial is incompatible with a government
+production deployment **however Q7 is answered**, so unlike the others that exclusion does not loosen.
+The shortlist lives in `scripts/ops/llm_candidates.json` as **data**, deliberately, so a loosened Q7 is
+an edit to one file rather than a redesign.
+
+### 4.4 What has been measured — accuracy, latency and cost
+
+A **105-item labelled benchmark set** is committed under CC0-1.0 at
+[`tests/data/benchmark/`](../../tests/data/benchmark/README.md), with a provenance README. The harness
+(`scripts/ops/llm_benchmark.py`) calls **the product's own functions with the product's prompts,
+resolved through the registry the product reads** — nothing is reimplemented — which is what makes it a
+pre-flight check on a production change rather than a parallel universe that agrees with production by
+luck. It proves the credential before scoring anything, scores classification at set level, scores
+detection recall-first with a confusion matrix, and meters real token usage.
+
+⚠ **Every number below comes from synthetic, authored data.** Authored text is cleaner than real
+complaints — better punctuated, more complete, less elliptical — so each figure is an **upper bound** on
+production accuracy, not an estimate of it.
+
+**The closed baseline is complete.** `gpt-5-nano`, the model production runs today, over all 105 items:
+
+| Metric | Value |
+|---|---|
+| Classification precision *(set-level)* | 0.773 |
+| Classification recall *(set-level)* | 0.752 |
+| Category-set **F1** *(multi-label)* | **0.762** |
+| Exact-set accuracy *(every gold label, no invented extras)* | 0.686 |
+| p95 latency, classification, against a 30 s budget | **20.3 s — passes** |
+| p99 latency, classification | **24.5 s — passes** |
+| Sensitive-content **false-alarm** rate | 0.067, including **5 of 8** deliberate confusables |
+| Sensitive-content **recall** | ⚠ **Not measured — and not measurable from this repository** |
+
+**The open column is one metric in.** `openai/gpt-oss-20b` completed **all 105 detection items** and
+**2 of 105 classification items**. ⚠ **The blocker was our prompt, not the model:** the classification
+prompt was ~20,700 characters before the grievance was added, and 105 of them in a few minutes exceeded
+the provider's short-window token limit. The same run's 105 short detection calls all completed. **That
+contrast is the finding**, and it is about us.
+
+⭐ **Two results the benchmark was not looking for, and both changed a decision:**
+
+**(a) The classifier invented categories on 17% of grievances, and they were stored.** Eighteen of 105
+items received a category that exists nowhere in the taxonomy — and not as noise, but as a coherent
+fictional `Road Hazard - *` family. **21 of the run's 32 false positives were invented categories.** The
+storage path logs and never rejects, deliberately, and the stated reason is sound for a *near-miss
+name*. `Road Hazard - Dust` is not a near-miss: it was stored, shown to the complainant as the system's
+understanding of their own complaint, and synced to ticketing where it matched no filter and no
+priority lookup.
+
+⭐ **Then both models invented the *same* category.** `gpt-oss-20b` classified only two items before the
+rate limit and returned `Road Hazard - Dust` on both. Two vendors, two architectures, one fabricated
+label — which is weak evidence about either model and **strong evidence about the taxonomy**: the
+catalogue had no road-hazard grouping, and independent models kept reaching for the category a road
+project would expect to exist.
+
+**The fix followed the evidence and was re-measured.** Six `Road Hazard - *` categories were added and
+the prompt was reduced. Invention fell from **18/105 to 4/105**, and three of the four residual are real
+categories with a formatting failure rather than new concepts. Precision rose, recall fell, F1 moved
+−0.009 — flat within the noise floor of a 105-item set — exact-set accuracy rose, and **p99 latency fell
+from 40.6 s to 24.5 s, inside the interactive budget for the first time.** ⚠ Three things changed at
+once, so this is **not a clean A/B** and the F1 line must not be read as one; the robust findings are
+the ones that moved by a lot.
+
+**(b) The prompt was carrying a bug that cost 79% of its size.** The catalogue was sent three times, and
+the dictionary was **51,213 characters for an English grievance against 15,121 for a Nepali one**. The
+language filter stripped the Nepali keys for a Nepali grievance and stripped **nothing** for an English
+one, because no key carried an English marker. **Every English classification therefore carried every
+Nepali translation, JSON-escaped at six bytes per character, for a model that never used them.** Net
+after the fix: 62,736 → 13,147 characters for English, and ~10,900 → **3,277 prompt tokens per
+classification**, while *adding* six categories.
+
+**Cost, measured in tokens rather than dollars**, because tokens do not drift and prices do. Over 212
+calls: **11,358 prompt + 3,361 completion tokens per grievance** — both calls, which is what production
+makes — of which **93.8% of the completion budget is reasoning tokens**: invisible in the reply, fully
+billed. ⚠ Any cost estimate built from output length understates this system by roughly 16×. ⚠ **That
+measurement predates the prompt reduction**, which cuts the prompt half by about 70%; the figure needs
+re-taking and [`model-benchmarks.md`](model-benchmarks.md) §6 says so.
+
+⚠ **The single most important missing number is SEAH recall, and it decides a model choice.**
+`gpt-5-nano` flags 7 of 105 ordinary complaints as sensitive, including 5 of the 8 confusables.
+`gpt-oss-20b` flags **0 of 105 — of anything.** Read naively that is a clean win for the open model.
+**Do not read it naively:** a detector that flags nothing has a perfect false-alarm rate and catches
+nothing. Two hypotheses fit the data equally — the open model is better calibrated, or it says no to
+everything and a real harassment report would go unflagged. **Nothing in this repository can tell them
+apart**, because the committed set contains no harassment reports at all, by decision: those narratives
+are held by the project owner and never enter the repository, since three hundred realistic Nepali
+harassment complaints sitting in a public repo will be read as leaked case data by somebody regardless
+of how the file is labelled. The harness accepts a set from outside the repository and **refuses a path
+inside it**.
+
+**Therefore neither model may be selected on this evidence, and `gpt-oss-20b`'s 0.000 must not appear in
+a submission as an improvement.** This is a real weakness in the evidence pack and it is the right
+trade; we would rather state it than let a reviewer discover that our headline detection number is not
+reproducible from what we published.
+
+### 4.5 The indicator-4 answer, clause by clause
+
+Here is the answer we intend to give, with each clause checked against the code rather than assumed.
+**Three of seven do not hold today**, and we would rather show you the audit than the draft.
+
+| Clause | Verdict |
+|---|---|
+| *"An OpenAI-compatible LLM endpoint, configured entirely through `LLM_BASE_URL` and `MODEL_*` with no code change, across both LLM surfaces"* | ✅ **True.** One registry; both surfaces asserted onto one endpoint by a test; no model name outside the registry, AST-parsed |
+| *"Documented in `open-model-configuration.md`"* | ✅ **True**, and it carries the measured capability matrix |
+| *"The commercial provider is retained as a configurable fallback"* | ✅ **True**, and pinned — a test asserts the closed configuration is what a fresh clone gets |
+| *"A self-hosted vLLM deployment is documented and costed, not deployed"* | ✅ **True**, and the costing sharpened it — see §4.7 |
+| *"The repository default is an open-weights configuration"* | ❌ **False, twice.** The defaults are still `gpt-5-nano` / `whisper-1`, because no open model has been **chosen** — the comparative benchmark is unfinished. And the ASR half is false independently: the configured open ASR endpoint **404s** |
+| *"The open configuration is what production runs"* | ❌ **False today.** It is decided, and it cannot happen until the clause above is true |
+| *"CI runs the **full** LLM test suite against the open configuration on every commit"* | ⚠ **Overstated, and it has never run in CI.** The job runs a deliberately small **live subset** — a cost decision, not an oversight — and calling it "the full suite" would misdescribe it |
+
+**The version that is true today**, which is what we would put in a submission:
+
+> Yes — an OpenAI-compatible LLM endpoint, configured entirely through the `LLM_BASE_URL` and
+> `MODEL_*` environment variables with no code change, across **both** of the system's LLM surfaces
+> (chatbot intake and ticketing case analysis). All nine model call sites resolve through a single
+> registry that neither surface owns, and a test asserts that one environment change moves both. Two
+> committed configuration files differ **only in values** — `diff .env.openai .env.open` is the whole
+> delta. The open path has been exercised against a hosted open-weights provider: the permissive licence
+> was verified from the model card, and `json_schema`-constrained generation was confirmed as *honoured*
+> rather than merely accepted. A CI job runs the product's own LLM code paths live against the open
+> configuration.
+>
+> ⚠ The repository default remains the proprietary configuration, deliberately: an open base URL
+> combined with proprietary model ids would be a repository that cannot serve a single request on a
+> fresh clone, which is weaker evidence than an honest default. The open model has not yet been
+> *chosen*, because the comparative benchmark is unfinished — the harness, the labelled dataset and the
+> scoring rules are committed and reproducible; the numbers are not yet in.
+>
+> A self-hosted vLLM deployment is **documented and costed, not deployed**, for want of a funded
+> operator.
+
+**About the CI job**, because it is the piece of evidence we care most about and the one most easily
+overstated. `dpg-platform-independence` runs the product's own LLM code paths — **both** surfaces —
+against a real provider through the open-weights configuration. Run by hand on 2026-08-20 it returned
+**4 passed, 1 xfailed, exit 0** against `openai/gpt-oss-20b`. The xfail is the transcription round-trip,
+it is strict, and it reddens the day someone fixes the ASR endpoint. **That is indicator 4 executing
+rather than asserted**, and a claim a build executes cannot silently rot the way a document can.
+
+Three properties of it are worth stating because each is a way the job could have become decoration:
+
+- Model ids come from **repository variables, not literals**, so swapping a model after the benchmark
+  reports is a settings change — and so the workflow never becomes a second place where a model name
+  lives. A test asserts the endpoint the tests reached is the one the registry names, which catches the
+  most embarrassing false green available here: a job that passes against the commercial provider while
+  reporting that open weights work.
+- Live tests **skip** on an account-level refusal, because a job that reddens on someone else's billing
+  teaches everyone to ignore the job. ⚠ **But a run where everything skipped would exit 0 and show a
+  green tick having tested nothing**, so the job also **fails when nothing passed**. Neither control is
+  safe alone.
+- The suite is deselected in the ordinary test job and selected here, **and a test asserts both**,
+  because a quarantined test suite that nobody notices is a failure mode this project has already had
+  once.
+
+⚠ **It has never executed in CI**, because the provider account was rate-limited when it was written.
+**A job that exists, never runs, and is cited as evidence is not acceptable**, and the workflow header
+says so in those terms. If the per-commit cadence proves unaffordable, the documented fallback is
+nightly plus release tags, **declared on the badge** rather than quietly.
+
+### 4.6 The privacy dimension of the same problem
+
+Indicators 4 and 7 meet here. Every grievance narrative, every officer note and — in the SEAH path —
+content that is sensitive by definition, is transmitted to a third-party provider outside Nepal,
+unredacted. Two clarifications, because the two problems are routinely conflated:
 
 - **Structured PII at rest is solved.** Name, phone, email and address are encrypted, decrypted at one
-  server-side boundary, and architecturally barred from the ticketing schema by tests. That work is done.
-- **Free-text egress to third parties is not.** A complainant writes "the site engineer Ram Bahadur
-  refused to…" into a narrative field, and that name is in the payload. No amount of column-level
-  encryption addresses it.
+  server-side boundary, and architecturally barred from the ticketing schema by tests.
+- **Free-text egress is not.** A complainant writes *"the site engineer Ram Bahadur refused to…"* into a
+  narrative field, and that name is in the payload. No amount of column-level encryption addresses it.
 
-Our plan is a redaction layer at the model-call boundary — deterministic patterns first (Nepali phone
-formats, Devanagari digits, citizenship and vehicle numbers), then NER — with measured recall published
-rather than asserted.
+**Two framing corrections we would rather make ourselves:**
 
-**✅ We have decided the design question we had flagged (Q8): redact at transmission, not before storage.**
-The officer handling the case still needs to see which official was named — for a GRM, complaints naming
-officials are a large share of the useful ones, and redacting before storage would destroy the record's
-evidentiary value. The full record stays; a redacted derivative goes to models and logs. **We would still
-like to know whether that conflicts with any position you or ADB safeguards hold** — if the agency's legal
-view is that PII must not be *stored* in free text at all, that is a much larger change than the sprint.
+**Openness is a licensing property, not a privacy property.** Moving to open weights answers indicator 4
+and does **nothing** for indicator 7. An open model served by a third party carries exactly the same
+data-flow risk as a commercial one served by its vendor. The two problems share an eventual solution —
+self-hosting — but the migration solves only the first.
 
-**⚠ And one gap we are choosing to leave open in the first pass, which we would rather state than have you
-find.** Person-name detection needs an ML model; the Nepali NER model with the best published accuracy has
-**no licence stated** on its model card, so shipping it would swap one closed dependency for another inside
-the very submission meant to remove it (**Q9**). We have therefore split the work:
+**The legal trigger was never model training.** Under Nepal's Individual Privacy Act 2018 and
+GDPR-style regimes alike, transmitting personal data to a third party **is itself a disclosure and a
+cross-border transfer; the event is the transmission.** Whether the recipient stores it, learns from it,
+or discards it a microsecond later does not change that a transfer occurred and requires a lawful basis.
+Non-retention is a mitigation, and a valuable one. It is not an answer.
 
-- **Landing now:** the deterministic layer — Nepali phone formats in **both** digit systems (Devanagari
-  digits defeat an ASCII regex, and `९८४१२३४५६७` is a phone number in plain text), citizenship numbers,
-  vehicle registrations, emails, and full address spans (settlement qualifiers such as *gaun*, *tole*,
-  ward numbers — while leaving the bare district, which the classifier needs). Plus redaction of the
-  logging, Celery and backup paths, which is where leaks actually happen.
-- **Also landing now — person names, at the rule layer.** An earlier draft of this section said names
-  were deferred entirely. That was wrong. Three recognisers ship without any ML dependency:
-  **honorific and role-title triggers** (`Er.`, Engineer, overseer, contractor, ward chairperson, `श्री`),
-  which catch the *named official* — the sharpest exposure, since that person consented to nothing;
-  a **Nepali family-name (thar) gazetteer**, tractable because surnames are a comparatively closed set;
-  and **self-identification patterns** (*"my name is …"*, `मेरो नाम … हो`), which catch the opening line the
-  voice channel all but guarantees.
-- **⚠ What still gets through, stated as a residual rather than rounded away:** a name with no title, no
-  recognisable surname and no self-identification frame. *"The man operating the roller"*, named in passing
-  three sentences later, is the shape of the miss. Higher recall needs the ML model whose licence is
-  unresolved (Q9). **We will publish the measured residual, not a description of it** — and because T2 is
-  parked, that residual reaches a third party indefinitely rather than during a transition, which is why
-  §4.3a sets out whose terms it lands under.
-- **The intended fix, and it may interest ADB beyond this project:** fine-tune a Nepali NER model on an
-  openly-licensed corpus, **release it openly**, and run it as a standalone anonymiser service usable by
-  any country programme where in-country self-hosting is impossible. Permissively-licensed Nepali NLP
-  tooling barely exists, so that would be a genuine DPG *contribution* rather than only a compliance fix.
-  **Q9** asks whether you would see it that way and whether there is appetite to fund it.
+#### Whose terms the residual lands under
 
-#### 4.3a Whose terms the residual lands under
-
-**Two framing corrections first, because we had them wrong too.**
-
-**Openness is a licensing property, not a privacy property.** The open-weights migration answers
-indicator 4 and does nothing for indicator 7 — an open model served by a third party carries the same
-data-flow risk as a commercial one. The two problems share an eventual solution (self-hosting) but T1
-solves only the first.
-
-**The legal trigger was never model training.** Under Nepal's Individual Privacy Act 2018 and GDPR-style
-regimes, transmitting personal data to a third party **is itself a disclosure and a cross-border
-transfer**. Whether the recipient stores it, trains on it or discards it immediately does not change that
-a transfer occurred and requires a lawful basis. Non-retention mitigates; it does not answer.
-
-**Hugging Face's actual commitments** — from
-[Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security),
-and better than an earlier draft of this document assumed (it cited the general privacy policy, which has
-no inference-specific clause, and understated them):
+**Hugging Face's own commitments are substantive, and we cite them**
+([Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security)):
 
 > *"Hugging Face does not store any user data for training purposes. We do not store the request body or
 > response when routing requests through Hugging Face. Logs are kept for debugging purposes for up to 30
 > days, but no user data or tokens are stored."*
 
-Plus TLS/SSL in transit, and the Hub — of which Inference Providers is a feature — is **SOC 2 Type 2
-certified**. Genuinely usable in the assessment.
+Plus TLS in transit, and the Hub — of which Inference Providers is a feature — is **SOC 2 Type 2
+certified**. Genuinely usable in a transfer assessment.
 
-⚠ **Then the sentence that matters, and it is theirs:** *"External providers are responsible for their own
-security measures, so please refer to their respective security policies."* **The no-storage commitment
-covers the router, not the company that runs the model.** Requests are proxied to third-party partners —
-Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate, Scaleway, OVHcloud — with the default
-policy choosing the fastest available *per request*. For a government privacy assessment, **"we cannot name
-which company processed this citizen's grievance" is a finding, not a footnote.**
+⚠ **Then the sentence that matters, and it is theirs:** *"External providers are responsible for their
+own security measures, so please refer to their respective security policies."* **The no-storage
+commitment covers the router, not the company that runs the model.** Requests are proxied to third-party
+partners — Cerebras, Groq, Together, Fireworks, Novita, DeepInfra, Replicate, Scaleway, OVHcloud — with
+the default policy choosing the fastest available **per request**. For a government privacy assessment,
+**"we cannot name which company processed this citizen's grievance" is a finding, not a footnote.**
 
-The **Terms of Service** reference no DPA and frame confidentiality around private repositories rather than
-inference traffic. For a router architecture a DPA is awkward by construction: one would be needed from
-Hugging Face *and* from each downstream provider — which is an underrated practical argument for
+The **Terms of Service reference no DPA** and frame confidentiality around private repositories rather
+than inference traffic. For a router architecture a DPA is awkward by construction: one would be needed
+from Hugging Face *and* from each downstream provider — which is an underrated practical argument for
 self-hosting, where there is one cloud contract and a standard DPA.
 
-**Our fix:** pin one named provider (`model:provider`) in production so DPG-04 can assess that company's
-terms and location, while CI keeps automatic routing because it sends only synthetic benchmark data.
-**What remains even then** — and belongs in the data-flow diagram: the provider's own retention (commonly
-~30 days, some reserving service-improvement use absent an opt-out), the jurisdiction of execution, and
-prompt caching. Whether ADB requires a signed DPA on top is **Q16**.
+**Our engineering response, which we would like sanity-checked (Q14):** pin one named provider in the
+model path (`model:provider`) in production, converting an unknowable sub-processor chain into one
+company whose policy can be read, cited and made the subject of a DPA request. **CI keeps automatic
+routing**, because it sends only synthetic benchmark data and the multi-provider evidence is worth
+having there.
 
-We should also be honest that one of our own documents currently claims summaries are PII-scrubbed
-before storage, and nothing scrubs them. It is on our list to fix the document
-(`docs/deployment/11_llm_pipeline_policy.md`). We flag it here because we would rather the consultant
-hear it from us than find it.
+⚠ **What remains even with a provider pinned**, and belongs in the data-flow diagram rather than being
+discovered later: the downstream provider's **own retention** (commonly around 30 days, with some
+reserving service-improvement use absent an opt-out); the **jurisdiction of execution**, which pinning a
+provider does not fix; and **prompt caching**, which several providers use for performance and which
+means cached content sits somewhere briefly. Any submission text naming a single destination country
+for the model calls would be a claim we cannot support.
 
-### 4.4 What we do not know, and will not claim
+**One thing about the router's fan-out that we will not overstate.** The router's value for indicator 4
+is independence from *any single vendor*, not just from one: `gpt-oss-20b` is offered by eight partners
+and `gpt-oss-120b` by eleven, read from the router's own catalogue. ⚠ **But only one route has actually
+been exercised** — the router selected Groq for the successful probes. The alternative base URLs are
+OpenAI-compatible and the code needs no change to use them, but none has been probed, because each needs
+its own account. **The fan-out count is not a measurement.**
 
-We would rather bring the consultant honest unknowns than optimistic estimates:
+#### The redaction plan, and the residual we will publish rather than describe
 
-- **Nepali quality on open weights is unmeasured — by us and largely by the field.** Nepali is
-  low-resource. We have no benchmark set and no numbers, so any statement that an open model is
-  "close enough" on grievance classification would be invention. Building the labelled set is the
-  long pole of this work and it is data effort, not engineering.
-- **Nepali ASR is the weakest link, and it is weak for the closed model too** — and ⚠ **we have to disclose
-  that voice transcription is not currently running at all.** It is switched off for lack of inference
-  budget, which means **we have no incumbent baseline to compare open ASR against.** If we ship an open
-  ASR path, the honest framing is *"we shipped a working voice path where there was none"*, not *"we matched
-  the incumbent"*. If open-weights ASR turns out materially worse, the options are (a) accept documented
-  degradation on voice while text stays at parity, (b) keep ASR hosted and disclose it as a remaining
-  closed dependency, or (c) fund a Nepali fine-tune on the 165 openly-licensed hours of OpenSLR SLR54.
-  **Q6** asks how the DPGA treats a *partial* open alternative — one that works but performs worse.
-- **Translation may want a specialist model.** A purpose-built seq2seq translation model will likely
-  beat a general chat model on Nepali↔English, but it needs its own service rather than a chat
-  endpoint. That is a real deployment cost, and the benchmark should decide it, not our prior.
-- ~~**Whether production actually switches.**~~ ✅ **Decided 2026-08-17: it does.** Production will run the
-  open configuration, on cost grounds, with the commercial provider retained as a configurable fallback if
-  government users report quality problems. **What we still do not know is the quality gap** — that is the
-  benchmark, and the benchmark needs Q15's inference budget to run.
+Redaction is Sprint 3 and it has **not started**. The design is specced and the decision behind it is
+taken: **redact at transmission, not before storage.** The officer handling the case still needs to see
+which official was named — for a GRM, complaints naming officials are a large share of the useful ones,
+and redacting before storage would destroy the record's evidentiary value. The full record stays; a
+redacted derivative goes to models and logs. **Q12** asks whether that conflicts with any position you
+or ADB safeguards hold.
 
-### 4.5 The deployment ladder — one variable changes
+What ships in the first pass:
+
+- **The deterministic layer** — Nepali phone formats in **both** digit systems (Devanagari digits defeat
+  an ASCII regex, and `९८४१२३४५६७` is a phone number in plain text), citizenship numbers, vehicle
+  registrations, emails, and full address spans while leaving the bare district the classifier needs.
+- **Person names, at the rule layer, with no ML dependency**: honorific and role-title triggers (`Er.`,
+  Engineer, overseer, contractor, ward chairperson, `श्री`), which catch the **named official** — the
+  sharpest exposure, since that person consented to nothing; a Nepali family-name (*thar*) gazetteer,
+  tractable because surnames are a comparatively closed set; and self-identification patterns
+  (*"my name is …"*, `मेरो नाम … हो`), which catch the opening line the voice channel all but guarantees.
+- **The logging, task-queue and backup paths**, which is where leaks actually happen.
+
+⚠ **What still gets through, stated as a residual rather than rounded away:** a name with no title, no
+recognisable surname and no self-identification frame. *"The man operating the roller"*, named in
+passing three sentences later, is the shape of the miss. **We will publish the measured residual, not a
+description of it.** Higher recall needs an ML model, and **the most accurate Nepali NER model we can
+find has no licence stated on its model card** — shipping it would swap one closed dependency for
+another inside the very submission meant to remove one (**Q13**).
+
+⚠ **And one precision we want settled before anyone briefs the ministry: what this produces is
+*pseudonymised* text, not *anonymised* text.** Because the mapping that turns a placeholder back into a
+name is kept, the text **remains personal data**. Redaction lowers the risk profile; it does not take
+the data out of scope. **We will not let anyone tell the agency the grievances are "anonymised"** — that
+claim would not survive scrutiny, and an overstatement there would discredit every other claim we make.
+What we can say accurately and strongly is: *only pseudonymised text crosses the border, and the
+re-identification key never leaves Nepal.* ⚠ The second clause is a promise about deployment, not about
+code, and it is quietly easy to void — one careless serialisation putting the mapping into the same task
+payload or log line as the text and the key has travelled with the ciphertext. So in-country residency
+and storage separation are **acceptance criteria with a test**, not implementation notes. That mapping
+is arguably the most concentrated personal data in the system: identifiers with nothing else attached.
+
+**The intended long-term fix, and it may interest ADB beyond this project:** fine-tune a Nepali NER
+model on an openly-licensed corpus, **release it openly**, and run it as a standalone anonymiser service
+usable by any country programme where in-country self-hosting is impossible. Permissively-licensed
+Nepali NLP tooling barely exists, so that would be a genuine DPG **contribution** rather than only a
+compliance fix. Q13 asks whether you would see it that way.
+
+### 4.7 The deployment ladder — and why self-hosting is parked
 
 Nepal cannot host GPUs: no machines, no operations staff, and power reliability makes on-premises a
-liability. We take that as a fact to design around, not to argue with. The distinction that opens the
-path is that **self-hosting the software is not the same as hosting the hardware.**
+liability. We take that as a fact to design around. The distinction that opens the path is that
+**self-hosting the software is not the same as hosting the hardware.**
 
-| Tier | What it is | Who can see grievance text | Role |
+| Tier | What it is | Who can see grievance text | Status |
 |---|---|---|---|
-| **T1** ⭐ | Hosted open-weights inference API | The inference provider | Development, CI, **DPG evidence** — **and production**, as of 2026-08-17 |
+| **T1** ⭐ | Hosted open-weights inference API | The router **and** whichever partner it selects | Supported; the configuration in `.env.open`. **The steady state, and the intended production target** |
 | **T2** | vLLM on a rented GPU VM under the agency's own contract | Nobody outside the agency's contracted infrastructure | ⏸ **Parked** — documented and costed, not deployed |
 | **T3** | On-premises, inside the ministry | Nobody | Not Nepal. Plausible for other country programmes |
 
-**The only thing that differs between the three is the base URL.** That is both the engineering goal
-and the indicator-4 answer.
+**The only thing that differs between the three is the base URL.** That is both the engineering goal and
+the indicator-4 answer, and it is what [`vllm-deployment.md`](vllm-deployment.md) exists to keep true.
 
-> **⚠ T2 is parked, and we would rather tell you why than present a target we are not funding.** The two
-> decisions this needed — jurisdiction and *who pays for the running instance* — are the same decision, and
-> the second has no answer today. **A GPU instance with no named budget line is the Babyl failure mode**, so
-> we are not starting one. The best case remains ADB financing subcontractor-managed instances leased to
-> member countries under a TA with the Ministry of Finance; that is a procurement conversation, and
-> `docs/dpg/vllm-deployment.md` will keep the design and the price current so it can be taken as one.
->
-> **The consequence we want to be explicit about:** T1 is therefore the **steady state**, not a transition.
-> Grievance text will be processed by a third-party provider **indefinitely**. That does not change the
-> indicator-4 answer — a hosted open-weights provider is still an open alternative, and we will be running
-> it — but it **does** change the privacy analysis in §4.3 from a transitional exposure to a permanent one,
-> and it makes the redaction work the only remaining control rather than a defence in depth. We would rather
-> you hear that framing from us.
->
-> **⭐ And since we costed it (DPG-25, 2026-08-20), one thing turned out to be sharper than "parked
-> for want of a payer":** the crossover volume — where a dedicated GPU becomes cheaper than hosted
-> inference — is **40,000 to 780,000 grievances per month** across every price assumption we tried.
-> Two pilot districts handle grievances in the **tens** per month; all 77 districts of Nepal at 100
-> each would be **7,700**. So T1 is cheaper at every volume this system will ever see, by three to
-> four orders of magnitude, and **volume growth does not close the gap** — classification is one
-> request per grievance, not one per conversational turn, so a dedicated GPU would sit idle almost
-> always, and idle GPU time is the entire cost.
->
-> **That means T2 is not a cost decision at all. It is a data-sovereignty decision with a price
-> attached**, and we would rather say so than present a break-even that quietly implies waiting for
-> volume to justify it. The token counts behind that arithmetic are measured
-> ([`model-benchmarks.md`](model-benchmarks.md)); the instance prices are quotes we have not taken,
-> which is why the conclusion is stated as a range and not a number.
+**T2 is parked because nobody owns the run costs.** The two decisions it needed — jurisdiction, and *who
+pays for the running instance* — are really one decision, and the second has no answer. **A GPU instance
+with no named budget line is the failure mode that killed Rwanda's Babyl**, better avoided by not
+starting than discovered later. The best case remains ADB financing subcontractor-managed instances
+leased to member countries under a TA with the Ministry of Finance; that is a procurement conversation,
+and the deployment document exists so that unparking is a procurement decision rather than an
+engineering one.
 
-Indicative T2 sizing — one 24 GB GPU instance (AWS `g5`/`g6.xlarge` class) serving one 27–31B model at
-4-bit quantisation, co-hosting a Whisper-class ASR model, roughly **$700–900/month** on demand and
-materially less with a one-year commitment. ⚠ **Unverified against this deployment's actual volumes.**
-Note that a GRM's load is intake-shaped and bursty around road works and public meetings, not
-chat-shaped: classification is one request per grievance, not one per conversational turn. We will size
-against measured volumes.
+⭐ **And the costing changed the conclusion, which is why we present it rather than a break-even.** The
+T1/T2 crossover — the volume at which a dedicated GPU becomes cheaper than hosted inference — sits at
+**40,000 to 780,000 grievances per month** across every price assumption we tried. Two pilot districts
+handle grievances in the **tens** per month; all 77 districts of Nepal at 100 each would be **7,700**. So
+T1 is cheaper at every volume this system will ever see, by three to four orders of magnitude, and
+**volume growth does not close the gap** — classification is one request per grievance, not one per
+conversational turn, so a dedicated GPU would sit idle almost always, and idle GPU time is the entire
+cost.
 
-The two T2 decisions we had flagged are **answered by parking it** — but both stay live for the day it is
-unparked, and one of them has become a different, smaller ask:
+**That means T2 is not a cost decision at all. It is a data-sovereignty decision with a price
+attached**, and presenting it as a break-even would have implied that waiting for volume eventually
+justifies it. It does not. ⚠ The token counts behind that arithmetic are measured; the instance prices
+are quotes we have not taken, which is why the conclusion is a range rather than a number.
 
-- **Jurisdiction (Q11).** Moot while T2 is parked. The analysis stands for later: AWS Mumbai
-  (`ap-south-1`) is the obvious latency choice but is still a cross-border transfer from Nepal, and
-  Nepal–India data flows carry a political sensitivity Singapore (`ap-southeast-1`) does not.
-- **Who operates and who pays (Q12).** No answer today, which **is** the answer: we are not starting an
-  instance nobody funds. **The gate condition worked.**
-- ⚠ **A smaller ask that has become the live one instead — see Q15 below.** With T2 parked we do not need a
-  GPU budget; we need a **metered inference budget** for benchmarking and CI, which is two orders of
-  magnitude smaller and is the thing currently blocking our indicator-4 *evidence* rather than our
-  indicator-4 *answer*.
+**The consequence we want to be explicit about:** T1 is the steady state, not a transition. Grievance
+text will be processed by a third-party provider **indefinitely**. That does not change the indicator-4
+answer — a hosted open-weights provider is still an open alternative — but it turns the privacy exposure
+in §4.6 from transitional into permanent, and it makes redaction the only remaining control rather than a
+defence in depth.
 
-### 4.6 What we will be able to show, and when
+### 4.8 What we do not know, and will not claim
 
-Sequenced deliberately so that nothing is claimed before it is true:
-
-| Evidence for indicator 4 | Status |
-|---|---|
-| `LLM_BASE_URL` + `MODEL_*` configuration across **both** LLM surfaces, no code change | Specced, not built |
-| An open-weights configuration as the **repository default**, documented | Specced — **deliberately sequenced into Sprint 2, not Sprint 1.** Flipping the base URL to an open router while the model names are still `gpt-3.5-turbo` / `whisper-1` would ship a default configuration that answers **no** request: a reviewer who clones and runs gets a 404, which is weaker evidence than an honest proprietary default. The flip lands as one edit to DPG-17's single config file once the benchmark has named the open models |
-| **CI running the full LLM test suite against the open configuration on every commit** | Specced — the strongest single piece of evidence we can offer, because it cannot silently rot. ⚠ **It is also the only *recurring* inference cost in the plan, and we have no inference budget** (see Q15). We will cap it to a small live subset with a hard token cap; if even that is unaffordable we will run it nightly plus on release tags and **say so on the badge** rather than let a job exist that never runs |
-| Published benchmark table, open vs closed, on a labelled Nepali set | Specced — needs the benchmark set built first (**synthetic in phase 1**; no labeller budget, so it grows with the live project). ⚠ **Unpriced inference** — see Q15. And **ASR has no baseline column**: voice was never live |
-| A documented, **costed** vLLM (T2) deployment | Specced — ⏸ **not deployed, T2 parked.** The end-to-end test against a live endpoint is a logged deferral, not a silent omission |
-
-We will not paste an indicator-4 answer into a submission until the CI job is green. A submission that
-overstates deployment is worse than one that understates it.
-
-✅ **And one line of it got stronger, not weaker.** We had planned to argue *demonstrated replaceability*.
-Since production will now run the open configuration on cost grounds, we can argue the thing itself — we will
-be **running** the open alternative, with the commercial provider retained as a configurable fallback. That is
-more than indicator 4 asks for, and it is the sentence we would lead with.
+- **Nepali quality on open weights is unmeasured — by us and largely by the field.** Nepali is
+  low-resource. The open column of the benchmark has detection only, so any statement that an open model
+  is "close enough" on grievance classification would be invention today. ⚠ **And the classification
+  blocker was our own prompt**, which has since been cut by 70%; re-running the open column is now the
+  next measurement, not a funding question.
+- **SEAH recall for both candidates.** §4.4. This is the number that decides a model selection with a
+  safeguarding consequence, and no table may rank two candidates that differ by a few points on a
+  hand-authored set.
+- **Nepali ASR is the weakest link, and it is weak for the closed model too** — and we have to disclose
+  that **voice transcription is not running at all**, so there is **no incumbent baseline to compare
+  open ASR against.** If we ship an open ASR path, the honest framing is *"we shipped a working voice
+  path where there was none"*, never *"we matched the incumbent"*. There is also no audio in the
+  benchmark set and, as §4.3(c) records, no reachable open ASR endpoint on the configured router.
+  **Q8** asks how the DPGA treats a *partial* open alternative — one that works but performs worse.
+- **Translation may want a specialist model.** A purpose-built seq2seq model will likely beat a general
+  chat model on Nepali↔English, but it needs its own service rather than a chat endpoint. That is a real
+  deployment cost, and the benchmark should decide it, not our prior.
+- **Whether an open model can hold the interactive latency budget.** The closed baseline now passes p99
+  at 24.5 s against a 30 s wait. The shortlist spans 30× on a one-sentence probe. A slower open model
+  turns a 2-in-100 tail into a routine event, at which point the wait and the request timeout have to
+  move together — which they are pinned to do.
 
 ---
 
@@ -673,201 +898,141 @@ more than indicator 4 asks for, and it is the sentence we would lead with.
 
 Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it.
 
-### Ownership and process
+### Ownership, licensing and process
 
 - **Q1 🔴 — Does ADB have a standing IP position for software developed under a loan-financed
-  engagement, or is this determined case by case?** Who is the right signatory, and what is a
-  realistic timeline? This blocks our `LICENSE` file and the submission itself.
+  engagement, or is this determined case by case?** Who is the right signatory, and what is a realistic
+  timeline? This blocks the copyright holder in `LICENSE` and `NOTICE`, the identification of the data
+  controller, and the submission itself. It has the longest lead time on this list and **it is the single
+  most valuable thing you can help us with.**
 - **Q2 — Are there precedents?** Has ADB nominated software as a DPG before? What did the ownership
   determination look like, and can we reuse its shape rather than starting from a blank page?
 - **Q3 — Who submits?** Does ADB nominate, or do we self-submit with ADB endorsement? Does the
-  implementing agency (DOR) need to be a party, given that production will run on DOR infrastructure
-  at `grm-chatbot.dor.gov.np`?
+  implementing agency (DOR) need to be a party, given that production runs on DOR infrastructure at
+  `grm-chatbot.dor.gov.np`?
+- **Q4 — Do you have any objection to Apache-2.0?** The licence choice has been referred to you. We chose
+  Apache-2.0 over MIT for its express patent grant, which matters when a government adopts the code and
+  other country teams fork it, and it is already applied across 593 files. **Confirming it is the
+  cheapest unblock available on this list**; if you would prefer MIT, the change is mechanical and we
+  would rather make it now than after a submission.
+- **Q5 — Sequencing.** Can we begin the assessment with indicator 4's model choice unmade and the CI
+  evidence not yet green, or should we complete the engineering first? A rough timeline for the
+  assessment itself would help us schedule the sprints against it.
 
 ### Indicator 4 for AI systems — the substance
 
-- **Q4 🔴 — Is our reading of indicator 4 correct?** Specifically: is a configurable
-  OpenAI-compatible endpoint, plus a tested open-weights default, plus CI proving both configurations
-  pass the same test suite, sufficient — *even if production continues on a commercial provider*? Or
-  does the DPGA expect the deployed system to run open weights?
-- **Q5 — How does the DPGA treat "open weight" models whose licences are not OSI-approved?**
-  Several strong multilingual models ship under bespoke community licences with use restrictions
-  (Llama, Gemma). Do those count as open alternatives for indicator 4, or must the alternative be
-  Apache-2.0 / MIT? We are currently filtering for Apache-2.0 or MIT to be safe, which narrows the
-  field and may cost us quality on Nepali. **How much does that filter matter?**
-- **Q6 — How does the DPGA treat a *partial* open alternative?** If open-weights ASR works for Nepali
-  but at a materially higher word-error rate, is "functional, with documented degradation" an
-  acceptable answer, or does the alternative need parity? This determines whether we can keep voice
-  intake at all in an open configuration.
-- **Q7 — Two dependency-licence readings, one of which we have already decided.** (a) Redis 7.4+ is
-  RSALv2/SSPLv1, consumed by us as a network service behind a process boundary rather than as a linked
-  library. **We have moved to `redis:8.10`, elected under AGPLv3 (OSI-approved)** — see §3.1(b). Our
-  question is
-  narrow: **does AGPLv3 anywhere in the stack cause a problem** for you, for the DPGA assessment, or
-  in ADB / DOR procurement review? If it does, we will switch to Valkey (BSD-3-Clause) instead — we
-  simply prefer not to pay the renaming and retraining cost speculatively. (b) Is `psycopg2-binary`'s
-  LGPL-with-exceptions an issue for a permissively-licensed DPG?
-- **Q5b — The "data" limb of the AI questionnaire.** We do no training or fine-tuning; every call is
-  zero-shot prompting. Does that dispose of the data question, or does the DPGA expect us to publish
-  an evaluation set and prompt templates as artefacts?
+- **Q6 🔴 — Is our reading of indicator 4 correct?** Specifically: is a configurable OpenAI-compatible
+  endpoint, plus a tested open-weights configuration, plus CI proving both configurations pass the same
+  test suite, sufficient — *even if production continues on a commercial provider*? Or does the DPGA
+  expect the deployed system to run open weights? The project intends to run them anyway, so we expect to
+  satisfy the stricter reading; we would still like the answer, because it determines how much benchmark
+  evidence the submission needs before we can claim it.
+- **Q7 — How does the DPGA treat "open weight" models whose licences are not OSI-approved?** Several
+  strong multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma).
+  Do those count as open alternatives for indicator 4, or must the alternative be Apache-2.0 / MIT? We
+  filter for Apache-2.0 or MIT to be safe, which narrows the field and **may be costing real accuracy on
+  Nepali specifically** — §4.3 names the excluded models. **How much does that filter matter?**
+- **Q8 — How does the DPGA treat a *partial* open alternative?** Our open configuration runs the text
+  paths and **cannot transcribe at all**, because the router serves no OpenAI-compatible audio route. Is
+  "open for text, closed or absent for speech, documented" an acceptable answer? And separately: if
+  open-weights ASR works for Nepali at a materially higher word-error rate, is "functional, with
+  documented degradation" acceptable, or does the alternative need parity? This determines whether voice
+  intake can exist in an open configuration at all.
+- **Q9 — The "data" limb of the AI questionnaire.** We do no training and no fine-tuning; every call is
+  zero-shot prompting against a taxonomy we author, so there is no training-data licence question. We
+  **have** published a 105-item labelled evaluation set under CC0-1.0, with its provenance and its
+  limits. Is that what the data limb wants, and do you also expect the prompt templates as artefacts?
+- **Q10 — Three dependency-licence readings.** (a) We run Redis as a network service behind a process
+  boundary, not as a linked library, and take Redis 8 under **AGPLv3** — the one OSI-approved option of
+  its three. **Does AGPLv3 anywhere in the stack cause a problem** for you, for the DPGA assessment, or
+  in ADB/DOR procurement review? If so we will move to Valkey (BSD-3-Clause); we simply prefer not to pay
+  the switching cost speculatively. (b) Is `psycopg2-binary`'s LGPL-with-linking-exception an issue for a
+  permissively-licensed DPG? (c) Same question for two transitive LGPL libraries, `jwcrypto` and the
+  prebuilt libvips binaries, both unmodified and dynamically loaded.
+- **Q11 — How much benchmark evidence does the submission actually require?** If a smaller published
+  table on a synthetic set is sufficient, we can scope to that rather than measuring expansively and
+  publishing late. This is a scoping question, not a funding one — see Q18.
 
-### Privacy
+### Privacy and safeguarding
 
-- **Q8 — Redaction posture: we have decided, and we want to know if it conflicts with anything you hold.**
-  ✅ **We redact at transmission, not before storage** — the officer needs to see which official was named,
-  and redacting before storage destroys the record's evidentiary value. **Does the DPGA or ADB safeguards
-  policy take a contrary position?** If the requirement is that PII must not be *stored* in free text at
-  all, that is a far larger change than the sprint and we would want to know now rather than later.
-- **Q9 — The NER recursion.** The most accurate Nepali NER model we have found has **no licence
-  stated** on its model card. Shipping it would swap one closed dependency for another, inside the
-  very submission meant to remove it. Our fallback is to fine-tune our own on an openly-licensed
-  corpus and **release it openly** — which would itself be a genuine DPG contribution, since
-  permissively-licensed Nepali NLP tooling barely exists. **Would the DPGA see that as a positive, and
-  is there ADB appetite to fund it?**
-- **Q11 — Hosting jurisdiction. ⏸ Moot for now — self-hosting is parked (§4.5)**, so there is no instance
-  to place. We keep the question on the list because it returns the day it is unparked, and because the
-  *provider's* jurisdiction is now a permanent question rather than a transitional one.
-  Does the DPGA have any position on cross-border hosting for a
-  national-government DPG, beyond compliance with local law? Practically: does anything in the
-  Standard prefer Singapore over Mumbai, or is this purely a Nepal legal question?
+- **Q12 — Redaction posture: we have decided, and we want to know if it conflicts with anything you
+  hold.** We redact **at transmission, not before storage** — the officer needs to see which official was
+  named, and redacting before storage destroys the record's evidentiary value. **Does the DPGA or ADB
+  safeguards policy take a contrary position?** If the requirement is that PII must not be *stored* in
+  free text at all, that is a far larger change than the sprint and we would want to know now.
+- **Q13 — The NER recursion, and a possible contribution.** The most accurate Nepali NER model we have
+  found has **no licence stated** on its model card. Our fallback is to fine-tune our own on an
+  openly-licensed corpus and **release it openly**, running it as a standalone anonymiser service reusable
+  by any country programme where in-country self-hosting is impossible. **Would the DPGA see that as a
+  positive, and is there ADB appetite to fund it?**
+- **Q14 🔴 — The provider's terms, and whether a DPA is required.** The router's no-storage commitment
+  covers the router, not the partner that runs the model; the Terms reference no DPA; and default routing
+  picks a different third-party processor per request. We intend to **pin a single named provider** so the
+  processor is knowable. **Does ADB — or the DPGA — expect a signed data-processing agreement** with that
+  provider before complainant narratives are routed through it? If the answer is yes and no provider will
+  sign one, that reopens self-hosting — the most expensive consequence on this list.
+- **Q15 — Who should review the privacy assessment?** It is drafted and thorough on the *system*, and
+  explicitly a lay reading of the *law*: every statutory reference is marked unverified and no lawyer has
+  read it. **Does the DPGA expect a legally-reviewed assessment, or is a documented, honest engineering
+  assessment sufficient?** If the former, we need to know who pays for that review and whether ADB has
+  counsel who can do it.
+- **Q16 — Hosting jurisdiction.** ⏸ Largely moot for the agency's own infrastructure while self-hosting is
+  parked, but the **provider's** jurisdiction is now a permanent question rather than a transitional one,
+  and we cannot currently make it knowable. Does the DPGA have a position on cross-border processing for a
+  national-government DPG, beyond compliance with local law? And for the day T2 is unparked: does anything
+  in the Standard prefer Singapore over Mumbai, or is that purely a Nepal legal question?
 
-### Scope and sequencing
+### Scope, sustainability and funding
 
-- **Q10 — Which project-hygiene artefacts are actually required** versus merely recommended?
-  `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue templates, public roadmap,
-  release tags and versioning, governance model. We would rather build the required set once than
-  guess and iterate.
-- **Q12 — Sustainability, and it has already bitten us.** Does the DPG assessment look at who funds and
-  operates the system after the pilot? We believe it should — and we are living the answer: **we parked
-  self-hosted inference precisely because no run-cost owner exists** (§4.5). That is the Babyl failure mode
-  avoided by not starting, and we would like to use the DPG process as leverage for a named budget line.
-  ⚠ **Note the ask has changed shape, not just size:** with T2 parked we no longer need a GPU budget; we need
-  a small **metered inference** budget to produce the evidence at all. See **Q15**.
-- **Q13 — Sequencing.** Can we begin the assessment process with indicator 4 in progress and the CI
-  evidence not yet green, or should we complete the engineering first? A rough timeline for the
-  assessment itself would help us schedule the sprints against it.
-- **Q14 — Is there anything in the current DPG Standard revision, or in the AI-systems guidance
-  specifically, that we have missed by reading the published Standard and questionnaire?**
-- **Q15 🔴 — Can ADB fund a small *metered inference* line, and how much evidence does the submission
-  actually need?** This is the one ask that currently blocks work rather than paperwork.
-  **Today we have no inference budget at all** — enough for a few classification calls a day, which is why
-  voice transcription is switched off. Three deliverables in §4.6 are made of inference calls: the ASR
-  evaluation, the text benchmark, and the CI job that runs on every commit forever.
-  **The amounts are small.** A few hundred short synthetic texts across a handful of candidate models on
-  per-token pricing is plausibly tens of dollars, not thousands, and the CI job can be capped. **This is two
-  orders of magnitude below the T2 GPU we have just parked**, and unlike that instance it has a defined end
-  point for the benchmark and a hard cap for CI. Two questions inside it:
-  1. **Is a metered inference line something ADB can fund as part of the DPG work itself?** The evaluation
-     exists to substantiate a claim in an ADB-endorsed submission.
-  2. **How much benchmark evidence does the submission actually require?** If a smaller published table on a
-     synthetic set is sufficient, our cost falls again — and we would rather scope to what is needed than
-     measure expansively and publish late.
-
----
-
-## Appendix A — Full dependency inventory
-
-✅ **Superseded 2026-08-18 — see [`dependency-licenses.md`](dependency-licenses.md)** (DPG-02), the
-generated audit over 153 packages in four dependency sets, produced in-container from the resolved
-trees. The tables below are the readable summary and are kept for that; where they differ, the
-generated report is authoritative. It found two transitive LGPL dependencies this list does not
-mention, and a licence contradiction in our own npm manifest.
-
-### Python — chatbot stack (`requirements.txt`)
-
-| Package | Purpose | Licence |
-|---|---|---|
-| `fastapi` | Orchestrator + backend API | MIT |
-| `uvicorn` (<0.50, pinned) | ASGI server | BSD-3-Clause |
-| `pydantic` v2 | Validation | MIT |
-| `python-multipart` | Uploads | Apache-2.0 |
-| `pyyaml` | Config | MIT |
-| `email-validator` | Validation | CC0-1.0 |
-| `python-socketio` | WebSocket bridge | MIT |
-| `rasa-sdk` 3.6.2 | `Tracker` / `CollectingDispatcher` types only | Apache-2.0 |
-| `psycopg2-binary` | Postgres driver | ⚠ LGPL-3.0-with-exceptions |
-| `SQLAlchemy` 2 / `alembic` | ORM / migrations | MIT |
-| `pytz` | Timezones | MIT |
-| `redis` (client) | Broker client | MIT |
-| `celery` 5.5 / `flower` | Task queue / monitor | BSD-3-Clause |
-| `boto3` | AWS SNS SMS + SES | Apache-2.0 |
-| **`openai` 1.70.0** | **The one ML dependency — client only** | Apache-2.0 |
-| `requests` / `httpx` | HTTP clients | Apache-2.0 / BSD-3-Clause |
-| `pyvips` | Image compression (libvips) | MIT |
-| `python-dotenv` | Config | BSD-3-Clause |
-| `rapidfuzz` | Fuzzy matching | MIT |
-| `langdetect` | Language detection | Apache-2.0 |
-| `icecream` | Debug | MIT |
-| `Flask` / `Werkzeug` / `flask-socketio` | Legacy blueprints; production is FastAPI | BSD-3-Clause / MIT |
-
-### Python — GRM ticketing and ops (`requirements.grm.txt`)
-
-| Package | Purpose | Licence |
-|---|---|---|
-| `pydantic-settings` | Config | MIT — ⚠ **moves to `requirements.txt`** under DPG-17, since the shared LLM config module is on the chatbot surface too |
-| `openpyxl` | Quarterly XLSX reports (deliberately no pandas) | MIT |
-| `python-jose[cryptography]` | Keycloak JWT / JWKS verification | MIT |
-| `python-keycloak` | Keycloak Admin API | MIT |
-| `reportlab` | Case-closure PDFs | BSD-3-Clause (open-source edition) |
-| `apscheduler` | Broker-independent ops scheduler | MIT |
-| `pip-audit` | Scheduled CVE scan | Apache-2.0 |
-| `pytest` | Tests | MIT |
-
-### Frontend (`channels/ticketing-ui/package.json`)
-
-| Package | Licence |
-|---|---|
-| `next` 16.2.6 | MIT |
-| `react` / `react-dom` 19.2.4 | MIT |
-| `lucide-react` | ISC |
-| `tailwindcss` v4 + `@tailwindcss/postcss` | MIT |
-| `typescript` | Apache-2.0 |
-| `eslint` / `eslint-config-next` | MIT |
-| `vitest` | MIT |
-
-Note: only **four** runtime dependencies. No component library, no state-management library, no
-charting library, no analytics SDK.
-
-### Container images
-
-| Image | Licence |
-|---|---|
-| `postgres:15` | PostgreSQL Licence (OSI) |
-| **`redis:8.10`** | **AGPLv3** at our election (Redis 8 is tri-licensed RSALv2 / SSPLv1 / AGPLv3). ✅ Was `redis:7`, a floating tag onto the non-OSI 7.4 line — see §3.1(b) |
-| `nginx:stable` | BSD-2-Clause |
-| `quay.io/keycloak/keycloak:26.0.7` | Apache-2.0 |
-
-### External services (operational dependencies, not code dependencies)
-
-Worth distinguishing for the consultant: these are services the deployment calls, replaceable by
-configuration, and none of them constrains anyone's right to use or fork the code.
-
-| Service | Used for | Replaceability |
-|---|---|---|
-| **OpenAI API** | All 9 model calls | **The subject of §4** |
-| AWS SNS | SMS to complainants (international / development) | Provider-agnostic behind `backend/services/messaging.py`; already **dual-implemented** |
-| **DOIT SMS** (`sms.doit.gov.np`) | SMS in Nepal — Government of Nepal gateway | The production path; configured, not compiled in |
-| SMTP relay | Email notifications and quarterly reports | Any SMTP server |
-| AWS EC2 | Hosting | Any VM |
-
-The SMS layer is a useful counter-example to point at: two providers, one interface, selected by
-environment variable. **It is what the LLM layer should look like** — and the fact that we already did
-it once, elsewhere in the same codebase, is the best evidence that §4's work is a refactor rather than
-an architectural change.
+- **Q17 — Which project-hygiene artefacts are actually required** versus merely recommended? We have
+  shipped `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue templates and a PR template. We
+  have **deliberately not** written a governance model or a release/versioning policy, because both
+  describe commitments nobody has agreed to on a project whose IP ownership is formally open. Which of
+  those does the DPGA require?
+- **Q18 — Sustainability, and it has already bitten us twice.** Does the DPG assessment look at who funds
+  and operates the system after the pilot? We believe it should, and we are living the answer: **we parked
+  self-hosted inference precisely because no run-cost owner exists**, and that gate worked. **Inference for
+  the benchmark and the demo months is funded** — a few hundred US dollars, paid personally by the project
+  owner and to be expensed, covering the pilot's own classification traffic as well as the model sweep. So
+  this is no longer a blocker on the evidence. ⚠ **But that envelope is time-boxed and the CI job is not.**
+  The platform-independence job is the only recurring inference cost in the plan, and **who pays for it
+  after the demo months is unresolved.** We would like to use the DPG process as leverage for a named
+  budget line, and we would rather ask now than let the job quietly stop running.
+- **Q19 — Is there anything in the current DPG Standard revision, or in the AI-systems guidance
+  specifically, that we have missed** by reading the published Standard and questionnaire?
 
 ---
+
+## Appendix A — Dependency inventory
+
+**Superseded by the generated report.** [`dependency-licenses.md`](dependency-licenses.md) is the
+authoritative inventory: 153 packages across four dependency sets, produced in-container from the
+resolved trees, with a written disposition for every entry carrying conditions beyond attribution, and
+re-run nightly by the ops container.
+
+We deliberately do **not** keep a hand-maintained mirror of it here. A summary table in a second document
+is exactly the drift this evidence pack exists to remove — and the generated report found two transitive
+LGPL dependencies and a licence contradiction in our own npm manifest that no hand-written list contained.
+
+The summary counts are in §2.2; the notable dispositions are in §3.2.
 
 ## Appendix B — Where the engineering plan lives
 
-Four sub-sprints, 27 tickets, with test ledgers and open questions already written up in
-[`docs/sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md):
+Four sub-sprints, 31 tickets, with test ledgers, a decision register and a deviation log at
+[`docs/sprints/2026-08-llm/`](../sprints/2026-08-llm/README.md).
 
-| Sprint | Scope | Serves |
-|---|---|---|
-| **0** — [licensing & governance](../sprints/2026-08-llm/01-licensing-and-governance-spec.md) | `LICENSE`, `NOTICE`, SPDX, dependency scan (**four sets, incl. container images + a pin-drift check**), IP determination, privacy assessment, **project hygiene (DPG-05)**, **the stale root README (DPG-06)** | Indicators 2, 3, 5, 7, 8 |
-| **1** — [LLM-agnostic](../sprints/2026-08-llm/02-llm-agnostic-spec.md) | Characterization tests first; **one config file both surfaces read (DPG-17)**; then both LLM surfaces behind configurable clients; schema-constrained output; env plumbing | **Indicator 4** |
-| **2** — [open models](../sprints/2026-08-llm/03-open-models-spec.md) | Labelled Nepali benchmark set, ASR and text evaluation, CI platform-independence job, T2 vLLM deployment | **Indicator 4** evidence |
-| **3** — [PII redaction](../sprints/2026-08-llm/04-pii-redaction-spec.md) | Redaction at the model-call and logging boundaries, measured recall on Nepali | Indicators 7, 9 |
+| Sprint | Scope | Serves | Status |
+|---|---|---|---|
+| **0** — [licensing & governance](../sprints/2026-08-llm/01-licensing-and-governance-spec.md) | `LICENSE`, `NOTICE`, SPDX, generated dependency scan across four sets with a pin-drift check, project hygiene, the root README, the privacy assessment, the IP determination | Indicators 2, 3, 5, 7, 8 | ✅ Landed, except the IP determination (external) |
+| **1** — [LLM-agnostic](../sprints/2026-08-llm/02-llm-agnostic-spec.md) | A characterization-test net first; one config file both surfaces read; both LLM surfaces behind configurable clients; schema-constrained output; environment plumbing; a degraded-mode audit | **Indicator 4** | ✅ Landed |
+| **2** — [open models](../sprints/2026-08-llm/03-open-models-spec.md) | Labelled Nepali benchmark set, provider probe and capability matrix, closed baseline, CI platform-independence job, self-hosted deployment documented and costed | **Indicator 4** evidence | 🟡 Landed; the open column and the ASR evaluation are incomplete |
+| **3** — [PII redaction](../sprints/2026-08-llm/04-pii-redaction-spec.md) | Redaction at the model-call, logging, task-queue and backup boundaries, with measured recall on Nepali | Indicators 7, 9 | ⬜ Not started |
 
-Sprint 0 starts immediately and in parallel, because the IP determination and the privacy assessment
-have multi-week external lead times and gate nothing in the code.
+**A note on what the sprints found, because it is the argument for the method rather than for the
+result.** Of the tickets that closed, most surfaced something the spec did not know: two latent
+crash bugs on the AI paths, a transcription call that had **never worked** because it passed the wrong
+SDK argument, a failed classification stored as if it had succeeded, a stored phone number overwritten
+with an empty string, four taxonomy categories that had silently lost their high-priority flag —
+including the dust category and the SEAH category — and the three storage-layer defects in §3.3. **None
+of those was found by reading a document.** They were found by running the code against a real database,
+a dead port, or a live provider, and then measuring what came back.
