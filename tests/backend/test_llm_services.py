@@ -857,10 +857,25 @@ def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(cli
 
 
 def test_a_category_added_to_the_catalogue_needs_no_code_change(client, caplog, monkeypatch):
-    """The other half of T-13-e: add one to the catalogue and it stops being 'unlisted'."""
-    new_category = {"classification": "Wildlife", "generic_grievance_name": "Elephant corridor blocked"}
-    monkeypatch.setitem(llm.CLASSIFICATION_DATA, "wildlife_corridor", new_category)
-    chosen = "Wildlife - Elephant corridor blocked"
+    """The other half of T-13-e: add one to the catalogue and it stops being 'unlisted'.
+
+    ⚠ **Both halves are needed and this is the one that constrains.** Its sibling proves the warning
+    FIRES for an invented category; only this one proves it can be SILENCED by configuration. A
+    `_warn_about_unlisted_categories` that flagged every category — all thirty legitimate ones
+    included — would pass the sibling and fail here. Deleting this test would leave the pair
+    asserting nothing.
+
+    ⚠ **The key form is the contract, not decoration.** The catalogue handed to the checker is
+    `list(catalogue)` — the dictionary KEYS — so a fixture must register a canonical key
+    (`Wildlife - Elephant Corridor Blocked`), not a slug. That changed under D-51: the prompt
+    previously carried a flat list built from raw CSV values (`Relocation issues - Poor housing…`)
+    while every consumer matched the canonical key (`Relocation Issues - Poor Housing…`), so the
+    model was shown one form and read in another. This fixture used the pre-D-51 form and went red
+    when the code was corrected — the test was wrong, the fix was right.
+    """
+    new_category = {"classification": "Wildlife", "generic_grievance_name": "Elephant Corridor Blocked"}
+    chosen = "Wildlife - Elephant Corridor Blocked"
+    monkeypatch.setitem(llm.CLASSIFICATION_DATA, chosen, new_category)
     client.chat.completions.create.return_value = _chat(
         json.dumps({**CLASSIFY_JSON, "grievance_categories": [chosen]})
     )
