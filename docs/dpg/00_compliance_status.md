@@ -944,108 +944,58 @@ defence in depth.
 
 Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it.
 
+**These are deliberately short and open.** The evidence behind each sits in the sections above. The
+judgement is yours — a question that arrived pre-argued would be asking you to check our reasoning
+rather than to give us yours.
+
 ### Ownership, licensing and process
 
-- **Q1 🔴 — Does ADB have a standing IP position for software developed under a loan-financed
-  engagement, or is this determined case by case?** Who is the right signatory, and what is a realistic
-  timeline? This blocks the copyright holder in `LICENSE` and `NOTICE`, the identification of the data
-  controller, and the submission itself. It has the longest lead time on this list and **it is the single
-  most valuable thing you can help us with.**
-- **Q2 — Are there precedents?** Has ADB nominated software as a DPG before? What did the ownership
-  determination look like, and can we reuse its shape rather than starting from a blank page?
-- **Q3 — Who submits?** Does ADB nominate, or do we self-submit with ADB endorsement? Does the
-  implementing agency (DOR) need to be a party, given that production runs on DOR infrastructure at
-  `grm-chatbot.dor.gov.np`?
-- **Q4 — Do you have any objection to Apache-2.0?** The licence choice has been referred to you. We chose
-  Apache-2.0 over MIT for its express patent grant, which matters when a government adopts the code and
-  other country teams fork it, and it is already applied across 593 files. **Confirming it is the
-  cheapest unblock available on this list**; if you would prefer MIT, the change is mechanical and we
-  would rather make it now than after a submission.
-- **Q5 — Sequencing.** Can we begin the assessment with indicator 4's model choice unmade and the CI
-  evidence not yet green, or should we complete the engineering first? A rough timeline for the
-  assessment itself would help us schedule the sprints against it.
+- **Q1 🔴 — How is IP ownership determined for software developed under a loan-financed engagement, and
+  who signs that determination?** We cannot name a copyright holder or submit without it, and we do not
+  know the right channel to open.
+- **Q2 — Has ADB nominated software as a DPG before, and what should we take from how it was handled?**
+- **Q3 — What is the submission route?** Whether ADB nominates or we self-submit with endorsement, and
+  whether the implementing agency needs to be a party.
+- **Q4 — Do you have any objection to Apache-2.0?**
+- **Q5 — When in the engineering should the assessment start, and how long does it usually take?**
 
-### Indicator 4 for AI systems — the substance
+### Indicator 4 for AI systems
 
-- **Q6 🔴 — Is our reading of indicator 4 correct?** Specifically: is a configurable OpenAI-compatible
-  endpoint, plus a tested open-weights configuration, plus CI proving both configurations pass the same
-  test suite, sufficient — *even if production continues on a commercial provider*? Or does the DPGA
-  expect the deployed system to run open weights? The project intends to run them anyway, so we expect to
-  satisfy the stricter reading; we would still like the answer, because it determines how much benchmark
-  evidence the submission needs before we can claim it.
-- **Q7 — How does the DPGA treat "open weight" models whose licences are not OSI-approved?** Several
-  strong multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma).
-  Do those count as open alternatives for indicator 4, or must the alternative be Apache-2.0 / MIT? We
-  filter for Apache-2.0 or MIT to be safe, which narrows the field and **may be costing real accuracy on
-  Nepali specifically** — §4.3 names the excluded models. **How much does that filter matter?**
-- **Q8 — How does the DPGA treat a *partial* open alternative?** Our open configuration runs the text
-  paths and **cannot transcribe at all**, because the router serves no OpenAI-compatible audio route. Is
-  "open for text, closed or absent for speech, documented" an acceptable answer? And separately: if
-  open-weights ASR works for Nepali at a materially higher word-error rate, is "functional, with
-  documented degradation" acceptable, or does the alternative need parity? This determines whether voice
-  intake can exist in an open configuration at all.
-- **Q9 — The "data" limb of the AI questionnaire.** We do no training and no fine-tuning; every call is
-  zero-shot prompting against a taxonomy we author, so there is no training-data licence question. We
-  **have** published a 105-item labelled evaluation set under CC0-1.0, with its provenance and its
-  limits. Is that what the data limb wants, and do you also expect the prompt templates as artefacts?
-- **Q10 — Three dependency-licence readings.** (a) We run Redis as a network service behind a process
-  boundary, not as a linked library, and take Redis 8 under **AGPLv3** — the one OSI-approved option of
-  its three. **Does AGPLv3 anywhere in the stack cause a problem** for you, for the DPGA assessment, or
-  in ADB/DOR procurement review? If so we will move to Valkey (BSD-3-Clause); we simply prefer not to pay
-  the switching cost speculatively. (b) Is `psycopg2-binary`'s LGPL-with-linking-exception an issue for a
-  permissively-licensed DPG? (c) Same question for two transitive LGPL libraries, `jwcrypto` and the
-  prebuilt libvips binaries, both unmodified and dynamically loaded.
-- **Q11 — How much benchmark evidence does the submission actually require?** If a smaller published
-  table on a synthetic set is sufficient, we can scope to that rather than measuring expansively and
-  publishing late. This is a scoping question, not a funding one — see Q18.
+- **Q6 🔴 — How does the DPGA assess platform independence for an AI system?** In particular, what weight
+  sits on a configurable and tested open alternative, versus on what production actually runs.
+- **Q7 — How does the DPGA treat open-weight models whose licences are not OSI-approved?** We filter for
+  Apache-2.0 and MIT, which excludes several of the strongest multilingual models for Nepali.
+- **Q8 — How does the DPGA treat a partial open alternative?** Our open configuration serves the text
+  paths; it has no OpenAI-compatible speech endpoint, so voice has no open path today.
+- **Q9 — What does the *data* limb of the AI questionnaire expect from a system that does no training or
+  fine-tuning?** We have published a 105-item labelled evaluation set under CC0-1.0.
+- **Q10 — Do any of these licences cause a problem for the assessment, or in ADB/DOR procurement?**
+  AGPLv3 (Redis, elected from its three), LGPL-with-linking-exception (`psycopg2-binary`), and two
+  transitive LGPL libraries.
+- **Q11 — How much benchmark evidence does a submission need to substantiate an open-alternative claim?**
 
 ### Privacy and safeguarding
 
-- **Q12 — Redaction posture: we have decided, and we want to know if it conflicts with anything you
-  hold.** We redact **at transmission, not before storage** — the officer needs to see which official was
-  named, and redacting before storage destroys the record's evidentiary value. **Does the DPGA or ADB
-  safeguards policy take a contrary position?** If the requirement is that PII must not be *stored* in
-  free text at all, that is a far larger change than the sprint and we would want to know now.
-- **Q13 — The NER recursion, and a possible contribution.** The most accurate Nepali NER model we have
-  found has **no licence stated** on its model card. Our fallback is to fine-tune our own on an
-  openly-licensed corpus and **release it openly**, running it as a standalone anonymiser service reusable
-  by any country programme where in-country self-hosting is impossible. **Would the DPGA see that as a
-  positive, and is there ADB appetite to fund it?**
-- **Q14 🔴 — The provider's terms, and whether a DPA is required.** The router's no-storage commitment
-  covers the router, not the partner that runs the model; the Terms reference no DPA; and default routing
-  picks a different third-party processor per request. We intend to **pin a single named provider** so the
-  processor is knowable. **Does ADB — or the DPGA — expect a signed data-processing agreement** with that
-  provider before complainant narratives are routed through it? If the answer is yes and no provider will
-  sign one, that reopens self-hosting — the most expensive consequence on this list.
-- **Q15 — Who should review the privacy assessment?** It is drafted and thorough on the *system*, and
-  explicitly a lay reading of the *law*: every statutory reference is marked unverified and no lawyer has
-  read it. **Does the DPGA expect a legally-reviewed assessment, or is a documented, honest engineering
-  assessment sufficient?** If the former, we need to know who pays for that review and whether ADB has
-  counsel who can do it.
-- **Q16 — Hosting jurisdiction.** ⏸ Largely moot for the agency's own infrastructure while self-hosting is
-  parked, but the **provider's** jurisdiction is now a permanent question rather than a transitional one,
-  and we cannot currently make it knowable. Does the DPGA have a position on cross-border processing for a
-  national-government DPG, beyond compliance with local law? And for the day T2 is unparked: does anything
-  in the Standard prefer Singapore over Mumbai, or is that purely a Nepal legal question?
+- **Q12 — What posture do the DPGA or ADB safeguards policy expect on personal data held in free text?**
+  We redact at transmission rather than before storage.
+- **Q13 — Would an openly-released Nepali anonymiser model count as a DPG contribution, and is there ADB
+  appetite to fund one?** The most accurate existing Nepali NER model states no licence.
+- **Q14 🔴 — Does ADB or the DPGA expect a signed data-processing agreement with the inference provider?**
+  Unless pinned, the router selects a different third-party processor per request, and its terms
+  reference no DPA.
+- **Q15 — Does the DPGA expect a legally-reviewed privacy assessment, or is a documented engineering one
+  sufficient?** Ours is written; no lawyer has read it.
+- **Q16 — Does the DPGA have a position on cross-border processing for a national-government DPG?**
 
 ### Scope, sustainability and funding
 
-- **Q17 — Which project-hygiene artefacts are actually required** versus merely recommended? We have
-  shipped `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue templates and a PR template. We
-  have **deliberately not** written a governance model or a release/versioning policy, because both
-  describe commitments nobody has agreed to on a project whose IP ownership is formally open. Which of
-  those does the DPGA require?
-- **Q18 — Sustainability, and it has already bitten us twice.** Does the DPG assessment look at who funds
-  and operates the system after the pilot? We believe it should, and we are living the answer: **we parked
-  self-hosted inference precisely because no run-cost owner exists**, and that gate worked. **Inference for
-  the benchmark and the demo months is funded** — a few hundred US dollars, paid personally by the project
-  owner and to be expensed, covering the pilot's own classification traffic as well as the model sweep. So
-  this is no longer a blocker on the evidence. ⚠ **But that envelope is time-boxed and the CI job is not.**
-  The platform-independence job is the only recurring inference cost in the plan, and **who pays for it
-  after the demo months is unresolved.** We would like to use the DPG process as leverage for a named
-  budget line, and we would rather ask now than let the job quietly stop running.
-- **Q19 — Is there anything in the current DPG Standard revision, or in the AI-systems guidance
-  specifically, that we have missed** by reading the published Standard and questionnaire?
+- **Q17 — Which project-hygiene artefacts does the DPGA require?** We have `SECURITY`, `CONTRIBUTING`,
+  `CODE_OF_CONDUCT` and issue/PR templates; no governance model and no versioning policy.
+- **Q18 — Does the assessment consider who funds and operates the system after the pilot?** Our inference
+  budget is time-boxed and personally funded, and the CI job that produces the indicator-4 evidence has
+  no owner beyond it.
+- **Q19 — What are we missing?** Anything in the current Standard revision, or the AI-systems guidance,
+  that we would not find by reading the published documents.
 
 ---
 
