@@ -533,6 +533,11 @@ ceiling, the effective mode is the weaker of the two, and the ladder degrades `j
 works.** This *improves* portability rather than trading it away: prompt-only JSON is the least portable
 choice available, and it is what breaks first when you change models.
 
+**The pattern was already proven in this codebase, which is the best evidence it was a refactor rather
+than a redesign.** The SMS layer runs two providers behind one interface selected by an environment
+variable — AWS SNS internationally, the Government of Nepal gateway (`sms.doit.gov.np`) in Nepal. The
+model layer is the same shape, done a second time.
+
 **The AI paths are fail-soft, which lowers the risk of switching providers.** Intake writes the
 grievance to PostgreSQL *before* any model call; classification runs as a Celery task with retry and
 explicit failure states; the chatbot waits on a bounded deadline rather than indefinitely. **A grievance

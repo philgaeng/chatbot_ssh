@@ -212,142 +212,56 @@ decision, not a migration.
 **And it is now two models, not six.** Every text task resolves to one small model; transcription to one
 speech model. Eight task keys, two values.
 
-### Three things worth being candid about
+### What is done, and what is not
 
-**It was a configuration refactor, not a rewrite — and it is done.** The client was constructed with no
-base-URL override; the SDK accepts one and the major open-weights serving stacks expose a compatible API.
-That is exactly the "minimal configuration changes" the Standard asks about. **The precedent was already
-inside our own codebase:** the SMS layer runs two providers behind one interface selected by an
-environment variable (AWS SNS internationally, the Government of Nepal gateway for Nepal). Having done it
-once was the best evidence it was a refactor; having now done it twice, `diff .env.openai .env.open` is
-the evidence.
+**It is a configuration refactor, and it is finished.** `diff .env.openai .env.open` is the whole delta —
+no code, no rebuild, no migration.
 
-**The AI paths are fail-soft, which lowers the switching risk.** Intake writes the grievance to PostgreSQL
-*before* any model call; classification runs as a retrying background task with explicit failure states;
-the chatbot waits on a bounded deadline. **A grievance is never lost because a model was unavailable** —
-so a slower model degrades throughput, not intake.
+**What is not finished, and you should hear it from us rather than find it:**
 
-**⚠ The CI job has never run in CI.** It is written, it is pinned by a test file of its own, and it
-returns 4 passed / 1 xfailed / exit 0 when run by hand against an Apache-2.0 open-weights model. It has
-not executed on the runner because the provider account was rate-limited when it was written. **A job
-that exists, never runs, and is cited as evidence is not acceptable**, and the workflow header says so in
-those words. If the per-commit cadence proves unaffordable the documented fallback is nightly plus release
-tags, **declared on the badge** rather than quietly.
+- **No open model has been chosen.** The comparative benchmark is unfinished, so the repository default
+  is still the proprietary configuration — deliberately, because an open endpoint pointed at proprietary
+  model ids is a repository that cannot serve one request on a fresh clone.
+- **The open configuration cannot transcribe.** The provider serves no OpenAI-compatible speech endpoint,
+  so the claim is true for text and false for voice.
+- **⚠ The CI job that demonstrates all of this has never run in CI.** It passes when run by hand; the
+  provider account was rate-limited when it was written. **A job that exists, never runs, and is cited as
+  evidence is not acceptable** — the workflow header says so in those words.
+- **⚠ One measurement is missing and it carries a safeguarding consequence.** Sensitive-content *recall*
+  decides the model choice, and it cannot be measured from anything in this repository: the committed
+  benchmark holds no harassment reports, by decision rather than omission.
 
-Two properties of that job are worth naming, because each is a way it could have become decoration.
-Model ids come from repository variables rather than literals, and a test asserts **the endpoint the
-tests reached is the one the registry names** — which catches the most embarrassing false green available
-here, a job that passes against the commercial provider while reporting that open weights work. And live
-tests *skip* on an account-level refusal, because a job that reddens on someone else's billing teaches
-everyone to ignore it — ⚠ but a run where everything skipped would exit 0 and show a green tick having
-tested nothing, so **the job also fails when nothing passed.** Neither control is safe alone.
-
-### What the measurements found, including two things we were not looking for
-
-The closed baseline — the model production runs today — scores **F1 0.762** on multi-label
-classification over 105 authored items, with p99 latency inside the 30-second interactive budget.
-⚠ Authored text is cleaner than real complaints, so every figure is an **upper bound** on production
-accuracy, not an estimate of it.
-
-⭐ **The classifier was inventing categories on 17% of grievances, and storing them.** Not as noise — as
-a coherent fictional `Road Hazard - *` family, stored, **shown to the complainant as the system's
-understanding of their own complaint**, and synced to ticketing where it matched no filter and no
-priority lookup. Then the open model invented **the same category**: two vendors, two architectures, one
-fabricated label. That made it a **taxonomy** finding rather than a model one — the catalogue had no
-road-hazard grouping, and independent models kept reaching for the category a road project would expect
-to exist. Adding six categories and cutting the prompt took invention from **18 items to 4**, and dropped
-p99 latency from 40.6 s to 24.5 s, inside the budget for the first time.
-
-⚠ **The single most important number we do not have is SEAH detection recall, and it decides a model
-choice with a safeguarding consequence.** The current model flags **5 of 8** items authored as the hard
-case — gendered complaints that are emphatically not harassment: no separate toilet for women workers,
-unequal pay for the same work, refused work for being a woman. **The SEAH route is access-isolated**, so
-those do not get a wrong label; they **leave the queue of the people who would have fixed them.** The open
-candidate flags **nothing at all** — which is either better calibration or a detector that always says no,
-and **nothing in the repository can tell those apart**, because the committed benchmark contains no
-harassment reports. That is by decision, not omission: three hundred realistic Nepali harassment
-complaints sitting in a public repository will be read as leaked case data by somebody, regardless of how
-the file is labelled. The positives are held by the project owner and the harness **refuses a dataset path
-inside the repository**.
-
-**So neither model may be selected on the evidence that exists**, and the open model's perfect
-false-alarm rate must not appear in a submission as an improvement. Detail and the confusion matrix are in
+The benchmark figures, the two live defects the measurements exposed, and the candidate that refused a
+grievance about children falling ill are in
+[`00_compliance_status.md`](00_compliance_status.md) §4.3–§4.4 and
 [`model-benchmarks.md`](model-benchmarks.md).
 
-⚠ **And one candidate disqualified itself for a reason that is not about quality.** `Apertus-70B` — the
-strongest *DPG story* on our shortlist, fully open weights **and** open training data, built for
-low-resource language coverage — replied to the capability probe with *"Your request was blocked"*, in
-0.42 seconds. The prompt was our flagship benchmark item: road dust entering a house, children falling
-ill. **This system's entire input distribution is human harm**, and dust and sick children is the mildest
-end of it. A filter tuned to refuse discussion of harm to children refuses hardest on the reports that
-matter most — and because sensitive-content detection fails open by design, a harassment report that
-filter blocks would be silently handled as an ordinary complaint.
+### Where the residual goes, and under whose terms — the substance of Q14
 
-### Where the residual goes, and under whose terms
+Redaction is imperfect by construction, so the honest question is what happens to the text that gets
+through. With self-hosting parked, that text reaches a third party permanently, so we read the
+provider's terms rather than assuming them.
 
-Redaction is imperfect by construction, so the honest question is *what happens to the text that gets
-through*. With self-hosting parked (§5) that text goes to a third party permanently, so we read the
-provider's terms rather than assuming them. **What we found is worth your view (Q14):**
+Hugging Face's own commitments are substantive and we cite them: no user data stored for training, no
+request body or response stored when routing, debugging logs for 30 days, SOC 2 Type 2 on the Hub.
+⚠ **Then the sentence that decides it, and it is theirs:** *"External providers are responsible for
+their own security measures."* **The no-storage commitment covers the router, not the company that runs
+the model** — and by default the router picks a different third-party processor *per request*. For a
+government privacy assessment, "we cannot name which company processed this citizen's grievance" is a
+finding, not a footnote. The Terms reference no DPA.
 
-**Two framing points first, because both are easy to get wrong.** Moving to open weights answers
-indicator 4 and **does nothing for indicator 7** — openness is a *licensing* property, not a *privacy*
-one, and an open model served by a third party carries exactly the same data-flow risk as a commercial one
-served by its vendor. **And the legal trigger was never model training:** under Nepal's Individual Privacy
-Act 2018 and GDPR-style regimes alike, sending personal data to a third party **is a disclosure and a
-cross-border transfer — the event is the transmission itself.** Whether the recipient stores it, learns
-from it, or discards it a microsecond later does not change that a transfer occurred and needs a lawful
-basis. Non-retention is a mitigation, and a valuable one; it is not an answer.
+We intend to pin one named provider so the processor is knowable. **What that still does not fix** —
+the downstream provider's own retention, the jurisdiction of execution, and prompt caching — is why
+Q14 asks whether a signed agreement is expected.
 
-**Hugging Face's own commitments are substantive, and we cite them**
-([Inference Providers → Security & Compliance](https://huggingface.co/docs/inference-providers/en/security)):
-no user data stored for training; no request body or response stored when routing; debugging logs for up
-to 30 days with no user data or tokens; TLS in transit; and the Hub, of which Inference Providers is a
-feature, is **SOC 2 Type 2 certified.**
+⚠ **And one precision we want settled before anyone briefs the ministry.** What redaction produces is
+**pseudonymised** text, not **anonymised** text: we keep the mapping, so the text remains personal data.
+**We will not let anyone tell the agency the grievances are "anonymised"** — the claim would not survive
+scrutiny and would discredit everything else we say. What we can say is accurate and strong: only
+pseudonymised text crosses the border, and the re-identification key never leaves Nepal.
 
-**⚠ Then the sentence that matters, and it is theirs:** *"External providers are responsible for their own
-security measures, so please refer to their respective security policies."* The no-storage commitment
-covers the **router**, not the company that actually runs the model.
-
-- **By default the processor is not fixed.** Requests are proxied to third-party partners — Cerebras,
-  Groq, Together, Fireworks, Novita, DeepInfra, Replicate, Scaleway, OVHcloud and others — with the
-  default policy selecting *the fastest available per request*. **For a government privacy assessment,
-  "we cannot name which company processed this citizen's grievance" is a finding, not a footnote.**
-- **The Terms of Service reference no DPA**, and frame confidentiality around private repositories rather
-  than inference traffic. For a router architecture a DPA is awkward by construction: you would need one
-  from Hugging Face *and* from each downstream provider.
-
-**Our engineering response, which we would like sanity-checked:** **pin the provider** in the model path
-rather than use automatic routing, turning an unknowable sub-processor chain into one named company whose
-policy can be read, cited and made the subject of a DPA request. **Production pins; CI keeps automatic
-routing**, because CI sends only synthetic benchmark data.
-
-**What remains even with a provider pinned**, and belongs in the data-flow diagram rather than being
-discovered later: the downstream provider's **own retention**; the **jurisdiction of execution**, which
-pinning does not fix; and **prompt caching**, which several providers use and which means cached content
-sits somewhere briefly. Any submission text naming a single destination country for the model calls would
-be a claim we cannot support.
-
-⚠ **One thing we will not overstate.** The router's value for indicator 4 is independence from *any single
-vendor*: our chosen model is offered by eight partners and its larger sibling by eleven. **But only one
-route has actually been exercised.** The others are OpenAI-compatible and the code needs no change to use
-them, but each needs its own account and none has been probed. The fan-out count is not a measurement.
-
-### ⚠ One precision we want right before anyone briefs the ministry
-
-**What redaction produces is pseudonymised text, not anonymised text**, and the difference is not
-pedantry. Because we keep the mapping that turns a placeholder back into a name, the text **remains
-personal data**. Redaction lowers the risk profile; it does not take the data out of scope.
-
-**We will not let anyone tell the agency the grievances are "anonymised."** That claim would not survive
-scrutiny, and an overstatement there would discredit every other claim we make.
-
-**What we can say, accurately and strongly:** *only pseudonymised text crosses the border, and the
-re-identification key never leaves Nepal.* Pseudonymisation is an explicitly recognised safeguard, and
-that is a genuinely strong position. ⚠ The second clause is a promise about **deployment, not about code**,
-and it is quietly easy to void — one careless serialisation putting the mapping into the same task payload
-or log line as the text, and the key has travelled with the ciphertext. So in-country residency and
-storage separation are **acceptance criteria with a test**, not implementation notes. That mapping is
-arguably the most concentrated personal data in the system: identifiers with nothing else attached.
+Full analysis, including what we will not overstate about the router's multi-vendor fan-out:
+[`00_compliance_status.md`](00_compliance_status.md) §4.6.
 
 ---
 
