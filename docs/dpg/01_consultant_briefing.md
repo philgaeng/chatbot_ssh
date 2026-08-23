@@ -522,7 +522,7 @@ written disposition for every entry carrying conditions beyond attribution, is
 | Officer frontend | Next.js 16, React 19, Tailwind v4, lucide-react | MIT / ISC |
 | Reports & documents | openpyxl, ReportLab | MIT / BSD-3-Clause |
 | Images | pyvips / libvips | MIT / LGPL-2.1 |
-| Conversational state machine | This project's own code; `rasa-sdk` as a type shim only | Apache-2.0 |
+| Conversational state machine | This project's own code and orchestrator; `rasa-sdk` supplies the action/form base classes — **no Rasa server, no NLU, no TensorFlow** | Apache-2.0 |
 | **Model client** | **`openai` — the only ML dependency, and the *client* is open; the service it calls is the subject of §4** | Apache-2.0 |
 
 **Reading manifests would have missed 98 of the 133 Python packages**, and with them the three copyleft
@@ -534,8 +534,10 @@ licence obligation does not care how a package got there.
 **Two points a reviewer usually asks about.** Identity is **self-hosted** (Keycloak 26) rather than
 federated to a vendor — an earlier plan used AWS Cognito and we moved during the build, removing what
 would have been a hard indicator-4 dependency at the authentication layer. And the conversational state
-machine is our own code, with `rasa-sdk` surviving only as a type shim: **there is no Rasa server and no
-TensorFlow anywhere.**
+machine and its orchestrator are our own code. ⚠ **`rasa-sdk` is more than a type shim** — 49 modules
+import it and our form base class inherits its `FormValidationAction`, whose dispatch our orchestrator
+executes. The claim that carries the licensing weight is narrower and it holds: **there is no Rasa
+server, no Rasa NLU and no TensorFlow anywhere**, and `rasa-sdk` itself is Apache-2.0.
 
 ### External services
 

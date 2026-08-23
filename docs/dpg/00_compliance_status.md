@@ -122,7 +122,7 @@ could self-host with no commercial relationship with anyone.
 | Officer frontend | Next.js 16, React 19, Tailwind v4, lucide-react | MIT / ISC |
 | Reports & documents | openpyxl (XLSX), ReportLab (PDF) | MIT / BSD-3-Clause |
 | Images | pyvips / libvips | MIT / LGPL-2.1 (separate process, dynamic link) |
-| Chatbot state machine | This project's own code; `rasa-sdk` survives only as a type shim | Apache-2.0 |
+| Chatbot state machine | This project's own code and its own orchestrator; `rasa-sdk` (Apache-2.0) supplies the action/form base classes it drives — **no Rasa server, no Rasa NLU, no TensorFlow** | Apache-2.0 |
 | Container orchestration | Docker Compose | Apache-2.0 |
 
 **The audit is generated, not asserted.** [`dependency-licenses.md`](dependency-licenses.md) was
@@ -154,9 +154,13 @@ Two points a reviewer usually asks about:
   hard indicator-4 dependency at the authentication layer
   ([`16_auth_keycloak.md`](../deployment/16_auth_keycloak.md)).
 - **There is no Rasa server and no TensorFlow.** The conversational state machine is this project's
-  own code; `rasa-sdk` (Apache-2.0) is installed only for its `Tracker` / `CollectingDispatcher`
-  types. An earlier assessment flagged Rasa's licence as a week-one emergency; resolved mechanically
-  from the resolved tree, it is a non-issue.
+  own code, driven by this project's own orchestrator. ⚠ **`rasa-sdk` (Apache-2.0) is more than a type
+  shim, and we would rather be precise than tidy:** 49 modules import it, `BaseFormValidationAction`
+  **inherits** `FormValidationAction`, and the orchestrator calls `action.run(dispatcher, tracker,
+  domain)` — so its form-validation dispatch is executed, not merely annotated against. What is
+  genuinely absent is the part that carries the licence weight: **no Rasa server, no Rasa NLU, no
+  TensorFlow** — verified against the resolved tree. An earlier assessment flagged Rasa's licence as a
+  week-one emergency; `rasa-sdk` is Apache-2.0, so it is a non-issue either way.
 
 ### 2.3 Indicator 5 — Documentation ✅
 

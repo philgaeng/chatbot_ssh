@@ -91,7 +91,7 @@ mechanically, from the resolved tree:**
 
 | Package | Version | Licence | What it actually is |
 |---|---|---|---|
-| `rasa-sdk` | 3.6.2 | Apache-2.0 | The only Rasa-family package installed. There is no Rasa server, no Rasa NLU and no TensorFlow anywhere in the tree — the conversational state machine is this project's own code, and `rasa-sdk` survives as a type shim for `Tracker` / `CollectingDispatcher`. |
+| `rasa-sdk` | 3.6.2 | Apache-2.0 | The only Rasa-family package installed, and **Apache-2.0, so the licence question is closed either way**. There is no Rasa server, no Rasa NLU and no TensorFlow anywhere in the tree — verified against the resolved tree. ⚠ **It is not merely a type shim**: 49 modules import it, `BaseFormValidationAction` inherits `FormValidationAction`, and the orchestrator executes `action.run(...)`. Removing it is a refactor, not a deletion — see §Known vulnerabilities. |
 
 Nothing further is owed on this. The alarm cost an hour, not a week.
 
@@ -370,15 +370,29 @@ That number measures a tree this branch has already moved past; it is not a meas
 | Python (`pip-audit`) | **6 across 5 packages** | `ecdsa` ⚠ no fix released · `sanic-cors` · `wheel` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0 |
 | npm, production tree (`npm audit --omit=dev`) | **4 high** | all one package: `sharp` < 0.35.0 inheriting four libvips CVEs |
 
-### ⭐ Two of the six Python findings come from a dependency that exists only as a type shim
+### ⚠ Two of the six come from `rasa-sdk` — and neither the fix nor the risk is what it looks like
 
-`rasa-sdk` pulls **`sanic-cors`** and **`wheel`**. This repository runs **no Rasa server** — `rasa-sdk`
-is installed solely for the `Tracker` and `CollectingDispatcher` type annotations, which is the point
-[§2.2 of the compliance status](00_compliance_status.md) makes about *licensing*. It turns out to carry
-a **security** cost too: a web CORS library, in the image, for a web server that does not exist.
+`rasa-sdk` pulls **`sanic-cors`** and **`wheel`**. The tempting conclusion is that removing a
+"type shim" removes a third of the Python findings cheaply. **Both halves of that are wrong, and the
+correction is worth more than the original claim.**
 
-**Dropping `rasa-sdk` removes a third of the Python findings** and is a contained change — define the two
-types locally. Logged rather than done, because it touches the live chatbot's action signatures.
+**The risk is near zero, not a third.** Neither CVE is reachable. `sanic-cors` is CORS middleware for
+a Sanic web server — `sanic` is never imported by any module in this repository, so the code never
+executes. `wheel` is build tooling, not a runtime import. **They are findings in a count, not exposure
+in a system**, and a remediation plan that optimises the count over the risk is how the expensive work
+gets done first.
+
+**The removal is a refactor, not a deletion.** `rasa-sdk` is imported by **49 modules**. The surface
+used is `Tracker`, `CollectingDispatcher`, `Action`, `DomainDict`, six event constructors — **and
+`FormValidationAction`, which `BaseFormValidationAction` inherits** and whose `run()` the orchestrator
+invokes (`backend/orchestrator/action_registry.py`). The events are trivial dict factories and would
+be a dozen lines; `Tracker` (302 lines) and the inherited form-validation dispatch are not. This is a
+framework dependency being driven at runtime, and replacing it means reimplementing a slot-validation
+loop that the live chatbot's intake path runs on.
+
+**Conclusion: do not do this for the CVEs.** If `rasa-sdk` is ever removed it should be for its own
+reasons — owning the form loop outright — with the dependency reduction as a side effect, and it needs
+a characterization net over the intake path first, exactly as DPG-10 did for the LLM surfaces.
 
 ### The other four
 
