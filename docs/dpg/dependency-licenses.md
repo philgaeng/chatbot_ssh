@@ -122,7 +122,10 @@ A dated audit is stale the next time anybody adds a dependency, and indicator 2 
 to hold continuously. Per **Q-06**, the licence scan is now **scheduled**, not a pre-submission
 artefact:
 
-* `ops/security.py` → `licence_scan()`, running nightly at 01:50 beside the existing `pip-audit`
+* `ops/security.py` → `licence_scan()`, scheduled nightly at 01:50 beside the existing `pip-audit`
+  ⚠ **Scheduled is not the same as running.** The `ops` container is **not deployed to staging or
+  DOR prod**, so this executes only where a development stack happens to be up at 01:50. Until `ops`
+  ships, treat this report's freshness as *the date at the top*, not as a nightly guarantee.
   CVE scan, writing to `ops.dependency_findings` with `source='pip-licenses'`. Report-only; it
   never blocks a deploy.
 * Classification lives in `ops/licences.py` — pure logic, unit-tested by
@@ -348,3 +351,41 @@ own merits even though it does not move this row.
 was wrong, and was corrected after actually rebuilding `grm_ui` and re-running the scan.** Recorded
 here rather than quietly edited, because the point of a generated report is that it says what the
 command said.
+
+---
+
+## Known vulnerabilities — measured 2026-08-23, on `dpg/sprint2-open-models`
+
+Distinct from the licence question above and recorded here because a reviewer reaching this repository
+through GitHub sees a vulnerability count before they see anything else.
+
+⚠ **GitHub reports 34 alerts (17 high) — against `main`, which is two months stale.** `main` was last
+touched 2026-06-25, sits 333 commits behind this branch, and **all three dependency manifests differ**.
+That number measures a tree this branch has already moved past; it is not a measurement of the code.
+
+**Measured on this branch instead**, in-container against the resolved trees:
+
+| Set | Findings | Notes |
+|---|---|---|
+| Python (`pip-audit`) | **6 across 5 packages** | `ecdsa` ⚠ no fix released · `sanic-cors` · `wheel` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0 |
+| npm, production tree (`npm audit --omit=dev`) | **4 high** | all one package: `sharp` < 0.35.0 inheriting four libvips CVEs |
+
+### ⭐ Two of the six Python findings come from a dependency that exists only as a type shim
+
+`rasa-sdk` pulls **`sanic-cors`** and **`wheel`**. This repository runs **no Rasa server** — `rasa-sdk`
+is installed solely for the `Tracker` and `CollectingDispatcher` type annotations, which is the point
+[§2.2 of the compliance status](00_compliance_status.md) makes about *licensing*. It turns out to carry
+a **security** cost too: a web CORS library, in the image, for a web server that does not exist.
+
+**Dropping `rasa-sdk` removes a third of the Python findings** and is a contained change — define the two
+types locally. Logged rather than done, because it touches the live chatbot's action signatures.
+
+### The other four
+
+* **`ecdsa`** — arrives via `python-jose`, the Keycloak JWT path. ⚠ **No fix version has been
+  published**, so this is a standing exposure requiring either a mitigation or a move to a different
+  JWT library. The one on this list that cannot be closed by a version bump.
+* **`sharp` / libvips** — the same prebuilt binaries [flagged above as LGPL transitives](#dispositions),
+  arriving through Next.js image optimisation. ⚠ The advertised fix moves Next.js **outside the stated
+  dependency range**, so it is a framework bump, not a patch.
+* **`python-dotenv`, `setuptools`** — ordinary version bumps, no downstream constraint.

@@ -126,8 +126,7 @@ could self-host with no commercial relationship with anyone.
 | Container orchestration | Docker Compose | Apache-2.0 |
 
 **The audit is generated, not asserted.** [`dependency-licenses.md`](dependency-licenses.md) was
-produced **inside the running containers**, against the resolved trees, and the ops container re-runs
-the scan nightly so it cannot go stale:
+produced **inside the running containers**, against the resolved trees:
 
 | Set | Packages | Non-OSI | Unknown |
 |---|---|---|---|
@@ -136,6 +135,13 @@ the scan nightly so it cannot go stale:
 | npm — production tree | 16 | 0 | 0 |
 | Container images | 4 | 0 | 0 |
 | **Total** | **153** | **0** | **0** |
+
+⚠ **On how fresh that stays, because the honest answer is weaker than "nightly".** A licence scan
+*is* scheduled — `ops/security.py` runs it at 01:50 daily beside a `pip-audit` CVE scan, writing to
+`ops.dependency_findings`. But **the `ops` container is not deployed to either server yet**, so today
+it runs only in a development stack, on a machine that is on when it is on. The mechanism exists and
+is committed; the *guarantee* does not, and will not until `ops` ships. We would rather say that than
+claim a nightly job a reviewer cannot point at — the same standard §4.5 applies to the CI job.
 
 Reading the manifests instead would have missed 98 of the 133 Python packages, and with them the
 three copyleft findings in §3.2 — **none of which is anyone's declared dependency.** A licence

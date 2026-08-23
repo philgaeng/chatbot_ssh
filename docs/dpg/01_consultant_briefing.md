@@ -64,9 +64,11 @@ has not started.
 - `LICENSE` (Apache-2.0), `NOTICE`, and an SPDX header on **593 source files**, applied by a committed
   idempotent script and held in place by a test that imports the script's own scope rather than restating
   it — so coverage cannot decay the first week someone adds a module.
-- **A generated dependency-licence audit** over four sets — two Python manifests, npm, container images —
-  re-run nightly by the ops container. Machine output, not our assertion. It found two transitive LGPL
-  dependencies **no manifest would have shown**, and a licence contradiction in our own npm package.
+- **A generated dependency-licence audit** over four sets — two Python manifests, npm, container images.
+  Machine output, not our assertion. It found two transitive LGPL dependencies **no manifest would have
+  shown**, and a licence contradiction in our own npm package. ⚠ A nightly re-run **is scheduled and is
+  not yet deployed** — the `ops` container has not shipped to either server, so today it runs only in a
+  development stack. The mechanism is committed; the guarantee is not.
 - `SECURITY.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, issue and PR templates.
 - A root `README` rewritten from the compose files. It had advertised a Rasa NLU service on port 5005
   that has never existed in this codebase — directly contradicting our own indicator-2 argument, on the
@@ -495,9 +497,10 @@ Recorded so they are not re-opened, and because two of them change what we are a
 
 **There is no proprietary component anywhere in the runtime stack**, and no dependency in any tree carries
 an unknown, unparseable or non-OSI licence. The figures below come from a scan run **inside the running
-containers** against the resolved trees — not from reading manifests — and the ops container re-runs it
-nightly so it cannot go stale. The full per-package listing, with a written disposition for every entry
-carrying conditions beyond attribution, is [`dependency-licenses.md`](dependency-licenses.md).
+containers** against the resolved trees — not from reading manifests. The full per-package listing, with a
+written disposition for every entry carrying conditions beyond attribution, is
+[`dependency-licenses.md`](dependency-licenses.md). ⚠ The scheduled re-run that keeps it fresh is
+**built but not yet deployed** (§2).
 
 | Set | Packages | Unknown or non-OSI |
 |---|---|---|
