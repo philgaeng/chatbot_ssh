@@ -197,12 +197,12 @@ def test_provision_admin_scope_promotes_stale_invited_db_row():
         "ticketing.services.officer_admin._upsert_officer_onboarding",
     ) as upsert_ob:
         status = provision_admin_scope_keycloak(
-            db, "philgaeng@gmail.com", "org_admin", "DOR"
+            db, "officer@example.test", "org_admin", "DOR"
         )
 
     assert status == "active"
     resend.assert_not_called()
-    upsert_ob.assert_called_once_with(db, "philgaeng@gmail.com", "active")
+    upsert_ob.assert_called_once_with(db, "officer@example.test", "active")
 
 
 def test_provision_admin_scope_force_invite_for_active_user():

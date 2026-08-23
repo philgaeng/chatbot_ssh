@@ -131,11 +131,17 @@ SMTP_CONFIG = {
     "FROM_DISPLAY": os.getenv("SMTP_FROM_DISPLAY", "GRM Ticketing"),
 }
 
-# Admin notification emails
+# Admin notification emails — recipients of the grievance recap mail.
+#
+# From the environment, not a literal. These are real personal addresses, and this
+# repository is public: a hardcoded recipient list is both a config value that cannot be
+# changed per deployment and a set of addresses published to anyone who clones. Set
+# ADMIN_EMAILS to a comma-separated list, or ADMIN_EMAIL for a single one; empty means
+# nobody is mailed, which is the right default for a fresh clone.
 ADMIN_EMAILS: List[str] = [
-    "philgaeng@gmail.com",
-    'philgaeng@project.com.ph'
-    # Add other admin emails
+    addr.strip()
+    for addr in (os.getenv("ADMIN_EMAILS") or os.getenv("ADMIN_EMAIL", "")).split(",")
+    if addr.strip()
 ]
 
 ############################

@@ -19,7 +19,7 @@ def test_sync_promotes_invited_when_keycloak_complete():
         "ticketing.services.officer_admin.keycloak_onboarding_complete",
         return_value=True,
     ):
-        changed = sync_officer_onboarding_status(db, "philgaeng@gmail.com")
+        changed = sync_officer_onboarding_status(db, "officer@example.test")
 
     assert changed is True
     assert ob.status == "active"
