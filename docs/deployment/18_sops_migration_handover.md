@@ -213,6 +213,61 @@ Then confirm the two things a split most commonly breaks:
 ⚠ **Do not push to staging or production until the local stack is green.** Deploys there are
 `git pull` + `compose up` on the box, so a broken `env.local` contract breaks the running system.
 
+### ⚠⚠ 5a. Migrating staging and production — the step with no undo
+
+**A single `secrets.enc.env` asserts that every host holds the same value for every secret.** That
+is fine, even desirable, for most of them. For two it is **irreversible if the assertion is false**,
+and for six more it is destructive in a different way. Neither failure raises an error.
+
+#### Hazard 1 — one file carries one value
+
+`make env-local` on a host **overwrites** that host's `DB_ENCRYPTION_KEY` with the one in
+`secrets.enc.env`. If DOR prod's key differs from yours, every encrypted PII column on that box
+becomes unreadable **permanently** — pgcrypto does not fail loudly here, and `base_manager.py`
+**fails open** when decryption raises (DPG-04 finding). It looks like empty fields, not an outage.
+
+`SEARCH_TOKEN_PEPPER` has the same shape with a quieter failure: phone and email lookup return
+nothing, silently, and only `scripts/database/rehash_search_tokens.py` can rebuild the tokens.
+
+⚠ **This is unverified today.** §5.3.1 records *that* copies exist on staging and prod; its own
+header says values were never compared, and that check was across **repositories**, not across
+these hosts. **Verify by hash on each host before deploying anything** — never by printing, pasting
+or eyeballing a value:
+
+```bash
+# run ON each host, and locally, then compare the three hashes
+grep -oP '^DB_ENCRYPTION_KEY=\K.*'  env.local | tr -d '"' | sha256sum
+grep -oP '^SEARCH_TOKEN_PEPPER=\K.*' env.local | tr -d '"' | sha256sum
+```
+
+| Result | Action |
+|---|---|
+| All hashes match | Safe to proceed |
+| **Any differ** | ⛔ **Stop.** One shared file cannot hold two values. You need a per-host encrypted file (`secrets.prod.enc.env`, its own recipient, its own `path_regex`) — **or** a planned re-encryption migration. Do **not** "just use the local one" |
+
+#### Hazard 2 — the generator writes `env.local` from scratch
+
+`gen_env_local.sh` builds `env.local` from `.env.shared` + `secrets.enc.env` **only**. Anything
+present in a host's current `env.local` and absent from those two halves is **silently dropped**.
+
+⚠ **Six secrets live only on staging and prod and are NOT in `secrets.enc.env`** — §5.3.1 rows 2, 4,
+7, 8, 9, 10 (`SEARCH_TOKEN_PEPPER`, `OPS_DB_PASSWORD`, `MESSAGING_API_KEY`,
+`KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`). Running
+`make env-local` on those hosts today would **delete all six**. Officer login and the Messaging API
+break; ⚠ `MESSAGING_API_KEY` also guards `GET /api/grievance/{id}`, which serves plaintext PII.
+
+#### The order that is safe
+
+1. **Back up the host's `env.local` first** — `cp env.local env.local.pre-sops && chmod 600 …`, off-box too. It is gitignored, so there is no other copy.
+2. Compare the two hashes above. Stop if they differ.
+3. Add the six host-only secrets to `secrets.enc.env` (`make secrets-edit`) **before** generating anything.
+4. Give the host **its own age keypair** and add it as a recipient — `sops updatekeys secrets.enc.env`. ⚠ Do not copy your personal key onto a server (§5.2).
+5. **Dry-run the parity check** — generate to a temp path and diff the variable **names** against the live file. Zero missing names, or stop:
+   ```bash
+   scripts/ops/gen_env_local.sh /tmp/drill &&      diff <(grep -oE '^[A-Za-z_]+=' env.local | sort) <(grep -oE '^[A-Za-z_]+=' /tmp/drill/env.local | sort)
+   ```
+6. Only then `make env-local`, then restart the stack.
+
 ## 6. The rotation pass
 
 Every credential's "last rotated" date is **unknown**, which means treat as never. Do this **after**
@@ -262,6 +317,9 @@ each one**:
 - [x] `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` **deliberately skipped**, and that recorded
       (`14_…` §3)
 - [ ] Staging and production migrated only after local is green — **local is green; hosts not started**
+- [ ] ⚠ **§5a run on each host before any deploy**: `DB_ENCRYPTION_KEY` + `SEARCH_TOKEN_PEPPER`
+      hashes compared, host `env.local` backed up, the six host-only secrets added to
+      `secrets.enc.env`, and the name-parity dry run clean
 - [x] `Last rotated` recorded as *"unknown — treat as never"* — in **`14_…` §1**, not §5.3.1
 
 ## 9. ⚠ Never
@@ -271,3 +329,6 @@ each one**:
 - Rotate `DB_ENCRYPTION_KEY` without a re-encryption plan
 - Rotate `SEARCH_TOKEN_PEPPER` without running the rehash script in the same window
 - Deploy a split to production before the local stack is green on it
+- ⚠ **Run `make env-local` on staging or production before §5a's two hash checks pass** — a mismatched
+  `DB_ENCRYPTION_KEY` is permanent PII loss, and it fails **open and silent**, not loud
+- ⚠ **Overwrite a host's `env.local` without backing it up first** — six secrets exist only there

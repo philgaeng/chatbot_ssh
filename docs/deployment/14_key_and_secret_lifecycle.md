@@ -60,6 +60,10 @@ Losing this key makes every encrypted PII column unrecoverable, so it must be ba
 
 - **Backup:** store the key in **two** offline locations (e.g. a password manager + an `age`/GPG-encrypted file on separate media). Never in the same bucket as DB dumps.
 - **Reference from backups:** `scripts/ops/backup_db.sh` records (but never stores) which key fingerprint a dump expects, so a restore knows which key it needs. Keep the key archive in lockstep with retention.
+- ⚠ **Deploying it is not neutral.** One `secrets.enc.env` carries one value, so `make env-local` on a
+  host **overwrites** that host's key. If the hosts do not already share this value, that is permanent
+  PII loss — and `base_manager.py` **fails open**, so it shows up as empty fields, not an error.
+  **Compare hashes on every host before the first deploy** — [`18_… §5a`](18_sops_migration_handover.md).
 - **Rotation:** requires a **re-encryption migration** (decrypt-with-old → encrypt-with-new) across all PII columns. Treat as planned maintenance with a full backup first. Do **not** rotate casually.
 
 ---
