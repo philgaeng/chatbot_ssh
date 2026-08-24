@@ -278,6 +278,7 @@ anything would tell you.
 | Trap | What happens |
 |---|---|
 | **Markdown bold breaks greps** | `grep "fails closed"` misses `fails **closed**`. A verification pass reports a false negative and you "fix" something already correct |
+| **Markdown structure breaks greps twice over** | A phrase split across a line wrap is invisible to `grep`; collapsing whitespace is **not enough**, because blockquote `>` markers survive the collapse and sit inside the phrase. Strip `^\s*>\s?` first, then collapse. This produced two consecutive false negatives on one check while the document was correct |
 | **`\|` is not alternation under `grep -E`** | It matches a literal pipe. A multi-probe check silently reports everything missing |
 | **`§(\d+)(?!\.)`** | Excludes any section reference ending a sentence. A dangling-reference check reported clean while `§6` dangled |
 | **Hashing a missing variable** | `grep -oP '^VAR=\K.*' \| sha256sum` on an absent variable hashes the empty string and returns the same digest on every host that also lacks it — reading as "match, safe to proceed" |
