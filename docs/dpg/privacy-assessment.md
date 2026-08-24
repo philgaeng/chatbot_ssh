@@ -650,8 +650,13 @@ at 3am is written, and what is missing is named, scoped, and pointed at someone.
 - `ticketing.admin_audit_log` records reveals and administrative actions
 - A private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) — which now points at the
   runbook, and tells the reporter which parts of it are not yet committed
-- ⚠ **The `ops` container is deployed to neither server.** On staging and production this list describes
-  a development stack, not a monitored one
+- ⚠ **The `ops` container is deployed to neither server** — on staging and production this list describes
+  a development stack, not a monitored one. ⚠ **And corrected 2026-08-24: in the development stack it has
+  been unable to authenticate to the database since 2026-08-21** (`ops/config.py:107` falls back to
+  `POSTGRES_PASSWORD` when `OPS_DB_PASSWORD` is unset, and that rotation did not include the `ops_app`
+  role). Last successful write **2026-08-18**; **253** failures since; every report row renders `n/a`.
+  **No environment currently has working automated detection** —
+  [`ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md)
 
 > ### ⚠ Correction — Keycloak events were not being recorded at all
 >
@@ -661,9 +666,15 @@ at 3am is written, and what is missing is named, scoped, and pointed at someone.
 > turned them on. Verified 2026-08-24 against the live realm: `events_enabled = f`,
 > `admin_events_enabled = f`, `keycloak.event_entity` — **0 rows**.
 >
-> It stayed invisible because the daily ops report *does* query that table (`ops/reports.py:45,55`), and
-> so reported **0 officer logins and 0 failed logins** every day, indistinguishably from a quiet one. A
-> monitoring row that cannot tell "none happened" from "none recorded" is worse than no row at all.
+> It stayed invisible because the daily ops report *does* query that table (`ops/reports.py:45,55`), so a
+> working monitor would have reported **0 officer logins and 0 failed logins** every day —
+> indistinguishable from a quiet one. **A monitoring row that cannot tell "none happened" from "none
+> recorded" is worse than no row at all.**
+>
+> ⚠ **Corrected 2026-08-24, and it makes the point sharper rather than softer.** Since 2026-08-21 that
+> report has not been rendering `0` — it renders `n/a`, because the `ops` container cannot authenticate
+> at all (see the bullet above). So the empty table was masked first by a row that could not distinguish
+> zero from unrecorded, and then by a monitor that was not running. **Neither failure raised anything.**
 >
 > ✅ **Fixed the same day** — `setup_realm_event_logging` in `ticketing/auth/keycloak_setup.py` enables
 > login and admin events with a 90-day expiration, applied by `make keycloak-setup`; a failed login now

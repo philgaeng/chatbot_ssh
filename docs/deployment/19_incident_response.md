@@ -71,10 +71,21 @@ When the answer stops being zero, §2 onwards applies in full and B1's clock sta
 | **`keycloak.event_entity`** | Officer logins, login failures, admin actions | Realm `grm` — ⚠ see §4.2, this only works forward from 2026-08-24 |
 | **`ops.dependency_findings`** | Nightly CVE and licence scan | [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) |
 
-⚠ **The ops container is not deployed to either server** ([`../dpg/01_consultant_briefing.md`](../dpg/01_consultant_briefing.md) §5).
-Today these signals exist in a development stack only. **On staging and production, the detection
-column of this table is empty** — an incident there is found by a person noticing, or by a reporter
-emailing us. Deploying `ops` is the cheapest improvement available to this procedure.
+> ### ⚠ Corrected 2026-08-24 — the detection substrate is empty *everywhere*, including here
+>
+> The `ops` container is **not deployed to either server**, so on staging and production the detection
+> column above is empty: an incident there is found by a person noticing, or by a reporter emailing us.
+>
+> **And in the development stack, where it does run, it has been unable to reach the database since
+> 2026-08-21.** [`ops/config.py:107`](../../ops/config.py) falls back to `POSTGRES_PASSWORD` when
+> `OPS_DB_PASSWORD` is unset — which it is, everywhere — so `ops` authenticates as the `ops_app` role
+> using the *other* role's password. `POSTGRES_PASSWORD` was rotated on 2026-08-21; `ops_app` was not
+> rotated with it. Measured: last successful write **2026-08-18**, and **253** authentication failures
+> in the container log since. Every row of the daily report renders `n/a (OperationalError)`.
+>
+> **So no environment currently has working automated detection.** Deploying `ops` and repairing this
+> credential are the two cheapest improvements available to this procedure.
+> [`../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md)
 
 ---
 
@@ -142,6 +153,11 @@ from memory.** Two entries are traps under time pressure and both fail *silently
 - **`SEARCH_TOKEN_PEPPER` requires [`../../scripts/database/rehash_search_tokens.py`](../../scripts/database/rehash_search_tokens.py)
   in the same window.** Skip it and phone/email lookup returns nothing, raising no error — officers
   will report "the complainant isn't in the system" and nobody will connect it to the incident.
+- **`POSTGRES_PASSWORD` silently kills the ops monitor** unless the `ops_app` role is rotated in the
+  same window. `ops` falls back to `POSTGRES_PASSWORD` when `OPS_DB_PASSWORD` is unset
+  ([`ops/config.py:107`](../../ops/config.py)), so rotating one role's password breaks a *different*
+  role's login. **This is not hypothetical — it is the live state of this stack**, undetected for three
+  days, and the thing it broke is the detection you would be relying on during the incident.
 
 ⚠ **Standing exposure a responder must know before assessing anything.** Per §1 of the lifecycle doc,
 `POSTGRES_PASSWORD` and `REDIS_PASSWORD` were rotated on the **local stack only** (2026-08-21 / 08-23).
@@ -245,6 +261,7 @@ Stated so the omissions are deliberate and findable, per engineering rule 9.
 |---|---|---|
 | **B1, B2, B3 unfilled** (§0) | No declaration authority, no notification clock, no survivor-notification decision | **DOR** |
 | **`ops` not deployed to staging or production** | The detection column of §2 is empty on both servers | Engineering — deploy |
+| **`ops` cannot authenticate to the database since 2026-08-21** | Even the development stack has no working detection — every report row is `n/a` | Engineering — rotate `ops_app`, or set `OPS_DB_PASSWORD` |
 | **Keycloak events not yet enabled on staging/production** | No login evidence there until `make keycloak-setup` is re-run | Engineering — next deploy |
 | **`POSTGRES_PASSWORD` / `REDIS_PASSWORD` not rotated on either server** | Both are in public git history and still live there | Engineering — [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md) §1 |
 | **No `DB_ENCRYPTION_KEY` re-encryption script** | The one rotation that matters most cannot be executed under incident conditions | Engineering |
