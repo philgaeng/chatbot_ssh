@@ -33,7 +33,7 @@ escalation ladder up to a Grievance Redress Committee. It includes a dedicated, 
 | 1 | Relevance to SDGs | ✅ **Compliant** | None. SDG 16.6, 16.10, 9.1. Needs writing up, not building |
 | 2 | Approved open licence | 🟢 **Closed, provisionally** | `LICENSE` (Apache-2.0), `NOTICE`, an SPDX header on **593 source files** maintained by a script and held by a test so coverage cannot decay, and a **generated** licence audit over 153 packages in four dependency sets. Two things stay provisional: the **licence text** is yours to confirm (Q4), and the **copyright holder** is blank pending indicator 3 — `NOTICE` says so rather than guessing |
 | 3 | Clear ownership | 🔴 **Blocked, external** | A written IP determination from ADB. **Nobody on this project can resolve it**, and it is now the only thing standing between us and a complete licensing story |
-| 4 | Platform independence | 🟡 **The mechanism is built and running; the model choice is not made** | Every model in the product is a configuration value — nine call sites, two subsystems, one registry, proven by tests and exercised live against an open-weights provider. **But** the repository default is still proprietary, no open model has been selected, and the open configuration **cannot transcribe audio at all**. §3 |
+| 4 | Platform independence | 🟡 **The mechanism is built and running; the model choice is not made** | Every model in the product is a configuration value — nine call sites, two subsystems, one registry, proven by tests and exercised live against an open-weights provider. **But** the repository default is still proprietary and **no open model has been selected** — the comparative benchmark is unfinished. ⚠ The open provider serves no speech endpoint; that costs nothing today, because automatic transcription is switched off on cost grounds and is not expected to be funded. §3 |
 | 5 | Documentation | ✅ **Compliant, strong** | A 365-file spec tree, a Docker runbook for 13 services, OpenAPI on both APIs, and a portable engineering starter kit another country team could reuse |
 | 6 | Data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema in three independent migration streams, XLSX and PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
 | 7 | Privacy & applicable laws | 🟠 **Partial — and nothing real has happened yet** | The assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram are written, each leg verified against code — which is how the three storage-layer defects in §5 came to light, all three now fixed. ⭐ **No genuine grievance has been processed on this platform**: every record is seed data or a demo dummy, so every exposure is **prospective**, and redaction is a **go-live precondition rather than remediation**. Still missing: that redaction, a deletion capability, a breach procedure, and a lawyer's review (Q15) |
@@ -163,8 +163,9 @@ Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it
   sits on a configurable and tested open alternative, versus on what production actually runs.
 - **Q7 — How does the DPGA treat open-weight models whose licences are not OSI-approved?** We filter for
   Apache-2.0 and MIT, which excludes several of the strongest multilingual models for Nepali.
-- **Q8 — How does the DPGA treat a partial open alternative?** Our open configuration serves the text
-  paths; it has no OpenAI-compatible speech endpoint, so voice has no open path today.
+- **Q8 — How does the DPGA treat a partial open alternative?** Our open configuration serves **every
+  model call the system actually makes**. The one path it could not serve — speech — is switched off
+  on cost grounds and is not expected to be funded.
 - **Q9 — What does the *data* limb of the AI questionnaire expect from a system that does no training or
   fine-tuning?** We have published a 105-item labelled evaluation set under CC0-1.0.
 - **Q10 — Do any of these licences cause a problem for the assessment, or in ADB/DOR procurement?**

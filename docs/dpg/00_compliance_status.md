@@ -60,7 +60,7 @@ of the meeting. The honest version is more useful to us than the flattering one.
 | 1 | Relevance to SDGs | ✅ **Compliant** | Needs writing up, not building. SDG 16.6 / 16.10, SDG 9.1 |
 | 2 | Use of an approved open licence | 🟢 **Closed, provisionally** | `LICENSE` (Apache-2.0), `NOTICE`, an SPDX header on **593 source files** maintained by a script and pinned by a test, and a **generated** audit over 153 packages. Two things stay provisional: the **licence text** is delegated to the consultant (**Q4**), and the **copyright holder** is blank pending indicator 3 — `NOTICE` says so rather than guessing |
 | 3 | Clear ownership | 🔴 **Blocked — external** | A written IP determination from ADB. **Nobody on this project can resolve it.** It is the only thing standing between us and a complete licensing story |
-| 4 | Platform independence | 🟡 **Mechanism built and executing; the model choice is not made** | Every model is a configuration value across both LLM surfaces, proven by tests and by a live CI job. **But** the repository default is still proprietary, no open model has been selected, and the open configuration cannot transcribe audio at all. §4 states this clause by clause |
+| 4 | Platform independence | 🟡 **Mechanism built and executing; the model choice is not made** | Every model is a configuration value across both LLM surfaces, proven by tests and by a live CI job. **But** the repository default is still proprietary and **no open model has been selected** — the comparative benchmark is unfinished. ⚠ The open provider serves no speech endpoint, which costs nothing today because automatic transcription is switched off on cost grounds and is not expected to be funded. §4 states this clause by clause |
 | 5 | Documentation | ✅ **Compliant, strong** | A 365-file spec tree, a Docker runbook covering 13 services, OpenAPI on both APIs, and a portable engineering starter kit another country team could reuse |
 | 6 | Mechanism for data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema in three independent migration streams, XLSX + PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
 | 7 | Privacy & applicable laws | 🟠 **Partial** | The assessment and the data-flow diagram exist and three storage-layer defects they found are fixed. **Outstanding:** unredacted egress to a third-party model provider, no deletion capability anywhere, no breach procedure, and no legal review of the assessment (**Q15**) |
@@ -472,11 +472,19 @@ neither owns.
 | 9 | ticketing | `generate_resolved_case_summary_llm` | `ticket_findings` / `…_seah` | ✅ **live** | Whole case timeline; the output is shown to the complainant |
 
 **Five call sites are live, not nine**, and the distinction is declared in code rather than in a
-document: the four parked paths are the **voice-notes flow**, switched off in the prototype for want of
-a transcription budget. They are listed in a `PARKED_TASKS` mapping with a reason each, and a test
-enforces the only two acceptable states — **enqueued in production, or declared parked. Nothing else.**
-They are complete and unrotted; unparking is a budget decision, not a migration, because they resolve
-models through the same registry as the live paths.
+document: the four parked paths are the **voice-notes flow**. They are listed in a `PARKED_TASKS`
+mapping with a reason each, and a test enforces the only two acceptable states — **enqueued in
+production, or declared parked. Nothing else.** They are complete and unrotted, and they resolve models
+through the same registry as the live paths, so unparking is a configuration decision rather than a
+migration.
+
+⚠ **What is switched off is automatic transcription, not voice intake — the distinction matters and we
+had been blurring it.** A complainant can still record a grievance: the audio is captured, stored and
+handled by an officer. What does not run is the machine transcription of it. And it is off on **cost
+grounds** — this project has no funding for per-minute transcription, and the implementing government
+is not expected to allocate any — so this should be read as an **unfunded capability rather than a
+pending one**. Anything in this document that says "parked pending a budget" is overstating the odds of
+its return.
 
 **Two models, not six.** Every text task resolves to `gpt-5-nano` and transcription to `whisper-1`.
 Eight task keys, two values — which is what makes a provider swap a small diff rather than a survey.
@@ -591,8 +599,15 @@ returns **HTTP 404** for every model id tried. Not auth and not billing, and thr
 **without** a token and 404 **with** one — so it exists and authenticates but serves nothing. The
 router's own catalogue confirms it: 132 models, **none of them audio**. Hugging Face serves ASR, but not
 through the OpenAI-compatible surface this code calls. So *"the open configuration runs the whole
-system"* is **false for audio and true for text**. Nothing breaks today because voice is switched off;
-it would break the day it is switched on.
+system"* is **false for audio and true for text**.
+
+⭐ **And the consequence runs in our favour, which is why it is worth stating precisely rather than as a
+gap.** Automatic transcription is switched off on cost grounds and is not expected to be funded (§4.1),
+so **the one path the open provider cannot serve is the one path that does not run.** The open
+configuration therefore covers **every model call this system actually makes**. If transcription were
+ever funded, it would have to run on the closed provider or on a self-hosted vLLM, which serves
+`/v1/audio/transcriptions` — and that is the day this becomes a real indicator-4 gap rather than a
+theoretical one.
 [Write-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md).
 
 **(d) Latency spans 30× across the shortlist** — 0.68 s to 23.8 s on a *one-sentence* prompt. Against
@@ -929,12 +944,12 @@ defence in depth.
 - **SEAH recall for both candidates.** §4.4. This is the number that decides a model selection with a
   safeguarding consequence, and no table may rank two candidates that differ by a few points on a
   hand-authored set.
-- **Nepali ASR is the weakest link, and it is weak for the closed model too** — and we have to disclose
-  that **voice transcription is not running at all**, so there is **no incumbent baseline to compare
-  open ASR against.** If we ship an open ASR path, the honest framing is *"we shipped a working voice
-  path where there was none"*, never *"we matched the incumbent"*. There is also no audio in the
-  benchmark set and, as §4.3(c) records, no reachable open ASR endpoint on the configured router.
-  **Q8** asks how the DPGA treats a *partial* open alternative — one that works but performs worse.
+- **Nepali ASR quality, which we may never need to know.** Automatic transcription is switched off on
+  cost grounds and is not expected to be funded, so there is no incumbent baseline, no audio in the
+  benchmark set, and no reachable open speech endpoint (§4.3(c)) — three absences that all stop
+  mattering if the path stays off. We keep it on this list rather than deleting it because the *code*
+  is live and correct-by-signature: the day someone funds transcription, all three become real and none
+  of them is measured. **Q8** asks whether a capability that never executes is a gap at all.
 - **Translation may want a specialist model.** A purpose-built seq2seq model will likely beat a general
   chat model on Nepali↔English, but it needs its own service rather than a chat endpoint. That is a real
   deployment cost, and the benchmark should decide it, not our prior.
@@ -970,8 +985,9 @@ rather than to give us yours.
   sits on a configurable and tested open alternative, versus on what production actually runs.
 - **Q7 — How does the DPGA treat open-weight models whose licences are not OSI-approved?** We filter for
   Apache-2.0 and MIT, which excludes several of the strongest multilingual models for Nepali.
-- **Q8 — How does the DPGA treat a partial open alternative?** Our open configuration serves the text
-  paths; it has no OpenAI-compatible speech endpoint, so voice has no open path today.
+- **Q8 — How does the DPGA treat a partial open alternative?** Our open configuration serves **every
+  model call the system actually makes**. The one path it could not serve — speech — is switched off
+  on cost grounds and is not expected to be funded.
 - **Q9 — What does the *data* limb of the AI questionnaire expect from a system that does no training or
   fine-tuning?** We have published a 105-item labelled evaluation set under CC0-1.0.
 - **Q10 — Do any of these licences cause a problem for the assessment, or in ADB/DOR procurement?**
