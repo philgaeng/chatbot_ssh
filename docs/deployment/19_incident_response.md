@@ -76,16 +76,17 @@ When the answer stops being zero, §2 onwards applies in full and B1's clock sta
 > The `ops` container is **not deployed to either server**, so on staging and production the detection
 > column above is empty: an incident there is found by a person noticing, or by a reporter emailing us.
 >
-> **And in the development stack, where it does run, it has been unable to reach the database since
-> 2026-08-21.** [`ops/config.py:107`](../../ops/config.py) falls back to `POSTGRES_PASSWORD` when
-> `OPS_DB_PASSWORD` is unset — which it is, everywhere — so `ops` authenticates as the `ops_app` role
-> using the *other* role's password. `POSTGRES_PASSWORD` was rotated on 2026-08-21; `ops_app` was not
-> rotated with it. Measured: last successful write **2026-08-18**, and **253** authentication failures
-> in the container log since. Every row of the daily report renders `n/a (OperationalError)`.
+> **And in the development stack it was blind from 2026-08-21 to 2026-08-24** — ✅ **now repaired.**
+> `ops` had no credential of its own and fell back to `POSTGRES_PASSWORD` while connecting as the
+> `ops_app` role; that rotation did not include `ops_app`. 253 auth failures, every report row `n/a`,
+> and the container reporting `healthy` throughout. Repairing it uncovered three further defects that
+> meant **the activity and security rows had never returned a number on any deployment**: one aborted
+> transaction blanked every row after it, four queries named columns that do not exist, and `ops_app`
+> lacked SELECT on five of the tables it reads. All fixed, all verified —
+> [`../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md).
 >
-> **So no environment currently has working automated detection.** Deploying `ops` and repairing this
-> credential are the two cheapest improvements available to this procedure.
-> [`../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md)
+> **So the detection table above is now true of the development stack, and of nothing else.** Deploying
+> `ops` to staging and production is the cheapest remaining improvement to this procedure.
 
 ---
 
@@ -153,11 +154,11 @@ from memory.** Two entries are traps under time pressure and both fail *silently
 - **`SEARCH_TOKEN_PEPPER` requires [`../../scripts/database/rehash_search_tokens.py`](../../scripts/database/rehash_search_tokens.py)
   in the same window.** Skip it and phone/email lookup returns nothing, raising no error — officers
   will report "the complainant isn't in the system" and nobody will connect it to the incident.
-- **`POSTGRES_PASSWORD` silently kills the ops monitor** unless the `ops_app` role is rotated in the
-  same window. `ops` falls back to `POSTGRES_PASSWORD` when `OPS_DB_PASSWORD` is unset
-  ([`ops/config.py:107`](../../ops/config.py)), so rotating one role's password breaks a *different*
-  role's login. **This is not hypothetical — it is the live state of this stack**, undetected for three
-  days, and the thing it broke is the detection you would be relying on during the incident.
+- **`POSTGRES_PASSWORD` used to silently kill the ops monitor.** ✅ Fixed 2026-08-24 — `ops_app` has
+  its own credential and the healthcheck now probes the database — but the shape is worth remembering,
+  because it is the shape these failures take: rotating one role's password broke a *different* role's
+  login, nothing raised, and **the thing it broke was the detection you would be relying on during the
+  incident**. It ran undetected for three days on a stack somebody looks at daily.
 
 ⚠ **Standing exposure a responder must know before assessing anything.** Per §1 of the lifecycle doc,
 `POSTGRES_PASSWORD` and `REDIS_PASSWORD` were rotated on the **local stack only** (2026-08-21 / 08-23).
@@ -261,7 +262,7 @@ Stated so the omissions are deliberate and findable, per engineering rule 9.
 |---|---|---|
 | **B1, B2, B3 unfilled** (§0) | No declaration authority, no notification clock, no survivor-notification decision | **DOR** |
 | **`ops` not deployed to staging or production** | The detection column of §2 is empty on both servers | Engineering — deploy |
-| **`ops` cannot authenticate to the database since 2026-08-21** | Even the development stack has no working detection — every report row is `n/a` | Engineering — rotate `ops_app`, or set `OPS_DB_PASSWORD` |
+| ~~**`ops` cannot authenticate to the database**~~ ✅ **fixed 2026-08-24** | Was: every report row `n/a` while the container reported `healthy`. Now: `ops_app` has its own credential, the healthcheck probes the database, and every report row returns a number | — |
 | **Keycloak events not yet enabled on staging/production** | No login evidence there until `make keycloak-setup` is re-run | Engineering — next deploy |
 | **`POSTGRES_PASSWORD` / `REDIS_PASSWORD` not rotated on either server** | Both are in public git history and still live there | Engineering — [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md) §1 |
 | **No `DB_ENCRYPTION_KEY` re-encryption script** | The one rotation that matters most cannot be executed under incident conditions | Engineering |

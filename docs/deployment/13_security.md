@@ -219,7 +219,7 @@ gitignored file; the migration is §5.7.
 | 1 | `DB_ENCRYPTION_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · AWS staging · DOR prod | `backend` **only** (T3-04) |
 | 2 | `SEARCH_TOKEN_PEPPER` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `base_manager.py` HMAC lookup tokens |
 | 3 | `POSTGRES_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Postgres, all services |
-| 4 | `OPS_DB_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `ops` container (`ops_app` role) |
+| 4 | `OPS_DB_PASSWORD` | 2026-08-24 | `secrets.enc.env` (SOPS) | **local** — ⚠ staging · prod do not run `ops` at all | `ops` container (`ops_app` role) |
 | 5 | `REDIS_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Broker + result backend |
 | 6 | `TICKETING_SECRET_KEY` | TBC | `secrets.enc.env` (SOPS) | ✅ **Empty locally by design** — the dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active; **checked, it fails closed** elsewhere (`grievance.py:251-263` raises without a key) · staging · prod | Ticketing ↔ chatbot webhook |
 | 7 | `MESSAGING_API_KEY` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** |

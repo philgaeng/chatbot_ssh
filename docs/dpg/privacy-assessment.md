@@ -651,11 +651,13 @@ at 3am is written, and what is missing is named, scoped, and pointed at someone.
 - A private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) — which now points at the
   runbook, and tells the reporter which parts of it are not yet committed
 - ⚠ **The `ops` container is deployed to neither server** — on staging and production this list describes
-  a development stack, not a monitored one. ⚠ **And corrected 2026-08-24: in the development stack it has
-  been unable to authenticate to the database since 2026-08-21** (`ops/config.py:107` falls back to
-  `POSTGRES_PASSWORD` when `OPS_DB_PASSWORD` is unset, and that rotation did not include the `ops_app`
-  role). Last successful write **2026-08-18**; **253** failures since; every report row renders `n/a`.
-  **No environment currently has working automated detection** —
+  a development stack, not a monitored one. ⚠ **And in that development stack it was blind from 2026-08-21
+  to 2026-08-24** — no credential of its own, falling back to `POSTGRES_PASSWORD` while connecting as
+  `ops_app`, which that rotation did not include. 253 failures, every report row `n/a`, container
+  reporting `healthy`. ✅ **Repaired 2026-08-24**, and the repair found that the report's activity and
+  security rows **had never returned a number on any deployment** — an aborted transaction blanked every
+  row after the first failure, four queries named non-existent columns, and the role lacked SELECT on
+  five tables. All fixed and verified —
   [`ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md)
 
 > ### ⚠ Correction — Keycloak events were not being recorded at all
@@ -671,10 +673,12 @@ at 3am is written, and what is missing is named, scoped, and pointed at someone.
 > indistinguishable from a quiet one. **A monitoring row that cannot tell "none happened" from "none
 > recorded" is worse than no row at all.**
 >
-> ⚠ **Corrected 2026-08-24, and it makes the point sharper rather than softer.** Since 2026-08-21 that
-> report has not been rendering `0` — it renders `n/a`, because the `ops` container cannot authenticate
-> at all (see the bullet above). So the empty table was masked first by a row that could not distinguish
-> zero from unrecorded, and then by a monitor that was not running. **Neither failure raised anything.**
+> ⚠ **Corrected 2026-08-24, and it makes the point sharper rather than softer.** That row was never
+> rendering `0` either: the login queries had **no SELECT grant** on `keycloak.event_entity` and, from
+> 2026-08-21, the container could not authenticate at all. So the empty event table was masked three
+> times over — by a row that could not tell zero from unrecorded, by a missing grant, and by a monitor
+> that was not running. **Not one of the three raised anything.** All are fixed; the row now reports a
+> real number.
 >
 > ✅ **Fixed the same day** — `setup_realm_event_logging` in `ticketing/auth/keycloak_setup.py` enables
 > login and admin events with a 90-day expiration, applied by `make keycloak-setup`; a failed login now

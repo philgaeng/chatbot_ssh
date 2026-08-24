@@ -10,6 +10,7 @@ network (HTTP / Redis), never via a broker.
 """
 from __future__ import annotations
 
+import logging
 from functools import lru_cache
 
 from pydantic import AliasChoices, Field
@@ -105,6 +106,21 @@ class OpsSettings(BaseSettings):
         """SQLAlchemy URL for the scoped ops_app role (falls back to POSTGRES_*)."""
         user = self.ops_db_user or self.postgres_user
         password = self.ops_db_password or self.postgres_password
+
+        # ⚠ Falling back to POSTGRES_PASSWORD while connecting as a DIFFERENT role only works
+        # for as long as the two roles happen to share a password — i.e. until the next
+        # rotation. That is exactly what happened on 2026-08-21: POSTGRES_PASSWORD was rotated,
+        # `ops_app` was not, and monitoring went blind for three days without a single log line
+        # saying why. The fallback is kept so a stack carrying only POSTGRES_* still boots, but
+        # it no longer does so quietly.
+        if not self.ops_db_password and user != self.postgres_user:
+            logging.getLogger("ops.config").error(
+                "OPS_DB_PASSWORD is unset — connecting as role '%s' with POSTGRES_PASSWORD. "
+                "This breaks the moment either role's password is rotated. Set OPS_DB_PASSWORD "
+                "(see docs/deployment/14_key_and_secret_lifecycle.md §1).",
+                user,
+            )
+
         return (
             f"postgresql+psycopg2://{user}:{password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
