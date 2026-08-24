@@ -86,7 +86,7 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 | 1 | ⚠ **Back up the age private key** to Proton Pass + a paper copy. **Until this is done, one disk failure makes `secrets.enc.env` permanently unreadable.** Nothing else here is urgent; this is | you, today |
 | 2 | Fill the `Owner` `TBC` cells in §5.3.1 | you |
 | 3 | The rotation pass (§6) — every credential is "unknown, treat as never" | you (external consoles) |
-| 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ Six secrets (§5.3.1 rows 2, 4, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet | you |
+| 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ **Five** secrets (§5.3.1 rows 2, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet — running the generator there today deletes them. ⚠ **And `OPS_DB_PASSWORD` (row 4, added 2026-08-24) is the opposite hazard**: it will arrive correctly and still do nothing until `ALTER ROLE ops_app PASSWORD` runs on that box — §5a Hazard 3 | you |
 | 5 | ~~The compose-password fix above~~ ✅ **done locally 2026-08-21** — ⚠ but it makes item 4 a **prerequisite for the next deploy**, not a nice-to-have: `${VAR:?}` stops the stack when the value is missing, and neither host can run `make env-local` until its age key is a recipient | deployment |
 
 ⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models` — and that is now load-bearing rather than incidental: the compose change in item 5 is **breaking for any host whose database still holds the old credential**, which is both of them.
@@ -250,11 +250,39 @@ grep -oP '^SEARCH_TOKEN_PEPPER=\K.*' env.local | tr -d '"' | sha256sum
 `gen_env_local.sh` builds `env.local` from `.env.shared` + `secrets.enc.env` **only**. Anything
 present in a host's current `env.local` and absent from those two halves is **silently dropped**.
 
-⚠ **Six secrets live only on staging and prod and are NOT in `secrets.enc.env`** — §5.3.1 rows 2, 4,
-7, 8, 9, 10 (`SEARCH_TOKEN_PEPPER`, `OPS_DB_PASSWORD`, `MESSAGING_API_KEY`,
-`KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`). Running
-`make env-local` on those hosts today would **delete all six**. Officer login and the Messaging API
-break; ⚠ `MESSAGING_API_KEY` also guards `GET /api/grievance/{id}`, which serves plaintext PII.
+⚠ **Five secrets live only on staging and prod and are NOT in `secrets.enc.env`** — §5.3.1 rows 2,
+7, 8, 9, 10 (`SEARCH_TOKEN_PEPPER`, `MESSAGING_API_KEY`, `KEYCLOAK_ADMIN_PASSWORD`,
+`KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`). Running `make env-local` on those hosts today
+would **delete all five**. Officer login and the Messaging API break; ⚠ `MESSAGING_API_KEY` also
+guards `GET /api/grievance/{id}`, which serves plaintext PII.
+
+> **Was six until 2026-08-24.** `OPS_DB_PASSWORD` (row 4) is now **in** `secrets.enc.env`, so it is no
+> longer at risk of being dropped here — it moved to Hazard 3 instead, which is a different problem
+> with the opposite sign. Counting it in both places would be worse than counting it in neither.
+
+#### Hazard 3 — a secret can arrive without the thing it unlocks (`OPS_DB_PASSWORD`, new 2026-08-24)
+
+Hazards 1 and 2 are about **values being overwritten or dropped**. This one is the inverse: the value
+arrives correctly and still does nothing, because **a database role's password lives in the database,
+per host** — publishing the secret does not set the role.
+
+`make env-local` will put `OPS_DB_PASSWORD` on staging and prod. Until someone also runs
+`ALTER ROLE ops_app PASSWORD` **on that box** to the same value, `ops` there cannot authenticate.
+
+⚠ **This is not theoretical — it is exactly what happened locally**, for the adjacent reason: `ops`
+had no secret of its own and silently fell back to `POSTGRES_PASSWORD`, that was rotated without
+`ops_app`, and monitoring went blind for three days while the container reported `healthy`. See
+[`ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md).
+
+**Two things make this much less dangerous than Hazards 1 and 2, and one makes it easy to miss:**
+
+- ✅ **Fully recoverable** — re-run the `ALTER ROLE`. No data is lost, only unmonitored time.
+- ✅ **`ops` runs on neither server today**, so nothing breaks on the next deploy. This is a
+  precondition for *shipping* `ops`, not a blocker for the SOPS migration.
+- ⚠ **But nothing will tell you**, unless you run step 7 below. A monitor that cannot see is
+  indistinguishable from a monitor with nothing to report.
+
+Full procedure: [`14_… §5.1`](14_key_and_secret_lifecycle.md).
 
 #### The order that is safe
 
@@ -267,6 +295,11 @@ break; ⚠ `MESSAGING_API_KEY` also guards `GET /api/grievance/{id}`, which serv
    scripts/ops/gen_env_local.sh /tmp/drill &&      diff <(grep -oE '^[A-Za-z_]+=' env.local | sort) <(grep -oE '^[A-Za-z_]+=' /tmp/drill/env.local | sort)
    ```
 6. Only then `make env-local`, then restart the stack.
+7. **If (and only if) this host runs `ops`** — today neither does: set the role to match the secret,
+   run the ops migrations, and **verify**. Three commands, in
+   [`14_… §5.1`](14_key_and_secret_lifecycle.md).
+   `python -m ops.selfcheck` exiting 0 is the only evidence that it worked; the container reporting
+   `healthy` was not, until 2026-08-24.
 
 ## 6. The rotation pass
 
@@ -280,7 +313,7 @@ each one**:
 2. `HG_TOKEN` — ⚠ also re-paste the **GitHub Actions secret `HF_TOKEN`**; it is the same credential
 3. `OPENAI_API_KEY`
 4. `SMTP_PASSWORD`
-5. `POSTGRES_PASSWORD`, `REDIS_PASSWORD` — coordinate with a stack restart
+5. `POSTGRES_PASSWORD`, `REDIS_PASSWORD` — coordinate with a stack restart. ⚠ **`ops_app` is a separate role with a separate password** (`OPS_DB_PASSWORD`) and is **not** carried along by this rotation. That coupling used to exist implicitly, and rotating `POSTGRES_PASSWORD` on 2026-08-21 blinded the monitor for three days because of it — see §5a Hazard 3. It is fixed; do not recreate it by leaving `OPS_DB_PASSWORD` unset on a host that runs `ops`.
 
 ### ⚠ Two that are NOT in the pass
 

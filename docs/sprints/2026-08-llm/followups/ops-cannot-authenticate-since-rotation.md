@@ -92,7 +92,12 @@ restored, exit 0.
 ## Still outstanding
 
 - [ ] ⚠ **`ops` is deployed to neither staging nor DOR production**, so every fix above is live on the
-      development stack only. Deploying it needs `OPS_DB_PASSWORD` set and `ops003` run on each box.
+      development stack only. ✅ **The deployment procedure is now written down** rather than left as a
+      note here — [`14_key_and_secret_lifecycle.md`](../../../deployment/14_key_and_secret_lifecycle.md)
+      §5.1 (the three steps, and the `selfcheck` that proves they landed) and
+      [`18_sops_migration_handover.md`](../../../deployment/18_sops_migration_handover.md) §5a **Hazard 3**
+      (the secret arrives; the role password does not follow it). The recovery one-liner in §5.1 was
+      red-tested by re-breaking the credential and running it verbatim.
 - [ ] The other report rows should get the same treatment they just got here — **run them, do not read
       them.** `_health_rows` and the preflight status were not exercised by this pass.
 - [ ] Consider whether `_safe_scalar` returning `n/a` is right at all. It is honest, but three months of
