@@ -21,8 +21,8 @@
 | 1 · Tooling | `sops` 3.13.3 + `age` 1.1.1 in `~/.local/bin` (no sudo). **Provenance verified** — sops against its published `checksums.txt`, age against the **GPG-signed Ubuntu archive index** |
 | 2 · Keypair | `~/.config/sops/age/keys.txt`, mode 0600, dir 0700, on **ext4** (checked `df -T`, and that the path does not resolve under `/mnt`). Public key `age1ke0hk5e…rz95h` |
 | 3 · `.gitignore` | Verified, plus `env.local.extra` added (see below) |
-| 4 · Split | `.env.shared` (32 vars, committed plaintext) + `secrets.enc.env` (11 vars, SOPS) + `.sops.yaml`; `make env-local` / `make secrets-edit`; generator `scripts/ops/gen_env_local.sh` |
-| 5 · Verify | `make wsl-up` green — **14/14 containers healthy**, 0 compose "variable is not set" warnings; regenerated `env.local` has **all 43 names and every value identical** to the pre-migration file; regeneration is idempotent |
+| 4 · Split | `.env.shared` (32 vars, committed plaintext) + `secrets.enc.env` (11 vars, SOPS) + `.sops.yaml`; `make env-local` / `make secrets-edit`; generator `scripts/ops/gen_env_local.sh`. ⚠ **Counts are as at 2026-08-21. Current: 33 + 12 = 45** — `OPS_DB_PASSWORD` was added 2026-08-24. Do not treat any number in this table as today's; run the generator, it prints them |
+| 5 · Verify | `make wsl-up` green — **14/14 containers healthy**, 0 compose "variable is not set" warnings; regenerated `env.local` has **all 43 names and every value identical** to the pre-migration file; regeneration is idempotent. *(45 names as of 2026-08-24.)* |
 
 ### ⚠ Four places this document was wrong, and what was done instead
 
@@ -48,11 +48,28 @@
 
 > **Resolved 2026-08-21**, after this section was written and because of it. All 19 compose literals
 > (including **Keycloak's `KC_DB_*`**, which the count below misses) now interpolate from `env.local`
-> with `${VAR:?}`; the credential is **rotated**; the literal is gone from all six tracked files; and
+> with `${VAR:?}`; the credential is **rotated**; the literal is gone from the source and config files; and
 > `security-preflight.sh` checks what a **container** resolves rather than the inert copy. ⚠ **Staging
 > and DOR prod are not done and will fail to start on the next deploy** — see the coordinated runbook in
 > [`db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
 > The description below is kept as the finding, in its original terms.
+>
+> ### ⚠ Re-checked 2026-08-24: "gone from all six tracked files" was too strong
+>
+> `git grep POSTGRES_PASSWORD=password` still returns **three tracked files**:
+>
+> | File | What it is | Verdict |
+> |---|---|---|
+> | `.claude/settings.local.json` (×3, lines 106/110/115) | Claude Code permission allowlist — the literal is embedded in pre-approved `export … POSTGRES_PASSWORD=password …` commands | ⚠ **Real leftover.** Removing it makes those exact commands prompt again, which is a workflow choice, not a mechanical edit |
+> | `.env.example:29` | ⚠ Carries a **value**, not a name — while §7 of this document tells readers it is "names only". Both cannot be true | ⚠ **Correct §7 or change the placeholder.** `changeme` would be as useful and would not collide |
+> | `docs/sprints/archive/.../PROGRESS.md` | Archived history describing the defect | ✅ Leave. Rewriting history to hide a finding is worse than the finding |
+>
+> ⭐ **Why this still matters even though the value was rotated locally:** `14_…` §1 records that
+> **staging and DOR prod were never rotated and still hold the pre-rotation credential**. So `password`
+> is not a stale string in those files — it is **the live database credential for both servers**, sitting
+> in the working tree of a repository slated for public release. The fix is the rotation in item 4
+> below, not a `sed`; this document's own conclusion applies unchanged — *encrypting (or deleting) a
+> value that is already in git history protects nothing; it has to be rotated.*
 
 **`POSTGRES_PASSWORD` is hardcoded as `password` in 11 compose sites and is not overridden by the
 staging or production overlays.** Compose's `environment:` beats `env_file:`, so the value this
@@ -87,6 +104,7 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 | 2 | Fill the `Owner` `TBC` cells in §5.3.1 | you |
 | 3 | The rotation pass (§6) — every credential is "unknown, treat as never" | you (external consoles) |
 | 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ **Five** secrets (§5.3.1 rows 2, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet — running the generator there today deletes them. ⚠ **And `OPS_DB_PASSWORD` (row 4, added 2026-08-24) is the opposite hazard**: it will arrive correctly and still do nothing until `ALTER ROLE ops_app PASSWORD` runs on that box — §5a Hazard 3 | you |
+| 6 | ⚠ **`POSTGRES_PASSWORD=password` is still in 3 tracked files** — `.claude/settings.local.json` (×3) and `.env.example:29`, plus archived history that should stay. It is **the live credential on both un-rotated servers**, in a repo slated for public release. Rotate there (item 4), then purge; or purge now and accept the prompts | you |
 | 5 | ~~The compose-password fix above~~ ✅ **done locally 2026-08-21** — ⚠ but it makes item 4 a **prerequisite for the next deploy**, not a nice-to-have: `${VAR:?}` stops the stack when the value is missing, and neither host can run `make env-local` until its age key is a recipient | deployment |
 
 ⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models` — and that is now load-bearing rather than incidental: the compose change in item 5 is **breaking for any host whose database still holds the old credential**, which is both of them.
@@ -101,7 +119,14 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
    this project's secrets: impact-if-lost, impact-if-leaked, rotation cadence, backup.
 3. [`../../CLAUDE.md`](../../CLAUDE.md) §Docker-only, §Environment variables.
 
-### ⚠ Task zero — there are now TWO inventories, and that is a defect
+### ✅ Task zero — DONE 2026-08-21. Kept as the reasoning, not as a task
+
+> The reconciliation described below **has been carried out** — see the *What actually happened* table,
+> row 0. [`14_…`](14_key_and_secret_lifecycle.md) §1 is the single authority (15 rows, verified
+> 2026-08-24) and [`13_security.md`](13_security.md) §5.3.1 keeps location columns only. **Do not redo
+> it.** The section stays because the *reason* it was done is the reason not to undo it.
+
+#### ⚠ Why there were TWO inventories, and why that was a defect
 
 `13_security.md` §5.3.1 and `14_key_and_secret_lifecycle.md` §1 both list this project's secrets.
 They were written months apart, they **disagree**, and neither is complete:
@@ -127,7 +152,10 @@ failed once here.
 
 ## 1. Install the tooling
 
-Neither `sops` nor `age` is installed. Verify with `which sops age`.
+> ✅ **Done 2026-08-21 on this workstation** — `sops` 3.13.3 + `age` 1.1.1 in `~/.local/bin`, verified
+> present 2026-08-24. **Still to do on staging and DOR prod**, which is where this section now applies.
+
+Verify with `which sops age`.
 
 ⚠ **Host install is correct here.** CLAUDE.md's Docker-only rule governs *building and running the
 stack*; `sops` is a developer tool that never runs in a container and never serves a request.
@@ -166,8 +194,9 @@ the window in which a decrypted file is committable never opens.
 Per `13_security.md` §5.2. Current `env.local` holds **43 variables, 8 of them secret-class**.
 
 > ⚠ **Superseded in two ways on 2026-08-21** — the plaintext half is **`.env.shared`** (`.env` is
-> gitignored on purpose), and the encrypted half holds **11** variables, not 8. The reasoning is in
-> *What actually happened* above; the table below is kept as the original intent.
+> gitignored on purpose), and the encrypted half holds **11** variables, not 8 (**12 since 2026-08-24**,
+> with `OPS_DB_PASSWORD`). The reasoning is in *What actually happened* above; the table below is kept
+> as the original intent.
 
 | Destination | Contents |
 |---|---|
@@ -206,7 +235,9 @@ make wsl-up            # the stack must come up on a generated env.local
 Then confirm the two things a split most commonly breaks:
 
 1. **Nothing lost.** Diff the variable *names* of the generated file against the original — the
-   count must be 43. ⚠ Compare **names**, never values, and never print a value.
+   count must match **what that host had before you started**, which is why step 1 of §5a backs it up.
+   ⚠ **Do not hard-code a number here.** It was 43 on 2026-08-21 and is 45 today; a memorised count is
+   how a dropped variable gets waved through. Compare **names**, never values, and never print a value.
 2. **The encrypted file is actually encrypted.** `grep -c 'ENC\[' secrets.enc.env` must be non-zero,
    and `git show HEAD:secrets.enc.env` must not contain a readable value.
 
@@ -216,8 +247,9 @@ Then confirm the two things a split most commonly breaks:
 ### ⚠⚠ 5a. Migrating staging and production — the step with no undo
 
 **A single `secrets.enc.env` asserts that every host holds the same value for every secret.** That
-is fine, even desirable, for most of them. For two it is **irreversible if the assertion is false**,
-and for six more it is destructive in a different way. Neither failure raises an error.
+is fine, even desirable, for most of them. For **one** it is **irreversible if the assertion is false**,
+for **five** more it is destructive in a different way, and for one it is inert-but-silent. None of the
+three raises an error.
 
 #### Hazard 1 — one file carries one value
 
@@ -226,24 +258,60 @@ and for six more it is destructive in a different way. Neither failure raises an
 becomes unreadable **permanently** — pgcrypto does not fail loudly here, and `base_manager.py`
 **fails open** when decryption raises (DPG-04 finding). It looks like empty fields, not an outage.
 
-`SEARCH_TOKEN_PEPPER` has the same shape with a quieter failure: phone and email lookup return
-nothing, silently, and only `scripts/database/rehash_search_tokens.py` can rebuild the tokens.
+`SEARCH_TOKEN_PEPPER` was listed here as having the same shape. ⚠ **Corrected 2026-08-24 — it is a
+different and sneakier problem, because the variable does not exist.** It is absent from `env.local`,
+`.env.shared` and `secrets.enc.env`, and `base_manager.py:557` reads
+`os.getenv("SEARCH_TOKEN_PEPPER") or self.encryption_key` — **the same silent-fallback pattern that
+blinded the ops monitor** (Hazard 3). So every stored lookup token today is derived from
+`DB_ENCRYPTION_KEY`.
+
+**The danger is therefore *introducing* the variable, not rotating it.** The first host that sets
+`SEARCH_TOKEN_PEPPER` re-derives nothing: every existing token was built from the encryption key, so
+phone and email lookup return **nothing, silently, raising no error** — it reads as "no such
+complainant". Only `scripts/database/rehash_search_tokens.py`, run on that box in the same window,
+repairs it. Treat setting it for the first time exactly like rotating it.
 
 ⚠ **This is unverified today.** §5.3.1 records *that* copies exist on staging and prod; its own
 header says values were never compared, and that check was across **repositories**, not across
 these hosts. **Verify by hash on each host before deploying anything** — never by printing, pasting
 or eyeballing a value:
 
+⚠ **The command that used to be here was unsafe, and this is worth understanding before you trust
+the replacement.** It piped `grep -oP '^VAR=\K.*'` into `sha256sum`. When the variable is **absent**,
+grep matches nothing, `sha256sum` hashes the empty string, and you get `e3b0c442…` — *the same value
+on every host that also lacks it*. Two hosts with no `SEARCH_TOKEN_PEPPER` produce identical hashes
+and the table below says **"Safe to proceed"**. Verified 2026-08-24: that is exactly what it returned
+locally. A check that cannot distinguish *matching* from *missing* is worse than no check, because it
+is read as reassurance before a step with no undo.
+
+Use this instead — it refuses to hash nothing. Run it **on each host and locally**, then compare:
+
 ```bash
-# run ON each host, and locally, then compare the three hashes
-grep -oP '^DB_ENCRYPTION_KEY=\K.*'  env.local | tr -d '"' | sha256sum
-grep -oP '^SEARCH_TOKEN_PEPPER=\K.*' env.local | tr -d '"' | sha256sum
+# Paste this function on each host, then run the three lines under it.
+hash_secret() {
+  local name="$1" file="${2:-env.local}" val
+  val="$(sed -n "s/^${name}=//p" "$file" | tr -d '"' | tr -d '\n')"
+  if [ -z "$val" ]; then
+    printf '%-22s ⛔ ABSENT OR EMPTY in %s — nothing to compare\n' "$name" "$file"
+    return 1
+  fi
+  printf '%-22s %s\n' "$name" "$(printf '%s' "$val" | sha256sum | cut -c1-16)"
+}
+
+hash_secret DB_ENCRYPTION_KEY      # ⭐ irreversible if these differ
+hash_secret SEARCH_TOKEN_PEPPER    # ⚠ expect ABSENT locally — see above
+hash_secret OPS_DB_PASSWORD        # Hazard 3; recoverable, but check it
 ```
+
+⚠ **Every host must run the identical function**, or you are comparing hashing conventions rather than
+values — trailing newlines and quote stripping both change the digest.
 
 | Result | Action |
 |---|---|
-| All hashes match | Safe to proceed |
+| All hashes present **and** matching | Safe to proceed |
 | **Any differ** | ⛔ **Stop.** One shared file cannot hold two values. You need a per-host encrypted file (`secrets.prod.enc.env`, its own recipient, its own `path_regex`) — **or** a planned re-encryption migration. Do **not** "just use the local one" |
+| **`⛔ ABSENT` on some hosts but not others** | ⛔ **Stop, and do not read this as a match.** Whichever host *has* the value is the one whose behaviour differs; deciding which way to converge is a data question, not a config one. For `SEARCH_TOKEN_PEPPER` specifically, see the note above — introducing it anywhere requires the rehash script |
+| **`⛔ ABSENT` everywhere** | Expected for `SEARCH_TOKEN_PEPPER` today. Record it and move on — but **do not add the variable as part of this migration** |
 
 #### Hazard 2 — the generator writes `env.local` from scratch
 
@@ -288,12 +356,27 @@ Full procedure: [`14_… §5.1`](14_key_and_secret_lifecycle.md).
 
 1. **Back up the host's `env.local` first** — `cp env.local env.local.pre-sops && chmod 600 …`, off-box too. It is gitignored, so there is no other copy.
 2. Compare the two hashes above. Stop if they differ.
-3. Add the six host-only secrets to `secrets.enc.env` (`make secrets-edit`) **before** generating anything.
+3. Add the **five** host-only secrets to `secrets.enc.env` (`make secrets-edit`) **before** generating anything.
 4. Give the host **its own age keypair** and add it as a recipient — `sops updatekeys secrets.enc.env`. ⚠ Do not copy your personal key onto a server (§5.2).
-5. **Dry-run the parity check** — generate to a temp path and diff the variable **names** against the live file. Zero missing names, or stop:
+5. **Dry-run the parity check** — generate into a scratch directory and diff the variable **names**
+   against the live file. Zero missing names, or stop.
+
+   ⚠ **The command printed here until 2026-08-24 did not work.** It was
+   `scripts/ops/gen_env_local.sh /tmp/drill`, but that argument is the **repo directory** the script
+   reads its two halves *from*, not an output directory — so it died with
+   `missing /tmp/drill/.env.shared` and the `&&` swallowed the diff. Copy the halves in first:
+
    ```bash
-   scripts/ops/gen_env_local.sh /tmp/drill &&      diff <(grep -oE '^[A-Za-z_]+=' env.local | sort) <(grep -oE '^[A-Za-z_]+=' /tmp/drill/env.local | sort)
+   rm -rf /tmp/drill && mkdir -p /tmp/drill
+   cp .env.shared secrets.enc.env /tmp/drill/
+   scripts/ops/gen_env_local.sh /tmp/drill
+
+   diff <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' env.local        | sort) \
+        <(grep -oE '^[A-Za-z_][A-Za-z0-9_]*=' /tmp/drill/env.local | sort)
    ```
+
+   Empty diff = no name gained or lost. ⚠ **Then delete the scratch copy** — it holds a plaintext
+   `env.local`: `rm -rf /tmp/drill`.
 6. Only then `make env-local`, then restart the stack.
 7. **If (and only if) this host runs `ops`** — today neither does: set the role to match the secret,
    run the ops migrations, and **verify**. Three commands, in
@@ -313,16 +396,20 @@ each one**:
 2. `HG_TOKEN` — ⚠ also re-paste the **GitHub Actions secret `HF_TOKEN`**; it is the same credential
 3. `OPENAI_API_KEY`
 4. `SMTP_PASSWORD`
-5. `POSTGRES_PASSWORD`, `REDIS_PASSWORD` — coordinate with a stack restart. ⚠ **`ops_app` is a separate role with a separate password** (`OPS_DB_PASSWORD`) and is **not** carried along by this rotation. That coupling used to exist implicitly, and rotating `POSTGRES_PASSWORD` on 2026-08-21 blinded the monitor for three days because of it — see §5a Hazard 3. It is fixed; do not recreate it by leaving `OPS_DB_PASSWORD` unset on a host that runs `ops`.
+5. ~~`POSTGRES_PASSWORD`, `REDIS_PASSWORD`~~ ✅ **rotated locally — 2026-08-21 and 2026-08-23** (`14_…` §1 carries the dates and the reason each was rotated). ⚠ **Staging and DOR prod still hold both old values, and `REDIS_PASSWORD`'s previous value is in public git history** — rotating them there is part of the host migration, not of this pass. Coordinate with a stack restart. ⚠ **`ops_app` is a separate role with a separate password** (`OPS_DB_PASSWORD`) and is **not** carried along by this rotation. That coupling used to exist implicitly, and rotating `POSTGRES_PASSWORD` on 2026-08-21 blinded the monitor for three days because of it — see §5a Hazard 3. It is fixed; do not recreate it by leaving `OPS_DB_PASSWORD` unset on a host that runs `ops`.
 
 ### ⚠ Two that are NOT in the pass
 
 - **`DB_ENCRYPTION_KEY` has no rotation path.** Every pgcrypto value must be decrypted with the old
   key and re-encrypted with the new, and **no script exists**. It is a migration, not a rotation.
   Leave it. Losing it means permanent PII loss (§14 §2).
-- **`SEARCH_TOKEN_PEPPER` invalidates every stored lookup token.** If it is rotated,
-  `scripts/database/rehash_search_tokens.py` **must** run on that box in the same maintenance
-  window. Skipping it makes phone and email lookup return nothing — **silently, raising nothing**.
+- **`SEARCH_TOKEN_PEPPER` invalidates every stored lookup token** — and ⚠ **it is not set anywhere,
+  so the operation to fear is *setting* it, not rotating it** (§5a Hazard 1, corrected 2026-08-24).
+  `base_manager.py:557` falls back to `DB_ENCRYPTION_KEY`, so every token in the database today was
+  derived from that key. The first host to define `SEARCH_TOKEN_PEPPER` orphans all of them.
+  Either way `scripts/database/rehash_search_tokens.py` **must** run on that box in the same
+  maintenance window. Skipping it makes phone and email lookup return nothing — **silently, raising
+  nothing**. It reads as "no such complainant".
 
 ## 7. ⚠ Things that look like defects and are not — do not "fix" them
 
@@ -330,7 +417,7 @@ each one**:
 |---|---|
 | `TICKETING_SECRET_KEY` is **empty** in `env.local` | The dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active locally. It **fails closed** elsewhere — `backend/api/routers/grievance.py` raises without a key. Checked 2026-08-20 |
 | `.env.open` and `.env.openai` are **tracked** | Deliberate (DPG-16). They are secret-free templates and the `diff` between them is the DPG indicator-4 evidence. A test asserts neither carries a key |
-| `.env.example` is **tracked** and lists secret names | Names only, generated from `declared_env_vars()` and pinned both ways by a test. ⚠ **If you add a variable, that test fails until `.env.example` is updated** |
+| `.env.example` is **tracked** and lists secret names | Generated from `declared_env_vars()` and pinned both ways by a test. ⚠ **If you add a variable, that test fails until `.env.example` is updated.** ⚠ **"Names only" is not quite true — corrected 2026-08-24:** line 29 is `POSTGRES_PASSWORD=password`, a *value*, and it is byte-identical to the credential still live on staging and DOR prod. It reads as an innocuous template default, which is exactly why it survived. See the re-check note in *What actually happened* |
 | `NEXT_PUBLIC_*` in `channels/ticketing-ui/.env.local` | Public by contract — they ship to the browser. They belong in the plaintext half |
 
 ## 8. Definition of done
@@ -343,16 +430,21 @@ each one**:
       — ⚠ **`.env.shared`, not `.env`**; see *What actually happened*
 - [x] `make env-local` regenerates a working `env.local`; `make wsl-up` green on it (14/14 healthy)
 - [x] All 43 variable names present after the split — and every value byte-identical, verified by
-      comparison, never printed
+      comparison, never printed *(45 as of 2026-08-24; the number moves, the check does not)*
 - [x] `secrets.enc.env` verified encrypted **in the committed object**, not just on disk
 - [ ] Rotation pass complete for the five in §6, with dates recorded in `14_…` §1
-      — ⚠ **blocked on the compose-password fix for `POSTGRES_PASSWORD`**
+      — ✅ **`POSTGRES_PASSWORD` (08-21) and `REDIS_PASSWORD` (08-23) done locally**; the compose-password
+      blocker that held them is fixed. ⚠ **The four external-console credentials (AWS, HG, OPENAI, SMTP)
+      are still "unknown — treat as never"**, and neither server is rotated at all
 - [x] `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` **deliberately skipped**, and that recorded
       (`14_…` §3)
 - [ ] Staging and production migrated only after local is green — **local is green; hosts not started**
-- [ ] ⚠ **§5a run on each host before any deploy**: `DB_ENCRYPTION_KEY` + `SEARCH_TOKEN_PEPPER`
-      hashes compared, host `env.local` backed up, the six host-only secrets added to
-      `secrets.enc.env`, and the name-parity dry run clean
+- [ ] ⚠ **§5a run on each host before any deploy**: host `env.local` backed up; `hash_secret` run for
+      `DB_ENCRYPTION_KEY`, `SEARCH_TOKEN_PEPPER` and `OPS_DB_PASSWORD` — ⚠ **using the fail-loud
+      function, not the old grep-into-sha256sum, which reported a match on absent variables**; the
+      **five** host-only secrets added to `secrets.enc.env`; and the name-parity dry run clean
+- [ ] ⚠ **If `ops` is ever deployed to a host**: `ALTER ROLE ops_app`, ops migrations, and
+      `python -m ops.selfcheck` exiting 0 — §5a Hazard 3 and [`14_…`](14_key_and_secret_lifecycle.md) §5.1
 - [x] `Last rotated` recorded as *"unknown — treat as never"* — in **`14_…` §1**, not §5.3.1
 
 ## 9. ⚠ Never
@@ -364,4 +456,8 @@ each one**:
 - Deploy a split to production before the local stack is green on it
 - ⚠ **Run `make env-local` on staging or production before §5a's two hash checks pass** — a mismatched
   `DB_ENCRYPTION_KEY` is permanent PII loss, and it fails **open and silent**, not loud
-- ⚠ **Overwrite a host's `env.local` without backing it up first** — six secrets exist only there
+- ⚠ **Overwrite a host's `env.local` without backing it up first** — **five** secrets exist only there
+- ⚠ **Trust a hash comparison that did not use `hash_secret`** — the older one-liner hashes the empty
+  string when a variable is absent, so two hosts that both lack it "match" (§5a Hazard 1)
+- ⚠ **Introduce `SEARCH_TOKEN_PEPPER` on any host without running the rehash script in the same
+  window** — it is unset everywhere today, so *adding* it is the destructive operation, not rotating it
