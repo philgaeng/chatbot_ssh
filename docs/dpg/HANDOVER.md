@@ -82,35 +82,43 @@ missing") — otherwise they become a special case that leaks.
 
 ---
 
-## 2. The five evidence documents — keep, cite, do not restate
+## 2. The five evidence documents — revise these BEFORE writing `00`
 
-Deliberately **not** archived. They are measurements and generated inventories, not positions, and the
-new `00` is short precisely because it cites them.
+Deliberately **not** archived: they are measurements and generated inventories, not positions, and the
+new `00` is short precisely because it cites them rather than restating them.
 
-| Document | What it is | State |
+⚠ **But every one of them carries between two and five "superseded / pre-fix / stale / corrected"
+markers, and they must be revised first.** A citation is a claim. Citing a document you know holds three
+versions of the same number inherits its confusion into the assessment, and §0.2's rule applies to
+citations exactly as it applies to sentences.
+
+| Document | What it is | What it needs |
 |---|---|---|
-| [`dependency-licenses.md`](dependency-licenses.md) | Generated: `pip-licenses`, `license-checker`, image digests. 153 packages | Good. Has accreted some process narration |
-| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file+line, 18 findings | **Strongest document in the pack** — and the model for how to write claims |
-| [`model-benchmarks.md`](model-benchmarks.md) | Measured model results | Needs its own from-scratch rewrite — but **later**, see below |
-| [`open-model-configuration.md`](open-model-configuration.md) | How to run on open models + capability matrix | One broken bullet, see below |
-| [`vllm-deployment.md`](vllm-deployment.md) | Self-hosting design + costing for a parked option | Fine. Small |
+| [`model-benchmarks.md`](model-benchmarks.md) | Measured model results | ⭐ **Rewrite from scratch** — §2, §3.7, §4 and §6 hold before/after/superseded copies of the *same* metrics, so a reader navigates three versions to find one number |
+| [`vllm-deployment.md`](vllm-deployment.md) | Self-hosting design + costing for a parked option | **Re-state the token numbers once.** Its crossover table is built on figures the document itself says are ~3× wrong, preserved by annotation — the pattern we removed everywhere else. The *conclusion* is unaffected |
+| [`open-model-configuration.md`](open-model-configuration.md) | How to run on open models + capability matrix | Two surgical fixes: the transcription bullet in "What is not yet true" has benchmark news appended inside it and reads as one incoherent item; and the `Status (2026-08-20)` header is stale |
+| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file+line, 18 findings | One factual fix: **§3.7's table says "6 chatbot model calls … name and phone, audio" and contradicts F-1 and leg L4 in the same document.** Otherwise **the strongest document in the pack, and the model for how to write a claim** |
+| [`dependency-licenses.md`](dependency-licenses.md) | Generated: `pip-licenses`, `license-checker`, image digests. 153 packages | Trim the process narration, and fix one broken claim: its header cites "`01` §6 and `00` Appendix A, both marked pending the generated report" — both are now archived stubs |
 
 ⚠ **Do not move them into a subdirectory.** 48 markdown links outside `docs/dpg/` and 10 code
 references point at them. Give the new `00` an evidence-index table instead.
 
-### Four things to fix or check before anything is sent
+### ⭐ The distinction to hold, in these documents and in the new `00`
 
-1. **`privacy-assessment.md` §3.7** — the cross-border table still says *"6 chatbot model calls … full
-   narrative, complainant name and phone, audio"*. This **contradicts F-1 and leg L4 in the same
-   document**, which were corrected to five live sites with contact details not leaving. One-line fix.
-2. **`open-model-configuration.md` "What is not yet true"** — the transcription bullet has benchmark
-   news appended inside it and reads as one incoherent item. Split it.
-3. **`model-benchmarks.md`** carries three layers of the same numbers: §2 post-fix, §3.7 before *and*
-   after, §4 marked "superseded by §3.7", §6 pre-fix. **Rewrite it from scratch when the open column
-   lands** — once, against complete data, rather than twice.
-4. **`privacy-assessment.md` leans on the DOIT SMS gateway being in-country** as a jurisdictional
-   advantage (leg L9). True — but its credential was tracked by no inventory until 2026-08-24. Do not
-   repeat an indicator-9a claim about that path without checking §3's secret inventory.
+**A findings register may carry status. A metric table may not carry versions.**
+
+`F-2 … ✅ FIXED 2026-08-19` is a register doing its job — the finding, its severity and its disposition
+belong in one row, and a reader wants the history. A benchmark table holding the pre-change and
+post-change value of the same metric is different: there is exactly one current number, and anything
+else belongs in a clearly separated "what changed and why" note or nowhere.
+
+That is why `privacy-assessment.md` reads well with five markers and `model-benchmarks.md` does not.
+
+### ⚠ One claim to re-check rather than repeat
+
+`privacy-assessment.md` leans on the DOIT SMS gateway being in-country as a jurisdictional advantage
+(leg L9). That is true — but **its credential was tracked by no inventory until 2026-08-24.** Do not
+repeat an indicator-9a claim about that path without checking §3's secret inventory first.
 
 ---
 
@@ -283,12 +291,31 @@ Compose. Host CLIs are for reading.
 
 ---
 
-## 7. Suggested order
+## 7. Order of work — evidence first, and this order is not optional
 
-1. Fix the evidence-document defects in §2 — small, and they are wrong *now*.
-2. Write the new `00` indicator by indicator. Header contract first. Cite, never restate.
-3. Generate `02_questions.md` from it; add the pin test.
-4. Re-derive `01` from the new `00` **in the same pass**.
-5. Write `03_remediation_record.md` from `PROGRESS.md`, headed "not part of the assessment".
-6. Verify: relative links across `docs/` resolve, `tests/repo` passes **on the host**, no live secret
-   appears in any tracked file.
+`00` and `01` come **last**. They cite the evidence documents, so writing them first means writing them
+against sources that are about to change — which is how the archived pair drifted apart.
+
+1. ⭐ **Re-run the benchmark** — the open column *and* the post-fix cost meter.
+   `scripts/ops/llm_benchmark.py`; the command is in `model-benchmarks.md` §1. The open column was
+   blocked by a rate limit that the 70% prompt cut removed, so this is unblocked and it is the
+   highest-value measurement available.
+   ⚠ **It spends inference** from a time-boxed, personally-funded envelope shared with pilot traffic —
+   about 105 classification + 105 detection calls per model. **Confirm with the owner before running.**
+   ⚠ **SEAH recall cannot be closed by this run**, or by anything in this repository: it needs the
+   owner's held-out positive set, which never enters git. So "complete data" means *complete except
+   recall*, and that gap is permanent until the owner supplies the set.
+2. **Rewrite `model-benchmarks.md` from scratch** against the result — once, not twice.
+3. **Fix the other four** per §2. Three are small; `vllm-deployment.md` needs its token numbers
+   restated rather than annotated.
+4. **Write the new `00`** indicator by indicator. Header contract first. Cite, never restate.
+5. **Generate `02_questions.md`** from it; add the pin test (§5).
+6. **Re-derive `01`** from the new `00` — **in the same pass as step 4**, never afterwards.
+7. **Write `03_remediation_record.md`** from `PROGRESS.md`, headed "not part of the assessment".
+8. **Verify:** relative links across `docs/` resolve, `tests/repo` passes **on the host**, no live
+   secret appears in any tracked file, and every section reference points at a section that exists.
+
+⚠ **If step 1 is declined or deferred**, write `model-benchmarks.md` anyway at step 2 with the open
+column as a single clearly-labelled gap. A clean structure with one honest hole is strictly better than
+three layers, and filling a gap later is not a rewrite. What you must not do is leave it as it is and
+cite it from `00`.
