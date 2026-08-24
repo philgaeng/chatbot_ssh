@@ -33,12 +33,12 @@ escalation ladder up to a Grievance Redress Committee. It includes a dedicated, 
 | 1 | Relevance to SDGs | ✅ **Compliant** | None. SDG 16.6, 16.10, 9.1. Needs writing up, not building |
 | 2 | Approved open licence | 🟢 **Closed, provisionally** | `LICENSE` (Apache-2.0), `NOTICE`, an SPDX header on **593 source files** maintained by a script and held by a test so coverage cannot decay, and a **generated** licence audit over 153 packages in four dependency sets. Two things stay provisional: the **licence text** is yours to confirm (Q4), and the **copyright holder** is blank pending indicator 3 — `NOTICE` says so rather than guessing |
 | 3 | Clear ownership | 🔴 **Blocked, external** | A written IP determination from ADB. **Nobody on this project can resolve it**, and it is now the only thing standing between us and a complete licensing story |
-| 4 | Platform independence | 🟡 **The mechanism is built and running; the model choice is not made** | Every model in the product is a configuration value — nine call sites, two subsystems, one registry, proven by tests and exercised live against an open-weights provider. **But** the repository default is still proprietary, no open model has been selected, and the open configuration **cannot transcribe audio at all**. §4 |
+| 4 | Platform independence | 🟡 **The mechanism is built and running; the model choice is not made** | Every model in the product is a configuration value — nine call sites, two subsystems, one registry, proven by tests and exercised live against an open-weights provider. **But** the repository default is still proprietary, no open model has been selected, and the open configuration **cannot transcribe audio at all**. §3 |
 | 5 | Documentation | ✅ **Compliant, strong** | A 365-file spec tree, a Docker runbook for 13 services, OpenAPI on both APIs, and a portable engineering starter kit another country team could reuse |
 | 6 | Data extraction | ✅ **Compliant** | PostgreSQL, version-controlled schema in three independent migration streams, XLSX and PDF exports, REST APIs. `pg_dump` gives a complete portable extract |
 | 7 | Privacy & applicable laws | 🟠 **Partial — and nothing real has happened yet** | The assessment against the Individual Privacy Act 2018 and a 13-leg data-flow diagram are written, each leg verified against code — which is how the three storage-layer defects in §5 came to light, all three now fixed. ⭐ **No genuine grievance has been processed on this platform**: every record is seed data or a demo dummy, so every exposure is **prospective**, and redaction is a **go-live precondition rather than remediation**. Still missing: that redaction, a deletion capability, a breach procedure, and a lawyer's review (Q15) |
 | 8 | Standards & best practices | ✅ **Compliant** | OpenAPI, OIDC/PKCE via self-hosted Keycloak, migrated schema, architectural invariants pinned by tests, and the hygiene set at the repo root. `SECURITY.md` routes disclosure privately rather than to a public issue, because this platform holds SEAH reports. Secrets are SOPS-encrypted in the repository, and a scan of **every blob ever committed** against every live credential confirms none of them is readable in the public history (§5). Governance and release-versioning policy deferred pending Q17 |
-| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake, and **two independent** content-detection paths. Outstanding: retention and breach policy, third-party PII redaction, and **a measured SEAH detector** — the one with a safeguarding consequence, §4 |
+| 9 | Do no harm by design | 🟢 **Mostly** | Access control, audit log, SEAH isolation, anonymous intake, and **two independent** content-detection paths. Outstanding: retention and breach policy, third-party PII redaction, and **a measured SEAH detector** — the one with a safeguarding consequence |
 
 **One blocker that is genuinely ours to close, and one that is not.** Indicator 4 is engineering that is
 mostly done and whose last step is a **measurement**, not a refactor. **Indicator 3 is a signature we have
@@ -103,7 +103,7 @@ has not started.
   models.
 - **A CI job running the product's own AI code paths live against the open configuration.** Run by hand it
   returns **4 passed, 1 xfailed, exit 0** against an Apache-2.0 open-weights model. ⚠ **It has never
-  executed in CI** — see §4.
+  executed in CI** — [`00_compliance_status.md`](00_compliance_status.md) §4.5.
 
 **Evidence** — *indicator 4*
 
@@ -115,31 +115,36 @@ has not started.
 
 ### Still ahead
 
-- **Choose an open model.** The open column of the benchmark has detection only. ⚠ The blocker was **our
-  own prompt** — 20,700 characters, because the category catalogue was injected three times — which has
-  since been cut by 70%, so re-running the open column is now the next measurement rather than a
-  procurement problem.
-- **Measure SEAH recall for both candidates.** This is the number that decides the model choice, it has a
-  safeguarding consequence, and it cannot be measured from anything in the repository. §4.
-- **Redaction at the egress boundaries** — *indicators 7, 9*. Nepali phone formats in **both** digit
-  systems (`९८४१२३४५६७` is a phone number an ASCII pattern misses completely), citizenship numbers,
-  vehicle registrations, emails, address spans; **person names at the rule layer** with no ML dependency —
-  honorific and role-title triggers, a Nepali family-name gazetteer, and self-identification patterns; and
-  the logging, task-queue and backup paths, which is where leaks actually happen rather than where
-  everyone designs against them. ⚠ **Some names will still get through** — see §4.
-- **A retention period, a deletion capability, and a breach procedure.** Archiving is implemented and is
-  not deletion: **no code path deletes personal data anywhere in this platform**, and `SECURITY.md`
-  already promises reporters a breach procedure that does not yet exist.
+- **Choose an open model.** The open column of the benchmark has detection only. Measure SEAH recall for both candidates.
+- **Redaction at the egress boundaries** — *indicators 7, 9*. Nepali phone formats in **both** digitsystems (`९८४१२३४५६७` is a phone number an ASCII pattern misses completely), citizenship numbers,vehicle registrations, emails, address spans; **person names at the rule layer** with no ML dependency —
+  honorific and role-title triggers, a Nepali family-name gazetteer, and self-identification patterns; andthe logging, task-queue and backup paths, which is where leaks actually happen rather than whereeveryone designs against them. ⚠ **Some names will still get through** — see §5.
+- **A retention period, a deletion capability, and a breach procedure.** Archiving is implemented and isnot deletion: **no code path deletes personal data anywhere in this platform**, and `SECURITY.md`already promises reporters a breach procedure that does not yet exist.
 
 ---
 
-## 3. What we need from you
+## 3. The AI layer — what is built
+
+Every model this system calls is a configuration value. Nine call sites across two subsystems resolve
+through one registry that both import and neither owns; **none names a model, a provider or an endpoint.**
+
+| Built | Evidence |
+|---|---|
+| One config file — every endpoint, model, deadline and output mode, declared once | `backend/config/llm_config.py` |
+| Two configurations that differ only in values | `diff .env.openai .env.open` is the whole delta |
+| One environment change moves **both** subsystems, and no model name survives anywhere outside the registry | two tests, the second AST-parsed |
+| Schema-constrained model output, per-model capability measured against the live provider | 7 call sites, with a degradation ladder |
+| The product's own code paths, run live against an Apache-2.0 open-weights model | `dpg-platform-independence` CI job |
+| A 105-item labelled Nepali benchmark set, published CC0-1.0 | scored by the product's own functions |
+
+**Switching providers is an environment-variable change** — no code, no rebuild, no migration. What is
+*not* built is in §1 and §2; the open questions it raises are §4.
+
+---
+
+## 4. What we need from you
 
 Grouped by what the answer unblocks. 🔴 = we cannot finish the work without it.
 
-**These are deliberately short and open.** The evidence behind each sits in the sections above. The
-judgement is yours — a question that arrived pre-argued would be asking you to check our reasoning
-rather than to give us yours.
 
 ### Ownership, licensing and process
 
@@ -189,79 +194,6 @@ rather than to give us yours.
   no owner beyond it.
 - **Q19 — What are we missing?** Anything in the current Standard revision, or the AI-systems guidance,
   that we would not find by reading the published documents.
-
----
-
-## 4. The AI layer, in brief
-
-**How we query models.** Nine call sites, two independent subsystems, and **not one of them names a
-model, a provider or an endpoint.** All nine resolve through a single registry that both surfaces import
-and neither owns.
-
-| Subsystem | What it does | Data sent to the provider |
-|---|---|---|
-| Chatbot intake | Grievance classification and summary; sensitive-content detection. *(Voice transcription, contact extraction and grievance translation are complete but **switched off**.)* | The full grievance narrative; district and province |
-| Ticketing | Officer-note translation; case findings; the resolved-case summary shown to the complainant | Officer case notes verbatim; whole case timelines, including SEAH cases |
-
-**Five call sites are live, not nine.** The other four are the voice-notes flow, switched off in the
-prototype for want of a transcription budget. They are declared in code as parked, each with a reason,
-and a test enforces the only two acceptable states — **enqueued in production, or declared parked,
-nothing else.** They resolve models through the same registry as the live paths, so unparking is a budget
-decision, not a migration.
-
-**And it is now two models, not six.** Every text task resolves to one small model; transcription to one
-speech model. Eight task keys, two values.
-
-### What is done, and what is not
-
-**It is a configuration refactor, and it is finished.** `diff .env.openai .env.open` is the whole delta —
-no code, no rebuild, no migration.
-
-**What is not finished, and you should hear it from us rather than find it:**
-
-- **No open model has been chosen.** The comparative benchmark is unfinished, so the repository default
-  is still the proprietary configuration — deliberately, because an open endpoint pointed at proprietary
-  model ids is a repository that cannot serve one request on a fresh clone.
-- **The open configuration cannot transcribe.** The provider serves no OpenAI-compatible speech endpoint,
-  so the claim is true for text and false for voice.
-- **⚠ The CI job that demonstrates all of this has never run in CI.** It passes when run by hand; the
-  provider account was rate-limited when it was written. **A job that exists, never runs, and is cited as
-  evidence is not acceptable** — the workflow header says so in those words.
-- **⚠ One measurement is missing and it carries a safeguarding consequence.** Sensitive-content *recall*
-  decides the model choice, and it cannot be measured from anything in this repository: the committed
-  benchmark holds no harassment reports, by decision rather than omission.
-
-The benchmark figures, the two live defects the measurements exposed, and the candidate that refused a
-grievance about children falling ill are in
-[`00_compliance_status.md`](00_compliance_status.md) §4.3–§4.4 and
-[`model-benchmarks.md`](model-benchmarks.md).
-
-### Where the residual goes, and under whose terms — the substance of Q14
-
-Redaction is imperfect by construction, so the honest question is what happens to the text that gets
-through. With self-hosting parked, that text reaches a third party permanently, so we read the
-provider's terms rather than assuming them.
-
-Hugging Face's own commitments are substantive and we cite them: no user data stored for training, no
-request body or response stored when routing, debugging logs for 30 days, SOC 2 Type 2 on the Hub.
-⚠ **Then the sentence that decides it, and it is theirs:** *"External providers are responsible for
-their own security measures."* **The no-storage commitment covers the router, not the company that runs
-the model** — and by default the router picks a different third-party processor *per request*. For a
-government privacy assessment, "we cannot name which company processed this citizen's grievance" is a
-finding, not a footnote. The Terms reference no DPA.
-
-We intend to pin one named provider so the processor is knowable. **What that still does not fix** —
-the downstream provider's own retention, the jurisdiction of execution, and prompt caching — is why
-Q14 asks whether a signed agreement is expected.
-
-⚠ **And one precision we want settled before anyone briefs the ministry.** What redaction produces is
-**pseudonymised** text, not **anonymised** text: we keep the mapping, so the text remains personal data.
-**We will not let anyone tell the agency the grievances are "anonymised"** — the claim would not survive
-scrutiny and would discredit everything else we say. What we can say is accurate and strong: only
-pseudonymised text crosses the border, and the re-identification key never leaves Nepal.
-
-Full analysis, including what we will not overstate about the router's multi-vendor fan-out:
-[`00_compliance_status.md`](00_compliance_status.md) §4.6.
 
 ---
 
@@ -393,7 +325,7 @@ written disposition for every entry carrying conditions beyond attribution, is
 | Reports & documents | openpyxl, ReportLab | MIT / BSD-3-Clause |
 | Images | pyvips / libvips | MIT / LGPL-2.1 |
 | Conversational state machine | This project's own code and orchestrator; `rasa-sdk` supplies the action/form base classes — **no Rasa server, no NLU, no TensorFlow** | Apache-2.0 |
-| **Model client** | **`openai` — the only ML dependency, and the *client* is open; the service it calls is the subject of §4** | Apache-2.0 |
+| **Model client** | **`openai` — the only ML dependency, and the *client* is open; the service it calls is the subject of §3** | Apache-2.0 |
 
 **Reading manifests would have missed 98 of the 133 Python packages**, and with them the three copyleft
 findings worth your eye (Q10): `psycopg2-binary` (LGPL with a linking exception), and two **transitive**
@@ -416,7 +348,7 @@ anyone's right to use or fork the code.
 
 | Service | Used for | Replaceability |
 |---|---|---|
-| Commercial LLM API | The five live model calls | **The subject of §4** — one environment variable |
+| Commercial LLM API | The five live model calls | **The subject of §3** — one environment variable |
 | AWS SNS | SMS to complainants (international / development) | Provider-agnostic behind one interface; already dual-implemented |
 | DOIT SMS (`sms.doit.gov.np`) | SMS in Nepal — Government of Nepal gateway | The production path; configured, not compiled in |
 | SMTP relay | Email notifications and quarterly reports | Any SMTP server |
