@@ -17,7 +17,7 @@
 
 | Step | Outcome |
 |---|---|
-| 0 · Task zero | Reconciled. [`14_…`](14_key_and_secret_lifecycle.md) §1 is now the **single authority** (15 rows, one per secret, with impact + cadence + procedure + `Last rotated`); [`13_security.md`](13_security.md) §5.3.1 keeps location columns only and points at it |
+| 0 · Task zero | Reconciled. [`14_…`](14_key_and_secret_lifecycle.md) §1 is now the **single authority** (16 rows, one per secret, with impact + cadence + procedure + `Last rotated`); [`13_security.md`](13_security.md) §5.3.1 keeps location columns only and points at it |
 | 1 · Tooling | `sops` 3.13.3 + `age` 1.1.1 in `~/.local/bin` (no sudo). **Provenance verified** — sops against its published `checksums.txt`, age against the **GPG-signed Ubuntu archive index** |
 | 2 · Keypair | `~/.config/sops/age/keys.txt`, mode 0600, dir 0700, on **ext4** (checked `df -T`, and that the path does not resolve under `/mnt`). Public key `age1ke0hk5e…rz95h` |
 | 3 · `.gitignore` | Verified, plus `env.local.extra` added (see below) |
@@ -103,8 +103,9 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 | 1 | ⚠ **Back up the age private key** to Proton Pass + a paper copy. **Until this is done, one disk failure makes `secrets.enc.env` permanently unreadable.** Nothing else here is urgent; this is | you, today |
 | 2 | Fill the `Owner` `TBC` cells in §5.3.1 | you |
 | 3 | The rotation pass (§6) — every credential is "unknown, treat as never" | you (external consoles) |
-| 4 | Migrate **staging** and **DOR prod**: install sops+age, generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⚠ **Five** secrets (§5.3.1 rows 2, 7–10) exist **only** on those hosts and are **not** in `secrets.enc.env` yet — running the generator there today deletes them. ⚠ **And `OPS_DB_PASSWORD` (row 4, added 2026-08-24) is the opposite hazard**: it will arrive correctly and still do nothing until `ALTER ROLE ops_app PASSWORD` runs on that box — §5a Hazard 3 | you |
-| 6 | ⚠ **`POSTGRES_PASSWORD=password` is still in 3 tracked files** — `.claude/settings.local.json` (×3) and `.env.example:29`, plus archived history that should stay. It is **the live credential on both un-rotated servers**, in a repo slated for public release. Rotate there (item 4), then purge; or purge now and accept the prompts | you |
+| 4 | Migrate **staging** and **DOR prod**: install sops+age (⚠ **neither is installed on staging** — verified 2026-08-24), generate a **per-server keypair**, add it as a recipient (`sops updatekeys`), then `make env-local`. ⭐ **Measured on staging 2026-08-24: `make env-local` there would delete THIRTY variables**, including `DOIT_SMS_BEARER_TOKEN` — a credential in neither inventory — and the whole Keycloak configuration. §5a Hazard 2 has the list. **DOR prod is unmeasured.** ⚠ **And `OPS_DB_PASSWORD` (row 4) is the opposite hazard**: it arrives correctly and still does nothing until `ALTER ROLE ops_app PASSWORD` runs on that box — §5a Hazard 3 | you |
+| 7 | ⭐ **`DOIT_SMS_BEARER_TOKEN` is tracked by no inventory** — read by `backend/config/sms_config.py:47`, live on staging, absent from §5.3.1, `14_…` §1 and every committed env file. It authenticates to the **Government of Nepal SMS gateway**, which is the *production* complainant-notification path. Added to both inventories 2026-08-24; ⚠ **it still needs an owner and a rotation route, neither of which we control** | you |
+| 6 | ⚠ **`POSTGRES_PASSWORD=password` is still in 3 tracked files** — `.claude/settings.local.json` (×3) and `.env.example:29`, plus archived history that should stay. ⚠ **Confirmed live on AWS staging by digest comparison, 2026-08-24** — that host still holds the pre-rotation value. In a repo slated for public release. Rotate there (item 4), then purge; or purge now and accept the prompts | you |
 | 5 | ~~The compose-password fix above~~ ✅ **done locally 2026-08-21** — ⚠ but it makes item 4 a **prerequisite for the next deploy**, not a nice-to-have: `${VAR:?}` stops the stack when the value is missing, and neither host can run `make env-local` until its age key is a recipient | deployment |
 
 ⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models` — and that is now load-bearing rather than incidental: the compose change in item 5 is **breaking for any host whose database still holds the old credential**, which is both of them.
@@ -122,8 +123,8 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 ### ✅ Task zero — DONE 2026-08-21. Kept as the reasoning, not as a task
 
 > The reconciliation described below **has been carried out** — see the *What actually happened* table,
-> row 0. [`14_…`](14_key_and_secret_lifecycle.md) §1 is the single authority (15 rows, verified
-> 2026-08-24) and [`13_security.md`](13_security.md) §5.3.1 keeps location columns only. **Do not redo
+> row 0. [`14_…`](14_key_and_secret_lifecycle.md) §1 is the single authority (16 rows as of 2026-08-24 —
+> `DOIT_SMS_BEARER_TOKEN` was added that day, having been in neither inventory) and [`13_security.md`](13_security.md) §5.3.1 keeps location columns only. **Do not redo
 > it.** The section stays because the *reason* it was done is the reason not to undo it.
 
 #### ⚠ Why there were TWO inventories, and why that was a defect
@@ -248,8 +249,8 @@ Then confirm the two things a split most commonly breaks:
 
 **A single `secrets.enc.env` asserts that every host holds the same value for every secret.** That
 is fine, even desirable, for most of them. For **one** it is **irreversible if the assertion is false**,
-for **five** more it is destructive in a different way, and for one it is inert-but-silent. None of the
-three raises an error.
+for **an unknown number of others** it is destructive in a different way — measured at **thirty** on
+staging, unmeasured on prod — and for one it is inert-but-silent. None of the three raises an error.
 
 #### Hazard 1 — one file carries one value
 
@@ -271,7 +272,22 @@ phone and email lookup return **nothing, silently, raising no error** — it rea
 complainant". Only `scripts/database/rehash_search_tokens.py`, run on that box in the same window,
 repairs it. Treat setting it for the first time exactly like rotating it.
 
-⚠ **This is unverified today.** §5.3.1 records *that* copies exist on staging and prod; its own
+> ### ✅ VERIFIED FOR STAGING, 2026-08-24 — and this was the one that could not be undone
+>
+> Run over SSH against `ubuntu@52.76.171.73` (`integration/stage`) and compared with the local box:
+>
+> | Secret | Local | AWS staging | Verdict |
+> |---|---|---|---|
+> | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** The irreversible hazard is cleared **for staging** |
+> | `SEARCH_TOKEN_PEPPER` | ⛔ absent | ⛔ absent | ✅ Consistent — see the correction below |
+> | `OPS_DB_PASSWORD` | present | ⛔ absent | Expected; staging runs no `ops` container (Hazard 3) |
+> | `POSTGRES_PASSWORD` | rotated 2026-08-21 | ⚠ **still the pre-rotation value**, confirmed by digest | Matches what `14_…` §1 records. This is open item 6 |
+>
+> ⚠ **DOR prod has NOT been checked** — no access from the development box. Until the same comparison
+> is run there, Hazard 1 is open for prod and **only** for prod. Nothing below is safe to run on that
+> host first.
+
+⚠ **Prod remains unverified.** §5.3.1 records *that* copies exist on staging and prod; its own
 header says values were never compared, and that check was across **repositories**, not across
 these hosts. **Verify by hash on each host before deploying anything** — never by printing, pasting
 or eyeballing a value:
@@ -318,15 +334,39 @@ values — trailing newlines and quote stripping both change the digest.
 `gen_env_local.sh` builds `env.local` from `.env.shared` + `secrets.enc.env` **only**. Anything
 present in a host's current `env.local` and absent from those two halves is **silently dropped**.
 
-⚠ **Five secrets live only on staging and prod and are NOT in `secrets.enc.env`** — §5.3.1 rows 2,
-7, 8, 9, 10 (`SEARCH_TOKEN_PEPPER`, `MESSAGING_API_KEY`, `KEYCLOAK_ADMIN_PASSWORD`,
-`KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`). Running `make env-local` on those hosts today
-would **delete all five**. Officer login and the Messaging API break; ⚠ `MESSAGING_API_KEY` also
-guards `GET /api/grievance/{id}`, which serves plaintext PII.
+> ### ⭐ MEASURED ON STAGING, 2026-08-24 — the number was not five, it was thirty
+>
+> This section previously named five host-only secrets from §5.3.1 and said `make env-local` would
+> delete them. **That was inferred from an inventory, not measured against a host.** Read over SSH
+> (names only, no values): staging's `env.local` holds **67 variables**; the two committed halves
+> generate **45**. **Thirty names exist on staging and in neither half**, and two of the five this
+> document named are **not on staging at all**.
+>
+> **`make env-local` on staging today would delete thirty variables**, of which four are credentials:
+>
+> | Deleted | What breaks |
+> |---|---|
+> | ⭐ **`DOIT_SMS_BEARER_TOKEN`** | **The production Nepal SMS gateway** (`sms.doit.gov.np`, `backend/config/sms_config.py:47`). ⚠ **This credential is in NEITHER inventory** — not §5.3.1, not `14_…` §1, not in any committed env file. Task zero's defect, recurring: a secret nobody is tracking |
+> | `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET` | Officer login and onboarding. The three this document did get right |
+> | `KEYCLOAK_ISSUER`, `KEYCLOAK_JWKS_URL`, `KEYCLOAK_ADMIN_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_INVITE_*`, `KC_HOSTNAME_URL`, `KC_HTTP_RELATIVE_PATH`, `KEYCLOAK_HOST_PORT`, `NEXT_PUBLIC_OIDC_*`, `NEXT_PUBLIC_BYPASS_AUTH` | Not secrets — but auth stops working without them, and a "secrets migration" that silently deletes non-secret config is the same outage |
+> | `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `SOCKETIO_REDIS_URL`, `DATABASE_*` (×5), `CHATBOT_WEBCHAT_URL`, `TICKETING_API_URL`-adjacent wiring, `SMS_ENABLED`, `SMS_PROVIDER`, `DOIT_SMS_BASE_URL`, `SMTP_FROM`, `SMTP_FROM_DISPLAY` | Runtime wiring |
+>
+> **Not on staging, though this document said they were:** `SEARCH_TOKEN_PEPPER` (absent everywhere —
+> Hazard 1) and `MESSAGING_API_KEY` (absent). §5.3.1 rows 2 and 7 are wrong about staging.
+>
+> ⚠ **Do not replace "five" with "thirty" and move on.** The number is a property of that host on that
+> day, and DOR prod has **not** been measured. The durable instruction is step 5 of *the order that is
+> safe*: **run the name-parity dry run on the host you are about to touch, and read its output.**
 
-> **Was six until 2026-08-24.** `OPS_DB_PASSWORD` (row 4) is now **in** `secrets.enc.env`, so it is no
-> longer at risk of being dropped here — it moved to Hazard 3 instead, which is a different problem
-> with the opposite sign. Counting it in both places would be worse than counting it in neither.
+⚠ **Some variables live only on staging and prod and are NOT in `secrets.enc.env`.** Running
+`make env-local` on those hosts deletes every one of them, silently. The measured list for staging is
+above; **prod is unmeasured**. ⚠ `MESSAGING_API_KEY` — which guards `GET /api/grievance/{id}`, serving
+plaintext PII — is in §5.3.1 as a host-only secret but is **absent from staging**, so it is presumably
+prod-only or stale; find out before you generate anything there.
+
+> **`OPS_DB_PASSWORD` is not in this hazard.** It is now **in** `secrets.enc.env`, so it cannot be
+> dropped here — it moved to Hazard 3, which is a different problem with the opposite sign. Counting it
+> in both places would be worse than counting it in neither.
 
 #### Hazard 3 — a secret can arrive without the thing it unlocks (`OPS_DB_PASSWORD`, new 2026-08-24)
 
@@ -356,7 +396,7 @@ Full procedure: [`14_… §5.1`](14_key_and_secret_lifecycle.md).
 
 1. **Back up the host's `env.local` first** — `cp env.local env.local.pre-sops && chmod 600 …`, off-box too. It is gitignored, so there is no other copy.
 2. Compare the two hashes above. Stop if they differ.
-3. Add the **five** host-only secrets to `secrets.enc.env` (`make secrets-edit`) **before** generating anything.
+3. Add **every host-only variable the step-5 dry run reports as missing** to `secrets.enc.env` (secrets) or `.env.shared` (non-secrets), via `make secrets-edit` / an edit, **before** generating anything. ⚠ **Do not work from a list in this document** — it said five, and staging measured thirty.
 4. Give the host **its own age keypair** and add it as a recipient — `sops updatekeys secrets.enc.env`. ⚠ Do not copy your personal key onto a server (§5.2).
 5. **Dry-run the parity check** — generate into a scratch directory and diff the variable **names**
    against the live file. Zero missing names, or stop.
@@ -439,10 +479,14 @@ each one**:
 - [x] `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` **deliberately skipped**, and that recorded
       (`14_…` §3)
 - [ ] Staging and production migrated only after local is green — **local is green; hosts not started**
+- [x] ✅ **§5a Hazard 1 run on AWS staging, 2026-08-24** — `DB_ENCRYPTION_KEY` identical to local, so the
+      irreversible hazard is cleared **for staging**. ⚠ **DOR prod not run — no access from the dev box**
 - [ ] ⚠ **§5a run on each host before any deploy**: host `env.local` backed up; `hash_secret` run for
       `DB_ENCRYPTION_KEY`, `SEARCH_TOKEN_PEPPER` and `OPS_DB_PASSWORD` — ⚠ **using the fail-loud
       function, not the old grep-into-sha256sum, which reported a match on absent variables**; the
-      **five** host-only secrets added to `secrets.enc.env`; and the name-parity dry run clean
+      **every variable the dry run reports missing** added to `secrets.enc.env` (secrets) or `.env.shared`
+      (non-secrets) — ⚠ **measured at thirty on staging, not the five this document used to claim**; and the
+      name-parity dry run re-run clean afterwards
 - [ ] ⚠ **If `ops` is ever deployed to a host**: `ALTER ROLE ops_app`, ops migrations, and
       `python -m ops.selfcheck` exiting 0 — §5a Hazard 3 and [`14_…`](14_key_and_secret_lifecycle.md) §5.1
 - [x] `Last rotated` recorded as *"unknown — treat as never"* — in **`14_…` §1**, not §5.3.1
@@ -456,7 +500,7 @@ each one**:
 - Deploy a split to production before the local stack is green on it
 - ⚠ **Run `make env-local` on staging or production before §5a's two hash checks pass** — a mismatched
   `DB_ENCRYPTION_KEY` is permanent PII loss, and it fails **open and silent**, not loud
-- ⚠ **Overwrite a host's `env.local` without backing it up first** — **five** secrets exist only there
+- ⚠ **Overwrite a host's `env.local` without backing it up first** — **thirty** variables exist only on staging, four of them credentials, and prod is unmeasured
 - ⚠ **Trust a hash comparison that did not use `hash_secret`** — the older one-liner hashes the empty
   string when a variable is absent, so two hosts that both lack it "match" (§5a Hazard 1)
 - ⚠ **Introduce `SEARCH_TOKEN_PEPPER` on any host without running the rehash script in the same

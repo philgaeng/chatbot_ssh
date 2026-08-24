@@ -226,6 +226,7 @@ gitignored file; the migration is §5.7.
 | 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | ⭐ Realm admin — **can mint officer accounts** |
 | 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | OIDC client |
 | 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Onboarding webhook |
+| 10b | ⭐ `DOIT_SMS_BEARER_TOKEN` | TBC | ⚠ **nowhere** — not in `secrets.enc.env` | **AWS staging `env.local` only** (verified 2026-08-24); prod unmeasured; **absent locally** | `backend/config/sms_config.py:47` — Government of Nepal SMS gateway, the **production** complainant SMS path |
 | 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Officer-invite mail relay |
 | 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | SNS (complainant SMS), Pinpoint |
 | 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` (generated) | Closed LLM config (the benchmark baseline) |
