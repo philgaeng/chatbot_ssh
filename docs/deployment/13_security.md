@@ -228,7 +228,7 @@ gitignored file; the migration is §5.7.
 | 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod — ✅ **folded in from staging 2026-08-24** | Onboarding webhook |
 | 10b | ⭐ `DOIT_SMS_BEARER_TOKEN` | TBC | `secrets.enc.env` (SOPS) — ✅ **folded in from staging 2026-08-24**; it had been in no store at all | `env.local` (generated) · AWS staging; prod unmeasured | `backend/config/sms_config.py:47` — Government of Nepal SMS gateway, the **production** complainant SMS path |
 | 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Officer-invite mail relay |
-| 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | SNS (complainant SMS), Pinpoint |
+| 12 | ~~`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`~~ | TBC | ⛔ **Still in `secrets.enc.env` — remove with `make secrets-edit`** | — | ✅ **No consumer since 2026-08-24.** SNS was the only user and it was deleted; Pinpoint was read by no code at all. **An unused credential is pure liability — delete it and revoke the IAM key** |
 | 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` (generated) | Closed LLM config (the benchmark baseline) |
 | 14 | `HG_TOKEN` (+ `HG_USERNAME`) | me | `secrets.enc.env` (SOPS) | `env.local` (generated) · **GitHub Actions secret `HF_TOKEN`** | Open LLM config; `dpg-platform-independence` CI job |
 | 15 | `GITHUB_TOKEN` (optional) | me | `secrets.enc.env` (SOPS) | **GitHub PAT** — reissued, not copied | Dependabot alerts API (security monitoring) |
@@ -254,7 +254,7 @@ prove those hosts are covered. Migrate each host explicitly.
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by | Rotation procedure | Last rotated |
 |---|---|---|---|---|---|---|---|
 | 23 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | LLM calls | platform.openai.com → API keys. ⚠ **Distinct from #13** — verified different | TBC |
-| 24 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | S3, SES, Pinpoint | IAM → create new → update → delete old. ⚠ **Distinct from #12** — verified different | TBC |
+| 24 | ~~`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`~~ | me | ⛔ **Still in `secrets.enc.env`** | — | ~~S3, SES, Pinpoint~~ — ✅ **no consumer in this repository since 2026-08-24** | **Revoke the IAM key rather than rotating it.** ⚠ **Distinct from #12** — verified different | TBC |
 | 25 | `HUGGINGFACE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | HF inference | huggingface.co/settings/tokens. ⚠ **Distinct from #14** — verified different | TBC |
 | 26 | `GOOGLE_API_KEY` | me | `secrets.enc.env` (SOPS) | `.env` local | Calendar / Sheets | Google Cloud Console → APIs & Services → Credentials | TBC |
 | 27 | `GOOGLE_CLIENT_SECRET` (+ `GOOGLE_CLIENT_ID`) | me | `secrets.enc.env` (SOPS) | `.env` local | OAuth client | Google Cloud Console → Credentials → OAuth client → reset secret | TBC |

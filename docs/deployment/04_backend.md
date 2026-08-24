@@ -46,7 +46,7 @@ All routers are included without a prefix; paths below are the real URL paths. S
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/messaging/send-sms` | SMS via provider selected by `SMS_PROVIDER` (DOIT gateway / AWS SNS / disabled) |
+| `POST /api/messaging/send-sms` | SMS via provider selected by `SMS_PROVIDER` (DOIT gateway / disabled) |
 | `POST /api/messaging/send-email` | Email via shared SMTP relay |
 
 Auth: `x-api-key` header. Callers: ticketing (SMS fallback, quarterly reports), Celery tasks, chatbot actions via `backend/clients/messaging_api.py`. Spec: [`../services/05_messaging_service.md`](../services/05_messaging_service.md). **No Twilio anywhere.**

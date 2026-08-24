@@ -28,10 +28,10 @@ SMS delivery provider is selected via env (`backend/config/sms_config.py`):
 | `SMS_PROVIDER` | Transport | Notes |
 |----------------|-----------|--------|
 | `doit` (default when `DOIT_SMS_BEARER_TOKEN` is set) | [DOIT SMS gateway](https://sms.doit.gov.np/developer-guide/) | Production Nepal — `POST /api/sms` |
-| `aws_sns` | AWS SNS | Dev / international fallback; PH `+63` numbers, whitelist gate |
+| ~~`aws_sns`~~ | ~~AWS SNS~~ | ✅ **Removed 2026-08-24.** SMS providers serving Nepal must be in-country; the path could only format PH `+63` numbers, so it could never reach a Nepali complainant (privacy assessment F-12) |
 | `disabled` | — | No outbound SMS |
 
-Set `SMS_ENABLED=true` to allow sends. AWS SNS path still respects `WHITELIST_PHONE_NUMBERS_OTP_TESTING` when `SMS_WHITELIST_ONLY` is true (default for `aws_sns`).
+Set `SMS_ENABLED=true` to allow sends — it is per-host and deliberately absent from the committed env, so a developer stack does not text real Nepali numbers. `SMS_WHITELIST_ONLY=true` additionally gates the DOIT gateway against `WHITELIST_PHONE_NUMBERS_OTP_TESTING`; that list is **empty** and must hold **Nepal-format** numbers (non-Nepali entries are ignored with a warning rather than raising, which they used to do).
 
 ### `POST /api/messaging/send-email`
 
@@ -148,6 +148,6 @@ SMS environment variables:
 |----------|----------|-------|
 | `DOIT_SMS_BEARER_TOKEN` | yes (doit) | Bearer token from [newsms.doit.gov.np](https://newsms.doit.gov.np) |
 | `DOIT_SMS_BASE_URL` | no | default `https://sms.doit.gov.np` |
-| `SMS_PROVIDER` | no | `doit` \| `aws_sns` \| `disabled` |
+| `SMS_PROVIDER` | no | `doit` \| `disabled` — ⚠ **unset or unrecognised with no token ⇒ `disabled`**, never a cross-border transport |
 | `SMS_ENABLED` | no | `true` to send (falls back to `constants.SMS_ENABLED` if unset) |
-| `SMS_WHITELIST_ONLY` | no | default `true` for `aws_sns`, `false` for `doit` |
+| `SMS_WHITELIST_ONLY` | no | default `false` — opt-in. Gates the DOIT gateway against `WHITELIST_PHONE_NUMBERS_OTP_TESTING`, which must hold **Nepal-format** numbers (non-Nepali entries are ignored with a warning) |

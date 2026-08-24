@@ -113,7 +113,7 @@ def send_sms(
                 error_code="DELIVERY_ERROR",
                 error="SMS delivery failed or disabled",
             )
-        # SNS MessageId is logged inside Messaging; we do not have it here yet.
+        # The provider's message id is logged inside Messaging; we do not have it here yet.
         return MessagingResponse(status="SUCCESS", message="SMS sent")
     except HTTPException:
         raise

@@ -38,7 +38,8 @@
    sets it on a host) and `HG_USERNAME` (§5.3.1 groups it with `HG_TOKEN` exactly as it groups
    `SMTP_USERNAME` with `SMTP_PASSWORD`, which §4 *did* catch). `POSTGRES_USER` and
    `PINPOINT_APPLICATION_ID` were left in the plaintext half: they are resource addresses, not
-   authentication principals.
+   authentication principals. ⚠ **`PINPOINT_APPLICATION_ID` was deleted on 2026-08-24** — it was read
+   by no code at all, and the AWS SMS path it belonged to is gone (privacy assessment F-12).
 3. **Task zero says five rows are missing from §14. It is six** — `KEYCLOAK_CLIENT_SECRET` was absent
    from both lists' reconciliation notes. This is the defect the section is about, one level down.
 4. **The DoD asked for `Last rotated` in §5.3.1 *and* for §5.3.1 to stop owning rotation.** Those

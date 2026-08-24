@@ -9,14 +9,14 @@
 - **Data-boundary rules** (no PII in `ticketing.*`, PII fetched via `GET /api/grievance/{id}`): `CLAUDE.md` + [`../ticketing_system/03_ticketing_api_integration.md`](../ticketing_system/03_ticketing_api_integration.md).
 - Dev bring-up + seed baseline for validating this flow: [`03_operations.md`](03_operations.md) §2 (Startup Runbook).
 
-## 2. Messaging — SMS (DOIT / AWS SNS) + email (SMTP)
+## 2. Messaging — SMS (DOIT gateway, in Nepal) + email (SMTP)
 
 Canonical spec: [`../services/05_messaging_service.md`](../services/05_messaging_service.md). Summary:
 
 | Channel | Provider | Notes |
 |---|---|---|
 | SMS | **DOIT government gateway** (`SMS_PROVIDER=doit`, `DOIT_SMS_BEARER_TOKEN`) | Production Nepal |
-| SMS | **AWS SNS** (`SMS_PROVIDER=aws_sns`) | Dev / international fallback, whitelist-gated |
+| SMS | ~~**AWS SNS**~~ | ✅ **Removed 2026-08-24** — no cross-border SMS fallback exists. `SMS_PROVIDER` unset with no token ⇒ `disabled` |
 | SMS | `disabled` | No outbound SMS |
 | Email | SMTP relay (`SMTP_*` in `env.local`) | Shared by Messaging API, quarterly reports, and Keycloak invite mail |
 

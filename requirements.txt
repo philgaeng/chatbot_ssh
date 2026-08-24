@@ -40,7 +40,6 @@ celery==5.5.2
 flower==2.0.1
 
 # --- Messaging (SMTP email / SNS SMS) ---
-boto3==1.37.28
 
 # --- LLM (classification, if LLM_CLASSIFICATION=True) ---
 openai==1.70.0

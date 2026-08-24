@@ -24,7 +24,7 @@ REDIS_PASSWORD=
 
 # Messaging (see docs/services/05_messaging_service.md)
 SMTP_SERVER=... SMTP_PORT=587 SMTP_USERNAME=... SMTP_PASSWORD=... SMTP_FROM=...
-SMS_PROVIDER=doit|aws_sns|disabled
+SMS_PROVIDER=doit|disabled
 DOIT_SMS_BEARER_TOKEN=...      # Nepal prod SMS
 
 # Ticketing / GRM

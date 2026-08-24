@@ -138,7 +138,7 @@ GET  /api/grievance/statuses          ← public
 **Messaging API** — for complainant SMS fallback + quarterly reports:
 
 ```
-POST /api/messaging/send-sms    → AWS SNS (works internationally)
+POST /api/messaging/send-sms    → DOIT gateway (sms.doit.gov.np, in Nepal) — no fallback
 POST /api/messaging/send-email  → SMTP mailbox relay
 Auth: x-api-key header
 ```
@@ -374,8 +374,10 @@ Run via Docker, deploy to staging EC2 first, then production.
 
 - **Primary:** `POST /message` to orchestrator using `session_id` stored on ticket
 - **Fallback** (session expired): `POST /api/messaging/send-sms` via Messaging API
-  - AWS SNS works internationally — use for demo (PH numbers work)
-  - Production Nepal: revisit when local SMS entity available
+  - **DOIT government gateway (`sms.doit.gov.np`), in Nepal — the only SMS transport.**
+  - ⚠ **There is deliberately no cross-border fallback.** The AWS SNS path was removed 2026-08-24:
+    SMS providers serving Nepal must be in-country, and it could only format PH numbers anyway.
+    With no DOIT token the provider resolves to `disabled` and sends nothing — that is intended.
 - Store `session_id` on ticket at creation — critical for both paths
 
 ### GRC convening: all GRC members for that project, in-app notification

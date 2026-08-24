@@ -496,16 +496,17 @@ REQUIRED_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['required']]
 FIELD_CATEGORIES_MAPPING = {k: v['category'] for k, v in FIELD_CONFIG.items()}
 
 ############################
-# AWS CONFIGURATION
+# SMS TEST WHITELIST
 ############################
 
-# AWS SNS Configuration
-AWS_REGION = "ap-southeast-1"
-WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
-    "+639175330841", 
-    "+639154345604"
-    # Add other whitelisted numbers
-]
+# Gates the DOIT gateway when SMS_WHITELIST_ONLY=true. **Nepal mobile format only** (97…/98…) —
+# anything else is ignored with a warning (messaging._normalized_whitelist).
+#
+# ⚠ Emptied 2026-08-24 with the removal of the AWS SNS path. It held two real Philippine mobile
+# numbers, committed to a public repository: real personal data of real people, and the reason
+# SMS_WHITELIST_ONLY=true crashed the DOIT send path. Empty means "send to nobody", which is the
+# safe reading of a whitelist.
+WHITELIST_PHONE_NUMBERS_OTP_TESTING: list[str] = []
 
 ############################
 # DATABASE CONFIGURATION
