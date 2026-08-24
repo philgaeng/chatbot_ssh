@@ -92,7 +92,7 @@ Start at [`00_services_index.md`](services/00_services_index.md); endpoint matri
 | [`02_grievance_service.md`](services/02_grievance_service.md) | Grievance API (statuses, detail, PII broker) |
 | [`03_voice_grievance_service.md`](services/03_voice_grievance_service.md) | Voice intake — webchat voice notes (accessible channel retired, CL-02) |
 | [`04_file_processing_service.md`](services/04_file_processing_service.md) | Uploads, image compression policy, archived attachments |
-| [`05_messaging_service.md`](services/05_messaging_service.md) | SMS (DOIT/SNS) + email contract |
+| [`05_messaging_service.md`](services/05_messaging_service.md) | SMS (DOIT gateway, in-country) + email contract |
 | [`06_llm_service.md`](services/06_llm_service.md) | Backend LLM utilities (Whisper, classification, detection) |
 | [`07_task_queue_service.md`](services/07_task_queue_service.md) | Chatbot Celery app and task registry |
 | [`08_gsheet_monitoring_service.md`](services/08_gsheet_monitoring_service.md) | Google Sheet monitoring feed (RETIRED, CL-02) |
@@ -148,11 +148,18 @@ Qualification of the platform as a [Digital Public Good](https://www.digitalpubl
 
 | Document | Description |
 |---|---|
-| [`00_compliance_status.md`](dpg/00_compliance_status.md) | **The full assessment.** Indicator by indicator with file-and-line evidence: what complies, what does not, the LLM platform-independence question, and the questions for ADB's DPG consultant |
-| [`dependency-licenses.md`](dpg/dependency-licenses.md) | **The generated licence audit** (DPG-02) — 153 packages across four dependency sets, scanned in-container from the resolved trees, with a disposition for every entry carrying conditions. Supersedes the hand-written inventories |
-| [`privacy-assessment.md`](dpg/privacy-assessment.md) | **The privacy assessment and data-flow inventory** (DPG-04) — indicators 7, 9 and 9a. Thirteen data-flow legs verified against the code, assessed against Nepal's Individual Privacy Act 2018, with a 17-item findings register. ⚠ Drafted by an AI agent, **no legal review** — see its §0.1 |
-| [`open-model-configuration.md`](dpg/open-model-configuration.md) | **How to run this system on open models** (DPG-16) — the two committed configurations, what the registry declares, the per-model structured-output measurements, the T1/T2/T3 ladder, and an explicit *what is not yet true* section (the open model ids are placeholders until DPG-23 measures them) |
-| [`01_consultant_briefing.md`](dpg/01_consultant_briefing.md) | **The shareable summary** — what to send the consultant ahead of the meeting. The scorecard, what the sprint closes, the fourteen questions, and the full dependency inventory, in ~320 lines |
+| [`00_compliance_status.md`](dpg/00_compliance_status.md) | **The assessment — start here.** Indicator by indicator: what we have, the gaps, the proposed remedy, and the questions each one raises. It **cites** the evidence documents below rather than restating them |
+| [`01_consultant_briefing.md`](dpg/01_consultant_briefing.md) | **The pre-read** — twenty minutes before a meeting. Where we stand, and the four questions that block work. Derived from `00`; if the two disagree, `00` is right |
+| [`02_questions.md`](dpg/02_questions.md) | **The 21 questions for ADB's DPG consultant.** ⚠ **Generated** from `00` by `scripts/ops/gen_dpg_questions.py`; `tests/repo/test_dpg_questions_generated.py` fails the build if they drift. Edit `00`, not this |
+| [`03_remediation_record.md`](dpg/03_remediation_record.md) | **What the sprints changed, and what that work found.** ⛔ **Deliberately not part of the assessment** — a document that lists accomplishments cannot also assess gaps. Send it only if asked what changed |
+| — *evidence* — | |
+| [`privacy-assessment.md`](dpg/privacy-assessment.md) | **The privacy assessment and data-flow inventory** (DPG-04) — indicators 7 and 9. Thirteen legs verified against the code at file and line, assessed against Nepal's Individual Privacy Act 2018, with an 18-item findings register. ⚠ Drafted by an AI agent, **no legal review** — see its §0.1 |
+| [`dependency-licenses.md`](dpg/dependency-licenses.md) | **The generated licence audit** (DPG-02) — 153 packages across four dependency sets, scanned in-container from the resolved trees, with a disposition for every entry carrying conditions, plus measured CVEs. The only inventory; nothing mirrors it |
+| [`open-model-configuration.md`](dpg/open-model-configuration.md) | **How to run this system on open models** (DPG-16) — the two committed configurations, what the registry declares, the measured per-model capability matrix, the T1/T2/T3 ladder, and an explicit *what is not yet true* section |
+| [`model-benchmarks.md`](dpg/model-benchmarks.md) | **What the models score** (DPG-23) on a committed 105-item Nepali set. One current value per metric, each dated. The open accuracy column is one clearly-labelled gap |
+| [`vllm-deployment.md`](dpg/vllm-deployment.md) | **Self-hosted inference, designed and costed** (DPG-25) — and why it is parked. ⭐ The T1/T2 choice is a data-sovereignty decision with a price, never a cost decision |
+| [`HANDOVER.md`](dpg/HANDOVER.md) | How this pack was rebuilt on 2026-08-24, and the traps that made a rebuild necessary. Process, not evidence |
+| [`archive/`](dpg/archive/) | The superseded 2026-08-17 and 2026-08-23 documents. Never edited; excluded from the link checker |
 
 The engineering that closes the gaps is specced in [`sprints/2026-08-llm/`](sprints/2026-08-llm/README.md).
 

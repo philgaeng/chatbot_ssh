@@ -2,9 +2,15 @@
 
 > **Raised:** 2026-08-20, by [DPG-23](../03-open-models-spec.md#dpg-23)'s closed-baseline run.
 > **Logged as deviation D-52** in [`../PROGRESS.md`](../PROGRESS.md).
-> **Status:** ⬜ **OPEN.** ⚠ **Do not fix this without measuring recall** — see §The trap.
-> **Size:** S to change the prompt, **M to change it safely**, because the safe version needs the
-> owner's held-out positive set.
+> **Status:** 🔄 **REFRAMED 2026-08-24 by the project owner, and the conclusion is now the opposite of
+> this document's title.** The over-flagging is **intentional**: the detector is tuned recall-first
+> because a missed harassment report is unrecoverable while a false alarm costs a trained SEAH officer
+> a review and carries **no risk to the complainant**. See §What this actually is.
+> ⛔ **The prompt change this document originally proposed is no longer the recommendation.** What is
+> genuinely missing is the **explicit return path** for a case a SEAH officer clears —
+> [`seah-officers-cannot-explicitly-return-a-cleared-case.md`](seah-officers-cannot-explicitly-return-a-cleared-case.md).
+> ⚠ **Do not touch this prompt without measuring recall** — see §The trap, which was right and stands.
+> **Size:** the measurement is M and needs the owner's held-out positive set.
 
 ---
 
@@ -26,21 +32,31 @@ gendered, and emphatically not harassment. **Five of those eight were flagged.**
 | `gen-0073` | Crop destroyed by a tractor; the contractor then shouted at the complainant | ❌ |
 | `gen-0093` | Resettlement scattered a community | ❌ |
 
-## Why this is a safeguarding-adjacent defect and not a precision complaint
+## ⭐ What this actually is — a priced trade, corrected 2026-08-24
 
-The SEAH route is **access-isolated**. A flagged grievance moves into a channel **most officers
-cannot see**. So an unequal-pay complaint, a water-access complaint and a job-discrimination
-complaint do not merely get a wrong label — they **leave the queue of the people who would have
-fixed them**. [`01_seah_detection_benchmark.md`](../../../models/01_seah_detection_benchmark.md) §1
-states the cost exactly:
+**This document originally read the 5-of-8 as a defect. It is not.** The owner's design intent, and
+the reason the prompt says *"be extra sensitive"*, is that the two errors are **deliberately
+asymmetric**:
 
-> *"The grievance moves into a channel most officers cannot see. The dust or compensation problem
-> then never reaches the people who would have fixed it — the complaint effectively disappears."*
+| Error | Cost | Recoverable? |
+|---|---|---|
+| **Miss** — harassment not flagged | The report sits in the ordinary queue and nobody downstream knows to look for it. This is the failure the SEAH route exists to prevent | ❌ **No** |
+| **False alarm** — ordinary complaint flagged | A SEAH officer reads it, clears it, and returns it to the standard queue. Costs review time and delay. **A SEAH officer reading a dust complaint discloses nothing to anyone** | ✅ **Yes** |
 
-⚠ And note **which** complaints these are. Every one of the five is a **women's access or
-discrimination grievance** on an infrastructure project — precisely the class the GRM exists to
-surface. The failure mode routes women's non-harassment complaints into a channel where they are
-least likely to be acted on.
+**So the system prefers false positives on purpose**, and the measured rate is the price of that
+preference rather than evidence against it.
+
+⚠ **What the asymmetry obligates is the return path**, and that is where the real work is. Over-flagging
+is only cheap while a cleared case can actually go back. Today the capability exists — correcting a
+ticket's classification re-resolves the workflow and clears the SEAH flag — but **only as a side effect
+of a category edit**: there is no explicit action, no de-flag audit event, and no test pinning the
+behaviour. Raised separately as
+[`seah-officers-cannot-explicitly-return-a-cleared-case.md`](seah-officers-cannot-explicitly-return-a-cleared-case.md).
+
+**The residual concern that survives the reframe, and it is small but real.** Every one of the five is
+a **women's access or discrimination grievance** — exactly the class the GRM exists to surface. They
+are not lost, but they are **delayed** by a round trip whose latency nobody currently measures. That
+is a service-quality question about the return path, not a safeguarding failure of the detector.
 
 ## The likely cause, which is in the prompt and is fixable
 
@@ -87,11 +103,17 @@ than the 6.7% measured on the LLM detection call alone. Report both numbers, as 
 
 ## Definition of done
 
-- [ ] The owner's held-out positive set is available, and **baseline recall is measured before any
-      prompt change** — there is currently no recall figure to regress against, which is itself the
-      most important item here
-- [ ] The prompt distinguishes *harassment* from *gender-related access and discrimination*, and
-      says where the latter should go instead
+⚠ **Re-ordered 2026-08-24.** The prompt change dropped from first to optional; the measurement and the
+return path came up.
+
+- [ ] The **return path is a first-class action** with its own audit event and a test —
+      [tracked separately](seah-officers-cannot-explicitly-return-a-cleared-case.md). **This is the
+      item that makes the current false-alarm rate acceptable**, and it does not need the held-out set
+- [ ] The owner's held-out positive set is available, and **baseline recall is measured** — there is
+      currently no recall figure to regress against, which is the most important measurement here
+- [ ] ⏸ *Optional, and only if recall is measured first:* the prompt distinguishes *harassment* from
+      *gender-related access and discrimination*. ⛔ **Not a goal in its own right** — a lower
+      false-alarm rate is not an improvement if it costs recall
 - [ ] Re-measured **paired**: recall and false-alarm together, gold seeds only, scenario counts stated
 - [ ] The **system** figure (keyword ∪ LLM ∪ classification-category) reported alongside the
       LLM-only figure

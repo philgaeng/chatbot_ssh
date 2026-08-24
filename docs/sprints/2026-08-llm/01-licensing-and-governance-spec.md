@@ -34,7 +34,7 @@ sends a reader to a directory listing.
 |---|---|---|
 | "⚠️ **Verify Rasa 3 specifically.** Rasa is architecturally load-bearing here… if a core Rasa dependency is non-OSI, that is a far bigger indicator-2 and indicator-4 problem than anything in this plan. Check this in week one." | **There is no Rasa.** No `rasa_chatbot/` directory (CLAUDE.md's folder listing is stale on this point, and so is the root `README.md` — **DPG-06** now owns both). No Rasa service in `docker-compose.yml` or `docker-compose.grm.yml`. `requirements.txt:2-6` states it outright: *"No Rasa NLU / TensorFlow server – only Rasa SDK actions."* The single dependency is `rasa-sdk==3.6.2` (`requirements.txt:25`), Apache-2.0, supplying the `Tracker` / `CollectingDispatcher` types the hand-rolled FastAPI orchestrator still speaks | The alarm is ~resolved before it is raised. DPG-02 confirms it mechanically. **Do not budget a week.** ⚠ Confirm the licence from the resolved tree rather than from this paragraph — that is the point of DPG-02 |
 | `pip-licenses` output → `docs/dependency-licenses.md` | The repo has **three** dependency sets: `requirements.txt` (chatbot), `requirements.grm.txt` (GRM/ops), and `channels/ticketing-ui/package.json` (Next.js 16 portal, npm tree). A Python-only audit misses the entire frontend | DPG-02 audits **all three**, or the submission has a hole a reviewer will find in one `ls` |
-| Dependencies are what the manifests declare | **There is a fourth set nobody was auditing: container images.** Four of them — `redis`, `postgres:15`, `nginx:stable`, `quay.io/keycloak/keycloak:26.0.7` — and **the licence drift that actually happened, happened there.** `redis:7` was a floating tag that followed upstream onto the RSALv2/SSPLv1 line (non-OSI) with nobody editing the file. Found while writing [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §3.2(a), **after this spec was written**; fixed by pinning `redis:8.10` and electing AGPLv3 | DPG-02 audits **four** sets, and adds a **pin-drift check** — a floating tag is a licence you did not choose |
+| Dependencies are what the manifests declare | **There is a fourth set nobody was auditing: container images.** Four of them — `redis`, `postgres:15`, `nginx:stable`, `quay.io/keycloak/keycloak:26.0.7` — and **the licence drift that actually happened, happened there.** `redis:7` was a floating tag that followed upstream onto the RSALv2/SSPLv1 line (non-OSI) with nobody editing the file. Found while writing [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §2, **after this spec was written**; fixed by pinning `redis:8.10` and electing AGPLv3 | DPG-02 audits **four** sets, and adds a **pin-drift check** — a floating tag is a licence you did not choose |
 
 ---
 
@@ -135,7 +135,7 @@ You need this for the submission regardless, and it is the mechanical resolution
    docker image inspect <image> --format '{{index .RepoDigests 0}}'
    ```
    Two findings are already established and must be **carried in, not re-derived** —
-   [`00_compliance_status.md`](../../dpg/00_compliance_status.md) §3.2(a):
+   [`00_compliance_status.md`](../../dpg/00_compliance_status.md) §2:
    - ✅ **`redis:8.10`, elected AGPLv3** (Redis 8 is tri-licensed RSALv2 / SSPLv1 / AGPLv3; only AGPLv3 is
      OSI-approved). Already changed in `docker-compose.yml` and the CI service block. Record the election
      explicitly — a reviewer who remembers the 2024 relicensing will see "Redis 8" and assume otherwise.
@@ -368,7 +368,7 @@ control.
 
 ## DPG-05 — Open-source project hygiene (indicator 8) {#dpg-05}
 
-**Added 2026-08-17 after the compliance audit** ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) §2.5).
+**Added 2026-08-17 after the compliance audit** ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) §8).
 No ticket covered this. Verified absent at the repo root: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`,
 `SECURITY.md`, `.github/ISSUE_TEMPLATE/`. (`LICENSE` / `NOTICE` are DPG-01's, not this ticket's.)
 
@@ -433,7 +433,7 @@ None (documents). The SPDX walker (T-01) does not apply — these are root markd
 
 ## DPG-06 — The repo front door contradicts the submission {#dpg-06}
 
-**Added 2026-08-17 after the compliance audit** ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) §3.3,
+**Added 2026-08-17 after the compliance audit** ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) §7,
 which understates it). This is small, and it is **the first thing a DPG reviewer reads.**
 
 The root `README.md` describes a system that does not exist, and the specific fiction it describes is the
@@ -472,7 +472,7 @@ visible file in the repository.
 - [x] Folder tree matches disk; `rasa_chatbot/` removed from `README.md` **and** CLAUDE.md (§Service boundaries — closes **P-13**).
       Verified: `grep -rn rasa CLAUDE.md` returns nothing
 - [x] Current branch correct — `integration/stage`, with the `main`-is-integration-only rule
-- [x] Consistent with `00_compliance_status.md` §2.2 — both now say there is no Rasa server, and the README explains
+- [x] Consistent with `00_compliance_status.md` §4 — both now say there is no Rasa server, and the README explains
       *why the row is gone* rather than silently deleting it, so a reader who remembers the old table is not left guessing
 
 ### ⚠ Two corrections to this ticket's own text

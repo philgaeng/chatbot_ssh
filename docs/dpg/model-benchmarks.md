@@ -1,37 +1,28 @@
-# Model benchmarks — what this system actually scores
+# Model benchmarks — what this system scores
 
-> **Status (2026-08-21): the closed baseline is complete and has been re-measured after the prompt
-> and taxonomy change; the open column is still one metric in.** The **closed baseline** —
-> `gpt-5-nano`, the model production runs today — covers all 105 items on both tasks, and §2 carries
-> the **post-change** figures with the pre-change run kept in [§3.7](#37--prompt-reduction--the-road-hazard-categories--measured-before-and-after-2026-08-21).
-> For the **open** configuration, `openai/gpt-oss-20b` completed **all 105 detection items** and
-> **2 of 105 classification items**, because the classification prompt was ~20,700 characters and 105
-> of them in a few minutes exceeded the provider's token rate limit (HTTP 402 on 103 items).
-> ⭐ **That blocker has since been removed** — the prompt is now ~3,277 tokens (§3.7) — so re-running
-> the open column is the next measurement and no longer needs anything but time. Every unmeasured cell
-> says `⚠ Not measured` rather than sitting blank.
-> **Owner:** [DPG-23](../sprints/2026-08-llm/03-open-models-spec.md#dpg-23) · **Set:**
-> [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) · **Harness:**
-> [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)
-
-> ⚠ **Every number on this page comes from synthetic, authored data (phase 1).** Authored text is
-> cleaner than real complaints — better punctuated, more complete, less elliptical — so each figure
-> is an **upper bound** on production accuracy, not an estimate of it. See
-> [the set's provenance](../../tests/data/benchmark/README.md) §2.
+> **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
+> grievance set. **As of 2026-08-24.**
+>
+> **What it is not.** Not a model selection — see [§4](#4-the-open-column--the-one-gap) and
+> [§5](#5-seah-recall--not-measurable-from-this-repository). Not an estimate of production accuracy:
+> the set is authored, so every figure is an **upper bound**
+> ([provenance](../../tests/data/benchmark/README.md)).
+>
+> **One value per metric.** [§2](#2-the-results) holds the current number for every cell, dated. Where
+> a number changed, the change is in [§7](#7-what-changed-on-2026-08-21-and-why) and nowhere else.
+>
+> **Set:** [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) ·
+> **Harness:** [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)
 
 ---
 
-## 1. Method, in one paragraph
+## 1. Method
 
 The harness calls **the product's own functions** — `classify_and_summarize_grievance` and
-`detect_sensitive_content_llm` — with the product's prompts, resolved through the registry the
-product reads. Nothing is reimplemented. That is what makes this a **pre-flight check on a
-production change** ([Q-04](../sprints/2026-08-llm/DECISIONS.md): production will run the open
-configuration) rather than a parallel universe that agrees with production only by luck. Calls run
-with `interactive=False`, so the 30-second interactive deadline does not truncate the very latency
-measurement the run exists to produce.
-
-Reproduce it:
+`detect_sensitive_content_llm` — with the product's prompts, resolved through the registry the product
+reads. Nothing is reimplemented, which is what makes this a pre-flight check on a production change
+rather than a parallel universe that agrees with production only by luck. Calls run with
+`interactive=False`, so the 30-second deadline does not truncate the latency measurement.
 
 ```bash
 docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml \
@@ -42,363 +33,282 @@ docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.
 
 ---
 
-## 2. The benchmark table
+## 2. The results
 
-**Baseline:** `gpt-5-nano` (`LLM_BASE_URL=https://api.openai.com/v1`), 105 items, **2026-08-21 — after
-the prompt reduction and the six Road Hazard categories** (§3.7). The superseded 2026-08-20 run is kept
-in §3.7 as the before column, because the change is only legible as a pair.
-**Open:** `⚠ Not measured` for classification — see §3.4 and the status note above.
+**Closed:** `gpt-5-nano` on `api.openai.com` — what production runs today. **Open:**
+`openai/gpt-oss-20b` via the Hugging Face router. 105 items per task. Every cell carries its
+measurement date; every empty cell names its blocker.
 
-| Metric | Current (closed) — `gpt-5-nano` | Open config | Delta |
-|---|---|---|---|
-| Classification precision *(set-level)* | **0.773** | ⚠ Not measured — 103/105 rate-limited (§3.4) | — |
-| Classification recall *(set-level)* | **0.752** | ⚠ Not measured | — |
-| Category-set **F1** *(multi-label)* | **0.762** | ⚠ Not measured | — |
-| Exact-set accuracy *(every gold label, no invented extras)* | **0.686** | ⚠ Not measured | — |
-| Sensitive-content **recall** | ⚠ **Not measured — no positive scenarios in the committed set** (§5) | ⚠ **Not measured** — same reason, and **it is the number that decides the row below** | — |
-| Sensitive-content **false-alarm rate** | **0.067** *(7 / 105)*, incl. **5 of 8** confusables | **0.000** *(0 / 105)*, incl. **0 of 8** confusables | ⚠ **Uninterpretable without recall — see §3.5** |
-| Field extraction F1 | ⚠ Not measured — the extraction path **has no production caller** (D-37) | ⚠ Not measured | — |
-| Translation quality (chrF++ / human) | ⚠ Not measured | ⚠ Not measured | — |
-| Nepali ASR **WER** | ⚠ **No baseline — voice has never been live** ([Q-13.2](../sprints/2026-08-llm/DECISIONS.md)), and there is no audio set ([followup](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md)) | ⚠ Not measured | n/a |
-| **p95 latency**, classification, vs the 30 s budget | **20.3 s — PASSES** | ⚠ Not measured (n=2) | — |
-| **p99 latency**, classification | **24.5 s — PASSES** (§3.7; it was 40.6 s and failed before the prompt change) | ⚠ Not measured | — |
-| **p95 latency**, SEAH detection | 8.78 s | **0.49 s** | **≈18× faster** |
-| **Cost / 1,000 grievances** | **11.36 M prompt + 3.36 M completion tokens** (§6) | ⚠ Not measured | — |
+| Metric | Closed — `gpt-5-nano` | Open — `openai/gpt-oss-20b` |
+|---|---|---|
+| Classification precision *(set-level)* | **0.773** · 08-21 | ⚠ Not measured — [§4](#4-the-open-column--the-one-gap) |
+| Classification recall *(set-level)* | **0.752** · 08-21 | ⚠ §4 |
+| Category-set **F1** *(multi-label)* | **0.762** · 08-21 | ⚠ §4 |
+| Exact-set accuracy | **0.686** · 08-21 | ⚠ §4 |
+| Items with an **invented** category | **4 / 105** · 08-21 ([§3.1](#31--the-model-invents-categories)) | ⚠ Not measured — but **2 of the 2 items it reached** invented one ([§3.4](#34--both-models-invent-the-same-category--which-makes-it-a-taxonomy-finding)) |
+| Sensitive-content **recall** | ⚠ **Not measurable from this repository** — [§5](#5-seah-recall--not-measurable-from-this-repository) | ⚠ Same — and it is the number that decides the row below |
+| Sensitive-content **false-alarm rate** *(⭐ a priced trade, not a defect — [§3.2](#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives))* | **0.067** *(7 / 105)*, incl. **5 of 8** confusables · 08-20 | **0.000** *(0 / 105)*, incl. **0 of 8** · 08-20 — ⚠ **uninterpretable without recall** ([§3.5](#35--the-open-model-flags-nothing--which-is-not-the-same-as-being-better)) |
+| **p95 / p99 latency**, classification *(30 s budget)* | **20.3 s / 24.5 s — both pass** · 08-21 | ⚠ §4 |
+| **p50 / p95 latency**, SEAH detection | 3.73 s / **8.78 s** · 08-20 | 0.35 s / **0.49 s** · 08-20 — **≈18× faster** |
+| **Prompt tokens** per classification | **3,277** · 08-21 | ⚠ §4 |
+| **Completion tokens** per grievance *(both calls)* | **3,361**, **93.8% reasoning** · 08-20 | ⚠ §4 |
+| Field extraction F1 | ⚠ The extraction path **has no production caller** — benchmarking it would spend budget to measure nothing | ⚠ Same |
+| Translation quality *(chrF++ / human)* | ⚠ Needs reference translations the set does not carry, or human rating. Neither is resourced | ⚠ Same |
+| Nepali ASR **WER** | ⚠ **No baseline — voice has never been live**, and the set holds no audio | ⚠ And the router **serves no `/v1/audio/*` route** ([`open-model-configuration.md`](open-model-configuration.md)) |
+
+⚠ **Why detection is dated 08-20 and classification 08-21.** The 08-21 change
+([§7](#7-what-changed-on-2026-08-21-and-why)) touched the **classification** prompt and the taxonomy
+only. The detection figures stand as measured, and will move only if the detection prompt changes.
+
+⚠ **Only one open candidate has been benchmarked at all.** The other five reachable candidates have
+capability measured but no accuracy ([`open-model-configuration.md`](open-model-configuration.md)).
 
 ---
 
-## 3. ⚠ What the baseline run found, which is about production today
+## 3. What the measurements found
 
-These are not open-versus-closed comparisons. They are measurements of **the model this system runs
-right now**, and three of them are defects rather than quality scores.
+### 3.1 ⭐ The model invents categories {#31--the-model-invents-categories}
 
-### 3.1 ⭐ The model invents categories, on 17% of grievances
+The prompt says *"Do not create new categories"*. On **4 of 105 items** it created one anyway — down
+from 18 before the taxonomy change ([§7](#7-what-changed-on-2026-08-21-and-why)). **3 of the 4 are not
+new concepts**: they are `Cultural Site Disturbances` and `Wildlife Passage` with the classification
+half of the name missing — a **formatting** failure that predates the change. **Exactly one genuinely
+new concept survives:** `Road Hazard - Noise Pollution`, the model asking for a seventh subcategory in
+the family it was just given six of.
 
-The classification prompt says *"Do not create new categories"*. On **18 of 105 items** it created
-one anyway, and not at random — it produced a coherent, entirely fictional `Road Hazard - *` family:
+⚠ **Production stores invented values.** `_warn_about_unlisted_categories` (`LLM_services.py:358`)
+*"logs — never rejects"*, and the reason is sound for a near-miss name. A category that exists nowhere
+is not a near-miss: it is **stored, shown to the complainant, and synced to ticketing**, where it
+matches no filter, appears in no report, and is not found by the `high_priority` lookup
+(`ticketing_dispatch.py:117`) — so it silently contributes nothing to priority.
 
-| Invented category | Times |
-|---|---|
-| `Road Hazard - Dust` | 7 |
-| `Road Hazard - Accident` | 5 |
-| `Road Hazard - Animal On Road` | 3 |
-| `Road Hazard - Others` | 2 |
-| `Wildlife Passage` *(malformed — the classification half is missing)* | 2 |
-| `Road Hazard - Flood And Landslide` | 1 |
-| `Road Hazard - Potholes` | 1 |
+**The rate fell 78%; the storage path is unchanged.** Fixing the taxonomy reduced the exposure, not
+the defect.
+[Tracked](../sprints/2026-08-llm/followups/the-model-invents-categories-and-they-are-stored.md).
 
-**21 of the 32 false positives are invented categories.** Precision against the *real* taxonomy
-would be 0.88 rather than 0.74 if these were the only error — so this single behaviour accounts for
-most of the precision gap.
+### 3.2 ⭐ The SEAH detector flags 5 of the 8 confusable negatives — which is the design working {#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives}
 
-⚠ **Production logs these and stores them anyway.** `_warn_about_unlisted_categories`
-(`LLM_services.py:358`) is explicit that it *"logs — never rejects"*, and the reason given is
-sound for a near-miss name: *"a complainant's classification is not worth discarding because the
-model named a category slightly wrong."* `Road Hazard - Dust` is not a near-miss name. It is a
-category that exists nowhere, and it is **stored, shown to the complainant in the review step, and
-synced to ticketing** — where it matches no filter, appears in no report grouped by category, and is
-not found by the `high_priority` lookup (`ticketing_dispatch.py:117`), so it silently contributes
-nothing to priority.
+False-alarm rate is **6.7%** (7 of 105). The set contains **8 items authored as the hard case** —
+gendered, and emphatically not harassment — and **5 were flagged**: no separate toilet for women
+workers · an unlit route home from school · unequal pay for the same work · one tap for the whole
+labour camp · refused work for being a woman. *(Plus non-sexual abuse and a resettlement complaint.)*
 
-Logged as [D-51](../sprints/2026-08-llm/PROGRESS.md) with a
-[follow-up](../sprints/2026-08-llm/followups/the-model-invents-categories-and-they-are-stored.md).
+⭐ **This is a priced trade, not a defect.** The detector is **deliberately tuned recall-first**,
+because the two errors are not symmetric:
 
-### 3.2 ⭐ The SEAH detector flags 5 of the 8 deliberate confusable negatives
+- a **miss** leaves a harassment report in the ordinary queue where nobody knows to look for it —
+  **unrecoverable**, and the reason the SEAH route exists;
+- a **false alarm** costs a SEAH officer a review. **A SEAH officer reading a dust complaint discloses
+  nothing to anyone and creates no risk for the complainant.**
 
-Overall false-alarm rate is **6.7%** (7 of 105). But the committed set contains **8 items authored
-specifically as the hard case** — gendered, and emphatically not harassment — and **5 of those 8
-were flagged**:
+The system prefers the cheap, recoverable error on purpose. **The prompt says *"be extra sensitive"*
+because it is meant to.**
 
-| Item | What it is | Flagged |
-|---|---|---|
-| `gen-0034` | No separate toilet for women workers at the site | ❌ flagged |
-| `gen-0035` | Unlit diversion route; a parent afraid for daughters walking home | ❌ flagged |
-| `gen-0101` | Women paid less than men for the same work | ❌ flagged |
-| `gen-0102` | One tap for the whole labour camp; women queue longest | ❌ flagged |
-| `gen-0103` | Refused work by the contractor on the grounds of being a woman | ❌ flagged |
-| `gen-0073` | Crop destruction; the contractor shouted at the complainant *(non-sexual abuse)* | ❌ flagged |
-| `gen-0093` | Resettlement scattered a community | ❌ flagged |
+⚠ **What the figure obligates is the return path** — the trade is sound only while a SEAH officer who
+clears a case can send it back. That path exists and is one step short of complete; its state is
+assessed in [`00_compliance_status.md`](00_compliance_status.md) §9.
 
-**Why this matters more than a precision number.** The SEAH route is access-isolated: a flagged
-grievance moves into a channel **most officers cannot see**. So an unequal-pay complaint, a
-water-access complaint and a job-discrimination complaint do not merely get a wrong label — they
-**effectively disappear** from the queue of the people who would have fixed them. That is exactly
-the cost [`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §1 sets out,
-and the reason a benchmark measuring only recall is dangerous: it would rate this behaviour as
-excellent.
+⛔ **Do not "fix" this number by tightening the prompt.** That trades away the property the design
+rests on, and **any change must be measured against the owner's held-out positive set first**
+([§5](#5-seah-recall--not-measurable-from-this-repository)) — tightening a recall-first detector
+without measuring recall is how a well-intentioned fix introduces a safeguarding miss.
+[Tracked](../sprints/2026-08-llm/followups/seah-detector-flags-gendered-non-harassment-complaints.md).
 
-⚠ **The prompt is the likely cause and it is fixable.** It says *"be extra sensitive… anything that
-may imply sexual or gender harassment should be flagged"* and excludes *"land issues, property
-disputes, or physical violence"* — but says nothing about **gender-related grievances that are not
-harassment**, which is the entire confusable class. Logged as
-[D-52](../sprints/2026-08-llm/PROGRESS.md).
+### 3.3 Classification is a second route into the same channel
 
-⚠ **This is a false-alarm finding only.** It says nothing about whether the detector *catches*
-harassment, because the committed set contains no harassment (§5). A prompt change made to reduce
-these false alarms **must be re-measured against the owner's held-out positive set before it ships**
-— tightening a recall-first detector without measuring recall is how a safeguarding miss gets
-introduced by a well-intentioned fix.
+`Gender - Gender Discrimination And Harrassment` appears as a **false positive 3 times**, and the
+review step keeps any category containing `"gender"` — so classification routes into the confidential
+channel independently of the detector, and the system figure is the **union** of the two.
 
-### 3.3 The classification path over-routes to SEAH too
+**Consistent with the recall-first design** ([§3.2](#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives)):
+a miss now requires *both* signals to fail. It is recorded because **the union is the rate that
+matters** — measuring the detector alone understates the review load the return path carries.
 
-`Gender - Gender Discrimination And Harrassment` appears as a **false positive 3 times** in
-classification. The review step keeps any category containing `"gender"`
-([`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §2), so classification
-is a **second, independent** route into the confidential channel. Both signals over-fire on the same
-material, and the system figure is the union — worse than either alone.
+### 3.4 ⭐ Both models invent the *same* category — a taxonomy finding {#34--both-models-invent-the-same-category--which-makes-it-a-taxonomy-finding}
 
-### 3.4 ⚠ The classification prompt is too large to benchmark at the open provider's rate limit
+`gpt-oss-20b` classified only 2 items before the rate limit stopped the run
+([§4](#4-the-open-column--the-one-gap)), and on **both** returned `Road Hazard - Dust` — one of the
+categories `gpt-5-nano` invented seven times.
 
-103 of 105 classification calls to `openai/gpt-oss-20b` returned **HTTP 402** — the router's
-short-window token limit, whose message says *"you have depleted your monthly included credits"*
-(the wording is misleading; see [the write-up](../sprints/2026-08-llm/followups/hf-router-rate-limit-reads-as-credit-exhaustion.md)).
-The **same run's 105 detection calls all completed**, because the detection prompt is short.
+Two vendors, two architectures, **the same fabricated label**. That is weak evidence about either
+model and strong evidence about the **taxonomy**: the catalogue had no road-hazard grouping, dust was
+filed under `Environmental - Air Pollution`, and independent models kept reaching for the category a
+road project would expect to exist. ⭐ **Acted on, and it worked** ([§7](#7-what-changed-on-2026-08-21-and-why)).
+**The transferable finding: when two unrelated models invent the same label, that is a signal about
+your taxonomy, not their quality.**
 
-**That contrast is the finding.** The classification prompt was ~20,700 characters *before the
-grievance was added*, because it injected the catalogue **three times**. ⭐ **Acted on in §3.7** —
-it is now ~3,277 prompt tokens, a 70% cut, while carrying six more categories. Stated in the past
-tense because the measurement above was taken against the old prompt. So, as it stood:
+### 3.5 ⭐ The open model flags **nothing** — which is not the same as being better {#35--the-open-model-flags-nothing--which-is-not-the-same-as-being-better}
 
-- §6's cost lever is not only about money — **the same duplication is what makes the open path
-  hit a rate limit that the detection path sails through**;
-- and it will do the same thing in production the first time grievances arrive in a burst, which
-  is exactly the traffic shape this system has (road works, public meetings).
+`gpt-oss-20b` flagged **0 of 105**, including **0 of the 8** confusables, at a tenth of the latency.
+Read naively that is a clean win over the closed model's 7. **Do not read it naively.**
 
-⚠ **This is not a quality finding about the model and must not be reported as one.** It is a finding
-about *our prompt* on *this provider's limits*.
+⚠ **A detector that flags nothing has a perfect false-alarm rate and catches nothing.** The set
+contains **no harassment reports at all** ([§5](#5-seah-recall--not-measurable-from-this-repository)),
+so two hypotheses fit the data equally: that it distinguishes gendered *access and discrimination*
+grievances from harassment — the line `gpt-5-nano` fails to hold — or that it says *no* to everything
+and a real harassment report would go unflagged. **Nothing in this repository can tell them apart**,
+and the second is a safeguarding failure.
 
-### 3.5 ⭐ The open model flags **nothing** — which is not the same as being better
-
-| | `gpt-5-nano` (closed) | `openai/gpt-oss-20b` (open) |
-|---|---|---|
-| Ordinary complaints flagged as sensitive | **7 / 105** | **0 / 105** |
-| Of the 8 deliberate `seah_confusable` items | **5 flagged** | **0 flagged** |
-| Detection p50 latency | 3.73 s | **0.35 s** |
-
-Read naively this is a clean win for the open model: it makes none of the false alarms §3.2 describes,
-and it is ten times faster. **Do not read it naively.**
-
-⚠ **A detector that flags nothing has a perfect false-alarm rate and catches nothing.** The committed
-set contains **no harassment reports at all** (§5), so these two hypotheses fit the data equally:
-
-1. `gpt-oss-20b` is better calibrated — it distinguishes gendered *access and discrimination*
-   grievances from harassment, which is exactly the line `gpt-5-nano` fails to hold;
-2. `gpt-oss-20b` says *no* to everything, and a real harassment report would go unflagged.
-
-**Nothing in this repository can tell these apart**, and the second one is a safeguarding failure.
-This is the sharpest possible illustration of why
-[`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §1 insists on a
-confusion matrix rather than one number, and why the *recall* half is the one held by the project
-owner outside git.
-
-⚠ **Therefore: `gpt-oss-20b` must not be selected on this evidence**, and its 0.000 must not appear
-in a submission as an improvement. **The next measurement in this whole sprint is SEAH recall for
-both models against the owner's held-out positive set.** Until then this row is a question, not a
-result.
-
-### 3.6 ⭐ Both models invent the *same* category — which makes it a taxonomy finding
-
-`gpt-oss-20b` classified only 2 items before the rate limit, and on **both** it returned
-`Road Hazard - Dust` — the same invented category `gpt-5-nano` produced 7 times (§3.1).
-
-Two model families, two vendors, two architectures, **the same fabricated label**. That is much
-weaker evidence about either model and much stronger evidence about the **taxonomy**: the catalogue
-has no road-hazard grouping, dust is currently filed under `Environmental - Air Pollution`, and
-independent models keep reaching for the category a road project would expect to exist.
-
-**So D-51's recommended fix has two halves and the second one grew:** guard the storage path against
-invented values, *and* take the gap to the project owner as a taxonomy question. On this evidence the
-second half is the more interesting one.
-
-### 3.7 ⭐ Prompt reduction + the Road Hazard categories — measured before and after (2026-08-21)
-
-Two changes shipped together on the owner's decision: the six `Road Hazard - *` categories D-51
-argued for, and four token reductions to the classification prompt. Both were measured on the same
-105 items against the same model.
-
-| | Before | After | |
-|---|---|---|---|
-| **Items with an invented category** | **18 / 105** | **4 / 105** | ⭐ **−78%** |
-| …of which a genuinely *new concept* | 18 | **1** | the other 3 are truncated real categories |
-| Set-level precision | 0.740 | **0.773** | ↑ |
-| Set-level recall | 0.805 | 0.752 | ↓ |
-| Category-set **F1** | 0.771 | **0.762** | −0.009 — flat within noise |
-| Exact-set accuracy | 0.676 | **0.686** | ↑ |
-| p95 latency | 24.6 s | **20.3 s** | ↑ |
-| **p99 latency** | **40.6 s** | **24.5 s** | ⭐ **inside the 30 s budget for the first time** |
-| Share over 30 s | 1.9% | **0.9%** | ↑ |
-| **Prompt tokens per classification** | ~10,900 | **3,277** | ⭐ **−70%** |
-| Categories in the taxonomy | 24 | **30** | +6 |
-
-⚠ **This is not a clean A/B, and the F1 line must not be read as one.** Three things changed at once
-— the prompt, the taxonomy, and the benchmark's acceptable-alternate lists. The −0.009 in F1 cannot
-be attributed to any single one of them, and with 105 items it is inside the noise floor either way.
-**The robust findings are the ones that moved by a lot**: invention, latency and token count.
-
-#### What the prompt change was
-
-The catalogue was sent **three** times — a flat list twice plus the full dictionary once — and the
-dictionary was **51,213 characters for an English grievance against 15,121 for a Nepali one.**
-
-⚠ **That asymmetry was a bug.** The filter read `if "_" + language_code not in k`, which strips the
-`_ne` keys for a Nepali grievance and strips **nothing** for an English one, because no key contains
-`_en`. Every English classification therefore carried every Nepali translation, JSON-escaped to
-`\uXXXX` at six bytes per character, for a model that never used them.
-
-Four changes, all four applied:
-
-1. **Fix the language filter** — the dictionary is a classification aid and categories come back in
-   English, so only English fields belong in it. Nepali grievances see exactly what they saw before.
-2. **Send the flat list once**, not twice.
-3. **Drop three fields** — `high_priority` is downstream routing metadata and never a classification
-   signal; `short_description` restates `description`; the `*_extra` question pair serves two
-   categories and was charged to all thirty.
-4. **Drop the flat list entirely** — the model now chooses from the dictionary **keys**.
-   ⭐ **This is a correctness fix as much as a saving:** the flat list was built from *raw* CSV values
-   (`Relocation issues - Poor housing…`) while every downstream consumer matches the *canonical* key
-   (`Relocation Issues - Poor Housing…`). The model was shown one form and read in another.
-
-**Net: 62,736 → 13,147 characters for an English grievance (−79%), 18,567 → 13,147 for a Nepali one
-(−29%) — while adding six categories.**
-
-#### ⭐ D-51's hypothesis was right, and the residue is more interesting than the headline
-
-Adding the categories the models kept inventing **stopped them inventing**: 18 items → 4. And 3 of
-those 4 are not new concepts at all — they are `Cultural Site Disturbances` and `Wildlife Passage`,
-which are **real categories with the classification half missing**. That is a formatting failure, not
-a taxonomy gap, and it predates this change.
-
-**Exactly one genuinely new concept survived: `Road Hazard - Noise Pollution`.** The model is asking
-for a seventh subcategory. One occurrence is not a mandate — but it is the same signal that produced
-this change, and it is worth watching rather than dismissing.
-
-All six new categories were used, 20 predictions across the set, so none is dead weight.
-
-⚠ **What is still unmeasured:** the six have **no gold items** — they appear only as acceptable
-alternates, so nothing here scores whether a model picks them *correctly*, only that it stops
-inventing them.
-[Logged](../sprints/2026-08-llm/followups/road-hazard-categories-have-no-benchmark-items.md).
+⛔ **So `gpt-oss-20b` must not be selected on this evidence, and its 0.000 must not appear in a
+submission as an improvement.** Under a recall-first design
+([§3.2](#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives)) **a zero
+false-alarm rate is a warning sign, not a selling point**: this system accepts false alarms in order
+to avoid misses, and a candidate producing none on a set built to be hard is behaving in exactly the
+way the design exists to avoid.
 
 ---
 
-## 4. ⚠ Latency: p95 passes, p99 does not — *superseded by §3.7*
+## 4. The open column — the one gap {#4-the-open-column--the-one-gap}
 
-| | classify | detect |
-|---|---|---|
-| p50 | 14.84 s | 3.73 s |
-| p95 | **24.60 s** | 8.78 s |
-| p99 | **40.64 s** | 20.91 s |
-| max | 40.66 s | 42.04 s |
-| over 30 s | **1.9%** | 0.95% |
-| over 45 s | 0.0% | 0.0% |
-| over 60 s | 0.0% | 0.0% |
+⭐ **The single labelled hole in this document, stated once here rather than annotated across the
+tables above.**
 
-**Read against the budget.** `CLASSIFICATION_WAIT_SECONDS = 30`. p95 fits with 5.4 s of headroom;
-**p99 does not fit at all**, and the two slowest items took 40.6 s each.
+**What exists:** `gpt-oss-20b` completed all **105 detection items** on 2026-08-20 — the open
+detection column in §2 is real.
 
-**What that costs, precisely — less than it sounds and more than nothing.** The grievance is already
-filed by the time the poll runs, and the classification reaches the officer through the two-minute
-ticketing sync regardless. What ~2 complainants in 100 lose is **the chance to see and correct how
-their own grievance was understood** — the accountability half of the feature.
+**What does not:** open **classification**. The run reached **2 of 105**; the other 103 hit the
+router's short-window token limit, which reports itself misleadingly as credit exhaustion
+([`open-model-configuration.md`](open-model-configuration.md)). The same run's detection calls all
+completed, because the detection prompt is short.
 
-**The recommendation.** The owner made the budget *a knob, not a wall* (2026-08-20). On this
-evidence it does not need moving **for the closed model**: 45 s would capture 100% of measured
-calls, but it would also make 98 complainants in 100 wait longer for a spinner they currently never
-see, to rescue 2. ⚠ **Re-decide it when the open column exists.** A slower open model turns this
-from a 2% tail into a routine event, and *then* the raise is the right call — at which point
-`CLASSIFICATION_WAIT_SECONDS` **and** `TIMEOUT_CLASSIFY_INTERACTIVE` move **together** (DPG-15b's
-tests pin that they stay coherent).
+⚠ **That contrast was a finding about our prompt, not the model.** The classification prompt injected
+the catalogue three times; it is now **3,277 tokens**, a 70% cut
+([§7](#7-what-changed-on-2026-08-21-and-why)), so the run that could not complete should now fit
+comfortably.
 
-⚠ **These numbers are a floor.** The run used concurrency 8 against a warm provider from a
-data-centre network. A complainant on a rural mobile connection adds latency this measurement does
-not contain.
+**Status: the blocker is removed and the measurement has not been taken.** Re-running spends
+inference from a time-boxed, owner-funded envelope shared with pilot traffic (~105 classification +
+105 detection calls per model); the owner deferred it on 2026-08-24. **It needs a decision and a few
+minutes, not new engineering** — and the same run would re-meter the cost table's completion half
+([§6](#6-cost--measured-in-tokens-priced-separately)).
+
+**What this gap does and does not stop:**
+
+- It does **not** stop the indicator-4 claim, which is about the *mechanism* and is pinned by tests
+  ([`open-model-configuration.md`](open-model-configuration.md)).
+- It does **not** stop the cost and sovereignty analysis, which turns on volume rather than on which
+  open model wins ([`vllm-deployment.md`](vllm-deployment.md) §3).
+- ⛔ It **does** stop **naming an open model as the production default.** That stays open until this
+  column and §5 both exist.
 
 ---
 
-## 5. ⚠ Sensitive-content **recall** is not measured, and cannot be from this repository
+## 5. ⚠ SEAH recall is not measured, and cannot be from this repository {#5-seah-recall--not-measurable-from-this-repository}
 
-The committed benchmark contains **zero positive SEAH scenarios**, by decision, not by omission: the
-harassment narratives are held by the project owner and never enter the repository, because *"three
-hundred realistic Nepali harassment complaints sitting in it will be read as leaked case data by
-somebody, regardless of how the file is labelled"*
-([`01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) §3.3).
+The committed benchmark contains **zero positive SEAH scenarios**, by decision: the harassment
+narratives are held by the project owner and never enter the repository, because *"three hundred
+realistic Nepali harassment complaints sitting in it will be read as leaked case data by somebody,
+regardless of how the file is labelled"*.
 
-**So the SEAH numbers on this page are not independently reproducible from this repository.** That
-is a real weakness in the evidence pack and it is the right trade. The harness accepts
-`--seah-set /path/outside/the/repo.jsonl` and **refuses a path inside it**.
+**So the SEAH numbers on this page are not independently reproducible here.** That is a real weakness
+in the evidence pack and it is the right trade. The harness accepts `--seah-set` outside the
+repository and **refuses a path inside it**.
 
-Recall is the metric with a safeguarding consequence, so:
-
-- **it must be measured before any model change ships**, on the owner's set;
-- it must be reported with the **number of independent scenarios**, not the row count, and
-  labelled gold-seed or expanded;
-- and no table may rank two candidates that differ by a few points — a hand-authored set cannot
-  resolve that ([§4](../models/01_seah_detection_benchmark.md) has the arithmetic).
+⭐ **This is the blocking measurement of the sprint, and unlike §4 money cannot unblock it.** Recall
+is the metric with a safeguarding consequence, so it **must be measured before any model change
+ships**; it must be reported with the **number of independent scenarios** rather than the row count;
+and **no table may rank two candidates that differ by a few points** — a hand-authored set cannot
+resolve that.
 
 ---
 
 ## 6. Cost — measured in tokens, priced separately
 
-Tokens are the measurement and they do not drift. Prices do, so they are stated separately with the
-date they were read.
+Tokens are the measurement and do not drift. Prices do, so they are stated separately.
 
-| | Measured, 105 grievances × 2 model calls each — ⚠ **pre-§3.7 prompt** |
-|---|---|
-| Calls | 212 |
-| Prompt tokens | 1,192,578 |
-| Completion tokens | 352,899 |
-| **of which reasoning** | **330,944 — 93.8%** |
-| **Per grievance** | 11,358 prompt + 3,361 completion |
-| **Per 1,000 grievances** | **11.36 M prompt + 3.36 M completion** |
+⚠ **Read the provenance column before quoting a row.** The prompt half was re-metered after the 08-21
+change; the completion half was not. **The fix is to re-run the meter, not to annotate this table** —
+one run replaces every row.
 
-⚠ **93.8% of the completion budget is reasoning tokens** — invisible in the reply, fully billed.
-This independently reproduces D-30's 92% at 40× the sample size. **Any cost estimate built from
-output length understates this system by roughly 16×**, and any token cap sized for the visible
-answer returns empty content (D-40).
+| Per grievance *(both calls)* | Value | Provenance |
+|---|---|---|
+| Model calls | **2** — classify + SEAH detect | measured 08-20 |
+| Prompt tokens, classification | **3,277** | ⭐ **measured 08-21**, after the cut |
+| Prompt tokens, detection | **≈ 460** | ⚠ derived — the 08-20 meter recorded 11,358 prompt tokens against a ~10,900-token classification prompt |
+| **Prompt tokens, total** | **≈ 3,700** | ⚠ derived |
+| **Completion tokens** | **3,361**, of which **93.8% reasoning** | ⚠ measured 08-20, **not re-metered**. A prompt change is not expected to move completion length, but that expectation is not a measurement |
+| **Per 1,000 grievances** | **≈ 3.70 M prompt + 3.36 M completion** | part measured, part derived |
 
-⚠ **Cost scales with the taxonomy, not with the grievance**, and this measurement predates the change
-that acted on it. When these tokens were metered the classification prompt injected the catalogue
-**three times** — about 20,700 characters before the complaint was added. §3.7 cut that to **~3,277
-prompt tokens** while *adding* six categories, so **the prompt half of the figures above is now roughly
-70% too high** and the run needs re-taking. The token counts are kept rather than deleted because they
-are what the crossover arithmetic in [`vllm-deployment.md`](vllm-deployment.md) was built on, and both
-move together. ⭐ **The lever worked, and it was a prompt change rather than a model change** — which is
-the transferable finding.
+⚠ **93.8% of the completion budget is reasoning tokens** — invisible in the reply, fully billed. **Any
+cost estimate built from output length understates this system by roughly 16×**, and any token cap
+sized for the visible answer returns empty content.
 
-**In dollars** — at a rate of `$0.05 / M` prompt and `$0.40 / M` completion, per 1,000 grievances:
+⭐ **The cut moved where the money is, and that changes the next lever.** Prompt was 77% of tokens and
+is now about 52% — but completion is priced several times higher, so the prompt is roughly **12% of
+the bill**. **Prompt engineering is no longer the cost lever. Reasoning effort is** — a different
+change with a quality risk the prompt cut did not carry, and it should be measured before it is made.
 
-> **≈ $1.91 per 1,000 grievances**
-> ⚠ **The rate is a placeholder, not a measurement.** Confirm the current published price before
-> quoting this figure to anyone, and record the date you read it. The token counts above are
-> measured and stand on their own; the dollar figure is arithmetic on a number this document did
-> not verify.
+**In dollars**, at `$0.05 / M` prompt and `$0.40 / M` completion:
 
-This is one half of the costed proposal to the Nepal Government that
-[Q-19](../sprints/2026-08-llm/DECISIONS.md#q-19) commits to; the other half is
-[DPG-25](../sprints/2026-08-llm/03-open-models-spec.md#dpg-25)'s self-hosted figure and the
-crossover between them.
+> **≈ $1.53 per 1,000 grievances** *(3.70 M × $0.05 = $0.19; 3.36 M × $0.40 = $1.34)*
+> ⚠ **The rate is a placeholder.** Confirm the published price before quoting this, and record the
+> date. The token counts stand on the provenance above; the dollar figure does not.
+
+This is one half of the costed proposal to the Nepal Government; the other half is the self-hosted
+figure and the crossover between them ([`vllm-deployment.md`](vllm-deployment.md) §3).
 
 ---
 
-## 7. What is not measured, and why — no blanks
+## 7. What changed on 2026-08-21, and why {#7-what-changed-on-2026-08-21-and-why}
 
-| Row | Why |
-|---|---|
-| **Open-column classification** (precision, recall, F1, exact-set, latency, cost) | ⭐ **The blocker is gone; the measurement is not taken.** 103 of 105 calls returned 402 on the provider's short-window **token** limit because the classification prompt was ~20,700 characters (§3.4). §3.7 cut it to ~3,277 tokens — a **70% reduction** — so the run that could not complete should now fit comfortably. **This is the next measurement in the sprint**, and it needs time rather than a decision |
-| **Open-column SEAH recall** | ⭐ **The single most important missing number in this sprint.** The open model flags **nothing** (§3.5), which is either better calibration or a detector that always says no, and the committed set cannot tell them apart. Needs the owner's held-out positive set |
-| **Every other open cell** | Only one open candidate was benchmarked (`gpt-oss-20b`, the fastest). The other five reachable candidates have **capability** measured ([configuration doc](open-model-configuration.md)) but no accuracy |
-| Sensitive-content **recall** | The committed set has no positives, by decision (§5). Needs the owner's held-out set |
-| **ASR / WER** | Two independent blockers: voice has never been live so there is **no baseline to beat** (Q-13.2 — the honest framing is *"we shipped a working ASR path where there was none"*, never *"we matched the incumbent"*), and there is **no audio** in the benchmark set |
-| **Field extraction F1** | The contact-extraction path has **no production caller** (D-37). Benchmarking a dead path would spend budget to measure nothing |
-| **Translation quality** | Needs either chrF++ against reference translations (which the set does not carry) or human rating. Neither is resourced |
-| **Per-task token split** | The meter is global, so classify and detect cannot be priced separately from this run. The combined figure is the right unit anyway — production makes **both** calls per grievance |
+⭐ **The only place on this page where a superseded number appears**, and it appears because the change
+is the finding. Every current value is in [§2](#2-the-results).
+
+Two changes shipped together: the six `Road Hazard - *` categories
+[§3.4](#34--both-models-invent-the-same-category--which-makes-it-a-taxonomy-finding) argued for, and
+four token reductions to the classification prompt — measured on the same 105 items, same model.
+
+| | Before | After |
+|---|---|---|
+| Items with an invented category | 18 / 105 | **4 / 105** — ⭐ **−78%** |
+| …of which a genuinely *new concept* | 18 | **1** |
+| **p99 latency**, classification | **40.6 s** | **24.5 s** — ⭐ **inside the 30 s budget for the first time** |
+| p95 latency, classification | 24.6 s | **20.3 s** |
+| Share of calls over 30 s | 1.9% | **0.9%** |
+| **Prompt tokens** per classification | ~10,900 | **3,277** — ⭐ **−70%** |
+| Categories in the taxonomy | 24 | **30** |
+
+**What did not move:** accuracy. F1 0.771 → 0.762, precision 0.740 → 0.773, recall 0.805 → 0.752,
+exact-set 0.676 → 0.686.
+
+⚠ **This is not a clean A/B.** Three things changed at once — prompt, taxonomy, and the benchmark's
+acceptable-alternate lists — so the −0.009 in F1 cannot be attributed to any one of them, and with 105
+items it is inside the noise floor either way. **Read the invention, latency and token rows; do not
+read the accuracy rows as an effect.**
+
+### What the prompt change was
+
+The catalogue was sent **three** times — a flat list twice plus the full dictionary once — and the
+dictionary was **51,213 characters for an English grievance against 15,121 for a Nepali one.**
+
+⚠ **That asymmetry was a bug.** The filter read `if "_" + language_code not in k`, which strips the
+`_ne` keys for a Nepali grievance and **nothing** for an English one, because no key contains `_en`.
+Every English classification carried every Nepali translation, JSON-escaped at six bytes per
+character, for a model that never used them.
+
+Four changes, all applied: **fix the language filter**; **send the flat list once**; **drop three
+fields** (`high_priority` is routing metadata, `short_description` restates `description`, and the
+`*_extra` pair served two categories while being charged to all thirty); and **drop the flat list
+entirely**, so the model chooses from the dictionary **keys**.
+
+⭐ **The last one is a correctness fix as much as a saving:** the flat list was built from *raw* CSV
+values while every downstream consumer matches the *canonical* key. **The model was shown one form and
+read in another.**
+
+**Net: 62,736 → 13,147 characters for an English grievance (−79%), 18,567 → 13,147 for a Nepali one
+(−29%) — while adding six categories.**
+
+⚠ **Still unmeasured:** the six new categories have **no gold items** — they appear only as acceptable
+alternates, so nothing scores whether a model picks them *correctly*, only that it stops inventing
+them.
+[Logged](../sprints/2026-08-llm/followups/road-hazard-categories-have-no-benchmark-items.md).
 
 ---
 
 ## 8. Related
 
-- [`tests/data/benchmark/README.md`](../../tests/data/benchmark/README.md) — the set, its provenance, and its limits
+- [`tests/data/benchmark/README.md`](../../tests/data/benchmark/README.md) — the set, its provenance and its limits
 - [`open-model-configuration.md`](open-model-configuration.md) — the mechanism and the capability matrix
-- [`../models/01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) — the SEAH method, sample sizes, and why this is a screening instrument
+- [`../models/01_seah_detection_benchmark.md`](../models/01_seah_detection_benchmark.md) — the SEAH method and why this is a screening instrument
+- [`vllm-deployment.md`](vllm-deployment.md) — where these token counts become a crossover
 - [`00_compliance_status.md`](00_compliance_status.md) — where these numbers are cited
-- [`../sprints/2026-08-llm/PROGRESS.md`](../sprints/2026-08-llm/PROGRESS.md) — D-50, D-51, D-52

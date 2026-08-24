@@ -100,7 +100,7 @@ what you actually chose, with the date.
 known requirement — it excludes Llama and Gemma class models on their community licences, and on a
 low-resource language that exclusion may cost real quality. The compliance briefing asks the consultant
 directly whether restricted-use open weights satisfy indicator 4
-([`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q7). **Record which models the
+([`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-04-02). **Record which models the
 filter excluded and why**, so that if the answer loosens it, re-running DPG-23 is a candidate-list edit
 rather than a re-design.
 
@@ -114,7 +114,7 @@ rather than a re-design.
 | Classification runs on `gpt-3.5-turbo` | It runs on `gpt-5-nano` (`LLM_services.py:246`) | The "current" column of the benchmark must name the real baseline, or the delta is meaningless |
 | `pytest tests/test_llm_services.py` in the CI job | That file does not exist today; Sprint 1's DPG-10 creates `tests/backend/test_llm_services.py` and `tests/ticketing/test_llm_client.py` | DPG-24's job runs the real paths |
 | CI is greenfield | `.github/workflows/ci.yml` already runs **four** parallel gates — `backend-tests` (`:23`, full Postgres + Redis service block, all three Alembic streams), `ui-checks` (`:202`), `webchat-checks` (`:236`), `docs-links` (`:262`) | DPG-24 adds a **fifth job to an existing file**, following its conventions — not a new workflow file with its own dialect. ⚠ This spec said "three" and named only three of the four until 2026-08-17; `webchat-checks` was the one missed |
-| The candidate filter is settled: Apache-2.0 / MIT | **It is gated on the consultant.** Several of the strongest multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma). Whether those count as open alternatives for indicator 4 is an open question — [`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q7 | The filter may be **loosened** before DPG-23 runs, which would widen the candidate field and may materially change the Nepali quality result. **Do not build the benchmark harness around a frozen licence filter** |
+| The candidate filter is settled: Apache-2.0 / MIT | **It is gated on the consultant.** Several of the strongest multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma). Whether those count as open alternatives for indicator 4 is an open question — [`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-04-02 | The filter may be **loosened** before DPG-23 runs, which would widen the candidate field and may materially change the Nepali quality result. **Do not build the benchmark harness around a frozen licence filter** |
 
 ### §0.1 — What Sprint 1 changed under this spec (added 2026-08-20)
 
@@ -134,7 +134,7 @@ Sprint 1 shipped after this spec was written. These are not clarifications; each
 ### §0.2 — ⚠ The benchmark data is split, and DPG-20's acceptance is wrong as written
 
 This spec says *"Commit under `tests/data/benchmark/`"* and treats a committed synthetic set as the
-publishable artefact for consultant-Q9. On **2026-08-19 the owner decided the opposite** for the SEAH
+publishable artefact for Q-04-04. On **2026-08-19 the owner decided the opposite** for the SEAH
 slice, and wrote the reason into
 [`docs/models/01_seah_detection_benchmark.md`](../../models/01_seah_detection_benchmark.md) §3.3:
 
@@ -180,7 +180,7 @@ rather than twice).
 > can deliberately cover the edge cases that matter most and are rarest in real traffic — Devanagari-digit
 > phone numbers, third-party names, code-switching — which is exactly what
 > [T-31-a](TESTS.md) needs; and a fully synthetic committed set is publishable, which is the artefact
-> consultant-Q9 asks about. **Phase 1 is the honest version of the evidence, not a compromised one** —
+> Q-04-04 asks about. **Phase 1 is the honest version of the evidence, not a compromised one** —
 > provided every published number says it came from synthetic data.
 
 **This is committed test data. It cannot be production PII.** The three routes, kept for the phase-2 pass:
@@ -214,7 +214,7 @@ production accuracy is the kind of claim that discredits an otherwise sound subm
    > taxonomy. So there is **no training-data licence question at all**; what is missing is an *evaluation*
    > set, which is exactly what this ticket builds. Whether the DPGA also expects the eval set **and the
    > prompt templates** published as artefacts is open with the consultant
-   > ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q9). If yes, the committed
+   > ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-04-04). If yes, the committed
    > synthetic half of the hybrid set is already the answer — **which is a second reason to prefer hybrid.**
 
 ### Acceptance
@@ -358,7 +358,7 @@ If open-weights Nepali ASR lands materially worse than the incumbent, the honest
 documented degradation on voice while text stays at parity; keep ASR on a hosted provider and **disclose it
 as a remaining closed dependency**; or fund a Nepali fine-tune. Whether the DPGA accepts *"functional, with
 documented degradation"* or expects parity is open with the consultant
-([`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q8) — and the answer decides
+([`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-04-03) — and the answer decides
 whether voice intake can exist at all in an open configuration. **Measure first, but record the threshold
 question in the doc**; do not let a bad WER quietly become a decision nobody made.
 
@@ -466,7 +466,7 @@ table has:**
   permissive licence, real multilingual coverage including Nepali, reliable guided decoding, fits one
   24 GB GPU at 4-bit. **Expect a handful, and name them in the doc with the reason each one made or missed
   the list** — including the ones the licence limb excluded, because that limb is provisional
-  (consultant-Q7) and a loosened answer should be a candidate-list edit, not a re-design.
+  (Q-04-02) and a loosened answer should be a candidate-list edit, not a re-design.
 - ⚠ **Still price it before running it ([Q-19](QUESTIONS.md#q-19)).** A shortlist is affordable in a way a
   sweep is not, which is the point — but "affordable" is a number, not an adjective. A **cheap first pass
   on a small slice** eliminates the weak candidates before the full set is spent on the two or three that
@@ -759,7 +759,7 @@ written. Size against that, and extrapolate to national with the method stated.
 - [ ] `docs/deployment/13_security.md` updated with the intended network posture, marked `⚠ not deployed`
 - [ ] **The ticket is marked `⚠ documented and costed, not deployed`, and every place that describes the
       ladder says the same** — `00-dpg-context-and-decisions.md` §2, the indicator-4 answer, and
-      `docs/dpg/00_compliance_status.md` §4.5. A ladder that still reads "T2 ⭐ the production target" is a
+      `docs/dpg/00_compliance_status.md` §4. A ladder that still reads "T2 ⭐ the production target" is a
       claim the submission cannot support
 - [ ] Q-03 (jurisdiction) and Q-05 (operator/payer) recorded as **parked with their reason**, so unparking
       starts from the analysis rather than repeating it

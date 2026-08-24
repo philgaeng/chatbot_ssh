@@ -1,14 +1,26 @@
 # Dependency licence audit
 
-> **Generated 2026-08-18** · commit `8470df63` (branch `dpg/sprint0-licensing`) · ticket **DPG-02**
+> **Generated 2026-08-18** · commit `8470df63`
 > **Serves DPG indicator 2** (use of an approved open licence) and, for the container-image set,
 > indicator 4 (platform independence).
 >
-> **This supersedes the hand-written inventory** in
-> [`01_consultant_briefing.md`](01_consultant_briefing.md) §6 and
-> [`00_compliance_status.md`](00_compliance_status.md) Appendix A, both of which are marked
-> "pending the generated report". Where they disagree with this file, this file is right — it was
-> produced from the resolved trees that actually ship, not from the manifests.
+> ⚠ **Licence data generated 2026-08-18; the vulnerability section was measured 2026-08-23.** Two
+> dates, because they are two different commands.
+>
+> ⛔ **The Python tree changed on 2026-08-24 and this report predates it.** `boto3` was removed from
+> `requirements.txt` with the AWS SNS SMS path (privacy assessment F-12), which also drops
+> **`botocore`, `jmespath` and `s3transfer`** — and `python-dateutil`, unless something else still
+> pulls it. So the counts below are **high by roughly four** and five rows describe packages that are
+> no longer in the tree. **Nothing here becomes wrong in kind** — every departing package was
+> Apache-2.0 or MIT, so *zero non-OSI, zero unknown* still holds — but the numbers are stale until the
+> scan is re-run against a rebuilt image. **Re-run it rather than editing the rows by hand:** a
+> hand-patched generated report is exactly the drift this file exists to remove.
+>
+> **This is the authoritative inventory, and it is the only one.** The hand-written summaries it
+> replaced are gone — [`00_compliance_status.md`](00_compliance_status.md) cites this file and keeps no
+> mirror of it, deliberately: a summary table in a second document is precisely the drift this evidence
+> pack exists to remove. Where anything disagrees with this file, this file is right — it was produced
+> from the resolved trees that actually ship, not from the manifests.
 
 ## How this was produced
 
@@ -30,9 +42,9 @@ docker compose ... exec grm_ui npx license-checker --production --json
 docker image inspect <image> --format '{{index .RepoDigests 0}}'
 ```
 
-### ⚠ Correction to the DPG-02 spec: there is one Python image, not two
+### ⚠ There is one Python image, not two
 
-The ticket says to run the scan against "both images — the chatbot image (`requirements.txt`) and
+The scan was specified to run against "both images — the chatbot image (`requirements.txt`) and
 the ticketing/ops image (`requirements.grm.txt`) … they are not the same tree." **They are the same
 tree.** One `Dockerfile` at the repo root serves every Python service and installs *both* manifests
 into one image:
@@ -46,14 +58,6 @@ Verified in the running container: `flask`, `rasa_sdk` and `openai` (chatbot) im
 `openpyxl` and `apscheduler` (GRM/ops). So the split below is by **manifest**,
 recovered by parsing each requirements file — not by image, which cannot distinguish them.
 
-> **Amended 2026-08-18 (DPG-17).** `pydantic-settings` moved from `requirements.grm.txt` to
-> `requirements.txt` and its row below now reads `chatbot`. The **counts did not change** — 35
-> declared / 98 transitive — because a package declared in *either* manifest was already counted as
-> declared; only the attribution moved. Recorded rather than silently corrected, because a dated
-> audit that disagrees with the manifests is worse than no audit, and "the counts are unchanged" is
-> itself a finding worth stating. The reason for the move: `backend/config/llm_config.py`, the
-> single LLM registry both surfaces read, is on the chatbot side and imports it.
-
 ## Summary
 
 | Set | Packages | Non-OSI | Unknown | Needs a disposition |
@@ -66,7 +70,7 @@ recovered by parsing each requirements file — not by image, which cannot disti
 
 **No package in any tree carries an unknown, unparseable or non-OSI licence.** Indicator 2 is
 answerable on the dependency tree; the remaining gap is the repository's own licence file, which is
-DPG-01 (landed, provisional pending the consultant — see NOTICE).
+landed, provisional pending the consultant — see `NOTICE`.
 
 ## Dispositions
 
@@ -81,7 +85,7 @@ so a reviewer does not have to rediscover it.
 | `tqdm` | MPL-2.0 AND MIT | **Keep.** Same reasoning; the MPL portion is unmodified. |
 | `email-validator` | The Unlicense | **Keep.** Public-domain dedication, OSI-approved. ⚠ Not to be confused with npm's `UNLICENSED`, which means *no licence declared* — the opposite. |
 | `@img/sharp-libvips-linux-x64` · `-linuxmusl-x64` | LGPL-3.0-or-later | **Keep.** Prebuilt libvips binaries pulled in by `sharp`, which Next.js uses for image optimisation. Shipped unmodified as separate shared objects and dynamically loaded — the LGPL-compliant pattern. ⚠ Also absent from the hand-written inventory: `sharp` is nobody's declared dependency, it is a Next.js transitive. |
-| `ticketing-ui@0.1.0` | reported `UNLICENSED` | **Explained, and partly fixed — but the row will not change.** Our own manifest declared no licence at all, contradicting the Apache-2.0 `LICENSE` DPG-01 had just added; `channels/ticketing-ui/package.json` and `channels/REST_webchat/package.json` now both declare `"license": "Apache-2.0"`. ⚠ **`license-checker` still reports `UNLICENSED`, and always will:** it hard-codes that value for any package with `"private": true` and ignores the `license` field entirely. Verified after rebuilding the image — the record it emits is `{"licenses": "UNLICENSED", "private": true}`. So this row is a **tool artefact for an unpublished package, not a finding**: our own code's licence is `LICENSE` + the per-file SPDX headers, and the manifest now states it too for anyone reading the file. |
+| `ticketing-ui@0.1.0` | reported `UNLICENSED` | **Explained, and partly fixed — but the row will not change.** Our own manifest declared no licence at all, contradicting the repository's Apache-2.0 `LICENSE`; `channels/ticketing-ui/package.json` and `channels/REST_webchat/package.json` now both declare `"license": "Apache-2.0"`. ⚠ **`license-checker` still reports `UNLICENSED`, and always will:** it hard-codes that value for any package with `"private": true` and ignores the `license` field entirely. Verified after rebuilding the image — the record it emits is `{"licenses": "UNLICENSED", "private": true}`. So this row is a **tool artefact for an unpublished package, not a finding**: our own code's licence is `LICENSE` + the per-file SPDX headers, and the manifest now states it too for anyone reading the file. |
 | `redis:8.10` | RSALv2 / SSPLv1 / **AGPLv3** (tri-licensed) | **Keep, elected under AGPLv3** — the one OSI-approved option of the three. Runs as an unmodified upstream image behind a network boundary; no Redis source is conveyed, so AGPLv3 imposes nothing on this repository or a downstream fork. Consultant Q7(a) asks whether AGPL anywhere in the stack is a problem for ADB/DOR procurement; Valkey (BSD-3-Clause) is the costed fallback. |
 
 ## Open decision #3 — the Rasa licence question, closed
@@ -119,23 +123,23 @@ Redis than production runs.
 ## Staying true
 
 A dated audit is stale the next time anybody adds a dependency, and indicator 2 is a claim that has
-to hold continuously. Per **Q-06**, the licence scan is now **scheduled**, not a pre-submission
+to hold continuously. The licence scan is therefore **scheduled**, not a pre-submission
 artefact:
 
 * `ops/security.py` → `licence_scan()`, scheduled nightly at 01:50 beside the existing `pip-audit`
-  ⚠ **Scheduled is not the same as running.** The `ops` container is **not deployed to staging or
-  DOR prod**, so this executes only where a development stack happens to be up at 01:50. Until `ops`
-  ships, treat this report's freshness as *the date at the top*, not as a nightly guarantee.
-  CVE scan, writing to `ops.dependency_findings` with `source='pip-licenses'`. Report-only; it
-  never blocks a deploy.
+  CVE scan, writing to `ops.dependency_findings` with `source='pip-licenses'`. Report-only; it never
+  blocks a deploy.
+
+  ⚠ **Scheduled is not the same as running, and it has never run on a deployed host.** The `ops`
+  container is **not deployed to staging or DOR prod**, so this executes only where a development
+  stack happens to be up at 01:50. **Treat this report's freshness as the date at the top, never as a
+  nightly guarantee.**
 * Classification lives in `ops/licences.py` — pure logic, unit-tested by
   `tests/repo/test_licence_scan.py`. Anything unrecognised surfaces as a **high** finding rather
   than passing silently, which is the only failure direction that is safe.
-* `pip-licenses>=5.0` is declared in `requirements.grm.txt`. ~~⚠ It was installed ad-hoc in the
-  container for *this* scan, so the nightly job starts working on the next image rebuild.~~
-  ✅ **CLOSED 2026-08-18 — the image was rebuilt and the scheduled job was run for real.**
-  `pip-licenses 5.5.5` is in the `ops` image; `licence_scan()` scanned **133 packages** and wrote
-  **5 findings** to `ops.dependency_findings`, with a `licence_scan` row in `ops.system_health_checks`
+* `pip-licenses>=5.0` is declared in `requirements.grm.txt` and present in the `ops` image
+  (`pip-licenses 5.5.5`). **The scheduled job has been run for real once, on 2026-08-18**, against a
+  development stack: `licence_scan()` scanned **133 packages** and wrote **5 findings** to `ops.dependency_findings`, with a `licence_scan` row in `ops.system_health_checks`
   reading `warn · {"flagged": {"warn": 5}, "scanned": 133}`.
 
   **The five it flagged are exactly the five this report dispositions**, and all are OSI-approved weak
@@ -146,27 +150,34 @@ artefact:
 
   ⚠ **One operational precondition surfaced by running it** — see the deviation below.
 
-### ⚠ The scan writes nothing if `OPS_DB_PASSWORD` is unset
+### ⚠ The scan writes nothing unless `ops` can authenticate — fixed in code, still unset on every host
 
-Found while verifying the above, and it is not specific to the licence scan: **it disables every ops
-finding, including the `pip-audit` CVE scan.**
+Found while verifying the run above, and it was never specific to the licence scan: **it disabled
+every ops finding, including the `pip-audit` CVE scan.**
 
-`ops/config.py:104-111` builds the connection as `user = ops_db_user or postgres_user`. `ops_db_user`
-**defaults to the non-empty string `"ops_app"`**, so that fallback can never fire — while
-`ops_db_password or postgres_password` *does* fall back, to the admin password. The result is a login
-attempt as `ops_app` using the **admin's** password. Meanwhile `ops001_init.py:54-64` creates the role
-**without a password at all** when `OPS_DB_PASSWORD` is unset, so no password can authenticate it.
+`ops` authenticated as the `ops_app` role using the **admin** password, because `ops_db_user` defaults
+to the non-empty string `"ops_app"` (so its fallback can never fire) while `ops_db_password` *does*
+fall back to `postgres_password`. Meanwhile the migration created the role **without a password at
+all** when `OPS_DB_PASSWORD` was unset, so nothing could authenticate it.
 
-The failure mode is the problem: `licence_scan()` **returns normally**. It logs
-`Failed to record check licence_scan`, tries to raise an alert, and — if `HEALTH_ALERT_EMAIL` is also
-unset — cannot send that either. A deployment missing one env var records nothing and says nothing.
-**A scan that manufactures confidence is worse than no scan**, which is the same lesson as the
-classifier bug in "How this was produced", one layer down.
+⚠ **The failure mode was the problem, and it is the reason this went unnoticed for days.**
+`licence_scan()` **returned normally** — it logged a failure to record the check, tried to raise an
+alert, and could not send that either. The container reported `healthy` throughout while writing
+nothing. **A scan that manufactures confidence is worse than no scan.**
 
-`env.local` does not set `OPS_DB_PASSWORD`. The migration comment documents it as an operator step, so
-this is a **configuration precondition, not a code defect** — but it is one whose omission is silent.
-Logged as sprint deviation **D-25**; the claim "the scan runs on the schedule" is true **given a
-correctly configured ops container**, and that caveat belongs with the claim.
+**Status 2026-08-24:** the credential defect is **fixed in code** and `OPS_DB_PASSWORD` is now carried
+in `secrets.enc.env` rather than living only on one host. ⚠ **Two things still stand between that and
+a working scan**, and both are deployment steps rather than code:
+
+1. **Publishing a database credential does not set it.** Until someone runs `ALTER ROLE ops_app
+   PASSWORD` on a given box, `ops` cannot authenticate there — and will still report `healthy` while
+   writing nothing.
+2. **`ops` is not deployed to staging or DOR prod at all**, so no licence or CVE scan runs anywhere
+   but a development stack.
+
+The claim *"the scan runs on the schedule"* is true **given a
+deployed and correctly configured ops container**, and that caveat belongs with the claim every time
+it is made.
 
 ## Python — declared dependencies (35)
 
@@ -343,14 +354,10 @@ library, state-management library, charting library or analytics SDK.
 `license-checker` emits `UNLICENSED` for any package marked `"private": true` **regardless of the
 `license` field** — the record is literally `{"licenses": "UNLICENSED", "private": true}`.
 
-The scan was still worth running, because the manifest genuinely declared no licence at the time:
-that has been fixed (`"license": "Apache-2.0"` in both npm manifests), and the fix is right on its
-own merits even though it does not move this row.
-
-**The prediction this file originally carried — that a rebuild would flip the row to `Apache-2.0` —
-was wrong, and was corrected after actually rebuilding `grm_ui` and re-running the scan.** Recorded
-here rather than quietly edited, because the point of a generated report is that it says what the
-command said.
+The scan was still worth running: the manifest genuinely declared no licence at the time, and that
+has been fixed (`"license": "Apache-2.0"` in both npm manifests). ⚠ **A rebuild does not flip this
+row** — verified by rebuilding `grm_ui` and re-running the scan. `private: true` is what produces
+`UNLICENSED`, and it is correct for an application that is not published.
 
 ---
 
@@ -392,7 +399,7 @@ loop that the live chatbot's intake path runs on.
 
 **Conclusion: do not do this for the CVEs.** If `rasa-sdk` is ever removed it should be for its own
 reasons — owning the form loop outright — with the dependency reduction as a side effect, and it needs
-a characterization net over the intake path first, exactly as DPG-10 did for the LLM surfaces.
+a characterization net over the intake path first, exactly as was done for the LLM surfaces.
 
 ### The other four
 

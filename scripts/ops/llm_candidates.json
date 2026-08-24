@@ -1,7 +1,7 @@
 {
   "_comment": [
     "The DPG-23 candidate shortlist, as DATA so that widening it is an edit, not a redesign.",
-    "That matters because the licence limb of the filter is PROVISIONAL: consultant-Q5 asks whether",
+    "That matters because the licence limb of the filter is PROVISIONAL: Q-04-02 asks whether",
     "restricted-use open weights (Llama, Gemma class) count as open alternatives for indicator 4. If",
     "the answer loosens, move rows from `excluded` to `shortlist` and re-run — no code changes.",
     "",
@@ -63,7 +63,7 @@
     {
       "id": "google/gemma-4-31B-it",
       "licence": "gemma-terms-of-use",
-      "reason": "Bespoke community licence with use restrictions. Excluded by the PROVISIONAL licence limb, not on quality — Gemma-class models are among the strongest multilingual options at this size, so this exclusion may be costing real Nepali quality. consultant-Q5."
+      "reason": "Bespoke community licence with use restrictions. Excluded by the PROVISIONAL licence limb, not on quality — Gemma-class models are among the strongest multilingual options at this size, so this exclusion may be costing real Nepali quality. Q-04-02."
     },
     {
       "id": "google/gemma-3-27b-it",
@@ -73,12 +73,12 @@
     {
       "id": "meta-llama/Llama-3.3-70B-Instruct",
       "licence": "llama-3.3-community",
-      "reason": "Llama Community License — use restrictions and an acceptable-use policy. Same provisional exclusion. consultant-Q5."
+      "reason": "Llama Community License — use restrictions and an acceptable-use policy. Same provisional exclusion. Q-04-02."
     },
     {
       "id": "CohereLabs/aya-expanse-32b",
       "licence": "cc-by-nc-4.0",
-      "reason": "⚠ The exclusion that hurts most. Aya is PURPOSE-BUILT for multilingual coverage and is exactly the right size, but CC-BY-NC forbids commercial use — and unlike the Gemma/Llama limb this one does NOT loosen if consultant-Q5 loosens, because non-commercial is incompatible with a government production deployment however indicator 4 is read. Excluded on licence, not on quality."
+      "reason": "⚠ The exclusion that hurts most. Aya is PURPOSE-BUILT for multilingual coverage and is exactly the right size, but CC-BY-NC forbids commercial use — and unlike the Gemma/Llama limb this one does NOT loosen if Q-04-02 loosens, because non-commercial is incompatible with a government production deployment however indicator 4 is read. Excluded on licence, not on quality."
     },
     {
       "id": "aisingapore/Gemma-SEA-LION-v4-27B-IT",

@@ -27,11 +27,16 @@ The guide's **strategy** survives all five corrections intact. It is the *invent
 
 ### ⚠ Two question-numbering spaces — do not conflate them
 
-[`QUESTIONS.md`](QUESTIONS.md) + [`DECISIONS.md`](DECISIONS.md) hold **Q-01…Q-19, hyphenated**: decisions
-for the *project owner*, each owned by a ticket. [`docs/dpg/00_compliance_status.md`](../../dpg/00_compliance_status.md) §5 holds
-**Q1…Q14, unhyphenated**: questions for *ADB's DPG consultant*. **The numbers overlap and mean different
-things** — its Q4 asks whether our reading of indicator 4 is correct; our Q-04 asks which configuration
-production runs. When citing across, write "consultant-Q7", as the specs now do.
+[`QUESTIONS.md`](QUESTIONS.md) + [`DECISIONS.md`](DECISIONS.md) hold **`Q-nn` — two parts**: decisions
+for the *project owner*, each owned by a ticket. [`docs/dpg/02_questions.md`](../../dpg/02_questions.md)
+holds **`Q-ii-nn` — three parts**: questions for *ADB's DPG consultant*, where the middle number is the
+DPG indicator. So `Q-04` is ours (which configuration production runs) and `Q-04-01` is theirs (how the
+DPGA assesses platform independence for an AI system).
+
+**Count the hyphens, and never renumber the consultant's set by hand.** Its numbers are *derived from
+the indicator they sit under* in [`00_compliance_status.md`](../../dpg/00_compliance_status.md), which
+is why inserting one never renumbers another — and `02_questions.md` is generated from that file, with
+`tests/repo/test_dpg_questions_generated.py` failing the build if the two disagree.
 
 ### ✅ All 20 owner questions answered — 2026-08-17
 

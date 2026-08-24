@@ -181,7 +181,7 @@ def test_a_schema_request_that_was_honoured_is_a_pass():
 
 def test_the_candidate_shortlist_loads_and_records_why_each_model_is_in_or_out():
     """
-    The licence limb of the filter is provisional (consultant-Q5), so widening the field must be an
+    The licence limb of the filter is provisional (Q-04-02), so widening the field must be an
     edit to this file rather than a redesign. That only holds if every row carries its reason.
     """
     data = json.loads(llm_smoke.CANDIDATES_FILE.read_text(encoding="utf-8"))

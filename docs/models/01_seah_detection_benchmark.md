@@ -21,10 +21,25 @@ to be wrong, and both cost something real:
 
 | Error | What it costs |
 |---|---|
-| **Miss** (harassment not flagged) | The report is handled as an ordinary road complaint. The reason the SEAH route exists is that this must not happen |
-| **False alarm** (ordinary complaint flagged) | The grievance moves into a channel **most officers cannot see**. The dust or compensation problem then never reaches the people who would have fixed it — the complaint effectively disappears |
+| **Miss** (harassment not flagged) | The report is handled as an ordinary road complaint. **The reason the SEAH route exists is that this must not happen**, and it is not recoverable — nobody downstream knows to look |
+| **False alarm** (ordinary complaint flagged) | A SEAH officer reads an ordinary grievance and returns it to the standard queue. Costs review time and delay; **carries no risk to the complainant**, because a SEAH officer seeing a dust complaint discloses nothing to anyone |
 
-A benchmark that measures only recall will happily recommend a model that flags everything.
+⭐ **These costs are deliberately asymmetric, and the detector is tuned accordingly.** The system
+**prefers false alarms to misses on purpose**: the cheap error is recoverable by a trained human, the
+expensive one is not. So a false-alarm figure on this page is **a measured price, not a defect**, and
+it must never be reported as one.
+
+⚠ **Two consequences that follow immediately, and both are easy to get wrong:**
+
+1. **A benchmark that measures only recall will happily recommend a model that flags everything** —
+   so false alarms are still measured, to price the trade rather than to fail a candidate on it.
+2. **Tightening the prompt to reduce false alarms trades away the property the design is built on.**
+   Any such change must be measured against recall **first**. Reducing this number is not, by itself,
+   an improvement.
+
+⚠ **The trade is only safe while the return path works.** If a cleared case cannot be sent back to the
+standard queue, the cheap error stops being cheap and this whole table is wrong. See
+[`../dpg/00_compliance_status.md`](../dpg/00_compliance_status.md) §9 for the state of that path.
 
 ## 2. What is actually being measured — there are three signals, not one
 

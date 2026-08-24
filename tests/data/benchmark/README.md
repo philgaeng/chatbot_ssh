@@ -206,7 +206,7 @@ publish results from it, or extend it without asking anyone.
 > category taxonomy. There is therefore **no training-data licence question at all**. What was
 > missing was an *evaluation* set, which is what this is. Whether the DPGA also expects the eval set
 > **and the prompt templates** published as artefacts is open with the consultant
-> ([`00_compliance_status.md`](../../../docs/dpg/00_compliance_status.md) consultant-Q5b); if the answer
+> ([`00_compliance_status.md`](../../../docs/dpg/00_compliance_status.md) Q-04-04); if the answer
 > is yes, this directory is already half of it.
 
 ⚠ The **taxonomy** the labels are drawn from (`backend/dev-resources/grievances_categorization_v1.1.csv`)

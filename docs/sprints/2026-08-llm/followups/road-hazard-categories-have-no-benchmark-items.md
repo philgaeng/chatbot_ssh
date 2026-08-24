@@ -64,5 +64,5 @@ Then re-run and compare the **invented-category rate** against the pre-change me
 ## Related
 
 - [`the-model-invents-categories-and-they-are-stored.md`](the-model-invents-categories-and-they-are-stored.md) — D-51, why these were added
-- [`../../../dpg/model-benchmarks.md`](../../../dpg/model-benchmarks.md) §3.1, §3.6 — the measurements
+- [`../../../dpg/model-benchmarks.md`](../../../dpg/model-benchmarks.md) §3.1, §3.4 — the measurements
 - [`../../../../tests/data/benchmark/README.md`](../../../../tests/data/benchmark/README.md) §1

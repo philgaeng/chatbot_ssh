@@ -110,7 +110,7 @@ text leaves the agency's control, found **in the code**, not assumed from the di
 | Exception reports carrying request bodies | Full payloads | Audit |
 | Database backups (`backups_data` volume) | Everything | **Name the destination and its jurisdiction** |
 | XLSX quarterly reports, PDF closure documents | Summaries, resolutions | Audit recipients and transport |
-| Messaging API → AWS SNS (SMS) / SMTP relay | Complainant-facing text | Third-party by design; assess |
+| Messaging API → DOIT gateway (SMS, in Nepal) / SMTP relay | Complainant-facing text | Third-party by design; assess |
 | `POST /message` → orchestrator | Officer replies | Internal |
 | Observability | — | **None installed** (no Langfuse, no OTel, no Sentry — verified). The source narrative's §3.4 assumes Langfuse; it does not exist here. Write the rule for whatever is added later |
 
@@ -170,7 +170,7 @@ Custom Presidio recognisers (or plain regex at this stage) for:
 - Ten-digit mobiles on `97x` / `98x` prefixes
 - Landline area codes
 - Citizenship certificate numbers
-- **Vehicle registration numbers** — named in [`00_compliance_status.md`](../../dpg/00_compliance_status.md) §4.6
+- **Vehicle registration numbers** — named in [`00_compliance_status.md`](../../dpg/00_compliance_status.md) §7
   and missing from this list until 2026-08-17. Not an afterthought in a **road-sector** GRM: *"the contractor's
   tipper ba 2 kha 1234 dumps spoil at night"* identifies a vehicle, its owner, and often its driver. Nepali
   plates carry a zone/province token in Devanagari plus digits, so this recogniser needs the digit
@@ -327,7 +327,7 @@ single most important test in this sprint.
 > to LLMs, in order to follow data-privacy laws in countries where in-country self-hosting is not
 > possible."* **That is a better idea than this ticket, and a bigger one** — a reusable anonymiser is worth
 > more than a Nepal-GRM-internal NER layer, and it is exactly the *"is there ADB appetite to fund it"*
-> conversation the compliance briefing opens (consultant-Q13).
+> conversation the compliance briefing opens (Q-07-02).
 >
 > **The sequencing consequence I have written in, and want confirmed:** Sprint 3 ships **DPG-31 only** as its
 > redaction engine — deterministic, no ML, no ~1 GB dependency — and this ticket plus [DPG-35](#dpg-35) leave
@@ -371,7 +371,7 @@ XLM-RoBERTa NER fine-tune exists, reporting **PER F1 0.87**, overall F1 0.79.
    > fine-tune released openly would be a genuine DPG *contribution* — permissively-licensed Nepali NLP
    > tooling barely exists. The compliance briefing asks whether the DPGA would credit that and whether
    > there is ADB appetite to fund it
-   > ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) consultant-Q13). Same shape as DPG-22's
+   > ([`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-07-02). Same shape as DPG-22's
    > SLR54 ASR fine-tune. **Both are out of scope here** — but if funding lands, this ticket's licence
    > blocker becomes the deliverable, so keep the corpus and threshold work reusable rather than one-off.
 2. **It is trained on WikiANN** — Wikipedia prose, not colloquial spoken grievances transcribed from
