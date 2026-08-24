@@ -115,9 +115,17 @@ very much want.
 - Reports go to a private mailbox, not a ticket queue visible to officers or implementing-agency
   staff.
 - We will not share your identity outside the maintainer team without your permission.
-- If a report reveals that real complainant data was exposed, we will follow the breach procedure in
-  [`docs/dpg/privacy-assessment.md`](docs/dpg/privacy-assessment.md), which may require us to notify
-  the implementing agency and affected data subjects. We will tell you when that happens.
+- If a report reveals that real complainant data was exposed, we will follow the incident-response
+  procedure in [`docs/deployment/19_incident_response.md`](docs/deployment/19_incident_response.md),
+  which may require us to notify the implementing agency and affected data subjects. We will tell you
+  when that happens.
+
+  > ⚠ **Be aware of what that procedure does and does not yet commit us to.** Detection, containment
+  > and evidence handling are written down and were verified against the running system. **Three
+  > decisions are still blank** — who declares a breach, who is notified on what clock, and how a
+  > survivor is told in a SEAH case — because they belong to the implementing agency, not to us. They
+  > are held on an interim basis by the maintainer. We would rather you knew that than discover it
+  > after reporting.
 
 ---
 
@@ -126,5 +134,6 @@ very much want.
 Security architecture, the control inventory, and the fail-closed guarantees are documented in
 [`docs/deployment/13_security.md`](docs/deployment/13_security.md). Key and secret rotation is
 [`docs/deployment/14_key_and_secret_lifecycle.md`](docs/deployment/14_key_and_secret_lifecycle.md).
-The privacy position, including the breach procedure, is
-[`docs/dpg/privacy-assessment.md`](docs/dpg/privacy-assessment.md).
+The incident-response runbook — detection, containment, evidence and its clocks — is
+[`docs/deployment/19_incident_response.md`](docs/deployment/19_incident_response.md). The privacy
+position it serves is [`docs/dpg/privacy-assessment.md`](docs/dpg/privacy-assessment.md).

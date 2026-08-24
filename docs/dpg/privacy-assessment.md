@@ -269,7 +269,7 @@ personal data is exposed beyond what a reader would assume.
 | **L8** | Ticketing → orchestrator `POST /message` | Officer's reply text to the complainant | `ticketing/clients/orchestrator.py` | Internal. Officer-authored content |
 | **L9** | Ticketing → Messaging API → SMS / email | Complainant phone number and message body | `messaging.py:145-148`, `:280`, `:330` | **Production Nepal uses the DOIT government gateway** (`sms.doit.gov.np`) — in-country. ⚠ **The fallback is AWS SNS in `ap-southeast-1` (Singapore)** — a second, quieter cross-border leg carrying a phone number and a message about a grievance. Email goes to an SMTP relay whose destination depends on configuration |
 | **L10** | Reports and closure documents | XLSX exports of case data; a closure PDF | `report_export.py`, `closure_pdf.py`, `report_shares.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a UUID4 token in the URL, with **no expiry** (`public_closure.py:38,58`). Report shares use `secrets.token_urlsafe(24)` — adequate entropy — but also do not expire |
-| **L11** | Backups | ⚠ Full `pg_dump` of `app_db` **plus a tar of the uploads volume** | `scripts/ops/backup_db.sh:45-60` | Contact columns remain ciphertext inside the dump. **The narrative, all officer notes, and every voice recording and photograph are in the clear.** Encryption is **optional and off unless `BACKUP_GPG_RECIPIENT` or `BACKUP_PASSPHRASE` is set**. Retention 14 days. Off-box copy optional; **destination unspecified in the repo** — a deployment fact this document cannot verify |
+| **L11** | Backups | ⚠ Full `pg_dump` of `app_db` **plus a tar of the uploads volume** | `scripts/ops/backup_db.sh:45-60` | Contact columns remain ciphertext inside the dump. **The narrative, all officer notes, and every voice recording and photograph are in the clear.** ⚠ **This row described the pre-fix script and was stale — corrected 2026-08-24.** Encryption is no longer optional: an unencryptable dump *and* the uploads tar are **discarded** unless `BACKUP_ALLOW_UNENCRYPTED=1` is set deliberately (F-4, fixed 2026-08-19). Retention 14 days. Off-box copy optional; **destination unspecified in the repo** — a deployment fact this document cannot verify |
 | **L12** | Auth | Officer usernames, emails, names, credentials, login and failure events | `docker-compose.grm.yml:48`, `keycloak` schema | Self-hosted Keycloak, same database, same host. No third-party identity provider — worth stating, it is a real jurisdictional advantage |
 | **L13** | Ops monitoring | Aggregate counts only — grievances submitted, tickets resolved, logins, reveal events | `ops/reports.py:36-58` | ✅ **Verified PII-free.** Every query is a `count(*)`. The daily ops email carries no personal data |
 
@@ -631,24 +631,50 @@ cases narrows to `super_admin`; all reveals audited; a daily job; settings chang
 
 ### 5.3 Breach procedure
 
-**⚠ Not built as a written procedure.** The technical detection substrate exists and is better than
-the absence of a policy suggests:
+✅ **Written 2026-08-24:** [`../deployment/19_incident_response.md`](../deployment/19_incident_response.md).
+Detection, triage against what each store actually holds, containment in order, evidence and its
+retention clocks, notification, and post-incident review — every part of which is an engineering fact
+this repository can state and verify.
+
+**Three decisions are deliberately blank** — who declares a breach, who is notified on what clock, and
+whether and how a survivor is told when a SEAH case is exposed. They are held on an **interim** basis by
+the maintainer and addressed to the **Department of Roads**. That is weaker than an agreed procedure and
+much stronger than the "does not exist" this section reported until today: the runbook a responder needs
+at 3am is written, and what is missing is named, scoped, and pointed at someone.
+
+**The detection substrate**, re-verified 2026-08-24:
 
 - `ops` runs health checks, a nightly CVE scan, and a nightly licence scan into `ops.dependency_findings`
 - Deduplicated alerting to a configured address (`ops/alerts.py:29`)
 - A daily ops report covering failed logins and contact-reveal counts (`ops/reports.py:50-58`)
 - `ticketing.admin_audit_log` records reveals and administrative actions
-- Keycloak login and login-failure events are queryable
-- A private vulnerability disclosure channel exists as of this sprint ([`SECURITY.md`](../../SECURITY.md))
+- A private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) — which now points at the
+  runbook, and tells the reporter which parts of it are not yet committed
+- ⚠ **The `ops` container is deployed to neither server.** On staging and production this list describes
+  a development stack, not a monitored one
 
-**What is missing is the human procedure**, and it is short enough to write once someone can commit
-to it:
+> ### ⚠ Correction — Keycloak events were not being recorded at all
+>
+> This section previously listed "Keycloak login and login-failure events are queryable" among the
+> controls that existed. **It was false, and writing the runbook is what caught it.** Keycloak stores no
+> login or admin events unless the realm asks for it, both default to off, and nothing in this repository
+> turned them on. Verified 2026-08-24 against the live realm: `events_enabled = f`,
+> `admin_events_enabled = f`, `keycloak.event_entity` — **0 rows**.
+>
+> It stayed invisible because the daily ops report *does* query that table (`ops/reports.py:45,55`), and
+> so reported **0 officer logins and 0 failed logins** every day, indistinguishably from a quiet one. A
+> monitoring row that cannot tell "none happened" from "none recorded" is worse than no row at all.
+>
+> ✅ **Fixed the same day** — `setup_realm_event_logging` in `ticketing/auth/keycloak_setup.py` enables
+> login and admin events with a 90-day expiration, applied by `make keycloak-setup`; a failed login now
+> writes a `LOGIN_ERROR` row. ⚠ **Forward-only — no login anywhere was recorded before 2026-08-24, and
+> none of it is recoverable.** ⚠ Not yet applied to staging or production. Logged as **F-18**.
 
-- [ ] Who decides that an incident is a personal-data breach, and within what time
-- [ ] Who must be notified — the implementing agency, ADB, and **affected data subjects**; and for a SEAH breach, whether a survivor is notified directly and by whom, which is a safeguarding decision, not an IT one
-- [ ] Notification timeline
-- [ ] Containment, evidence preservation, and post-incident review
-- [ ] The interaction with [`SECURITY.md`](../../SECURITY.md), which already promises a reporter that we will tell them when a breach procedure is triggered — **that promise is currently written against a procedure that does not exist**, and this document is the place that admits it
+**Still open — and these are exactly B1–B3 in the runbook:**
+
+- [ ] **B1** — Who decides that an incident is a personal-data breach, and within what time
+- [ ] **B2** — Who must be notified — the implementing agency, ADB, and **affected data subjects** — and on what clock
+- [ ] **B3** — For a SEAH breach, whether a survivor is notified directly and by whom, which is a safeguarding decision, not an IT one
 
 ---
 
@@ -666,7 +692,7 @@ privacy impact, not a legal characterisation.
 | **F-5** | **Grievance text, including potential SEAH disclosures, passes through the Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | DPG-34 |
 | **F-6** | **Grievance text reaches application logs** — translation error paths interpolate the whole input dict; `parse_llm_response` logs the raw model response on a parse error | `LLM_services.py:298, 337, 345` | 🟠 Medium | DPG-34 |
 | **F-7** | **No deletion capability exists anywhere in the platform**, and no retention period has been chosen. Archiving is implemented and is not deletion | `ARCHIVING_AND_RETENTION.md` §5.3, §10 | 🟠 Medium | **needs a legal position** |
-| **F-8** | **No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed | — | 🟠 Medium | **needs an owner** |
+| **F-8** | ~~**No written breach procedure**, while `SECURITY.md` already promises reporters that one will be followed~~ ⏳ **Downgraded 2026-08-24.** The runbook exists — detection, triage, containment, evidence clocks, recovery — and `SECURITY.md` now points at it and tells the reporter what is *not* committed. **Three decisions remain blank (B1–B3)** and are held on an interim basis by the maintainer, which is a stopgap for a pilot that has processed no genuine grievance, not an agreed arrangement | [`../deployment/19_incident_response.md`](../deployment/19_incident_response.md) §0 | 🟡 Low-medium | **needs a named DOR owner before go-live** |
 | **F-9** | **Third parties named in grievances have not consented and cannot exercise any right.** The redaction layer *does* reach names (§31.2b — title triggers, thar gazetteer, self-identification), tuned for recall, so this is a **measured residual rather than an untouched gap** — but the residual is real and unquantified until DPG-35 reports it, and no redaction addresses the fact that these people have no rights they can exercise over data already held | §4 | 🟠 Medium | **needs a legal position**; recall figure from DPG-35 |
 | **F-10** | **Public closure endpoint is unauthenticated with a non-expiring UUID4 token.** Deliberate design (the complainant has no account) but a forwarded link is a permanent disclosure | `public_closure.py:38,58` | 🟡 Low-medium | new — add expiry |
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question with ADB OGC | — | 🟡 Low-medium | DPG-03 |
@@ -676,6 +702,7 @@ privacy impact, not a legal characterisation.
 | **F-15** | ~~*(Documentation)* `docs/deployment/09_privacy.md` still forbids cross-schema reads from `ticketing.*` into `public.*`~~ ✅ **FIXED 2026-08-18.** The section now states the as-built contract — enumerated closed table set, no FKs, no PII columns, grievance **state** changes over HTTP only — **with T3-07's reason carried alongside it**. Not a one-line deletion: a June doc reorganisation deleted that rationale and left the bare rule, which is how it survived a correction, so the fix had to restore the *why* (engineering rule 7) | `09_privacy.md` §Implementation boundaries | ✅ Closed | — |
 | **F-16** | **The model provider's own data terms are not recorded anywhere** — retention window, whether inputs are used for service improvement, and whether prompt caching applies. These are the mitigations any transfer analysis would cite, and citing an unverified mitigation is worse than citing none | commercial fact, not in the repo | ⚠ Unverified | **obtain and file before submission** |
 | **F-17** | **Jurisdiction of execution is not controlled and not currently knowable.** Pinning a provider does not pin the country the inference runs in. Any submission text naming a single destination country for the model calls would be a claim we cannot support | §3.7.1 | ⚠ Unverified | state as-is; do not overclaim |
+| **F-18** | **Keycloak recorded no login, login-failure or admin events at all** — realm event storage defaults to off and nothing in the repository enabled it, so the platform's primary authentication evidence did not exist. ⚠ **The daily ops report queried the empty table and reported `0` rather than "not recorded"**, which is why it survived every review of this document. Found while writing the incident-response runbook, by checking a claim in §5.3 against the database | live realm: `events_enabled = f`, `keycloak.event_entity` empty; `ops/reports.py:45,55` | 🟠 Medium | ✅ **FIXED 2026-08-24** — `setup_realm_event_logging` (`ticketing/auth/keycloak_setup.py`), 90-day expiration, verified end-to-end. ⚠ Forward-only, and not yet applied to staging or production |
 
 **Two findings were corrected in the same commit as this document rather than logged:**
 

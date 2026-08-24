@@ -33,6 +33,16 @@ SSO_SESSION_MAX_LIFESPAN = 28800  # 8h
 ACCESS_TOKEN_LIFESPAN = 3600  # 1h
 ACTION_TOKEN_ADMIN_LIFESPAN = 604800  # 7d — execute-actions / resend-invite links
 
+# Security-event retention (seconds). Keycloak stores **no** login or admin events unless the realm
+# asks for it, and both default to off — so nothing was recorded, and a login that happened before
+# this was switched on cannot be recovered. The ops daily report already queried
+# `keycloak.event_entity` for officer logins and login failures (`ops/reports.py:45,55`), which means
+# it reported 0 rather than "not recorded" for as long as storage was off.
+# 90 days: long enough that a disclosure arriving weeks later is still investigable (backups roll at
+# 14), short enough to stay data-minimising. The retention decision in
+# `docs/dpg/privacy-assessment.md` §5.1 may override it.
+EVENTS_EXPIRATION = 7776000  # 90d
+
 DEMO_OFFICERS: list[dict[str, str]] = keycloak_demo_officers()
 
 # Token mappers: emit Cognito-compatible claim names so the rest of the code
@@ -179,6 +189,28 @@ def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
         ACCESS_TOKEN_LIFESPAN,
         SSO_SESSION_MAX_LIFESPAN,
         ACTION_TOKEN_ADMIN_LIFESPAN,
+    )
+
+
+def setup_realm_event_logging(admin: KeycloakAdmin) -> None:
+    """Persist login and admin events — the evidence a breach investigation reads.
+
+    `enabledEventTypes` is deliberately left unset, which stores every type: a responder cannot
+    know in advance which event turns out to matter.
+    """
+    admin.update_realm(
+        REALM,
+        {
+            "eventsEnabled": True,
+            "eventsExpiration": EVENTS_EXPIRATION,
+            "adminEventsEnabled": True,
+            "adminEventsDetailsEnabled": True,
+        },
+    )
+    logger.info(
+        "Realm '%s' event storage enabled (login + admin, expiration=%ss)",
+        REALM,
+        EVENTS_EXPIRATION,
     )
 
 
@@ -467,6 +499,7 @@ def main() -> None:
 
     grm = _realm_admin()
     setup_realm_token_lifespans(grm)
+    setup_realm_event_logging(grm)
     setup_realm_smtp(grm)
     setup_realm_login_theme(grm)
     setup_user_profile_policy(grm)

@@ -101,6 +101,16 @@ Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_off
 - [ ] **Redirect URIs:** update in `keycloak_setup.py` for the new domain, re-run `keycloak-setup`.
 - [ ] **Token lifespans:** access 1 h, SSO/refresh 8 h (setup script applies access; verify realm settings), refresh-token rotation ON.
 - [ ] **Brute-force protection:** enabled by the setup script — verify in realm settings.
+- [ ] ⭐ **Event storage:** applied by the setup script (`setup_realm_event_logging` — login + admin events, 90-day expiration). **Verify, do not assume**, and re-run `make keycloak-setup` on every environment:
+      ```bash
+      docker exec <db-container> psql -U user -d app_db -tAc \
+        "SELECT events_enabled, admin_events_enabled, events_expiration FROM keycloak.realm WHERE name='grm';"
+      ```
+      Keycloak defaults **both to off**, and nothing recorded a single login on any environment before
+      2026-08-24. It went unnoticed for months because the daily ops report queries `keycloak.event_entity`
+      (`ops/reports.py:45,55`) and an empty table reads as a quiet day. **Nothing is recoverable retroactively** —
+      an environment where this is off has no authentication evidence for an incident.
+      See [`19_incident_response.md`](19_incident_response.md) §5.
 - [ ] **JWKS/key rotation:** backend caches JWKS 5 min; rotate signing keys in the admin UI if compromised.
 - [ ] **Backups:** the `keycloak` schema rides along with `app_db` dumps (`scripts/ops/backup_db.sh`) — no separate export needed, but a realm JSON export before upgrades is cheap insurance.
 - [ ] **Multi-country (future):** one `grm` realm + per-user `country_code` attribute, or realm-per-country if isolation is required.
