@@ -217,16 +217,16 @@ gitignored file; the migration is §5.7.
 | # | Secret | Owner | Authoritative store | Other copies | Consumed by |
 |---|---|---|---|---|---|
 | 1 | `DB_ENCRYPTION_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · AWS staging · DOR prod | `backend` **only** (T3-04) |
-| 2 | `SEARCH_TOKEN_PEPPER` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | `base_manager.py` HMAC lookup tokens |
+| 2 | `SEARCH_TOKEN_PEPPER` | TBC | ⚠ **nowhere** — not in `secrets.enc.env` either | ⚠ **Nowhere. Measured 2026-08-24: absent from local AND from AWS staging**; prod unmeasured. This row said "staging · prod" and was wrong. `base_manager.py:557` falls back to `DB_ENCRYPTION_KEY`, so tokens derive from that today | `base_manager.py` HMAC lookup tokens |
 | 3 | `POSTGRES_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Postgres, all services |
 | 4 | `OPS_DB_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) — ⚠ **new 2026-08-24**; staging · prod run no `ops` container, so any copy there is inert and its presence is **unverified from here** | `ops` container (`ops_app` role) |
 | 5 | `REDIS_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Broker + result backend |
 | 6 | `TICKETING_SECRET_KEY` | TBC | `secrets.enc.env` (SOPS) | ✅ **Empty locally by design** — the dev bypass (`APP_ENV=dev` + `AUTH_MODE=bypass`) is active; **checked, it fails closed** elsewhere (`grievance.py:251-263` raises without a key) · staging · prod | Ticketing ↔ chatbot webhook |
-| 7 | `MESSAGING_API_KEY` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** |
-| 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | ⭐ Realm admin — **can mint officer accounts** |
-| 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | OIDC client |
-| 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | staging · prod · **not in local** | Onboarding webhook |
-| 10b | ⭐ `DOIT_SMS_BEARER_TOKEN` | TBC | ⚠ **nowhere** — not in `secrets.enc.env` | **AWS staging `env.local` only** (verified 2026-08-24); prod unmeasured; **absent locally** | `backend/config/sms_config.py:47` — Government of Nepal SMS gateway, the **production** complainant SMS path |
+| 7 | `MESSAGING_API_KEY` | TBC | ⚠ **nowhere** — not in `secrets.enc.env` | ⚠ **Measured 2026-08-24: absent from AWS staging too.** This row said "staging · prod"; prod is unmeasured, so its only possible home is prod or nowhere — establish which before generating there | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** |
+| 8 | `KEYCLOAK_ADMIN_PASSWORD` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod — ✅ **folded in from staging 2026-08-24** | ⭐ Realm admin — **can mint officer accounts** |
+| 9 | `KEYCLOAK_CLIENT_SECRET` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod — ✅ **folded in from staging 2026-08-24** | OIDC client |
+| 10 | `KEYCLOAK_WEBHOOK_SECRET` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod — ✅ **folded in from staging 2026-08-24** | Onboarding webhook |
+| 10b | ⭐ `DOIT_SMS_BEARER_TOKEN` | TBC | `secrets.enc.env` (SOPS) — ✅ **folded in from staging 2026-08-24**; it had been in no store at all | `env.local` (generated) · AWS staging; prod unmeasured | `backend/config/sms_config.py:47` — Government of Nepal SMS gateway, the **production** complainant SMS path |
 | 11 | `SMTP_PASSWORD` (+ `SMTP_USERNAME`) | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | Officer-invite mail relay |
 | 12 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | TBC | `secrets.enc.env` (SOPS) | `env.local` (generated) · staging · prod | SNS (complainant SMS), Pinpoint |
 | 13 | `OPENAI_API_KEY` | me | `secrets.enc.env` (SOPS) | `env.local` (generated) | Closed LLM config (the benchmark baseline) |

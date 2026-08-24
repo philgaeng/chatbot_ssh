@@ -357,6 +357,33 @@ present in a host's current `env.local` and absent from those two halves is **si
 > ⚠ **Do not replace "five" with "thirty" and move on.** The number is a property of that host on that
 > day, and DOR prod has **not** been measured. The durable instruction is step 5 of *the order that is
 > safe*: **run the name-parity dry run on the host you are about to touch, and read its output.**
+>
+> ### ✅ FOLDED IN, 2026-08-24 — staging's gap is 30 → 18, and the remaining 18 are deliberate
+>
+> `secrets.enc.env` went 12 → **17 keys**; `.env.shared` 33 → **40**; the generator now writes **57**
+> variables. What moved, and what deliberately did not:
+>
+> | Bucket | Variables | Where |
+> |---|---|---|
+> | **Secret, shared** (5 new) | `DOIT_SMS_BEARER_TOKEN`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`, `SMTP_FROM` | `secrets.enc.env` + `#@secret` marker |
+> | **Secret, overwritten** (2) | `SMTP_USERNAME`, `SMTP_PASSWORD` — staging's mail config is authoritative, on the owner's instruction | `secrets.enc.env` |
+> | **Non-secret, shared** (8) | `SMTP_SERVER` (overwritten), `SMTP_FROM_DISPLAY`, `SMS_PROVIDER`, `DOIT_SMS_BASE_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_INVITE_CLIENT_ID`, `NEXT_PUBLIC_OIDC_CLIENT_ID`, `KEYCLOAK_HOST_PORT` | `.env.shared` |
+> | ⛔ **Host-specific — must NOT be shared** (10) | `KEYCLOAK_ISSUER`, `KC_HOSTNAME_URL`, `KC_HTTP_RELATIVE_PATH`, `KEYCLOAK_ADMIN_URL`, `KEYCLOAK_JWKS_URL`, `KEYCLOAK_INVITE_REDIRECT_URI`, `NEXT_PUBLIC_OIDC_ISSUER`, `NEXT_PUBLIC_BYPASS_AUTH`, `SMS_ENABLED`, `CHATBOT_WEBCHAT_URL` | **`env.local.extra` on each host** — they encode that deployment's own hostname and auth mode. Putting staging's `nepal-gms-chatbot.facets-ai.com` in a shared file breaks local and prod |
+> | ⛔ **Dead — do not propagate** (8) | `DATABASE_HOST/NAME/PASSWORD/PORT/USER`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `SOCKETIO_REDIS_URL` | Nowhere. ⚠ **`DATABASE_*` is read by no code** (`git grep` over `backend/ ticketing/ ops/ channels/ scripts/` is empty) and carries the stale `password` credential. The three Redis URLs are set by compose `environment:`, **which wins over `env_file:`** — and staging's copies carry **no** `REDIS_PASSWORD`, so propagating them would be a downgrade. Delete them from the host's `env.local` during the migration |
+>
+> ⚠ **`SMS_ENABLED` is host-specific for a reason worth stating:** staging has it `true`. A shared
+> `true` would make every developer's stack send real SMS to Nepali phone numbers. Absent, the code
+> falls back to `backend/config/constants.SMS_ENABLED` (`sms_config.py:58-63`).
+>
+> **Verified after the fold:** every folded value's digest matches staging's; `POSTGRES_PASSWORD` kept
+> its **locally rotated** value and was *not* clobbered by staging's pre-rotation one;
+> `make keycloak-setup` runs clean; 14/14 containers healthy.
+>
+> ⚠ **One consequence to decide on, not an accident:** `KEYCLOAK_ADMIN_PASSWORD`,
+> `KEYCLOAK_CLIENT_SECRET` and `KEYCLOAK_WEBHOOK_SECRET` are now **one value across local, staging and
+> prod**, because that is what a single `secrets.enc.env` means. For an IdP admin credential that is a
+> real blast-radius question — a leak anywhere grants everywhere. The alternative is Hazard 1's
+> per-host encrypted file. **This needs an owner's decision before prod.**
 
 ⚠ **Some variables live only on staging and prod and are NOT in `secrets.enc.env`.** Running
 `make env-local` on those hosts deletes every one of them, silently. The measured list for staging is
