@@ -1,6 +1,7 @@
 # Handover — rewriting the DPG compliance pack from scratch
 
-**Written:** 2026-08-23, at the end of a session that got this wrong several times.
+**Written:** 2026-08-23 · **Amended:** 2026-08-24, after a parallel agent falsified four of its
+claims — see §8, and read that section before acting on §3 or §4.
 **For:** the agent writing the new `00_compliance_status.md`, `02_questions.md` and
 `03_remediation_record.md`, and re-deriving `01_consultant_briefing.md`.
 **Read this first.** It exists so you do not re-derive facts that took a day to establish, and do not
@@ -154,10 +155,12 @@ Every number below was measured this week. Where it was measured *how* matters, 
   discard unencryptable dumps.
 - Still open: unredacted egress (Sprint 3, not started), **no deletion capability anywhere**, no
   retention period, breach procedure partially written with three decisions blank, no legal review.
-- Secrets: `POSTGRES_PASSWORD` and `REDIS_PASSWORD` both rotated this week. **`DB_ENCRYPTION_KEY` was
-  never committed** — the one secret that cannot be rotated. `SMTP_USERNAME` is in history and
-  **unremovable** (git author on 865 of 1,018 commits). **Recommendation on record: do not purge
-  history.**
+- Secrets: `POSTGRES_PASSWORD` and `REDIS_PASSWORD` both rotated. **`DB_ENCRYPTION_KEY` was never
+  committed** — the one secret that cannot be rotated.
+  ⭐ **No live secret is in public git history any more** (amended 2026-08-24). `SMTP_USERNAME` used to
+  be, and was unremovable because it was the git author on 865 commits — but staging's mail config
+  replaced it, so the live value is now a different address and the git-author address is no longer a
+  credential half. **Recommendation on record: do not purge history.**
 
 ### Blocked externally
 - **No IP determination** → no copyright holder, no submission. Nobody on the project can resolve it,
@@ -169,15 +172,17 @@ Every number below was measured this week. Where it was measured *how* matters, 
 
 Carry these into the new `00` as gaps; do not treat them as done.
 
-- **Deploy to AWS staging and DOR prod — six interlocking steps, none started.** ⚠⚠ Compare
-  `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` hashes per host **first** — mismatched values make a
-  shared `secrets.enc.env` push **irreversible**. Then SOPS per host, Postgres credential + `ALTER
-  ROLE`, Redis credential, `TICKETING_SECRET_KEY` (empty — the ticketing API refuses to boot), and the
-  taxonomy re-seed. Runbook: [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+- **Deploy to AWS staging and DOR prod.** ⚠ **§8 rewrote this entirely — do not act on any earlier
+  description of it.** The hazard analysis inverted, the variable count was wrong by 6×, and the
+  pre-flight check that guarded it returned a false pass. Runbook:
+  [`../deployment/18_sops_migration_handover.md`](../deployment/18_sops_migration_handover.md) §5a,
+  and [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md)
+  for the database credentials.
 - **SEAH recall measurement** — blocks model selection.
 - **The open benchmark column** — unblocked by the prompt cut.
 - **Sprint 3 (PII redaction)** — not started.
-- **`ops` container not deployed** — so no nightly CVE or licence scan runs on either server.
+- **`ops` container not deployed** — no nightly CVE or licence scan runs on either server. ⚠ And where
+  it *did* run, the daily report had never worked at all: four independent defects, §8.
 
 ---
 
@@ -225,3 +230,110 @@ Compose. Host CLIs are for reading.
 
 **The discipline that matters most:** if you find yourself appending a correction to a paragraph,
 stop. That is how the archived pack got the way it did. Rewrite the paragraph.
+
+---
+
+## 8. ⚠ Amendment, 2026-08-24 — a parallel agent falsified four of the claims above
+
+Six commits (`38c72209`…`1c77c0dd`) landed after this handover was written. They are worth reading in
+full; what follows is only what changes an instruction above. **Where §3 or §4 disagrees with this
+section, this section is right** — every claim here was measured, several against the live staging host.
+
+### 8.1 ⭐ The `SEARCH_TOKEN_PEPPER` hazard is inverted, and the check for it returned a false pass
+
+§4 told you to compare `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` digests across hosts before
+migrating. **For the pepper that instruction is worse than useless.**
+
+The variable is **unset everywhere**, and `base_manager.py:557` reads
+`os.getenv("SEARCH_TOKEN_PEPPER") or self.encryption_key`. So every stored lookup token is already
+derived from `DB_ENCRYPTION_KEY`, and **the destructive operation is *introducing* the variable, not
+rotating it.** The first host to define it orphans every search token — silently, presenting as *"no
+such complainant"*.
+
+⚠ **And the documented check would have blessed it.** `grep -oP '^VAR=\K.*' | sha256sum` on a missing
+variable hashes the empty string, so it returned `e3b0c442…` on every host that also lacked it and the
+result table read **"safe to proceed"**. A comparison that cannot distinguish *equal* from *absent* is
+not a comparison. Now fixed with a `hash_secret` that refuses to hash nothing.
+
+**The general shape is the one to carry:** `X or fallback` on a security-relevant value hides the
+absence of X. It hid the pepper, and it blinded the ops monitor (§8.2). Grep for the pattern.
+
+### 8.2 ⭐ My `POSTGRES_PASSWORD` rotation broke the ops monitor, and I wrote the opposite
+
+`ops` connects as the `ops_app` role, but `OPS_DB_PASSWORD` was unset everywhere, so
+`ops/config.py:107` fell back: `ops_db_password or postgres_password`. It authenticated as one role
+using another role's credential — fine only while the two matched. **Rotating `POSTGRES_PASSWORD` ran
+`ALTER ROLE` on `user`; `ops_app` is a different role and was not rotated with it.**
+
+Measured: **253 authentication failures**, last successful ops write **2026-08-18**, every row of the
+daily report rendering `n/a` — while the container reported `healthy` throughout.
+
+⚠ **I recorded the opposite in the rotation commit**, writing that ops *"falls back to the admin
+credential — which now works only because step 2 rotated that too."* It does not work: the fallback
+supplies a password, not a role. **A plausible sentence about a code path I had not read.**
+
+`ops_app` now has its own 40-character password in `secrets.enc.env`. The coupling is gone.
+
+### 8.3 The daily ops report had never worked on any deployment — four independent defects
+
+Fixing the credential exposed three more underneath: one failed query aborted the whole Postgres
+transaction and nothing rolled back, so per-row degradation was per-report; four queries named columns
+that do not exist (`grievances.created_at` is `grievance_creation_date`; `tickets.status` is
+`status_code` with an UPPER-CASE vocabulary); and `ops_app` lacked `SELECT` on five tables it reads.
+
+**Relevant to the pack:** anything claiming ops monitoring as an indicator-9a control needs to say it
+was repaired on 2026-08-24 and has never run on a deployed host.
+
+### 8.4 The staging migration would have deleted 30 variables, not 5 — and one was an untracked credential
+
+§5a's "six host-only secrets" was **inferred from an inventory, never measured**. Measured against AWS
+staging: its `env.local` holds **67 variables**, the committed halves generate 45, and **30 existed in
+neither half**. The documented procedure would have deleted all thirty, silently.
+
+⭐ **One of them was `DOIT_SMS_BEARER_TOKEN`** — the credential for `sms.doit.gov.np`, the **Government
+of Nepal SMS gateway, which is the production complainant-notification path** (AWS SNS is only the
+international fallback). Live on staging, read by `backend/config/sms_config.py:47`, documented in four
+places — and **absent from every secret inventory and every committed env file.**
+
+⚠ **This one matters to the DPG pack directly.** `privacy-assessment.md` describes leg L9 and names
+DOIT as the in-country production path — a genuine jurisdictional advantage the assessment leans on —
+**without recording that its credential was untracked.** The new `00` should not repeat an
+indicator-9a claim about that path without checking the credential is now inventoried. It is: 
+`secrets.enc.env` went **11 → 17 keys**.
+
+✅ **The irreversible check is clear for staging**: `DB_ENCRYPTION_KEY` digests match locally and on
+staging. ⚠ **DOR prod is still unchecked** — no access from the dev box — so that hazard remains open
+**for prod only**.
+
+⚠ **`SMS_ENABLED=true` on staging**, and it is deliberately *not* shared: in a file every host reads,
+every developer's stack would start sending real SMS to Nepali phone numbers.
+
+### 8.5 New hazard: publishing a database credential does not set it
+
+`make env-local` will put `OPS_DB_PASSWORD` on staging and prod. **Until someone runs
+`ALTER ROLE ops_app PASSWORD` on that box, `ops` there cannot authenticate — and will report `healthy`
+while writing nothing**, which is exactly §8.2 repeating. A role's password lives in the database, per
+host; the secret file only carries what the client will offer.
+
+Fully recoverable, and `ops` runs on neither server today, so it is a precondition for *shipping* ops
+rather than a blocker for the migration.
+
+### 8.6 Two facts to carry into the new pack
+
+- **`TICKETING_SECRET_KEY` is still empty** (0 chars in `secrets.enc.env`). Unchanged, still a
+  deployment blocker — the ticketing API refuses to boot without it outside the dev bypass.
+- **`secrets.enc.env` now holds 17 keys**, including `KEYCLOAK_ADMIN_PASSWORD`,
+  `KEYCLOAK_CLIENT_SECRET` and `KEYCLOAK_WEBHOOK_SECRET`, which the lifecycle document had listed as
+  secrets but which lived only on the host.
+
+### 8.7 ⭐ The pattern worth taking, more than any individual fact
+
+Four of the six commits above have the same shape: **a document asserted something about the system
+that nobody had run.** The six host-only secrets, the pepper hazard, the ops credential, the daily
+report. Each read plausibly, each was written by someone who understood the design, and each was
+falsified the first time anyone executed it.
+
+**Two of them were mine.** When the new `00` states a control, prefer the form *"verified on DATE by
+running X"* over *"the system does Y"* — and if you cannot name the command, mark the claim unverified
+rather than writing it flat. That is already the discipline in `privacy-assessment.md`, which is why
+that document survived this week intact and the compliance status did not.
