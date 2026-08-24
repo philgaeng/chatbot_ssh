@@ -1,21 +1,23 @@
 # Handover — rewriting the DPG compliance pack from scratch
 
-**Written:** 2026-08-23 · **Amended:** 2026-08-24, after a parallel agent falsified four of its
-claims — see §8, and read that section before acting on §3 or §4.
+**Date:** 2026-08-24
 **For:** the agent writing the new `00_compliance_status.md`, `02_questions.md` and
 `03_remediation_record.md`, and re-deriving `01_consultant_briefing.md`.
-**Read this first.** It exists so you do not re-derive facts that took a day to establish, and do not
+**Read this first.** It exists so you do not re-derive facts that took a week to establish, and do not
 repeat the mistakes that made a rewrite necessary.
 
 ---
 
 ## 0. Why the previous pack was archived
 
-Not because the facts were wrong. Because the **structure** was.
+Two root causes, and both produce the same symptom: a document that has to be read with a correction
+sheet beside it.
 
-The 2026-08-17 originals were written before Sprints 1 and 2 landed. On 2026-08-23 they were
-"rewritten" — but the rewrite kept the original's shape and voice, and only replaced the prose. What
-followed was five rounds of the owner saying *"this doesn't belong here"*:
+### 0.1 Nobody asked what each document was *for*
+
+The 2026-08-17 originals predate Sprints 1 and 2. A pass on 2026-08-23 "rewrote" them — but kept the
+original's shape and voice and replaced only the prose. What followed was five rounds of the owner
+saying *"this doesn't belong here"*:
 
 | What the owner had to point out | The underlying error |
 |---|---|
@@ -25,12 +27,28 @@ followed was five rounds of the owner saying *"this doesn't belong here"*:
 | §2 was two-thirds achievements | An assessment listing accomplishments |
 | The two documents duplicated each other | No decision about which was the source |
 
-**The root cause: nobody asked what each document was *for* before writing it.** Every correction
-above follows from that one omission.
-
 ⚠ **So before you write a line, write the contract in the header**: what this document is, as of when,
-what it is **not**, and where the other thing lives. If you cannot state what belongs in a section and
+what it is **not**, and where the other thing lives. If you cannot say what belongs in a section and
 what does not, do not write the section.
+
+### 0.2 Claims were written that nobody had executed
+
+Separately and just as damaging: documents asserted things about the system that were plausible,
+written by people who understood the design, and false. Six of them were caught this week by running
+them — the six host-only secrets, the `SEARCH_TOKEN_PEPPER` hazard, the ops credential, the daily ops
+report, the Keycloak event log, "re-run nightly by the ops container".
+
+**The rule that follows, and it is the most important instruction in this document:** prefer
+*"verified on DATE by running X"* to *"the system does Y"*. **If you cannot name the command, mark the
+claim unverified rather than writing it flat.** That is already the discipline in
+`privacy-assessment.md` — which is why that document came through the week intact while the compliance
+status did not.
+
+### 0.3 Do not amend; rewrite
+
+If you find yourself appending a correction to a paragraph, or adding a section that supersedes an
+earlier one, **stop and rewrite the paragraph.** That practice is what made the archived pack
+unreadable, and this document was itself briefly guilty of it.
 
 **The archived files are in [`archive/`](archive/)** — the 2026-08-17 originals and the 2026-08-23
 state. Do not edit them; they are the record. `archive/` is excluded from the docs link checker and
@@ -38,7 +56,7 @@ the `file.py:line` pin, so they cannot rot or break gates.
 
 ---
 
-## 1. The target structure, as agreed
+## 1. The target structure
 
 ```
 docs/dpg/
@@ -48,8 +66,8 @@ docs/dpg/
                                 documents, never restate them.
   01_consultant_briefing.md   ← re-derive from the new 00 IN THE SAME PASS.
                                 A pre-read. Not a summary of the old 00.
-  02_questions.md             ← GENERATED from 00. See §5 — this is the one
-                                mechanical decision that matters.
+  02_questions.md             ← GENERATED from 00. See §5 — the one mechanical
+                                decision that matters.
   03_remediation_record.md    ← what the sprints fixed. Explicitly NOT part of the
                                 assessment; sent only in response to one.
                                 Derive from docs/sprints/2026-08-llm/PROGRESS.md.
@@ -57,58 +75,57 @@ docs/dpg/
   <the five evidence documents, unchanged — see §2>
 ```
 
-**Question numbering: `Q-<indicator>-<n>`.** `Q-03-01` is the first question about indicator 3.
-Numbers become *derived from structure*, so inserting a question never renumbers another. Use
-**`Q-00-xx` for process questions** that belong to no indicator (submission route, precedents,
-assessment timeline, "what are we missing") — otherwise they become a special case that leaks.
+**Question numbering: `Q-<indicator>-<n>`.** `Q-03-01` is the first question about indicator 3. Numbers
+become *derived from structure*, so inserting one never renumbers another. Use **`Q-00-xx` for process
+questions** belonging to no indicator (submission route, precedents, assessment timeline, "what are we
+missing") — otherwise they become a special case that leaks.
 
 ---
 
 ## 2. The five evidence documents — keep, cite, do not restate
 
-These were deliberately **not** archived. They are measurements and generated inventories, not
-positions, and the new `00` is short precisely because it cites them.
+Deliberately **not** archived. They are measurements and generated inventories, not positions, and the
+new `00` is short precisely because it cites them.
 
 | Document | What it is | State |
 |---|---|---|
 | [`dependency-licenses.md`](dependency-licenses.md) | Generated: `pip-licenses`, `license-checker`, image digests. 153 packages | Good. Has accreted some process narration |
-| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file+line, 18 findings | **Strongest document in the pack.** ⚠ Being edited by a parallel agent — do not stomp |
-| [`model-benchmarks.md`](model-benchmarks.md) | Measured model results | ⚠ **Needs its own from-scratch rewrite — but LATER**, see below |
-| [`open-model-configuration.md`](open-model-configuration.md) | How to run on open models + capability matrix | ⚠ One broken bullet, see below |
+| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file+line, 18 findings | **Strongest document in the pack** — and the model for how to write claims |
+| [`model-benchmarks.md`](model-benchmarks.md) | Measured model results | Needs its own from-scratch rewrite — but **later**, see below |
+| [`open-model-configuration.md`](open-model-configuration.md) | How to run on open models + capability matrix | One broken bullet, see below |
 | [`vllm-deployment.md`](vllm-deployment.md) | Self-hosting design + costing for a parked option | Fine. Small |
 
 ⚠ **Do not move them into a subdirectory.** 48 markdown links outside `docs/dpg/` and 10 code
 references point at them. Give the new `00` an evidence-index table instead.
 
-### Three defects to fix before anything is sent
+### Four things to fix or check before anything is sent
 
-1. **`privacy-assessment.md` §3.7** — the cross-border table still says *"6 chatbot model calls …
-   full narrative, complainant name and phone, audio"*. This **contradicts F-1 and leg L4 in the same
-   document**, which were corrected to five live sites with contact details not leaving. One-line fix
-   in the strongest document in the pack.
+1. **`privacy-assessment.md` §3.7** — the cross-border table still says *"6 chatbot model calls … full
+   narrative, complainant name and phone, audio"*. This **contradicts F-1 and leg L4 in the same
+   document**, which were corrected to five live sites with contact details not leaving. One-line fix.
 2. **`open-model-configuration.md` "What is not yet true"** — the transcription bullet has benchmark
-   news appended inside it, so it reads as one incoherent item. Split it.
+   news appended inside it and reads as one incoherent item. Split it.
 3. **`model-benchmarks.md`** carries three layers of the same numbers: §2 post-fix, §3.7 before *and*
    after, §4 marked "superseded by §3.7", §6 pre-fix. **Rewrite it from scratch when the open column
-   lands**, not now — so it is rewritten once against complete data instead of twice.
-
-⚠ Several `privacy-assessment.md` entries are dated **2026-08-24**, which is in the future. Check
-before it goes anywhere external.
+   lands** — once, against complete data, rather than twice.
+4. **`privacy-assessment.md` leans on the DOIT SMS gateway being in-country** as a jurisdictional
+   advantage (leg L9). True — but its credential was tracked by no inventory until 2026-08-24. Do not
+   repeat an indicator-9a claim about that path without checking §3's secret inventory.
 
 ---
 
 ## 3. Verified facts — do not re-derive these
 
-Every number below was measured this week. Where it was measured *how* matters, that is stated.
+Every number below was measured. Where *how* it was measured matters, that is stated.
 
 ### Licensing (indicator 2)
 - `LICENSE` Apache-2.0 — **provisional**, the choice was referred to the consultant.
 - `NOTICE` names **no copyright holder** — deliberate, blocked on the IP determination.
-- **593 source files** carry SPDX headers. Measured with `python3 scripts/ops/add_spdx_headers.py --check`.
+- **593 source files** carry SPDX headers — `python3 scripts/ops/add_spdx_headers.py --check`.
 - **153 packages** across four sets (35 declared Python / 98 transitive / 16 npm production / 4 images),
   **0 non-OSI, 0 unknown**, 10 dispositions.
-- ⚠ The nightly licence scan is **scheduled but not deployed** — `ops` is on neither server, so it runs
-  only where a dev stack happens to be up at 01:50. Do not call it a guarantee.
+- ⚠ The nightly licence scan is **scheduled and has never run on a deployed host** — `ops` is on
+  neither server. Do not call it a guarantee.
 
 ### The AI layer (indicator 4)
 - **9 call sites, 2 subsystems, 1 registry** (`backend/config/llm_config.py`). None names a model,
@@ -123,44 +140,63 @@ Every number below was measured this week. Where it was measured *how* matters, 
 - Closed baseline: **F1 0.762**, precision 0.773, recall 0.752, exact-set 0.686, **p99 24.5 s** (inside
   the 30 s budget). 105 authored items, synthetic — an **upper bound**, not an estimate.
 - Open column: detection only. The classification blocker was **our own prompt** (~20,700 chars,
-  catalogue injected three times), since cut **70%**. Re-running it needs time, not a decision.
+  catalogue injected three times), since cut **70%**. Re-running needs time, not a decision.
 - **SEAH recall is unmeasured for both candidates** and cannot be measured from this repository — the
-  committed set holds no harassment reports, by decision. **This is the single blocking measurement.**
-- T1/T2 crossover **40,000–780,000 grievances/month** vs a national ceiling near **7,700**. So
-  self-hosting is a **data-sovereignty decision with a price**, never a cost decision.
+  committed set holds no harassment reports, by decision. **The single blocking measurement.**
+- T1/T2 crossover **40,000–780,000 grievances/month** vs a national ceiling near **7,700**. Self-hosting
+  is a **data-sovereignty decision with a price**, never a cost decision.
 
 ### ⚠ Four counter-intuitive corrections — each was wrong in the pack first
 
 1. **Voice intake works; automatic transcription is unfunded.** A complainant records, audio is stored,
-   an officer handles it. What does not run is machine transcription — switched off on **cost** grounds,
-   and the government is not expected to fund it. Never write "cannot transcribe" unqualified.
+   an officer handles it. What does not run is machine transcription — off on **cost** grounds, and the
+   government is not expected to fund it. Never write "cannot transcribe" unqualified.
 2. **The consequence runs in our favour**: the one path the open provider cannot serve is the one path
    that does not run, so **the open configuration covers every model call the system actually makes.**
 3. **`rasa-sdk` is NOT a type shim.** 49 modules import it, `BaseFormValidationAction` **inherits**
    `FormValidationAction`, and the orchestrator executes `action.run(...)`. The true and sufficient
    claim is narrower: **no Rasa server, no Rasa NLU, no TensorFlow** — and `rasa-sdk` is Apache-2.0.
-4. **GitHub's 34 Dependabot alerts are against `main`, which is 2 months stale** (last touched
-   2026-06-25, 333 commits behind, all three manifests differ). Real count on this branch: **6 Python +
-   4 npm-high**. Prioritise by **reachability** — `sanic-cors` and `wheel` are unreachable; **`ecdsa`
-   (via `python-jose`, the Keycloak JWT path) is reachable and has no published fix.**
+4. **GitHub's 34 Dependabot alerts are against `main`, 2 months stale** (2026-06-25, 333 commits behind,
+   all three manifests differ). Real count on this branch: **6 Python + 4 npm-high**. Prioritise by
+   **reachability** — `sanic-cors` and `wheel` are unreachable; **`ecdsa` (via `python-jose`, the
+   Keycloak JWT path) is reachable and has no published fix.**
 
 ### Privacy (indicators 7, 9)
 - Assessment + 13-leg data-flow diagram exist, verified at file and line. **No lawyer has read it**;
   every statutory section number is marked unverified.
-- ⭐ **No genuine grievance has ever been processed** — every record is seed data or a demo dummy. So
-  every exposure is **prospective**, and redaction is a **go-live precondition, not remediation**.
-  ⚠ This statement expires at go-live, and a demo participant may have entered their own real contact
-  details.
+- ⭐ **No genuine grievance has ever been processed** — every record is seed data or a demo dummy. Every
+  exposure is **prospective**, and redaction is a **go-live precondition, not remediation**. ⚠ This
+  expires at go-live, and a demo participant may have entered their own real contact details.
 - Three storage defects **fixed** 2026-08-19: encryption fails closed, HMAC search tokens, backups
   discard unencryptable dumps.
 - Still open: unredacted egress (Sprint 3, not started), **no deletion capability anywhere**, no
-  retention period, breach procedure partially written with three decisions blank, no legal review.
-- Secrets: `POSTGRES_PASSWORD` and `REDIS_PASSWORD` both rotated. **`DB_ENCRYPTION_KEY` was never
-  committed** — the one secret that cannot be rotated.
-  ⭐ **No live secret is in public git history any more** (amended 2026-08-24). `SMTP_USERNAME` used to
-  be, and was unremovable because it was the git author on 865 commits — but staging's mail config
-  replaced it, so the live value is now a different address and the git-author address is no longer a
-  credential half. **Recommendation on record: do not purge history.**
+  retention period, a breach runbook with three decisions blank, no legal review.
+
+### Secrets, as of 2026-08-24
+- `secrets.enc.env` holds **17 keys** — including `OPS_DB_PASSWORD`, `DOIT_SMS_BEARER_TOKEN`,
+  `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET` and `KEYCLOAK_WEBHOOK_SECRET`, all folded in on
+  2026-08-24 after they were found living only on the staging host.
+- `POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated. **`DB_ENCRYPTION_KEY` has never been committed** —
+  the one secret that cannot be rotated, since no re-encryption path exists.
+- ⭐ **No live secret is in public git history.** `SMTP_USERNAME` was the exception and was unremovable,
+  being the git author on 865 commits — staging's mail config replaced it, so the live value is a
+  different address (verified: 0 of 1,037 commits). **Recommendation on record: do not purge history.**
+- ⚠ **`TICKETING_SECRET_KEY` is empty** (0 chars). The ticketing API refuses to boot without it outside
+  the dev bypass, so this blocks any deployment.
+- ⚠ **`SEARCH_TOKEN_PEPPER` is unset everywhere**, and `base_manager.py:557` reads
+  `os.getenv("SEARCH_TOKEN_PEPPER") or self.encryption_key`. Every stored search token therefore derives
+  from `DB_ENCRYPTION_KEY`. See §4 — this makes *defining* it the destructive act.
+
+### Ops monitoring
+- **Repaired 2026-08-24, and it has never run on a deployed host.** Four independent defects: `ops`
+  authenticated as `ops_app` using the `user` role's password (which the `POSTGRES_PASSWORD` rotation
+  then broke — 253 auth failures, last successful write 2026-08-18, container reporting `healthy`
+  throughout); one failed query aborted the whole Postgres transaction with no rollback, making per-row
+  degradation per-report; four queries named columns that do not exist; and `ops_app` lacked `SELECT` on
+  five tables it reads.
+- Keycloak recorded **no login or admin events at all** until 2026-08-24 — realm event storage defaults
+  to off. Forward-only; nothing before that date is recoverable, and it is not yet applied to staging or
+  prod.
 
 ### Blocked externally
 - **No IP determination** → no copyright holder, no submission. Nobody on the project can resolve it,
@@ -170,19 +206,39 @@ Every number below was measured this week. Where it was measured *how* matters, 
 
 ## 4. Open work that is not documentation
 
-Carry these into the new `00` as gaps; do not treat them as done.
+Carry these into the new `00` as gaps.
 
-- **Deploy to AWS staging and DOR prod.** ⚠ **§8 rewrote this entirely — do not act on any earlier
-  description of it.** The hazard analysis inverted, the variable count was wrong by 6×, and the
-  pre-flight check that guarded it returned a false pass. Runbook:
-  [`../deployment/18_sops_migration_handover.md`](../deployment/18_sops_migration_handover.md) §5a,
-  and [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md)
-  for the database credentials.
+### Deploying to AWS staging and DOR prod — nothing started
+
+The authoritative runbook is
+[`../deployment/18_sops_migration_handover.md`](../deployment/18_sops_migration_handover.md) §5a. Its
+hazards, as they now stand:
+
+- ✅ **`DB_ENCRYPTION_KEY` — the step with no undo — is cleared for staging.** Digests match locally
+  and on the host. ⚠ **DOR prod is still unchecked** (no access from the dev box), so this hazard is
+  open **for prod only**.
+- ⚠ **`SEARCH_TOKEN_PEPPER`: the destructive act is *introducing* it, not rotating it.** It is unset
+  everywhere and falls back to the encryption key, so every stored token already derives from that. The
+  first host to define the variable orphans every search token — silently, presenting as *"no such
+  complainant"*.
+- ⚠ **Staging's `env.local` holds 30 variables that existed in neither committed half**, measured on
+  the host. They are now folded: 5 secrets and 8 non-secrets shared, 2 overwritten, and **10 host-specific
+  ones that must stay in `env.local.extra`** because they encode a hostname or an auth mode.
+  **`SMS_ENABLED=true` is one of them** — shared, every developer's stack would send real SMS to Nepali
+  phone numbers.
+- ⚠ **Publishing a database credential does not set it.** `make env-local` puts `OPS_DB_PASSWORD` on a
+  host; until someone runs `ALTER ROLE ops_app PASSWORD` on that box, `ops` cannot authenticate and will
+  report `healthy` while writing nothing. Recoverable, but nothing tells you.
+- Then: the Postgres credential + `ALTER ROLE`, the Redis credential, `TICKETING_SECRET_KEY` (empty),
+  and the taxonomy re-seed. Database credentials:
+  [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+
+### The rest
+
 - **SEAH recall measurement** — blocks model selection.
-- **The open benchmark column** — unblocked by the prompt cut.
+- **The open benchmark column** — unblocked by the prompt cut; needs time.
 - **Sprint 3 (PII redaction)** — not started.
-- **`ops` container not deployed** — no nightly CVE or licence scan runs on either server. ⚠ And where
-  it *did* run, the daily report had never worked at all: four independent defects, §8.
+- **`ops` not deployed** to either server, so no CVE or licence scan runs anywhere but a dev stack.
 
 ---
 
@@ -191,27 +247,36 @@ Carry these into the new `00` as gaps; do not treat them as done.
 The single most valuable mechanical decision available. Two hand-maintained copies of the same
 questions cost two reconciliation passes this week.
 
-**This repository already has the pattern**: `.env.example` is generated from
-`declared_env_vars()` and `tests/backend/test_llm_config_pins.py` fails if either side drifts. Do the
-same — questions live under each indicator in `00`, a script extracts them into `02`, and a test fails
-if regenerating produces a diff. ~30 lines, and drift becomes **impossible** rather than discouraged.
+**This repository already has the pattern**: `.env.example` is generated from `declared_env_vars()` and
+`tests/backend/test_llm_config_pins.py` fails if either side drifts. Do the same — questions live under
+each indicator in `00`, a script extracts them into `02`, and a test fails if regenerating produces a
+diff. ~30 lines, and drift becomes **impossible** rather than discouraged.
 
 ---
 
-## 6. Traps that cost real time this session
+## 6. Traps
 
 Every one of these produced a wrong result that looked right.
 
+### The one that is not mechanical
+
+⭐ **`X or fallback` on a security-relevant value hides the absence of `X`.** It hid
+`SEARCH_TOKEN_PEPPER` (§3) and it blinded the ops monitor (§3) — in the same week, in two unrelated
+subsystems. When you meet the pattern, ask what happens when the left side is empty, and whether
+anything would tell you.
+
+### The mechanical ones
+
 | Trap | What happens |
 |---|---|
-| **Markdown bold breaks greps** | `grep "fails closed"` misses `fails **closed**`. Verification reports a false negative and you "fix" something already correct |
+| **Markdown bold breaks greps** | `grep "fails closed"` misses `fails **closed**`. A verification pass reports a false negative and you "fix" something already correct |
 | **`\|` is not alternation under `grep -E`** | It matches a literal pipe. A multi-probe check silently reports everything missing |
 | **`§(\d+)(?!\.)`** | Excludes any section reference ending a sentence. A dangling-reference check reported clean while `§6` dangled |
-| **Anchor-based edit scripts** | Validate-then-write-at-the-end means **a failed anchor applies nothing** while earlier `print` output claims success. Always re-read the file after |
-| **Guessing line wraps in anchors** | Three attempts failed on this in one pass. Match with regex and flexible whitespace instead |
+| **Hashing a missing variable** | `grep -oP '^VAR=\K.*' \| sha256sum` on an absent variable hashes the empty string and returns the same digest on every host that also lacks it — reading as "match, safe to proceed" |
+| **Anchor-based edit scripts** | Validate-then-write-at-the-end means **a failed anchor applies nothing** while earlier `print` output claims success. Re-read the file, never trust the script's own summary |
+| **Guessing line wraps in anchors** | Three attempts failed on this in one pass. Match with regex and flexible whitespace |
 | **`tests/repo` in a container** | 6 tests fail because `git` exits 255 there. They pass on the host and in CI. Not defects |
-| **Containers run baked images** | `backend` has no bind mount, so a code change appears not to work — or worse, appears to work when it did not. Bind-mount with `-v "$PWD:/app"` or the result is meaningless |
-| **A "success" line printed by an earlier statement** | I reported "6 cross-references remapped" when zero had been applied. Verify by re-reading, never by the script's own output |
+| **Containers run baked images** | `backend` has no bind mount, so a code change appears not to work — or appears to work when it did not. Bind-mount with `-v "$PWD:/app"` or the result is meaningless |
 
 **Docker-only.** Per `CLAUDE.md`, anything that builds, serves, or mutates the database goes through
 Compose. Host CLIs are for reading.
@@ -220,120 +285,10 @@ Compose. Host CLIs are for reading.
 
 ## 7. Suggested order
 
-1. Fix the three evidence-document defects in §2 — small, and they are wrong *now*.
+1. Fix the evidence-document defects in §2 — small, and they are wrong *now*.
 2. Write the new `00` indicator by indicator. Header contract first. Cite, never restate.
 3. Generate `02_questions.md` from it; add the pin test.
 4. Re-derive `01` from the new `00` **in the same pass**.
 5. Write `03_remediation_record.md` from `PROGRESS.md`, headed "not part of the assessment".
-6. Verify: relative links across `docs/` resolve (~1,620), `tests/repo` passes **on the host**, no live
-   secret appears in any tracked file.
-
-**The discipline that matters most:** if you find yourself appending a correction to a paragraph,
-stop. That is how the archived pack got the way it did. Rewrite the paragraph.
-
----
-
-## 8. ⚠ Amendment, 2026-08-24 — a parallel agent falsified four of the claims above
-
-Six commits (`38c72209`…`1c77c0dd`) landed after this handover was written. They are worth reading in
-full; what follows is only what changes an instruction above. **Where §3 or §4 disagrees with this
-section, this section is right** — every claim here was measured, several against the live staging host.
-
-### 8.1 ⭐ The `SEARCH_TOKEN_PEPPER` hazard is inverted, and the check for it returned a false pass
-
-§4 told you to compare `DB_ENCRYPTION_KEY` and `SEARCH_TOKEN_PEPPER` digests across hosts before
-migrating. **For the pepper that instruction is worse than useless.**
-
-The variable is **unset everywhere**, and `base_manager.py:557` reads
-`os.getenv("SEARCH_TOKEN_PEPPER") or self.encryption_key`. So every stored lookup token is already
-derived from `DB_ENCRYPTION_KEY`, and **the destructive operation is *introducing* the variable, not
-rotating it.** The first host to define it orphans every search token — silently, presenting as *"no
-such complainant"*.
-
-⚠ **And the documented check would have blessed it.** `grep -oP '^VAR=\K.*' | sha256sum` on a missing
-variable hashes the empty string, so it returned `e3b0c442…` on every host that also lacked it and the
-result table read **"safe to proceed"**. A comparison that cannot distinguish *equal* from *absent* is
-not a comparison. Now fixed with a `hash_secret` that refuses to hash nothing.
-
-**The general shape is the one to carry:** `X or fallback` on a security-relevant value hides the
-absence of X. It hid the pepper, and it blinded the ops monitor (§8.2). Grep for the pattern.
-
-### 8.2 ⭐ My `POSTGRES_PASSWORD` rotation broke the ops monitor, and I wrote the opposite
-
-`ops` connects as the `ops_app` role, but `OPS_DB_PASSWORD` was unset everywhere, so
-`ops/config.py:107` fell back: `ops_db_password or postgres_password`. It authenticated as one role
-using another role's credential — fine only while the two matched. **Rotating `POSTGRES_PASSWORD` ran
-`ALTER ROLE` on `user`; `ops_app` is a different role and was not rotated with it.**
-
-Measured: **253 authentication failures**, last successful ops write **2026-08-18**, every row of the
-daily report rendering `n/a` — while the container reported `healthy` throughout.
-
-⚠ **I recorded the opposite in the rotation commit**, writing that ops *"falls back to the admin
-credential — which now works only because step 2 rotated that too."* It does not work: the fallback
-supplies a password, not a role. **A plausible sentence about a code path I had not read.**
-
-`ops_app` now has its own 40-character password in `secrets.enc.env`. The coupling is gone.
-
-### 8.3 The daily ops report had never worked on any deployment — four independent defects
-
-Fixing the credential exposed three more underneath: one failed query aborted the whole Postgres
-transaction and nothing rolled back, so per-row degradation was per-report; four queries named columns
-that do not exist (`grievances.created_at` is `grievance_creation_date`; `tickets.status` is
-`status_code` with an UPPER-CASE vocabulary); and `ops_app` lacked `SELECT` on five tables it reads.
-
-**Relevant to the pack:** anything claiming ops monitoring as an indicator-9a control needs to say it
-was repaired on 2026-08-24 and has never run on a deployed host.
-
-### 8.4 The staging migration would have deleted 30 variables, not 5 — and one was an untracked credential
-
-§5a's "six host-only secrets" was **inferred from an inventory, never measured**. Measured against AWS
-staging: its `env.local` holds **67 variables**, the committed halves generate 45, and **30 existed in
-neither half**. The documented procedure would have deleted all thirty, silently.
-
-⭐ **One of them was `DOIT_SMS_BEARER_TOKEN`** — the credential for `sms.doit.gov.np`, the **Government
-of Nepal SMS gateway, which is the production complainant-notification path** (AWS SNS is only the
-international fallback). Live on staging, read by `backend/config/sms_config.py:47`, documented in four
-places — and **absent from every secret inventory and every committed env file.**
-
-⚠ **This one matters to the DPG pack directly.** `privacy-assessment.md` describes leg L9 and names
-DOIT as the in-country production path — a genuine jurisdictional advantage the assessment leans on —
-**without recording that its credential was untracked.** The new `00` should not repeat an
-indicator-9a claim about that path without checking the credential is now inventoried. It is: 
-`secrets.enc.env` went **11 → 17 keys**.
-
-✅ **The irreversible check is clear for staging**: `DB_ENCRYPTION_KEY` digests match locally and on
-staging. ⚠ **DOR prod is still unchecked** — no access from the dev box — so that hazard remains open
-**for prod only**.
-
-⚠ **`SMS_ENABLED=true` on staging**, and it is deliberately *not* shared: in a file every host reads,
-every developer's stack would start sending real SMS to Nepali phone numbers.
-
-### 8.5 New hazard: publishing a database credential does not set it
-
-`make env-local` will put `OPS_DB_PASSWORD` on staging and prod. **Until someone runs
-`ALTER ROLE ops_app PASSWORD` on that box, `ops` there cannot authenticate — and will report `healthy`
-while writing nothing**, which is exactly §8.2 repeating. A role's password lives in the database, per
-host; the secret file only carries what the client will offer.
-
-Fully recoverable, and `ops` runs on neither server today, so it is a precondition for *shipping* ops
-rather than a blocker for the migration.
-
-### 8.6 Two facts to carry into the new pack
-
-- **`TICKETING_SECRET_KEY` is still empty** (0 chars in `secrets.enc.env`). Unchanged, still a
-  deployment blocker — the ticketing API refuses to boot without it outside the dev bypass.
-- **`secrets.enc.env` now holds 17 keys**, including `KEYCLOAK_ADMIN_PASSWORD`,
-  `KEYCLOAK_CLIENT_SECRET` and `KEYCLOAK_WEBHOOK_SECRET`, which the lifecycle document had listed as
-  secrets but which lived only on the host.
-
-### 8.7 ⭐ The pattern worth taking, more than any individual fact
-
-Four of the six commits above have the same shape: **a document asserted something about the system
-that nobody had run.** The six host-only secrets, the pepper hazard, the ops credential, the daily
-report. Each read plausibly, each was written by someone who understood the design, and each was
-falsified the first time anyone executed it.
-
-**Two of them were mine.** When the new `00` states a control, prefer the form *"verified on DATE by
-running X"* over *"the system does Y"* — and if you cannot name the command, mark the claim unverified
-rather than writing it flat. That is already the discipline in `privacy-assessment.md`, which is why
-that document survived this week intact and the compliance status did not.
+6. Verify: relative links across `docs/` resolve, `tests/repo` passes **on the host**, no live secret
+   appears in any tracked file.
