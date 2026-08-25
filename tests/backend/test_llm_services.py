@@ -112,10 +112,15 @@ ALL_CONTACT_INPUT = {
 # landed is the gate working.
 GRIEVANCE_TEXT = "सडकको धुलोले बच्चाहरू बिरामी भए, कृपया पानी छर्नुहोस्।"
 
+# ⚠ **Canonical catalogue keys, and that is load-bearing** (D-51, 2026-08-25). This fixture used to
+# say `["Dust and air pollution"]` — a string the taxonomy has never contained — while a test named
+# `a_valid_classification_survives_validation_unchanged` asserted the result came back untouched.
+# It did, which was the defect: off-catalogue values were logged and then stored. Now they are
+# repaired or dropped, so a fixture standing for a *valid* classification has to be one.
 CLASSIFY_JSON = {
     "grievance_summary": "धुलोले बच्चाहरू बिरामी भए",
-    "grievance_categories": ["Dust and air pollution"],
-    "grievance_categories_alternative": ["Noise pollution"],
+    "grievance_categories": ["Environmental - Air Pollution"],
+    "grievance_categories_alternative": ["Environmental - Noise Pollution"],
     "follow_up_question": "कति दिनदेखि यो समस्या छ?",
 }
 
@@ -809,7 +814,7 @@ def test_the_factory_error_names_the_host_but_never_the_key(clean_llm_env, monke
     assert "LLM_API_KEY" in str(exc.value)
 
 # ═════════════════════════════════════════════════════════════════════════════
-# T-13-b / T-13-e — validation, and why the categories are not an enum
+# T-13-b / T-13-e — validation, and why an off-catalogue category is not stored
 # ═════════════════════════════════════════════════════════════════════════════
 
 def test_a_schema_violating_classification_is_rejected_not_silently_accepted(client):
@@ -833,16 +838,23 @@ def test_a_valid_classification_survives_validation_unchanged(client):
     assert llm.classify_and_summarize_grievance(GRIEVANCE_TEXT) == CLASSIFY_JSON
 
 
-def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(client, caplog, monkeypatch):
+def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(client, caplog):
     """
     **T-13-e.** The taxonomy is **admin-configurable** and resynced into
-    `public.grievance_classification_taxonomy`. A `Literal[...]` of today's categories in the
-    schema would mean a code change every time an administrator adds one — and would make the
-    resync path a lie. So the schema says `list[str]`, and membership is checked afterwards,
-    against the catalogue as it is at call time.
+    `public.grievance_classification_taxonomy`, so nothing about today's categories may be frozen
+    into the schema. It is not: `grievance_classification_schema` builds the enum from the
+    catalogue **at call time**, and membership is settled after parsing against that same
+    catalogue.
 
-    Checked, not enforced: a model naming a category slightly wrong is a prompt problem, and it is
-    not worth discarding a complainant's classification over.
+    ⚠ **What changed on 2026-08-25 (D-51) is the verdict, not the check.** This test used to end
+    `assert result["grievance_categories"] == [invented], "logged, not discarded"`. The reasoning
+    was that a model naming a category slightly wrong is a prompt problem, and a complainant's
+    classification is not worth discarding over it. Sound for a near-miss — but the value stored
+    was not a near-miss. `Road Hazard - Dust` existed nowhere, and it was stored, shown to the
+    complainant, synced to ticketing, matched by no filter or report, and missed by the
+    `high_priority` lookup. Measured at 17% of grievances before the taxonomy grew a `Road Hazard`
+    family (`docs/dpg/model-benchmarks.md` §3.1). A category that names nothing is now dropped;
+    one that names something badly is repaired onto it.
     """
     invented = "Category That Nobody Configured"
     client.chat.completions.create.return_value = _chat(
@@ -852,21 +864,19 @@ def test_categories_are_checked_against_the_live_catalogue_not_a_frozen_enum(cli
     with caplog.at_level("WARNING"):
         result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
 
-    assert result["grievance_categories"] == [invented], "logged, not discarded"
-    assert any(invented in r.getMessage() for r in caplog.records)
+    assert invented not in result["grievance_categories"], "stored is the defect"
+    assert any(invented in r.getMessage() for r in caplog.records), "dropped, never silently"
 
 
 def test_a_category_added_to_the_catalogue_needs_no_code_change(client, caplog, monkeypatch):
-    """The other half of T-13-e: add one to the catalogue and it stops being 'unlisted'.
+    """The other half of T-13-e: add one to the catalogue and it is accepted, with no code change.
 
-    ⚠ **Both halves are needed and this is the one that constrains.** Its sibling proves the warning
-    FIRES for an invented category; only this one proves it can be SILENCED by configuration. A
-    `_warn_about_unlisted_categories` that flagged every category — all thirty legitimate ones
-    included — would pass the sibling and fail here. Deleting this test would leave the pair
-    asserting nothing.
+    ⚠ **Both halves are needed and this is the one that constrains.** Its sibling proves an
+    invented category is refused; only this one proves configuration is what decides. A resolver
+    that dropped every category — all thirty legitimate ones included — would pass the sibling and
+    fail here. Deleting this test would leave the pair asserting nothing.
 
-    ⚠ **The key form is the contract, not decoration.** The catalogue handed to the checker is
-    `list(catalogue)` — the dictionary KEYS — so a fixture must register a canonical key
+    ⚠ **The key form is the contract, not decoration.** A fixture must register a canonical key
     (`Wildlife - Elephant Corridor Blocked`), not a slug. That changed under D-51: the prompt
     previously carried a flat list built from raw CSV values (`Relocation issues - Poor housing…`)
     while every consumer matched the canonical key (`Relocation Issues - Poor Housing…`), so the
@@ -884,16 +894,117 @@ def test_a_category_added_to_the_catalogue_needs_no_code_change(client, caplog, 
         result = llm.classify_and_summarize_grievance("हात्तीले बाटो छेकेको छ, यात्रु अलपत्र परे।")
 
     assert result["grievance_categories"] == [chosen]
-    assert not [r for r in caplog.records if "outside the live catalogue" in r.getMessage()]
+    assert not [r for r in caplog.records if "exist" in r.getMessage()]
 
 
-def test_the_classification_schema_declares_no_category_enum():
-    """Mutation target for T-13-e: freezing a Literal[...] of categories turns this red."""
-    schema = json.dumps(
-        llm.GrievanceClassification.model_json_schema()["properties"]["grievance_categories"]
+def test_the_permitted_categories_reach_the_provider_as_an_enum(client):
+    """
+    Mutation target for T-13-e, inverted on 2026-08-25. It previously asserted the schema carried
+    **no** enum, which was the correct reading of a `Literal[...]` written into the file by hand —
+    that would freeze the taxonomy. An enum *built from the live catalogue per call* freezes
+    nothing, and it is the only mechanism that stops invention at the source rather than repairing
+    it afterwards.
+    """
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+
+    schema = json.dumps(client.chat.completions.create.call_args.kwargs["response_format"])
+    for category in list(llm.CLASSIFICATION_DATA)[:3]:
+        assert category in schema, "the live catalogue must reach the provider as an enum"
+    assert "Category That Nobody Configured" not in schema
+
+
+def test_an_alternative_category_is_validated_too_because_the_complainant_can_pick_it(client):
+    """
+    ⚠ `grievance_categories_alternative` is **offered to the complainant to choose from** at the
+    review step. An unlisted value there is one they can actively select — which was unchecked
+    entirely until D-51: only the primary list was ever looked at.
+    """
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({
+            **CLASSIFY_JSON,
+            "grievance_categories": ["Environmental - Air Pollution"],
+            "grievance_categories_alternative": ["Teleportation Damage", "Noise Pollution"],
+        })
     )
-    assert "enum" not in schema
-    assert "const" not in schema
+
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+
+    assert result["grievance_categories_alternative"] == ["Environmental - Noise Pollution"]
+
+
+def test_when_nothing_resolves_the_first_alternative_is_promoted_rather_than_storing_none(
+    client, caplog
+):
+    """
+    The one real cost of dropping: on an item whose *only* category was invented, the grievance
+    would end up with none at all. The model's own second choices are already here and already
+    resolved, so the top one is promoted instead. Storing nothing is worse than storing the
+    model's second choice — the complainant reviews it either way.
+    """
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({
+            **CLASSIFY_JSON,
+            "grievance_categories": ["Teleportation Damage"],
+            "grievance_categories_alternative": ["Environmental - Noise Pollution"],
+        })
+    )
+
+    with caplog.at_level("WARNING"):
+        result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+
+    assert result["grievance_categories"] == ["Environmental - Noise Pollution"]
+    assert result["grievance_categories_alternative"] == []
+    assert any("promoted" in r.getMessage() for r in caplog.records)
+
+
+def test_the_classification_result_carries_no_key_the_database_mapping_does_not_know(client):
+    """
+    ⚠ The whole dict is handed to `classify_and_summarize_grievance_task` as `values`, and
+    `map_fields_between_backend_and_database` resolves **every** key through a fixed mapping. An
+    extra key — a resolution report, say — is a `KeyError` there, which the task turns into a
+    terminal `LLM_failed` for a classification that actually succeeded.
+    """
+    from backend.services.database_services.base_manager import BaseDatabaseManager
+
+    client.chat.completions.create.return_value = _chat(json.dumps(CLASSIFY_JSON))
+    result = llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+
+    mapping = inspect.getsource(
+        BaseDatabaseManager.map_fields_between_backend_and_database
+    )
+    for key in result:
+        assert f"'{key}'" in mapping, f"{key} would KeyError on the database write path"
+
+
+def test_the_benchmark_can_still_count_what_the_product_stopped_storing(client):
+    """
+    **T-13-g.** The benchmark calls this function, so once it repairs its own output the invention
+    row would read a flattering **0 / 105 for any model** — and that row is what bought the six
+    `Road Hazard - *` categories. `InventionMeter` reads the rate from the resolution log instead,
+    which couples the harness to *this module's* log wording.
+
+    ⚠ **This test is that coupling.** Reword either resolution log line and it goes red, rather
+    than the benchmark going quietly optimistic. Its sibling in `test_llm_benchmark.py` covers the
+    meter's arithmetic and cannot catch a rewording — it emits the lines itself.
+    """
+    from scripts.ops.llm_benchmark import InventionMeter
+
+    meter = InventionMeter()
+    meter.install()
+    client.chat.completions.create.return_value = _chat(
+        json.dumps({
+            **CLASSIFY_JSON,
+            "grievance_categories": ["Teleportation Damage", "Wildlife Passage"],
+        })
+    )
+
+    llm.classify_and_summarize_grievance(GRIEVANCE_TEXT)
+
+    counted = meter.as_dict(105)
+    assert counted["items_with_an_invented_category"] == 1, "the drop log stopped being counted"
+    assert counted["items_with_a_repaired_category"] == 1, "the repair log stopped being counted"
+
 
 # ═════════════════════════════════════════════════════════════════════════════
 # T-15-a … T-15-c — degraded mode: a dead endpoint must not take intake with it

@@ -53,6 +53,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# Imported here rather than with the stdlib block above: `backend` is only importable once
+# REPO_ROOT is on the path. Safe at module scope — this module is stdlib-only by design.
+from backend.services.category_resolution import fold_category_key  # noqa: E402
+
 BENCHMARK_DIR = REPO_ROOT / "tests" / "data" / "benchmark"
 GENERAL_SET = BENCHMARK_DIR / "general_classification.jsonl"
 CANDIDATES_FILE = Path(__file__).with_name("llm_candidates.json")
@@ -64,21 +68,11 @@ LATENCY_BUDGETS_S = (30.0, 45.0, 60.0)
 
 # ── Category normalisation (README §4.1) ─────────────────────────────────────
 
-
-def canonical_category(raw: str) -> str:
-    """
-    Fold a model's reply into the canonical key form the benchmark labels use.
-
-    Mirrors ``load_classification_data``'s key construction — hyphens to spaces, title case, per
-    half — but splits on the ``" - "`` separator first, because several category names contain a
-    hyphen of their own (``Gender-Based Access Issues``) and a blanket replace would destroy the
-    separator along with them.
-    """
-    text = (raw or "").strip().strip('"\'')
-    if " - " not in text:
-        return text.replace("-", " ").title()
-    classification, _, name = text.partition(" - ")
-    return f"{classification.replace('-', ' ').title()} - {name.replace('-', ' ').title()}"
+# ⚠ **The product's fold, not a copy of it** (D-51). This rule decides what counts as "the same
+# category", and a benchmark that folds differently from the code under measurement reports a
+# precision it did not measure. It lived here as a private reimplementation until the classifier
+# needed the same rule to repair off-catalogue values; both now read it from one place.
+canonical_category = fold_category_key
 
 
 # ── Token metering ───────────────────────────────────────────────────────────
@@ -150,6 +144,80 @@ class UsageMeter:
         else:
             data["usd_total"] = "⚠ Not priced — pass --price-in / --price-out"
         return data
+
+
+# ── Invention metering ───────────────────────────────────────────────────────
+
+
+class InventionMeter:
+    """
+    Count the categories the model made up — **after** the product stopped storing them (D-51).
+
+    ⚠ **This exists because the fix hid the measurement.** `classify_and_summarize_grievance` now
+    repairs an off-catalogue category onto the taxonomy or drops it, so `predicted` is in-catalogue
+    by construction and the "items with an invented category" row would read a flattering 0 whatever
+    the model did. That row is a **model** metric, not a storage one, and it is the row that bought
+    the six `Road Hazard - *` categories — losing it would mean the next taxonomy gap goes unseen.
+
+    Metered from the log rather than by changing a stable service, the same call the `UsageMeter`
+    above makes. One resolution warning is emitted per classification at most, so counting records
+    counts items. ⚠ If that log line is ever reworded, this reads zero and says so loudly rather
+    than silently — hence `matched`, which the report carries.
+    """
+
+    REPAIRED = "repaired"
+    DROPPED = "exist nowhere in the live catalogue"
+
+    def __init__(self) -> None:
+        self.repaired: list[str] = []
+        self.dropped: list[str] = []
+        self.items_with_dropped = 0
+        self.items_with_repair = 0
+        self._handler = None
+
+    def install(self) -> None:
+        import logging
+
+        meter = self
+
+        class _Handler(logging.Handler):
+            def emit(self, record: logging.LogRecord) -> None:
+                message = record.getMessage()
+                if meter.DROPPED in message:
+                    meter.items_with_dropped += 1
+                    meter.dropped.append(message)
+                elif meter.REPAIRED in message and "category value" in message:
+                    meter.items_with_repair += 1
+                    meter.repaired.append(message)
+
+        self._handler = _Handler(level=0)
+        service = logging.getLogger("llm_service")
+        # ⚠ One handler, one attachment point, or every record is counted twice. The service
+        # logger normally propagates to root, so root alone suffices; attach to the service
+        # logger only where it does not, rather than assuming either way.
+        logging.getLogger().addHandler(self._handler)
+        if not service.propagate:
+            service.addHandler(self._handler)
+        # ⚠ Repairs are logged at INFO — routine enough that WARNING would be noise in production,
+        # but this run exists to count them. Lower the service logger for the duration rather than
+        # raise the product's log level, which would change what the running system writes.
+        if service.getEffectiveLevel() > logging.INFO:
+            service.setLevel(logging.INFO)
+
+    def as_dict(self, items: int) -> dict:
+        return {
+            "items_with_an_invented_category": self.items_with_dropped,
+            "items_with_a_repaired_category": self.items_with_repair,
+            "rate_invented": round(self.items_with_dropped / items, 4) if items else None,
+            "matched": bool(self._handler),
+            "note": (
+                "Invented = the model named a category that exists nowhere and could not be "
+                "resolved onto one. Repaired = a real category named badly (wrong or missing "
+                "classification half). Neither reaches storage since D-51; both are model "
+                "behaviour and belong in the model column."
+            ),
+            "samples": (self.dropped + self.repaired)[:10],
+        }
 
 
 # ── Results ──────────────────────────────────────────────────────────────────
@@ -596,10 +664,13 @@ def main() -> int:
 
     meter = UsageMeter()
     meter.install()
+    inventions = InventionMeter()
+    inventions.install()
     all_scores = [run_task(model, task, items, args.concurrency) for model in models for task in tasks]
     report = _report(all_scores)
     usage = meter.as_dict(len(items) * max(len(models), 1), args.price_in, args.price_out)
     report["_usage"] = usage
+    report["_inventions"] = inventions.as_dict(len(items) * max(len(models), 1))
     _print_report(report)
     _print_usage(usage)
 

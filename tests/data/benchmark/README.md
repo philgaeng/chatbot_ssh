@@ -139,6 +139,11 @@ f"{row['classification'].replace('-', ' ').title()} - {row['generic_grievance_na
 it before scoring. Grading raw strings against canonical keys would deflate every accuracy number by
 the width of that mismatch, and it would look like a model problem.
 
+⚠ **The fold is the product's, not the harness's** (changed 2026-08-25, D-51). It lives in
+`backend/services/category_resolution.py` and the harness imports it, because the classifier now uses
+the same rule to repair an off-catalogue value before storing it. Two copies of "what counts as the
+same category" would mean the benchmark reporting a precision the product does not have.
+
 ### 4.2 ⚠ `high_priority` is the taxonomy's value, and it disagrees with production
 
 Severity is **not** the author's judgement of how bad a grievance is. It is the taxonomy's own

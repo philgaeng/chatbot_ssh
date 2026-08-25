@@ -80,7 +80,7 @@ spec's own acceptance criteria rely on.
 
 ### 2. `gpt-5-nano` is not a stray reference — it is the live classification model
 
-`LLM_services.py:246`, in `classify_and_summarize_grievance`, the primary AI path in the product. The
+`LLM_services.py:247`, in `classify_and_summarize_grievance`, the primary AI path in the product. The
 guide's §1.4 (*"Confirm whether that reference is intentional. If it is a typo falling through to an
 exception handler, you may have a classification path that has been quietly failing."*) has the right
 instinct pointed at the wrong thing. The real questions are in DPG-14.
@@ -228,7 +228,7 @@ designed behaviour, not a bug to work around.
 #### f. The privacy assessment cites these exact call sites — this sprint moves all nine
 
 [`docs/dpg/privacy-assessment.md`](../../dpg/privacy-assessment.md) §2.2 legs **L4** and **L5** cite
-`LLM_services.py:47, 79, 116, 232, 324, 385` and `llm_client.py:90, 169, 261` as the places grievance text
+`LLM_services.py:48, 79, 116, 232, 329, 448` and `llm_client.py:90, 169, 261` as the places grievance text
 leaves the country. **DPG-11 and DPG-12 move every one of them.**
 
 Update §2.2 in the same commit that moves them. DPG-30 (Sprint 3) verifies the diagram against the code
@@ -552,11 +552,11 @@ def declared_env_vars() -> tuple[str, ...]:    # what DPG-16's drift pin reads
 
 | Task key | Env override | Value today | Endpoint | Call sites |
 |---|---|---|---|---|
-| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | llm | `LLM_services.py:246` |
-| `extract` | `MODEL_EXTRACT` | `gpt-3.5-turbo` | llm | `LLM_services.py:93`, `:116` |
-| `translate` | `MODEL_TRANSLATE` | `gpt-4` | llm | `LLM_services.py:338` |
+| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | llm | `LLM_services.py:247` |
+| `extract` | `MODEL_EXTRACT` | `gpt-3.5-turbo` | llm | `LLM_services.py:94`, `:116` |
+| `translate` | `MODEL_TRANSLATE` | `gpt-4` | llm | `LLM_services.py:343` |
 | `detect` | `MODEL_DETECT` | `gpt-3.5-turbo` | llm | `LLM_services.py:399` (SEAH path) |
-| `asr` | `MODEL_ASR` | `whisper-1` | **asr** | `LLM_services.py:47` |
+| `asr` | `MODEL_ASR` | `whisper-1` | **asr** | `LLM_services.py:48` |
 | `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `gpt-4` → falls back to `translate` | llm | `llm_client.py:90` |
 | `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-4o-mini` | llm | `llm_client.py:141` |
 | `ticket_findings_seah` | `MODEL_TICKET_FINDINGS_SEAH` | `gpt-4o` | llm | `llm_client.py:142` |
@@ -584,7 +584,7 @@ DPG-12's T-12-c pins it:
 | Old | New | Behaviour |
 |---|---|---|
 | `OPENAI_API_KEY` | `LLM_API_KEY`, `ASR_API_KEY` | used if the new name is unset; logs one warning |
-| `OPENAI_CLASSIFICATION_TIMEOUT` (`LLM_services.py:214`) | `classify` task timeout | same |
+| `OPENAI_CLASSIFICATION_TIMEOUT` (`LLM_services.py:215`) | `classify` task timeout | same |
 | `ticketing` settings `openai_api_key` (`settings.py:87`) | `LLM_API_KEY` | same — satisfies DPG-12 step 1 |
 
 ### ⚠ The duplication is four files deep, not two — and one copy falsifies a stored record
@@ -732,7 +732,7 @@ here is a production intake outage.
 - [ ] `load_dotenv('/home/ubuntu/...')` deleted
 - [ ] DPG-10's tests pass **unchanged** (they may gain parametrization, not rewrites)
 - [ ] `docs/services/06_llm_service.md` updated — it currently says "uses OpenAI Whisper transcription API"
-- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L4 re-pointed** — it cites `LLM_services.py:47, 79, 116, 232, 324, 385`
+- [ ] **`docs/dpg/privacy-assessment.md` §2.2 leg L4 re-pointed** — it cites `LLM_services.py:48, 79, 116, 232, 329, 448`
       as the places grievance text leaves the country, and this ticket moves all six
 
 ### Tests
@@ -922,7 +922,7 @@ Found during this sprint's planning. Land them **under DPG-10's net**, before th
 
 ### 14.1 — `gpt-5-nano` on the classification path
 
-`LLM_services.py:246`. Two things to establish, in-container, against the live key:
+`LLM_services.py:247`. Two things to establish, in-container, against the live key:
 
 1. **Does the call actually succeed?** If the model name is wrong for the account, the request raises,
    `:237-246` catches it, and the function returns `status="error"` with empty summary and categories.

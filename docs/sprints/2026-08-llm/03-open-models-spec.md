@@ -111,7 +111,7 @@ rather than a re-design.
 | The guide assumes | Reality | Effect |
 |---|---|---|
 | One LLM surface to benchmark | Two — see [`02`](02-llm-agnostic-spec.md) §0. Ticketing's case findings and **complainant-facing** resolved summary also need a model choice | DPG-23 covers six task types, not four |
-| Classification runs on `gpt-3.5-turbo` | It runs on `gpt-5-nano` (`LLM_services.py:246`) | The "current" column of the benchmark must name the real baseline, or the delta is meaningless |
+| Classification runs on `gpt-3.5-turbo` | It runs on `gpt-5-nano` (`LLM_services.py:247`) | The "current" column of the benchmark must name the real baseline, or the delta is meaningless |
 | `pytest tests/test_llm_services.py` in the CI job | That file does not exist today; Sprint 1's DPG-10 creates `tests/backend/test_llm_services.py` and `tests/ticketing/test_llm_client.py` | DPG-24's job runs the real paths |
 | CI is greenfield | `.github/workflows/ci.yml` already runs **four** parallel gates — `backend-tests` (`:23`, full Postgres + Redis service block, all three Alembic streams), `ui-checks` (`:202`), `webchat-checks` (`:236`), `docs-links` (`:262`) | DPG-24 adds a **fifth job to an existing file**, following its conventions — not a new workflow file with its own dialect. ⚠ This spec said "three" and named only three of the four until 2026-08-17; `webchat-checks` was the one missed |
 | The candidate filter is settled: Apache-2.0 / MIT | **It is gated on the consultant.** Several of the strongest multilingual models ship under bespoke community licences with use restrictions (Llama, Gemma). Whether those count as open alternatives for indicator 4 is an open question — [`00_compliance_status.md`](../../dpg/00_compliance_status.md) Q-04-02 | The filter may be **loosened** before DPG-23 runs, which would widen the candidate field and may materially change the Nepali quality result. **Do not build the benchmark harness around a frozen licence filter** |
@@ -508,7 +508,7 @@ of equivalence. A reviewer who finds an overstated number stops trusting the res
 
 - **Sensitive-content detection is recall-first, not accuracy-first.** A missed harassment report is a
   safeguarding failure; a false positive is an officer reading one extra case. The current prompt already
-  encodes this (*"be extra sensitive as awareness around the issue is low"*, `LLM_services.py:580`).
+  encodes this (*"be extra sensitive as awareness around the issue is low"*, `LLM_services.py:625`).
   Score it accordingly, and set the threshold accordingly.
 - **Multi-label classification.** The system returns `grievance_categories` **and**
   `grievance_categories_alternative`. Single-label accuracy would misrepresent it. Score set-level.

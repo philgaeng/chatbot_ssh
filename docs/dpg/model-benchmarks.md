@@ -1,7 +1,8 @@
 # Model benchmarks — what this system scores
 
 > **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
-> grievance set. **As of 2026-08-24.**
+> grievance set. **Measurements as of 2026-08-24**; where a finding has since been acted on, it says
+> so and carries its own date.
 >
 > **What it is not.** Not a model selection — see [§4](#4-the-open-column--the-one-gap) and
 > [§5](#5-seah-recall--not-measurable-from-this-repository). Not an estimate of production accuracy:
@@ -72,19 +73,43 @@ capability measured but no accuracy ([`open-model-configuration.md`](open-model-
 The prompt says *"Do not create new categories"*. On **4 of 105 items** it created one anyway — down
 from 18 before the taxonomy change ([§7](#7-what-changed-on-2026-08-21-and-why)). **3 of the 4 are not
 new concepts**: they are `Cultural Site Disturbances` and `Wildlife Passage` with the classification
-half of the name missing — a **formatting** failure that predates the change. **Exactly one genuinely
-new concept survives:** `Road Hazard - Noise Pollution`, the model asking for a seventh subcategory in
-the family it was just given six of.
+half of the name missing — a **formatting** failure that predates the change. **The fourth,
+`Road Hazard - Noise Pollution`, is not a new concept either** — `Noise Pollution` is a real category
+under `Environmental`, and the model filed it under the wrong parent. Read together, **every one of
+the four is a correct leaf with a wrong or missing parent**, which is what made a deterministic repair
+possible.
 
-⚠ **Production stores invented values.** `_warn_about_unlisted_categories` (`LLM_services.py:358`)
-*"logs — never rejects"*, and the reason is sound for a near-miss name. A category that exists nowhere
-is not a near-miss: it is **stored, shown to the complainant, and synced to ticketing**, where it
-matches no filter, appears in no report, and is not found by the `high_priority` lookup
-(`ticketing_dispatch.py:117`) — so it silently contributes nothing to priority.
+✅ **Fixed 2026-08-25 — an off-catalogue category no longer reaches storage.** Until then it did:
+the check *"logged — never rejects"*, which is right for a near-miss name and wrong for a category
+that exists nowhere. Such a value was **stored, shown to the complainant as the system's understanding
+of their complaint, and synced to ticketing**, where it matched no filter, appeared in no report, and
+was missed by the `high_priority` lookup (`ticketing_dispatch.py:117`) — contributing nothing to
+priority, silently.
 
-**The rate fell 78%; the storage path is unchanged.** Fixing the taxonomy reduced the exposure, not
-the defect.
-[Tracked](../sprints/2026-08-llm/followups/the-model-invents-categories-and-they-are-stored.md).
+**What replaced it** (`LLM_services.py:373` → [`category_resolution.py`](../../backend/services/category_resolution.py)):
+
+| Tier | Mechanism | Effect |
+|---|---|---|
+| 1 | The permitted categories are sent as a **JSON-Schema enum**, rebuilt from the live catalogue on every call | A provider that honours `json_schema` **cannot** return one that does not exist. ⚠ Not a guarantee — `Qwen3.5-9B` accepts the schema and ignores it, and the ladder degrades on weaker models |
+| 2 | Values are folded to the canonical key form and matched; an unmatched value is resolved by its **leaf**, which is unique across the taxonomy | Repairs all four of the cases above, deterministically, with **no second model call** |
+| 3 | Anything still unresolved is **dropped and logged**, never stored. If that leaves an item with no category at all, the model's own top **alternative** is promoted | The stored value is always a real category — and the item does not lose its classification |
+
+⚠ **No fuzzy matching and no repair prompt.** An ambiguous leaf — one two classifications could claim
+— is refused rather than guessed, because a wrong category is stored and displayed just as silently as
+an invented one. A second model call was considered and rejected: it would have cost a round trip on
+the interactive path, and it would have **buried the signal** — eighteen items asking for a
+`Road Hazard` family is precisely how the taxonomy gap in [§7](#7-what-changed-on-2026-08-21-and-why)
+was found.
+
+⚠ **The figure above is a *model* metric and stays one.** Because the repair happens inside the
+function the harness calls, a re-run would otherwise report a flattering **0 / 105** for any model.
+`InventionMeter` reads the rate from the resolution log instead, so the row keeps measuring what the
+model did rather than what the product now tolerates.
+
+⏳ **Not yet re-measured.** The guard changes what is *stored*, not what the model *says*, so the
+`4 / 105` above stands. Set-level precision in [§2](#2-the-results) is scored against the returned
+categories, which are now repaired, so it should rise on the next run — **by how much is unmeasured
+until that run happens**.
 
 ### 3.2 ⭐ The SEAH detector flags 5 of the 8 confusable negatives — which is the design working {#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives}
 

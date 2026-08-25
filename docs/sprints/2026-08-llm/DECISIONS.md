@@ -37,6 +37,8 @@
 | [Q-08](#q-08) | Assess against what | Nepal Individual Privacy Act 2018 | [`01` DPG-04](01-licensing-and-governance-spec.md#dpg-04) |
 | [Q-09](#q-09) | Translation: specialist? | LLM first | [`03` DPG-23](03-open-models-spec.md#dpg-23) |
 | [Q-17](#q-17) | Provider outage blocks merges? | Every commit, never required | [`03` DPG-24](03-open-models-spec.md#dpg-24) |
+| [Q-26](#q-26) | Officer sees the confidence, or only ordered by it | **Order only** — no score on screen | [`05` DPG-40](05-prompt-engineering-spec.md#dpg-40) |
+| [Q-27](#q-27) | One category or three when unsure | **Option A — the complainant's screen does not change.** ⭐ And the classifier's purpose is stated: **coverage, not per-item precision** | [`05` DPG-42](05-prompt-engineering-spec.md#dpg-42), [DPG-43](05-prompt-engineering-spec.md#dpg-43) |
 
 ---
 
@@ -325,6 +327,65 @@ the first-attempt timeout are one decision, pinned by DPG-15b's coherence tests.
 
 ---
 
+## Q-26 — Should a SEAH officer see the model's confidence, or only be ordered by it? {#q-26}
+
+**→ Order only. The officer sees a sensibly sorted queue and no score.**
+
+> **DECIDED 2026-08-25.** *"order only"*
+
+**What it decides.** The detector already answers with a graded `level` and the product discards it
+(D-56). [DPG-40](05-prompt-engineering-spec.md#dpg-40) makes it survive to the ticket and **sorts the
+queue by it**. It does **not** put a confidence label on the officer's screen.
+
+**Why this is the right shape.** The SEAH queue deliberately contains false positives — that is the
+recall-first trade, priced and accepted (D-52). Ordering captures nearly all the value of the signal:
+the officer reaches the cases the model was sure of first, and the uncertain ones are still all there,
+still all reviewed. **Displaying the score adds triage information and a failure mode**: *"the model was
+not confident"* is an invitation to dismiss, and dismissal of a real report is the one **unrecoverable**
+error in this design. A queue order cannot lose a detection; a label that discourages reading can.
+
+⚠ **The distinction to hold on to:** confidence may **order**, never **gate**. That applies to the UI
+here and to any threshold later — a rule that suppresses low-confidence flags is a recall cut wearing a
+different hat, and with no recall baseline (Q-25) nothing in this repository would notice.
+
+⏳ **Revisitable, and the condition is nameable:** once the explicit return path is first-class and its
+round-trip is measured (D-52's open gap), the cost of a dismissal becomes visible and this can be
+reconsidered on evidence rather than on caution.
+
+---
+
+## Q-27 — When the classifier is unsure, does the complainant see one category or three? {#q-27}
+
+**→ Option A. The complainant's screen does not change. The confidence is used behind it.**
+
+> **DECIDED 2026-08-25.** *"We keep A. anyway I expect only few users to confirm the categories and we
+> have then the officer who can pick the right one when assessing the grievance. The classifier is there
+> to automate the process and make sure a category is assigned to all, if I let the officers do it, they
+> may do it poorly, with AI I have a baseline."*
+
+### ⭐ The answer states the classifier's purpose, and that reaches further than the question did
+
+This is the more important half of the decision, so it is recorded as a decision in its own right rather
+than as reasoning for a UI choice. **The classifier exists for coverage.** Its job is that *every*
+grievance arrives with a category, consistently applied, so that nothing lands uncategorised and no
+officer is left inventing a taxonomy under time pressure. The officer is the **correction point**, at
+assessment; the complainant's confirmation is a nice-to-have that most will skip.
+
+**Three things follow, and they change tickets:**
+
+| Consequence | Where it lands |
+|---|---|
+| **Coverage beats precision@1.** A grievance with a roughly-right category is a success; one with *no* category is the failure. A prompt change that raises precision while lowering the share of grievances that get any usable category is a **regression** under this purpose | [DPG-42](05-prompt-engineering-spec.md#dpg-42) — the headline metric is *share of grievances with at least one correct or acceptable category*, with precision@1 reported beside it, not above it |
+| **D-51's promotion rule was right for this reason too.** When nothing survives category resolution, the model's top alternative is promoted rather than storing nothing — that is coverage-first behaviour, and it now has an owner's rationale, not only an engineering one | [`followups/the-model-invents-categories…`](followups/the-model-invents-categories-and-they-are-stored.md) |
+| **The officer's correction is the real-world score, and it is not being recorded** — see D-57 | New ticket [DPG-46](05-prompt-engineering-spec.md#dpg-46) |
+
+⚠ **What this decision does *not* license.** "The officer will fix it" is not a reason to tolerate a bad
+baseline: an officer who finds the suggested category wrong most of the time stops reading it, and the
+coverage benefit evaporates while the cost stays. That is precisely why DPG-46 measures the correction
+rate rather than assuming it.
+
+---
+
 ## Q-24 — How many open models does "benchmark many" mean? {#q-24}
 
 **→ A shortlist, not a sweep.**
@@ -520,7 +581,7 @@ a compliance obstacle into a submission asset.
 
 Two facts only you have:
 
-1. `gpt-5-nano` (`LLM_services.py:244`) is the model on grievance classification — the product's most
+1. `gpt-5-nano` (`LLM_services.py:245`) is the model on grievance classification — the product's most
    quality-sensitive AI path. A nano-class model there is a real decision with real consequences, and it
    is undocumented. Deliberate cost choice, or drift? 
 2. `transcribe_audio_file` passes `language_code=` where the SDK takes `language=` (`:46`). If the SDK

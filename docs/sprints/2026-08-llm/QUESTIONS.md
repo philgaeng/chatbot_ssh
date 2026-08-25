@@ -1,7 +1,10 @@
 # Open questions for the project owner
 
-> **22 of 24 answered.** This file holds **only what is still live** — two open and one awaiting an
-> external answer. **Q-20, Q-21 and Q-22 came out of the owner's review of Sprint 1 and were all
+> **24 of 27 answered.** This file holds **only what is still live** — **one open and two awaiting an
+> external answer** (⚠ Q-25, Q-26 and Q-27 are new, 2026-08-25, out of Sprint 4's planning; **Q-26 and Q-27 were
+> asked and answered the same day**, and Q-27's answer restated the classifier's purpose — read it). ⚠ **The next free number is Q-28** — Q-24 is taken by *"how many open models"*
+> in [`DECISIONS.md`](DECISIONS.md), and Sprint 4's questions were numbered 24–26 for half a day before
+> that collision was caught. Check both files before numbering a new one. **Q-20, Q-21 and Q-22 came out of the owner's review of Sprint 1 and were all
 > answered the same day**; they are in [`DECISIONS.md`](DECISIONS.md) with the code that confirms each.
 > **Nothing in the second wave is blocked.** The register below records every decision in one line each.
 >
@@ -15,22 +18,25 @@
 
 ---
 
-## Still live — 3
+## Still live — 4
 
 | Q | Subject | State | What it blocks |
 |---|---|---|---|
 | [**Q-02**](#q-02) | Which open licence — Apache-2.0 or MIT | 🔴 **open** | **[DPG-01](01-licensing-and-governance-spec.md#dpg-01)** — delegated to the consultant, so `LICENSE` now waits on *two* externals: which text (Q-02) and which holder (Q-01). Indicator 2 fails outright with no licence at all, so this is the cheapest unblock on the list |
 | [**Q-19**](#q-19) | The LLM budget | ✅ **answered 2026-08-20** — a few hundred USD, owner-funded, covering the pilot | **Most of Sprint 2** — [DPG-22](03-open-models-spec.md#dpg-22), [DPG-23](03-open-models-spec.md#dpg-23), [DPG-24](03-open-models-spec.md#dpg-24). Raised by the answers themselves: there is no inference budget, and those three tickets are made of inference calls |
 | [**Q-01**](#q-01) | Who opens the ADB OGC IP request | 🔶 in flight | **[DPG-03](01-licensing-and-governance-spec.md#dpg-03)** and the submission. ⚠ The owner is writing to the *DPG consultant*, which is not the OGC channel the question meant |
+| [**Q-25**](#q-25) | Does a held-out SEAH set **with positives** exist, and who authors it | 🔶 **requested 2026-08-25, awaiting** | **[DPG-44](05-prompt-engineering-spec.md#dpg-44) entirely.** There is no baseline SEAH **recall** figure at all, so a detection-prompt change can only be scored on the error the design deliberately accepts. ⚠ Until this is answered the honest status of SEAH detection is *unmeasurable*, not *unimproved* |
 
 ---
 
-## Decision register — 21 answered
+## Decision register — 23 answered
 
 Full text, verbatim answers and reasoning: [`DECISIONS.md`](DECISIONS.md).
 
 | Q | Subject | Decision | Detail |
 |---|---|---|---|
+| **Q-27** | One category or three when unsure | **A — the complainant's screen does not change.** ⭐ And the classifier's purpose is now on the record: **coverage, not per-item precision** — the officer is the correction point | [→](DECISIONS.md#q-27) |
+| **Q-26** | Officer sees the confidence, or only ordered by it | **Order only** — a queue order cannot lose a detection; a *"low confidence"* label that discourages reading can | [→](DECISIONS.md#q-26) |
 | **Q-20** | Where the review step sits | **After submission** — verified in the state machine. The wait is already last; only the budget changes | [→](DECISIONS.md#q-20) |
 | **Q-21** | Which single text model | **Two models: Whisper + `gpt-5-nano`** — eight keys, two values | [→](DECISIONS.md#q-21) |
 | **Q-22** | The four unreachable LLM paths | **Not legacy — the parked voice-notes flow.** Declare and label; delete nothing | [→](DECISIONS.md#q-22) |
@@ -124,6 +130,34 @@ available, so degrading it is not free either.
    relevant right now, since voice is not live.
 
 **Answer:** I can pay for all the inferences during first months of demo in 2 districts - I will eventually expense it for so long it is a few 100 USD. Then we will submit to Nepal Gvt the choices they need to make moving forward with realistic budget.
+
+---
+
+### Q-25 — Is there a held-out SEAH set with positive items, and who authors it? {#q-25}
+
+**Owns:** [DPG-44](05-prompt-engineering-spec.md#dpg-44) · **New 2026-08-25**
+
+The committed benchmark set holds **no positive SEAH items** — your decision of 2026-08-19, and the right
+one: *"three hundred realistic Nepali harassment complaints sitting in it will be read as leaked case data
+by somebody, regardless of how the file is labelled."* The harness has a `--seah-set` flag for a set that
+lives outside git. **Nothing has ever been run through it.**
+
+⚠ **The consequence is sharper than "a missing number."** With no positives, the only measurable detection
+outcome is the **false-alarm rate** — the error the recall-first design deliberately accepts. Any prompt
+change therefore has an unmeasured effect on the outcome that matters, and a *measured* effect that will
+look like improvement whichever way recall actually moved: false alarms drop, the benchmark goes green,
+and an oblique report stops being flagged.
+
+**What is needed:** a set with positives, authored by someone who knows what a real oblique report looks
+like, held outside this repository. Volume matters less than authenticity — twenty genuinely oblique items
+are worth more than two hundred obvious ones, because the obvious ones are already caught.
+
+**Answer (2026-08-25):** 🔶 **Not yet — requested, owner following up.** *"not yet I have requested it and
+need to follow up today."*
+
+⚠ **What that means for the meantime, stated so nobody has to infer it:** DPG-44 stays ⛔ blocked and the
+detection prompt stays **unchanged**. The honest status of SEAH detection is **unmeasurable, not
+unimproved** — and every other ticket in Sprint 4 is unaffected, because none of them touches that prompt.
 
 ---
 

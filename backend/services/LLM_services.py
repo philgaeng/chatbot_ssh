@@ -13,11 +13,12 @@ from backend.config.llm_config import (
 from backend.services.llm_client import call_llm, get_asr_client, get_llm_client
 from backend.services.llm_schemas import (
     ContactExtractionAll,
-    GrievanceClassification,
     GrievanceTranslation,
     SensitiveContentDetection,
+    grievance_classification_schema,
     single_field_contact_schema,
 )
+from backend.services.category_resolution import resolve_categories
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
@@ -310,7 +311,11 @@ def classify_and_summarize_grievance(
         settings = get_llm_settings()
         validated = call_llm(
             "classify",
-            schema=GrievanceClassification,
+            # ⚠ The schema is built from THIS call's catalogue, so the permitted categories reach
+            # the provider as an enum as well as reaching the model as prose (D-51). On a provider
+            # that honours it the model cannot name a category that does not exist; where it does
+            # not, `resolve_categories` below is what holds.
+            schema=grievance_classification_schema(list(catalogue)),
             schema_name="grievance_classification",
             timeout=settings.timeout_classify_interactive if interactive else None,
             messages=[
@@ -356,12 +361,70 @@ def classify_and_summarize_grievance(
             # one place the four translations live, and exactly what its `"{}"` branch was for.
             return parse_llm_response("grievance_response", "{}", language_code)
 
-        # ⚠ Checked against the CANONICAL keys the model is now shown, not against the old raw
-        # flat list. Those two forms differ (`Relocation issues - Poor housing…` versus
-        # `Relocation Issues - Poor Housing…`), so validating against the wrong one would have
-        # reported every correct answer as invented.
-        _warn_about_unlisted_categories(validated.grievance_categories, list(catalogue))
-        return validated.model_dump()
+        # ⚠ **The boundary (D-51).** Everything downstream of this line — the review step, the
+        # database write, the ticketing sync, the `high_priority` lookup — assumes a category is a
+        # catalogue KEY, and none of it says so out loud or checks. So it is settled here, once:
+        # values are repaired onto the catalogue where a unique leaf identifies one, and dropped
+        # where nothing does. This used to only log, and store the value anyway.
+        #
+        # ⚠ Both lists, not just the first: `grievance_categories_alternative` is *offered to the
+        # complainant to choose from* at the review step, so an unlisted value there is one they
+        # can actively select.
+        primary = resolve_categories(validated.grievance_categories, catalogue)
+        alternative = resolve_categories(
+            validated.grievance_categories_alternative, catalogue, exclude=primary.kept
+        )
+
+        # Repairs and drops are logged apart because they mean different things. A repair is the
+        # model naming a real category badly. A drop is the model asking for a category that does
+        # not exist — which is a **product signal**, not only a defect: eighteen items asking for
+        # a `Road Hazard` family is how that gap in the taxonomy was found. Keep it greppable.
+        #
+        # ⚠ The values are **truncated** on the way into the log. A dropped value is the one piece
+        # of model output here that no schema constrained, and this module's rule on the parse path
+        # is already "the length, not the narrative" (T-34-c): a model that answers with a phrase
+        # from the complaint must not put it in the Celery log. 80 characters is longer than every
+        # real category key and far shorter than a narrative.
+        def _short(value: object, limit: int = 80) -> str:
+            text = str(value)
+            return text if len(text) <= limit else text[:limit] + "…"
+
+        if primary.repaired or alternative.repaired:
+            logger.info(
+                "classify_and_summarize_grievance: repaired %d category value(s) onto the "
+                "catalogue: %s",
+                len(primary.repaired) + len(alternative.repaired),
+                [(_short(raw), canonical) for raw, canonical in primary.repaired + alternative.repaired],
+            )
+        if primary.dropped or alternative.dropped:
+            logger.warning(
+                "classify_and_summarize_grievance: dropped %d category value(s) that exist "
+                "nowhere in the live catalogue: %s",
+                len(primary.dropped) + len(alternative.dropped),
+                [_short(value) for value in primary.dropped + alternative.dropped],
+            )
+
+        kept = primary.kept
+        alternatives = alternative.kept
+        if not kept and alternatives:
+            # Everything the model chose was unresolvable. Its own second choices are already
+            # here and already resolved, so promoting the first costs nothing and beats storing
+            # no category at all — which is the one real objection to dropping (D-51 "Option A"
+            # loses information on items where the invented value was the only answer).
+            kept, alternatives = alternatives[:1], alternatives[1:]
+            logger.warning(
+                "classify_and_summarize_grievance: no category survived resolution; promoted "
+                "the first alternative instead: %s", kept,
+            )
+
+        # ⚠ Patch the two fields — do not add a key. The whole dict is handed to the database task
+        # as `values`, and `map_fields_between_backend_and_database` resolves every key through a
+        # fixed mapping: an extra one is a KeyError, which the caller turns into a terminal
+        # `LLM_failed` for a classification that actually succeeded.
+        result = validated.model_dump()
+        result["grievance_categories"] = kept
+        result["grievance_categories_alternative"] = alternatives
+        return result
 
     except Exception as e:
         logger.error(f"Error in classify_and_summarize_grievance: {str(e)}")
@@ -384,24 +447,6 @@ class LLMResponseParseError(ValueError):
     absorbing the difference on its primary AI path. Subclasses `ValueError` so existing
     `except ValueError` handlers keep working.
     """
-
-
-def _warn_about_unlisted_categories(chosen: List[str], catalogue: List[str]) -> None:
-    """
-    Log — never reject — categories the model invented.
-
-    ⚠ The catalogue is passed in, derived from `CLASSIFICATION_DATA` at call time, because it is
-    **admin-configurable** and resynced into `public.grievance_classification_taxonomy`. Freezing
-    today's values into a `Literal[...]` in the schema would mean a code change every time an
-    administrator adds a category, and would break the resync path. And a complainant's
-    classification is not worth discarding because the model named a category slightly wrong.
-    """
-    unlisted = [c for c in chosen if c and c not in catalogue]
-    if unlisted:
-        logger.warning(
-            "classify_and_summarize_grievance: %d category value(s) outside the live catalogue: %s",
-            len(unlisted), unlisted,
-        )
 
 
 def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:

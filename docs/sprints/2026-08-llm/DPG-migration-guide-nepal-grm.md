@@ -15,7 +15,7 @@
 > 1. **There are two LLM surfaces, not one.** `ticketing/clients/llm_client.py` is a second, independent
 >    OpenAI client with three more hard-coded models. A migration that fixes only `backend/` leaves the
 >    indicator-4 claim false.
-> 2. **`gpt-5-nano` is the live classification model** (`LLM_services.py:244`), not a stray reference.
+> 2. **`gpt-5-nano` is the live classification model** (`LLM_services.py:245`), not a stray reference.
 > 3. **The model→task mapping below is wrong.** Classification is `gpt-5-nano`; `gpt-3.5-turbo` covers
 >    contact extraction (×2) and sensitive-content detection.
 > 4. **Degraded mode (§1.5) is largely already built** — intake writes to Postgres first, classification

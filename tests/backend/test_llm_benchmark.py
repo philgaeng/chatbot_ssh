@@ -283,3 +283,60 @@ def test_the_meter_reports_reasoning_share_because_it_is_invisible_and_dominant(
 def test_an_unpriced_run_says_so_rather_than_reporting_zero_dollars():
     data = bench.UsageMeter().as_dict(items=10, price_in=0.0, price_out=0.0)
     assert "Not priced" in str(data["usd_total"])
+
+
+# ── Invention metering (D-51) ────────────────────────────────────────────────
+
+
+def test_the_invention_meter_still_sees_what_the_product_stopped_storing():
+    """
+    Since D-51 an off-catalogue category is repaired or dropped before it is returned, so the
+    harness can no longer see invention in `predicted` — it would report a flattering 0 for any
+    model, and the row that bought the six `Road Hazard - *` categories would quietly stop working.
+    `InventionMeter` reads it from the resolution log instead.
+
+    ⚠ **This test only covers the meter's own arithmetic** — it emits the log lines itself, so it
+    cannot catch a rewording in `LLM_services.py`. The coupling to the *product's* wording is pinned
+    where the product runs:
+    `test_llm_services.py::test_the_benchmark_can_still_count_what_the_product_stopped_storing`.
+    Both are needed; this one alone would go green on a fix that measures nothing.
+    """
+    import logging
+
+    meter = bench.InventionMeter()
+    meter.install()
+    logger = logging.getLogger("llm_service")
+    assert logger.getEffectiveLevel() <= logging.INFO, "install() must let repairs through"
+
+    logger.warning(
+        "classify_and_summarize_grievance: dropped %d category value(s) that exist "
+        "nowhere in the live catalogue: %s", 1, ["Teleportation Damage"],
+    )
+    logger.info(
+        "classify_and_summarize_grievance: repaired %d category value(s) onto the catalogue: %s",
+        1, [("Wildlife Passage", "Wildlife, Environmental - Wildlife Passage")],
+    )
+
+    counts = meter.as_dict(105)
+    assert counts["items_with_an_invented_category"] == 1
+    assert counts["items_with_a_repaired_category"] == 1
+    assert counts["rate_invented"] == round(1 / 105, 4)
+
+
+def test_a_repair_is_not_counted_as_an_invention():
+    """
+    They are different findings. A repaired category is the model naming a real one badly — a
+    formatting failure. An invented one is the model asking for a category that does not exist,
+    which is the taxonomy signal. Collapsing them would have made the `Road Hazard` gap look like
+    a spelling problem.
+    """
+    import logging
+
+    meter = bench.InventionMeter()
+    meter.install()
+    logging.getLogger("llm_service").info(
+        "classify_and_summarize_grievance: repaired %d category value(s) onto the catalogue: %s",
+        2, [("Cultural Site Disturbances", "Cultural, Social - Cultural Site Disturbances")],
+    )
+
+    assert meter.as_dict(105)["items_with_an_invented_category"] == 0

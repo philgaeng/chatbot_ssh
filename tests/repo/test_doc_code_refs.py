@@ -99,13 +99,17 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     # now `call_llm(` rather than `.create(`**: DPG-18 moved request construction into the layer, so
     # the anchor token changed as well as the line. The sixth is ASR, which is a different API
     # surface (multipart audio, no messages) and keeps its own three lines.
-    ("backend/services/LLM_services.py", 81, "audio.transcriptions.create"),
-    ("backend/services/LLM_services.py", 88, "language=language_code"),
-    ("backend/services/LLM_services.py", 137, "call_llm"),
-    ("backend/services/LLM_services.py", 168, "call_llm"),
-    ("backend/services/LLM_services.py", 311, "call_llm"),
-    ("backend/services/LLM_services.py", 513, "call_llm"),
-    ("backend/services/LLM_services.py", 573, "call_llm"),
+    ("backend/services/LLM_services.py", 82, "audio.transcriptions.create"),
+    ("backend/services/LLM_services.py", 89, "language=language_code"),
+    ("backend/services/LLM_services.py", 138, "call_llm"),
+    ("backend/services/LLM_services.py", 169, "call_llm"),
+    ("backend/services/LLM_services.py", 312, "call_llm"),
+    ("backend/services/LLM_services.py", 558, "call_llm"),
+    ("backend/services/LLM_services.py", 618, "call_llm"),
+    # Where an off-catalogue category is repaired or dropped (D-51). Cited by the benchmark
+    # evidence and by TODO/PROGRESS as the place the boundary is enforced.
+    ("backend/services/LLM_services.py", 373, "resolve_categories"),
+    ("backend/services/category_resolution.py", 94, "def resolve_categories"),
     # Where every model name is declared — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 114, "gpt-5-nano"),
     # The three ticketing call sites — leg L5.

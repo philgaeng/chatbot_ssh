@@ -1,11 +1,15 @@
 # Sprint — August 2026: DPG compliance & LLM independence
 
-> **Status: QUEUED** (not started) · Source narrative: [`DPG-migration-guide-nepal-grm.md`](DPG-migration-guide-nepal-grm.md)
+> **Status: 🟡 in progress** — Sprint 0 ✅, Sprint 1 ✅, Sprint 2 🟡, Sprint 3 queued, Sprint 4 queued.
+> ⚠ This line read **QUEUED (not started)** until 2026-08-25; the tracker had been the only honest status
+> for weeks. [`PROGRESS.md`](PROGRESS.md) is the authority — read it, not this header.
+> Source narrative: [`DPG-migration-guide-nepal-grm.md`](DPG-migration-guide-nepal-grm.md)
 > Goal: make the Nepal GRM chatbot submittable as a **Digital Public Good**, by turning a hard-coded
 > OpenAI dependency into a configuration value, shipping a tested open-weights configuration as the
 > repository default, and closing the PII egress that both create.
-> Four sub-sprints, one spec each. Sprint 0 is non-code and starts **immediately, in parallel** — two of
-> its items have multi-week external lead times.
+> **Five sub-sprints, one spec each.** Sprint 0 is non-code and started **immediately, in parallel** — two
+> of its items have multi-week external lead times. **Sprint 4 was added 2026-08-25**, after Sprint 2's
+> measurements gave prompt work something to be measured against.
 
 ---
 
@@ -18,7 +22,7 @@ wrong, and one of them is load-bearing.** Each spec restates the corrected versi
 | The guide says | The code says | Consequence |
 |---|---|---|
 | "No provider abstraction exists" — one file, `backend/services/LLM_services.py` | **There are two LLM surfaces and four files.** `ticketing/clients/llm_client.py` is a second, independent OpenAI client with three more hard-coded models (`gpt-4`, `gpt-4o-mini`, `gpt-4o`) and its own settings object — and `ticketing/services/resolved_summary_builder.py:26-27` + `ticketing/tasks/llm.py:163` each keep **their own copy** of the model names | Sprint 1 is **~2× the scope** the guide assumes. A migration that fixes only `backend/` leaves the indicator-4 claim false — and one of those copies is written into a **persisted provenance field**, so drift there publishes a model name that never ran. Hence **DPG-17**: two factories, one config. |
-| "plus a `gpt-5-nano` reference" (implying a stray typo) | `gpt-5-nano` **is the live grievance-classification model** (`LLM_services.py:246`) — the primary AI path in the product | Not a cleanup item. It is the model selection that Sprint 2 has to benchmark against. |
+| "plus a `gpt-5-nano` reference" (implying a stray typo) | `gpt-5-nano` **is the live grievance-classification model** (`LLM_services.py:247`) — the primary AI path in the product | Not a cleanup item. It is the model selection that Sprint 2 has to benchmark against. |
 | "gpt-3.5-turbo (contact extraction, content detection, grievance classification)" | Classification is `gpt-5-nano`. `gpt-3.5-turbo` covers contact extraction (×2) and sensitive-content detection | Wrong model→task mapping; the benchmark plan inherits it. |
 | §1.5 "Degraded mode — do not skip this" (written as unbuilt) | **Largely already built.** Intake writes to Postgres first, classification is a Celery task with retry, `LLM_FAILED`/`LLM_SKIPPED` status codes exist, and the retrieve step polls with a 20 s deadline | DPG-15 is a *verify-and-close-the-gaps* ticket, not a build ticket. Treating it as greenfield would duplicate working machinery. |
 | "⚠️ Verify Rasa 3 specifically… far bigger indicator-2 problem" (flagged as week-one alarm) | There is **no Rasa**. No `rasa_chatbot/` directory, no Rasa service in either compose file, no Rasa NLU/server dependency — only `rasa-sdk==3.6.2` (Apache-2.0), used for the `Tracker`/`CollectingDispatcher` types the hand-rolled state machine still speaks | The alarm is ~resolved before it is raised. DPG-02 confirms it in an hour, not a week. |
@@ -77,6 +81,7 @@ Sprint 1 no longer ships the open-by-default flip.
 | [`02-llm-agnostic-spec.md`](02-llm-agnostic-spec.md) | **Sprint 1** — DPG-10…17. Both LLM surfaces routed through configurable clients, reading **one** config file. The indicator-4 answer. |
 | [`03-open-models-spec.md`](03-open-models-spec.md) | **Sprint 2** — DPG-20…25. Benchmark set, model selection, CI platform-independence job, vLLM deployment. ⭐ **Starting Sprint 2? Read its 🤝 HANDOVER block and §0.1/§0.2 first** — Sprint 1 changed four things under this spec (a 25-char floor, a 30 s pass/fail latency budget, a split on where benchmark data lives, and a green CI), and [Q-19](QUESTIONS.md#q-19) still gates three of its five tickets. |
 | [`04-pii-redaction-spec.md`](04-pii-redaction-spec.md) | **Sprint 3** — DPG-30…36. Redaction at the model-call *and* logging boundaries. Nepali-specific. |
+| [`05-prompt-engineering-spec.md`](05-prompt-engineering-spec.md) | **Sprint 4** — DPG-40…46. Confidence, top-k, and the graded signal the product already asks for and throws away. ⚠ **Two of its three ideas are plumbing, not prompts, and the third is blocked** — read its §0 before planning. |
 | [`PROGRESS.md`](PROGRESS.md) | **The tracker.** Status per ticket, checklists, deviations log. Updated at every commit. |
 | [`TESTS.md`](TESTS.md) | **The test ledger.** Every test this sprint must add, with its purpose and its mutation check. |
 | [`QUESTIONS.md`](QUESTIONS.md) | **What is still live** — 1 open (Q-02 licence choice), 1 in flight (Q-01 IP determination). Q-19 (LLM budget) was answered 2026-08-20. |
@@ -129,6 +134,20 @@ Sprint 1 no longer ships the open-by-default flip.
 | **DPG-35** | Recall measured on a labelled Nepali test set, published | eval | S/M | [04](04-pii-redaction-spec.md#dpg-35) |
 | **DPG-36** | Reconcile `11_llm_pipeline_policy.md`'s unbuilt scrubbing claim | docs | S | [04](04-pii-redaction-spec.md#dpg-36) |
 
+> **Sprint 4, added 2026-08-25 after the owner proposed a prompt-engineering pass.** ⚠ It starts from a
+> correction: **the detector is already asked for a confidence** (`level: high|medium|low`) and the answer is
+> discarded three times — never persisted, never on the ticket, so the SEAH queue has no ordering. And
+> `grievance_categories_alternative` **is** the top-k list already. So DPG-40 is plumbing, DPG-43 is a promotion
+> rule, and ⛔ **DPG-44 is blocked**: SEAH recall is not measurable from this repository, so a detection-prompt
+> change can only be scored on the error the design deliberately accepts (Q-25).
+| **DPG-40** | Keep the confidence we already ask for — persist `level`, carry it to the ticket, order the queue | backend + ticketing | S | [05](05-prompt-engineering-spec.md#dpg-40) |
+| **DPG-41** | **Calibration before consumption** — is the self-reported confidence worth anything | eval | S/M | [05](05-prompt-engineering-spec.md#dpg-41) |
+| **DPG-42** | Classification prompt: confidence per category, measured against the 08-21 baseline | backend + eval | M | [05](05-prompt-engineering-spec.md#dpg-42) |
+| **DPG-43** | The promotion rule — when an alternate becomes primary, and what the complainant is told | backend + UI copy | M | [05](05-prompt-engineering-spec.md#dpg-43) |
+| **DPG-44** | ⛔ SEAH detection prompt — **written and blocked** on a held-out set with positives | backend + eval | M | [05](05-prompt-engineering-spec.md#dpg-44) |
+| **DPG-45** | Publish the results; keep `InventionMeter` honest; **`00_compliance_status.md` untouched** | docs | S | [05](05-prompt-engineering-spec.md#dpg-45) |
+| **DPG-46** | ⭐ The **officer correction rate** — the classifier's real-world score, from production | backend + ticketing | S/M | [05](05-prompt-engineering-spec.md#dpg-46) |
+
 ---
 
 ## Execution order & workstreams
@@ -165,6 +184,16 @@ Sprint 3  ── DPG-30 (measure) ──▶ MUST LAND FIRST, same reason as DPG-
                                                 │
              ⏸ DPG-32 (NER) + most of DPG-35 ── moved out (Q-12c) to the standalone
                 anonymiser-service initiative. *DPG-35 keeps deterministic recall only.
+
+Sprint 4  ── DPG-40 (plumbing) ── ungated; closes a dangling read. Start any time after Sprint 2
+                        │
+             DPG-41 (calibration) ──▶ its verdict gates everything below, and
+                        │              "not usable for ranking" is an acceptable verdict
+             ├── DPG-42 (classification prompt) ──▶ DPG-43 (promotion + copy)
+             └── DPG-45 (publish) ── after 41/42/43, including a null result
+
+             ⛔ DPG-44 (detection prompt) ── BLOCKED on Q-25. Not scheduled, not started:
+                the only measurable detection outcome is the error we accept on purpose.
 ```
 
 **⚠ Sprint 2 is gated on money, not code.** DPG-20 (authoring the benchmark set) is free and can start
@@ -244,7 +273,10 @@ Every spec in this folder repeats this block. It is not decoration: several tick
 
 ### Definition of done — sprint level
 
-- [ ] All 27 tickets ✅ in [`PROGRESS.md`](PROGRESS.md), tests green in CI **without deselecting anything**
+- [ ] All tickets ✅ in [`PROGRESS.md`](PROGRESS.md), tests green in CI **without deselecting anything**.
+      ⚠ **Count from the tracker, not from here** — this line said `27` while the table above had held
+      **31** since the second wave added four, and Sprint 4 adds six more. A hard-coded count in a
+      document that grows is a number that goes quietly wrong.
 - [ ] Every test in [`TESTS.md`](TESTS.md) written and mutation-checked (a test that cannot go red is not a test)
 - [x] Every question in [`DECISIONS.md`](DECISIONS.md) answered and recorded **in the spec** — done 2026-08-17, except Q-02 and Q-19 which remain open and are named as blockers where they bite
 - [ ] `docs/dpg/` evidence pack complete — every indicator in

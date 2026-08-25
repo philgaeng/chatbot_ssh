@@ -374,13 +374,9 @@ standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixe
   return.
 - ⛔ **Detection recall is unmeasured** — the metric the design exists to optimise is the one we cannot
   measure here.
-- ⚠ **The model invents categories and the system stores them.** The rate fell 78% after the taxonomy
-  was widened, but the storage path is unchanged: an invented category matches no filter, appears in no
-  report, and is not found by the priority lookup.
 
 **Remedy.** Add the explicit return action with its own audit event and a test pinning the
-flag-clearing; instrument the round-trip; measure recall **before** touching the detection prompt;
-guard the storage path against categories not in the taxonomy.
+flag-clearing; instrument the round-trip; measure recall **before** touching the detection prompt.
 
 **Questions.**
 

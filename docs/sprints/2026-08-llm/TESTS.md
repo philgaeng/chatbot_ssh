@@ -166,7 +166,9 @@ next feature adds a hard-coded model and nobody notices until a DPG reviewer doe
 | **T-13-b** ✅ | Validated through its Pydantic model on both surfaces; a schema-violating reply is rejected, not silently accepted — `grievance_categories` as a string, `urgency: "URGENT"`, a list where complainant-facing prose belongs | ✅ **Checked** — swapped `model_validate` for `json.loads` → red, and the warning log printed `['D','u','s','t',…]`, which is the defect itself |
 | **T-13-c** ✅ | The ladder: the endpoint ceiling clamps every task down at once; a task capability can be lifted alone; the `prompt` rung sends **no `response_format` key at all** (not `None` — the SDK serialises that into the body); the schema is made strict before sending; the rung is logged | ✅ **Checked** — made `model_for` ignore the task capability → red (3 tests) |
 | **T-13-d** ✅ | **The silent-failure fix**: `"{}"` (the model saying *not enough information*) and `"{not json"` (the model failing) now produce different results on the classification path — the localized fallback vs `status="error"`. The log carries a **length, not the narrative**. ⚠ Honest limit, stated in the test: on `extract_all_contact_info` the *return value* is the same as an outage; only the log distinguishes them | ✅ **Checked** — restored `except JSONDecodeError: return {}` → red (3 tests) |
-| **T-13-e** ✅ | Category values are checked against the catalogue built from `CLASSIFICATION_DATA` **at call time**; adding one to the catalogue needs no code change; unlisted values are **logged, not discarded**; and the schema declares no enum | ✅ **Checked** — froze a `Literal[...]` of two categories → red (3 tests) |
+| **T-13-e** ✅ | ⭐ **Rewritten 2026-08-25 (D-51) — the verdict flipped.** Category values are still checked against the catalogue built from `CLASSIFICATION_DATA` **at call time**, and adding one still needs no code change. What changed: an unlisted value is now **repaired onto the catalogue or dropped**, never stored, and the permitted keys go to the provider as a **per-call enum**. The old row ended *"logged, not discarded"* and *"the schema declares no enum"* — both were right about a hand-written `Literal[...]` and wrong about a schema built from the live catalogue | ✅ **Checked** — restored the old *log-never-reject* behaviour (an unresolved value kept as-is) → **red, 7 tests** across this pair and T-13-f. And the pair still constrains from the other side: a resolver that drops *everything* fails the added-to-the-catalogue half, so neither half may be deleted |
+| **T-13-f** ✅ | **The repair itself** (`tests/backend/test_category_resolution.py`): the four values the benchmark actually saw all resolve; a value that exists nowhere is dropped; a bare classification and a leaf two classifications share are **refused rather than guessed**; the alternatives list is resolved too and deduped against the primary; and the classification result carries **no key the database field mapping does not know** — an extra one is a `KeyError` on the write path, which the task turns into a terminal `LLM_failed` for a classification that succeeded | ✅ **Checked** — made the leaf index resolve an ambiguous leaf to the first key it saw → red |
+| **T-13-g** ✅ | **The measurement survives the fix**: `InventionMeter` still counts what the product stopped storing, and a repair is not counted as an invention. ⚠ It reads the resolution **log**, so this test is the coupling to that log's wording — reword it and this goes red rather than the benchmark going quietly optimistic and reporting 0/105 for every model | ✅ **Checked** — reworded the drop log → red; reworded the repair log → red. ⚠ The first attempt at this test emitted the log lines itself and stayed **green** through both mutations — it was measuring the meter, not the coupling. Moved to where the product actually runs |
 
 ### DPG-14 — the defects
 
@@ -350,6 +352,32 @@ underperform its published F1, and the report should say so before a reviewer do
 
 ---
 
+## Sprint 4 — prompt engineering (DPG-40…45)
+
+⚠ **Two of these are not tests, and the ledger says so rather than dressing them up.** DPG-41's
+calibration curve and DPG-42's accuracy delta are **measurements** — they have no pass/fail and cannot
+gate CI. What *is* testable is the plumbing around them, and the guards that stop a measurement from
+being quietly turned into a threshold.
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-40-a** | The `level` the model returned is the `level` on the ticket — asserted end to end, not per layer. ⚠ Per-layer assertions are what let this value be dropped three times without a single test noticing | Drop the field in the dispatch payload → red |
+| **T-40-b** | ⭐ **`is_seah` is unchanged by any grade, `low` included.** The access boundary is boolean and independent of the score | Gate `is_seah` on `level != "low"` → red. **This is the mutation that matters**: it is the exact shape of the mistake §0.3 warns about |
+| **T-40-c** | `sensitive.py`'s read returns a persisted value rather than its `"low"` default — the dangling read is closed | Revert the migration → red |
+| **T-41-a** | The calibration harness reports **n per bin** and refuses to emit a detection calibration without its power stated beside it | Strip the n → red. A confidence figure without its sample size is how a threshold gets justified |
+| **T-42-a** | The confidence field is **optional in Python** while present in the wire schema — a model that omits it must not cost the complainant their classification (the D-51 rule: constrain generation, forgive the reply) | Make it required → red |
+| **T-43-a** | One promotion function covers both the D-51 empty-result repair and the confidence rule; the empty-result behaviour is unchanged | Fork a second promotion path → red |
+| **T-43-b** | The `high_priority` consequence is asserted: promoting an alternate that carries the flag changes priority, and that is deliberate | Silently filter high-priority categories out of promotion → red |
+| **T-46-a** | The officer classification patch writes old→new into `grievance_status_history.field_changes` — a confirmed-unchanged edit and a replaced-categories edit are **distinguishable afterwards** (D-57) | Point the patch back at the untracked `update_grievance` → red |
+| **T-45-a** | `InventionMeter` still counts after the prompt change — the existing coupling test (T-13-g) re-run against the new prompt | Reword either resolution log → red |
+
+⛔ **No test is listed for DPG-44, and that is the point.** A test for a blocked ticket invites someone
+to satisfy it. When Q-25 delivers a set, the test to write is the **paired** one: recall and false-alarm
+rate from a single run, reported together, so a change that trades one for the other cannot be presented
+as an improvement.
+
+---
+
 ## Coverage summary
 
 | Sprint | Test IDs | New files |
@@ -358,6 +386,7 @@ underperform its published F1, and the report should say so before a reviewer do
 | 1 | T-10-a…f, T-11-a…d, T-12-a…c, T-13-a…e, T-14-a…c, T-15-a…c, T-16-a, T-17-a…d · **second wave:** T-18-a…f, T-19-a…e, T-19b-a…b, T-15b-a…d | `tests/backend/test_llm_services.py`, `tests/ticketing/test_llm_client.py`, `tests/backend/test_llm_config.py`, `tests/backend/test_llm_config_pins.py` |
 | 2 | T-24-a…d | `@live_llm`-marked subset |
 | 3 | T-31-a…e, T-33-a…c, T-34-a…c (**in scope**) · T-32-a…c + PERSON metrics ⏸ **moved out with DPG-32** | `tests/backend/test_pii_service.py` |
+| 4 | T-40-a…c, T-41-a, T-42-a, T-43-a…b, T-45-a, T-46-a · ⚠ DPG-41/42 are **measurements, not tests** · ⛔ none for DPG-44, deliberately | extends `tests/backend/test_llm_services.py`, `test_llm_benchmark.py` |
 
 **Baseline: 0.** No test in the repository imports `LLM_services.py` or `ticketing/clients/llm_client.py`
 today. Every number above is net new.

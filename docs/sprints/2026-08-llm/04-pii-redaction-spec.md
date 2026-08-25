@@ -271,7 +271,7 @@ Three choices matter, and each has a reason:
 - **Do not redact LOCATION** if the classifier derives district from the narrative — you will break your
   own pipeline. Either leave `LOC` intact (a district name alone is not identifying) or take district
   from the structured field and redact freely. ⚠ **Check which applies here**: the classification prompt
-  (`LLM_services.py:220`) injects district and province from structured slots, so district may already
+  (`LLM_services.py:221`) injects district and province from structured slots, so district may already
   come from the structured side — verify before choosing.
 
 ### API
@@ -432,7 +432,7 @@ instead of nine call sites.
    **State this explicitly in the inventory and the privacy assessment**, and note that it is the
    strongest single argument for T2: for voice, only moving the inference endpoint solves it. Redaction
    applies to the transcript, immediately after.
-5. Verify `parse_llm_response`'s error path (`LLM_services.py:298`) — it currently logs the **raw model
+5. Verify `parse_llm_response`'s error path (`LLM_services.py:299`) — it currently logs the **raw model
    response**. That is a log-side leak on the model-call path; DPG-34 owns the fix, but flag it here.
 
 ### Acceptance
@@ -465,8 +465,8 @@ instead of nine call sites.
    (`TaskLogger`) so it covers every service, rather than at individual call sites — one filter,
    installed once, cannot be forgotten by the next call site.
 2. **Fix the known raw-text log sites**, at minimum:
-   - `LLM_services.py:298` — logs the raw model response on a JSON parse error
-   - `LLM_services.py:351`, `:345` — the translation error paths interpolate the **entire `input_data`
+   - `LLM_services.py:299` — logs the raw model response on a JSON parse error
+   - `LLM_services.py:356`, `:350` — the translation error paths interpolate the **entire `input_data`
      dict**, which contains `grievance_description`, into a `ValueError` message. That string then
      propagates as an exception, gets logged, and may reach a Celery result backend in Redis
    - Audit the rest against DPG-30's inventory
