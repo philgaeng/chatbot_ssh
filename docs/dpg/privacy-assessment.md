@@ -255,7 +255,8 @@ would create a cross-border transfer separate from §3.7.** It marks a thing not
 
 ⭐ **The cross-border path that matters once production is live is the off-box backup destination**
 (`BACKUP_REMOTE`), not this box. It is unset in every committed environment file, so off-box copying
-is currently off (L11 / F-4).
+is currently off (L11 / F-4). **The stated intention (2026-08-27) is Nepal government
+infrastructure** — in-country, and so not a transfer. Unverified as of this writing: §5.4 BU2.
 
 ---
 
@@ -605,6 +606,73 @@ tell "none happened" from "none recorded" is worse than no row at all.** Two fur
 it: no SELECT grant on the table, and three days when the container could not authenticate while
 reporting `healthy`. All fixed; forward-only, and not yet on staging or production.
 
+### 5.4 Backups — the engineering is done; the policy is not written
+
+**Built, and verified against the code:**
+
+| Control | Where |
+|---|---|
+| Daily `pg_dump` **plus a tar of the uploads volume** (voice notes, photographs) | `scripts/ops/backup_db.sh:44`, `:96` |
+| Both are GPG-encrypted — asymmetric to `BACKUP_GPG_RECIPIENT`, else symmetric AES256 | `backup_db.sh:52-81` |
+| ⭐ **No backup is kept at all if it cannot be encrypted**, unless an operator sets `BACKUP_ALLOW_UNENCRYPTED=1` in so many words | `backup_db.sh:82-95` |
+| Weekly restore drill: the latest dump is restored into a throwaway database and row counts asserted — proof the backups are *restorable*, not merely present | `scripts/ops/restore_drill.sh` |
+| The status file records which `DB_ENCRYPTION_KEY` fingerprint a dump expects — never the key | `backup_db.sh:147-155` |
+| Both write status JSON the ops monitor reads | `ops/checks.py:184`, `:226` |
+| On-box retention: 14 days. Off-box copy (`BACKUP_REMOTE`): **unset in every committed environment file** | `backup_db.sh:130-145` |
+
+**This is a stronger backup posture than most projects of this size have**, and the fail-closed rule
+is the reason: an operator who forgets to configure encryption loses a backup, rather than silently
+writing a complete copy of every grievance narrative and voice recording to disk in the clear.
+
+⭐ **Why it still needs a policy.** A backup is a complete bypass of every control in §1.4. Whoever
+holds one and its key holds every complainant's contact details, every SEAH narrative and every voice
+recording — with no jurisdiction gate, no reveal button, and **no entry in
+`ticketing.admin_audit_log`**. The application's access controls are genuinely strong; the backup
+file is the one artefact that has none of them. So the questions below are not about the script.
+They are about custody, and **none of them can be answered in this repository.**
+
+**Addressed to the Department of Roads, as B1–B3 are:**
+
+- [ ] **BU1 — Who holds the backup encryption key, and where.**
+      [`14_key_and_secret_lifecycle.md`](../deployment/14_key_and_secret_lifecycle.md) §2 covers
+      `DB_ENCRYPTION_KEY` custody in detail — two offline locations, never in the same place as the
+      dumps. It says **nothing about `BACKUP_GPG_RECIPIENT` / `BACKUP_PASSPHRASE`.** ⚠ Both failure
+      directions are severe and opposite: the key stored alongside the backups makes the encryption
+      decorative, while a key held by one person who leaves makes every backup permanently
+      unreadable. Needs a named custodian, a **second** holder, and a location that is not the
+      machine being backed up
+- [ ] **BU2 — The off-box destination, named.** Stated intention (2026-08-27): **Nepal government
+      infrastructure**, which settles the jurisdiction question §2.3 raises — backups would not be a
+      cross-border transfer. To close it rather than assert it: the specific host or service, who
+      operates it, and a written confirmation that it stays in Nepal. That is the same standard this
+      document applies to the model provider in §3.7, and it should not be applied more loosely here
+- [ ] **BU3 — Who may restore, and how a restore is recorded.** There is no audit trail for a
+      restore, and by its nature there cannot be one inside the application. At minimum: a named
+      list of who may do it, second-person approval for any restore outside the automated drill, and
+      a written record afterwards
+- [ ] **BU4 — Retention at the destination.** On-box is 14 days. What the government machines keep,
+      and for how long, is a separate policy and is unstated. ⚠ It also **sets the true window for
+      §5.1's contact minimisation**: details dropped from the live database survive in backups until
+      those roll, so the destination's retention — not the application's — is the real number
+- [ ] **BU5 — Whether SEAH material belongs in the same backup as everything else.** §3.4 keeps SEAH
+      cases behind a cast that administrators cannot join. A backup flattens that distinction
+      completely. Whether to accept it, or to hold SEAH data in a separately-keyed archive, is a
+      safeguarding decision rather than an IT one — the same class as **B3**
+- [ ] **BU6 — Disposal.** How a backup is destroyed at end of life, at the destination and on any
+      medium that ever held one. Deleting a file is not disposal on media that has left the building
+- [ ] **BU7 — Who is accountable when the drill fails.** The monitors exist and are correct. ⚠ But
+      `ops` **is deployed on neither server** (§5.3), so nothing is currently reading the status
+      files `backup_db.sh` and `restore_drill.sh` write. **A restore drill nobody reads reports
+      success and failure identically** — the same shape as the Keycloak events that recorded
+      nothing for months (F-18) while the daily report cheerfully returned zero
+
+⚠ **What is *not* needed here:** encrypting `grievance_description` in the database specifically to
+protect backups. The archive is already encrypted as a whole, uploads included, so column-level
+encryption adds nothing to this threat. It addresses a different one — a database read by someone who
+has the server but not the application — and it would break ticketing's direct read of the narrative
+(`ticketing/services/grievance_content.py:29`), which holds no key by design (§1.4). Worth
+considering on its own merits, but **not** as a backup control, and **not** before redaction (§4).
+
 ---
 
 ## 6. Findings register
@@ -644,7 +712,9 @@ The redaction work opens with an egress inventory that checks **this document ag
 - [ ] Whether the **Celery result backend** carries grievance text (§2.3)
 - [ ] Every log line that can carry grievance text — F-6 lists three found by reading; a sweep will find more
 - [ ] That **no environment has begun holding genuine grievance data** (F-14). §0.5 expires, so re-confirm rather than inherit
-- [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code fact
+- [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code
+      fact. Intended to be Nepal government infrastructure; confirm the host, its operator and its
+      retention, and whether BU1's key custody has been assigned (§5.4)
 - [ ] Whether `grievance_summary`, cached into `ticketing.tickets`, carries self-disclosed PII in practice
 - [ ] The provider's **retention window, service-improvement terms and prompt-caching behaviour** (F-16)
 - [ ] That the **re-identification mapping** never leaves Nepal and, preferably, is never persisted. The whole "only pseudonymised text crosses the border" claim rests on it
@@ -668,9 +738,11 @@ open-weights.
 **The timing is the opportunity.** Nothing in §6 describes harm that has happened, which makes
 redaction a **go-live precondition rather than remediation** (§0.5).
 
-**Three decisions cannot be made in this repository:** a retention schedule and legal confirmation of
-the erasure carve-out (F-7), a lawful basis for third-party data and its transfer (F-9), and the
-identification of a data controller (F-11).
+**Four decisions cannot be made in this repository:** a retention schedule and legal confirmation of
+the erasure carve-out (F-7), a lawful basis for third-party data and its transfer (F-9), the
+identification of a data controller (F-11), and **custody of the backup encryption key together with
+who may restore from a backup** (§5.4). The last is the quietest of the four and not the smallest: a
+backup and its key bypass every access control this document credits in §1.4.
 
 **Closing note.** This document was written by an AI agent reading source code. Its description of the
 **system** is verified line by line; its reading of the **law** is a lay reading. **The next reader
