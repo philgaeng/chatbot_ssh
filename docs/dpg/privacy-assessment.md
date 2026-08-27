@@ -132,15 +132,15 @@ country — is §4.
 
 ### 1.4 The architectural PII boundary — what is genuinely enforced
 
-Four rules are enforced by tests that fail the build, not by convention. They are the strongest
-privacy claim this platform can make.
+Four rules are enforced by automated tests that reject the change, not by written policy a
+developer is asked to remember. They are the strongest privacy claim this platform can make.
 
 | Rule | Enforced by |
 |---|---|
-| No complainant PII columns in `ticketing.*`, in any form — column, cache, or log | `tests/ticketing/test_pii_boundary.py` |
-| The ticketing subsystem holds **no** encryption key and **has no accessor for one** — it cannot decrypt, and cannot learn how | same test |
-| The set of `public.*` tables ticketing may touch is **closed and enumerated**, and which of them it writes is pinned | `tests/ticketing/test_boundary_policy.py` |
-| No foreign keys from `ticketing.*` into `public.*` | same test |
+| No complainant PII columns in `ticketing.*` — the whole `complainant_*` namespace is fenced, bar an opaque id | `tests/ticketing/test_boundary_policy.py` |
+| Ticketing's SQL never selects complainant PII out of `public.*` — it may join `complainants`, but only for a location code | same test |
+| The set of `public.*` tables ticketing may touch is **closed and enumerated**, and which of them it writes is pinned | same test |
+| The ticketing subsystem holds **no** encryption key and **has no accessor for one** — it cannot decrypt, and cannot learn how | `tests/ticketing/test_pii_boundary.py` |
 
 Complainant PII reaches an officer's screen by exactly one route: `GET /api/grievance/{id}`, which
 is authenticated, audited, and decrypts server-side
