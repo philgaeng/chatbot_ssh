@@ -95,12 +95,14 @@
     {
       "id": "openai/whisper-large-v3",
       "expected_licence": "apache-2.0",
-      "why": "The .env.open placeholder, and whisper-1 IS Whisper — so this is close to a drop-in for a closed dependency that was never actually live here."
+      "why": "The .env.open placeholder, and whisper-1 IS Whisper — so this is close to a drop-in for a closed dependency that was never actually live here.",
+      "measured_2026_08_20": "✅ Licence apache-2.0, verified from the model card — the expectation held. ⚠ WER unmeasured: the benchmark set has no audio, and .env.open's ASR endpoint 404s (D-53)."
     },
     {
       "id": "openai/whisper-large-v3-turbo",
       "expected_licence": "apache-2.0",
-      "why": "14.76% Nepali WER in the 2026 OpenSLR SLR54 comparative study — best-equal, and faster than large-v3."
+      "why": "14.76% Nepali WER in the 2026 OpenSLR SLR54 comparative study — best-equal, and faster than large-v3.",
+      "measured_2026_08_20": "⚠ Licence is MIT, NOT apache-2.0 — the expectation above was wrong, and so was DPG-22's table until 2026-08-27. Both pass the permissive filter so no decision changes, but do not repeat the apache-2.0 claim. ⚠ WER unmeasured, same two blockers as large-v3."
     }
   ]
 }
