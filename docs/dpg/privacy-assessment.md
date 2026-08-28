@@ -144,7 +144,7 @@ developer is asked to remember. They are the strongest privacy claim this platfo
 
 Complainant PII reaches an officer's screen by exactly one route: `GET /api/grievance/{id}`, which
 is authenticated, audited, and decrypts server-side
-(`backend/services/database_services/grievance_manager.py:190`). Revealing a phone number is an
+(`backend/services/database_services/grievance_manager.py:227`). Revealing a phone number is an
 explicit, logged action.
 
 ---
@@ -238,7 +238,7 @@ exposed beyond what a reader would assume.
 | **L4** | Celery → **model provider** | ⚠ **The raw narrative, unredacted** — **not** name, phone or audio | `LLM_services.py:312`, `:618` | **Two reachable call sites**, established per site rather than counted from source. The other four are the **parked voice flow** — complete, and they will egress the narrative *and* spoken contact details when unparked. The live contact path is deterministic, with no model involved |
 | **L5** | Ticketing Celery → **model provider** | ⚠ Officer notes verbatim; **the whole case timeline, including SEAH cases** | `ticketing/clients/llm_client.py:152, 230, 309` | **Three call sites** — a second client, same destination. ✅ Both surfaces resolve through one registry, and a test proves one environment change moves both, so a reviewer who redirects one cannot leave the other pointed abroad |
 | **L6** | Chatbot → ticketing webhook | Reference, summary, categories, location, priority | `ticketing_dispatch.py` | Internal, non-PII by design. `grievance_summary` is free text and **can** carry self-disclosed PII — cached deliberately; the raw description is not |
-| **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:190` | Server-side decryption at a single boundary, API-key authenticated, audited. **The platform's strongest privacy control** |
+| **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:227` | Server-side decryption at a single boundary, API-key authenticated, audited. **The platform's strongest privacy control** |
 | **L8** | Ticketing → orchestrator `POST /message` | Officer's reply to the complainant | `clients/orchestrator.py` | Internal. Officer-authored content |
 | **L9** | Ticketing → Messaging API → SMS / email | Complainant phone number and message body | `messaging.py:145-148` | ✅ **SMS is wholly in-country with no fallback** — the DOIT gateway is the only transport, and with no token the provider fails closed to `disabled` rather than routing abroad. Email goes to an SMTP relay whose destination depends on configuration |
 | **L10** | Reports and closure documents | XLSX case exports; a closure PDF | `report_export.py`, `closure_pdf.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a non-expiring UUID4 token (`public_closure.py:38,58`). Report shares use adequate entropy but also do not expire |

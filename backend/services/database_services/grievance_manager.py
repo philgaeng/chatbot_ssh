@@ -80,12 +80,49 @@ class GrievanceDbManager(BaseDatabaseManager):
             raise
 
     
+
+    # ── grievance_sensitive_issue only ever escalates (D-64, owner 2026-08-27) ────────────
+    _SENSITIVE_COL = "grievance_sensitive_issue"
+
+    @classmethod
+    def _escalate_only_sensitive_flag(cls, update_fields: list) -> list:
+        """Rewrite the SEAH flag's SET fragment so a stored True can never be cleared.
+
+        `grievance_sensitive_issue = %s`  →  `... = (COALESCE(col, false) OR %s)`
+
+        **The defect (D-64).** `detect_sensitive_content_task` writes True to this column seconds
+        after dispatch — during the contact + OTP window that exists for exactly that — while the
+        tracker slot still holds the KEYWORD result from the 0.9s poll at the end of
+        `form_grievance`. The final submit then collected that stale slot and wrote False straight
+        over the model's True. It fired in precisely the case the LLM leg exists for: keywords
+        miss it, the model catches it (D-52). The ticket's `is_seah` is read from this column by
+        the two-minute sync, so the erasure reached the ticket.
+
+        ⚠ **Done in SQL, not as read-modify-write, and that is not a style preference.** Reading
+        the current value and OR-ing in Python leaves a window: read False → the LLM task writes
+        True → we write False. The race is small and the consequence is a missed harassment
+        report, so the update has to be atomic. Postgres evaluates the OR against the row it is
+        updating.
+
+        ⚠ Recall-first by decision, not by accident: over-flagging is reviewed-and-returned, a
+        miss is a safeguarding failure. Nothing legitimately writes False here to clear a real
+        detection — every False in the codebase is a slot default or a form reset. Clearing a
+        false positive is a ticketing-side action on a reviewed case.
+        """
+        return [
+            f"{cls._SENSITIVE_COL} = (COALESCE({cls._SENSITIVE_COL}, false) OR %s)"
+            if field.strip().startswith(f"{cls._SENSITIVE_COL} =")
+            else field
+            for field in update_fields
+        ]
+
     def update_grievance(self, grievance_id: str, data: Dict[str, Any]) -> int:
         """Update an existing grievance record"""
         try:
             self.logger.info(f"update_grievance: Updating grievance with ID: {grievance_id}")
             expected_fields = ['grievance_categories', 'grievance_categories_alternative', 'grievance_summary', 'grievance_description', 'grievance_claimed_amount', 'grievance_location', 'language_code', 'follow_up_question', 'grievance_sensitive_issue', 'grievance_high_priority', 'grievance_timeline', 'grievance_classification_status', 'case_sensitivity', 'vault_payload_ref', 'vault_last_updated_at']
             update_fields, update_values = self.generate_update_query(data, expected_fields)
+            update_fields = self._escalate_only_sensitive_flag(update_fields)
 
             if update_fields and update_values:
             
@@ -415,6 +452,7 @@ class GrievanceDbManager(BaseDatabaseManager):
             
             # Filter update data to only include allowed fields
             filtered_update_data = {k: v for k, v in update_data.items() if k in allowed_fields}
+
             
             if not filtered_update_data:
                 self.logger.warning(f"No valid fields to update for grievance {grievance_id}")
@@ -437,6 +475,8 @@ class GrievanceDbManager(BaseDatabaseManager):
             
             # Perform the actual update
             update_fields, update_values = self.generate_update_query(filtered_update_data, allowed_fields)
+            # Same escalation rule, same reason — this is the second writer of the column.
+            update_fields = self._escalate_only_sensitive_flag(update_fields)
             
             if not update_fields:
                 self.logger.warning(f"No fields to update for grievance {grievance_id}")
