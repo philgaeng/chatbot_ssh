@@ -104,7 +104,7 @@ text leaves the agency's control, found **in the code**, not assumed from the di
 
 | Egress | Carries | Status today |
 |---|---|---|
-| 9 LLM call sites (see [`02`](02-llm-agnostic-spec.md) §0) | Raw narrative, contact strings, officer notes, field reports, audio | **Unredacted** |
+| 9 LLM call sites behind **2 chokepoints** — `call_llm()` in `backend/services/llm_client.py:80` and `ticketing/clients/llm_client.py:69` (DPG-18). **5 run; 4 are parked** — the voice-notes flow, declared in `PARKED_TASKS` (`backend/task_queue/registered_tasks.py:96`) | Raw narrative, contact strings, officer notes, field reports, audio | **Unredacted.** ⚠ The count is 9 but the *surface* is 2 — see [DPG-33](#dpg-33). Inventory all 9, and mark the 4 parked ones: they carry no production egress until transcription is funded |
 | Celery task payloads → **Redis** | `input_data["values"]["grievance_description"]` (`grievance_intake/classification.py`) | **Unredacted.** Check Redis persistence (RDB/AOF) and whether the volume is backed up |
 | Application logs (`backend/logger/`) | Varies per call site — audit each | Partially mitigated: `db_debug_log.text_len_for_log` logs **lengths**, not text. Follow that precedent |
 | Exception reports carrying request bodies | Full payloads | Audit |
@@ -231,6 +231,18 @@ Three choices matter, and each has a reason:
   `11_llm_pipeline_policy.md` gets reconciled (DPG-36), not the design. The conflict is resolved in favour
   of the officer's ability to act on a case — a GRM officer needs to know which engineer was named.
 
+  > ⚠ **REVISITED 2026-08-27 — a third option, and it does not lose to this reason.** The owner proposes
+  > encrypting the original narrative, working from the redacted derivative everywhere, and revealing the
+  > original through the audited path that already exists for contact details. **The option Q-12b rejected
+  > was "the original is gone"; this one keeps it.** The officer still learns which engineer was named —
+  > they ask, and the asking is logged. Design:
+  > [`followups/encrypt-the-original-work-from-the-redacted.md`](followups/encrypt-the-original-work-from-the-redacted.md).
+  >
+  > **That is a sprint after this one — it needs a redacted derivative to exist first.** Two parts of it
+  > constrain Sprint 3 and are written in below, because building the opposite and reversing it costs
+  > more than deciding now: **§31.4** (redact the output) and **[DPG-33](#dpg-33) step 2** (which of the
+  > summary's three consumers gets names).
+
   > ### ⚠ This is **pseudonymisation, not anonymisation** — and the distinction is load-bearing
   >
   > **Because we keep the mapping, the text remains personal data** under GDPR-style analysis and under
@@ -270,9 +282,39 @@ Three choices matter, and each has a reason:
 
 - **Do not redact LOCATION** if the classifier derives district from the narrative — you will break your
   own pipeline. Either leave `LOC` intact (a district name alone is not identifying) or take district
-  from the structured field and redact freely. ⚠ **Check which applies here**: the classification prompt
-  (`LLM_services.py:221`) injects district and province from structured slots, so district may already
-  come from the structured side — verify before choosing.
+  from the structured field and redact freely. ⚠ **Check which applies here**: the classification
+  system message (`LLM_services.py:322`) injects district and province from structured slots, so
+  district may already come from the structured side — verify before choosing. The same injection
+  happens on the contact-extraction prompt (`:141`) and the translation prompt (`:563`).
+
+### 31.4 — Redact the output, not only the input (added 2026-08-27)
+
+**The ordering is the control; a prompt instruction is not.** If the summary is generated from
+pseudonymised text the model never receives the name, so it cannot emit one. That is structural. Asking a
+model in its prompt not to name anybody only acts in the case where redaction *missed* a name — which is
+exactly where an instruction is least dependable, because a missed name reads to the model as ordinary
+narrative. Keep the instruction as defence in depth; **do not record it as a control.** This spec already
+says so about the ticketing prompt ([DPG-33](#dpg-33) step 3) and the same standard applies here.
+
+**The enforceable version, and it is cheap:** run `redact_for_model()` over the model's *output* before it
+is persisted. Same function, one more call site, two sentences of input. If a PERSON token survives into a
+generated summary, that summary is redacted again or regenerated. It converts *"we asked the model not
+to"* into *"a summary carrying a detected name cannot be stored"* — deterministic, and pinnable by a test
+the way the boundary rules are.
+
+⚠ **There are two summary-producing prompts, not one, and the second is easy to miss:**
+
+| Where | Produces | Why it gets missed |
+|---|---|---|
+| `LLM_services.py:333-348` | `grievance_summary`, from the classification call | The obvious one |
+| `LLM_services.py:567-574` | `grievance_summary_en`, from the **translation** call | Its prompt says *"if it is not aligned with the details, **create a new summary** from the translated details"* — it reads as a translation step, so a task to "gate the summary prompt" finds the first and misses this. And its output is the English summary, the one most likely to reach a quarterly report or ADB |
+
+An output-redaction pass covers both without anyone having to remember there are two. A prompt gate has to
+be applied twice, correctly, and stay applied.
+
+⚠ **Names removed is not identity removed.** A summary keeps ward-level location and circumstance, which
+[the privacy assessment §1.2](../../dpg/privacy-assessment.md) notes is often identifying on its own. The
+defensible claim is *the summary carries no names*, **not** *the summary is anonymous*.
 
 ### API
 
@@ -307,6 +349,8 @@ Per-document mapping scope. Never a process-global counter (two concurrent griev
       claim rests on, and it is voided by a single careless `json.dumps`
 - [ ] **No document produced by this sprint describes the output as "anonymised".** Pseudonymised, with the
       reason. Pinned by the same grep that checks the egress inventory
+- [ ] **`redact_for_model()` runs over model *output* before persistence (§31.4)**, not only over input.
+      A prompt instruction may be added beside it, and is **not** counted as a control
 - [ ] `redact_for_model` / `restore` round-trip is lossless for non-PII text
 - [ ] LOCATION policy decided, with the reason recorded
 - [ ] **No new heavy dependency in this ticket** — it must ship without DPG-32
@@ -422,9 +466,30 @@ instead of nine call sites.
    redacted. But `grievance_summary` is shown to the complainant and stored, and translation output
    feeds the English record — those need `restore()` applied to the model's output using the same
    mapping. Get this wrong in either direction and you either leak or you ship `<PERSON_1>` to a user.
+
+   > ⚠ **AMENDED 2026-08-27 — "the summary" is three different artefacts, and one field cannot serve all
+   > three.** The step above restores names into a single `grievance_summary`, which means restoring them
+   > into the copy that is **cached in `ticketing.tickets` by design** (CLAUDE.md data rule 4) and travels
+   > from there into the officer queue, officer search and the XLSX quarterly report. Verified consumers:
+   >
+   > | Consumer | Where | Needs names? |
+   > |---|---|---|
+   > | **Complainant-facing** — confirmation email, status-check display | `actions/action_outro.py:220`, `actions/services/status_check/display.py:30` | **Yes.** They wrote the name; `<PERSON_1>` back at them is absurd. ⚠ The email leaves over the SMTP relay, and it can carry the *accused's* name too — an egress in DPG-30's table |
+   > | **Stored / cached / reported** — `public.grievances`, `ticketing.tickets`, queue, search, XLSX | CLAUDE.md rule 4 | **This is the open question.** Names here are what spreads laterally |
+   > | **Model-facing** — the translation call's input | `LLM_services.py:563` | **No**, unconditionally |
+   >
+   > ⭐ **This is the highest-leverage decision in the sprint.** A stored summary with no names makes the
+   > entire officer-side surface clean — queue, search, reports, and the ticketing backup — and it is the
+   > mechanism that could retire rule 4's *"the asymmetry is intentional. Do not 'fix' it"* caveat, which
+   > exists only because there has never been a way to make the summary safe.
+   >
+   > **Decide it in this sprint, even if the storage half is built in the next one** (see
+   > [`followups/encrypt-the-original-work-from-the-redacted.md`](followups/encrypt-the-original-work-from-the-redacted.md)).
+   > Restore-into-storage and redacted-storage are opposite implementations; building one and reversing it
+   > is the expensive path.
 3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
    *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
-   descriptors"* (`llm_client.py:160-161`). **A prompt instruction is not a control** — it does nothing
+   descriptors"* (`ticketing/clients/llm_client.py:189-190`). **A prompt instruction is not a control** — it does nothing
    about what is *sent*, only about what comes back. Keep it (defence in depth) and add real redaction
    on the input.
 4. **Audio is not redactable.** `transcribe_audio_file` sends the raw waveform; a voice note carries the
@@ -432,13 +497,19 @@ instead of nine call sites.
    **State this explicitly in the inventory and the privacy assessment**, and note that it is the
    strongest single argument for T2: for voice, only moving the inference endpoint solves it. Redaction
    applies to the transcript, immediately after.
-5. Verify `parse_llm_response`'s error path (`LLM_services.py:299`) — it currently logs the **raw model
-   response**. That is a log-side leak on the model-call path; DPG-34 owns the fix, but flag it here.
+5. ✅ **`parse_llm_response`'s error path is already clean** — `LLM_services.py:490` logs the response
+   **length**, not the body, and has since DPG-13, which delivered that half of T-34-c early. The
+   raise carries a length too, not the reply. There is nothing to fix here: check it has not
+   regressed, and when adding context to `LLMResponseParseError`, do not put the body back.
 
 ### Acceptance
 
 - [ ] Redaction applied at both client chokepoints, opt-out rather than opt-in
 - [ ] `restore()` applied where output reaches a human or storage; a test per direction
+- [ ] **Which of the summary's three consumers receives names is decided and recorded** (step 2's
+      amendment), even if only the complainant-facing half ships this sprint
+- [ ] **Output redaction (§31.4) applied to both summary-producing prompts** — the classification call and
+      the translation call — with a test that a name surviving generation cannot be persisted
 - [ ] Ticketing prompt instruction kept **and** input redaction added
 - [ ] Audio's irreducibility documented in the inventory and the privacy assessment
 - [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green
@@ -450,10 +521,9 @@ instead of nine call sites.
 > see [`02` §19.0b](02-llm-agnostic-spec.md#dpg-19)). Two log lines this ticket must cover, and
 > neither was in its inventory:**
 > `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO** on every
-> validation — `logger.info("%s - Validating phone: %s", action_name, slot_value)` — and `:37` logs
-> it again on the invalid path. **This is the leak that actually happens**, in the sense DPG-34 means:
-> no model, no third party, just the phone number in the container logs of every intake. Recorded,
-> not fixed — Sprint 1 does not touch it.
+> validation — `logger.info("%s - Validating phone: %s", action_name, slot_value)` — and `:38` logs
+> it again on the invalid path. Recorded, not fixed — Sprint 1 does not touch it, and it is still
+> there. It now heads DPG-34's step 2 list below, which is where the work is.
 
 ## DPG-34 — Redaction at the logging, Celery, and backup boundary {#dpg-34}
 
@@ -465,12 +535,20 @@ instead of nine call sites.
    (`TaskLogger`) so it covers every service, rather than at individual call sites — one filter,
    installed once, cannot be forgotten by the next call site.
 2. **Fix the known raw-text log sites**, at minimum:
-   - `LLM_services.py:299` — logs the raw model response on a JSON parse error
-   - `LLM_services.py:356`, `:350` — the translation error paths interpolate the **entire `input_data`
-     dict**, which contains `grievance_description`, into a `ValueError` message. That string then
-     propagates as an exception, gets logged, and may reach a Celery result backend in Redis
+   - `backend/actions/services/contact/phone.py:27` — logs the complainant's phone at **INFO on every
+     validation**, and `:38` logs it again on the invalid path. **This is the leak that actually
+     happens**: no model, no third party, just the phone number in the container logs of every intake.
+     Start here
+   - `LLM_services.py:500` — `_grievance_ref()` bounds the translation error messages to the
+     `grievance_id` plus **the first three words** (60-char cap), which is what DPG-19.3 left behind.
+     Three words is still narrative and can read *"Er. Sharma refused"*: a bounded, deliberate residual
+     that this ticket is the one to close. The function's own docstring says so
    - Audit the rest against DPG-30's inventory
-   - **Follow the existing precedent**: `db_debug_log.text_len_for_log` already logs lengths, not content
+   - **Follow the existing precedent**: `db_debug_log.text_len_for_log` already logs lengths, not
+     content — `LLM_services.py:616` and `:647` use it on the SEAH path
+   - ✅ **Two sites this list used to name are already fixed** and are not work: `parse_llm_response`
+     logs the response length (`:490`, DPG-13), and the translation paths no longer interpolate the
+     whole `input_data` dict (DPG-19.3 / D-29)
 3. **Celery payloads.** `input_data["values"]["grievance_description"]` is serialised into Redis on every
    intake. Decide and implement: pass a grievance ID and let the task read the text from Postgres, or
    redact the payload. **Passing the ID is cleaner** and removes the store entirely rather than
@@ -555,6 +633,14 @@ self-disclosed PII… The asymmetry is intentional. Do not 'fix' it"* — with w
 builds. If redaction now happens at transmission rather than at storage, that caveat still stands and
 should say so explicitly, with the new reason.
 
+> ⭐ **Added 2026-08-27 — there may now be a way to retire that caveat rather than restate it.** Rule 4's
+> asymmetry exists because there has never been a way to make the summary safe to cache. Generating the
+> summary downstream of the pseudonymiser, plus the output pass in [§31.4](#dpg-31), is that way: the model
+> never receives the name, and a name that survives generation cannot be persisted. **If [DPG-33](#dpg-33)
+> step 2 decides the stored summary carries no names, this ticket amends rule 4 instead of re-explaining
+> it** — and moves the reason with the rule, per CLAUDE.md's own instruction. If it decides otherwise,
+> restate the caveat with the new reason as originally written.
+
 ### Steps
 
 1. ~~Decide (Q-12b)~~ ✅ **Decided: redact at transmission** (2026-08-17). This ticket no longer waits on a
@@ -587,7 +673,13 @@ should say so explicitly, with the new reason.
       "unaddressed" — a number, published, with the provider's terms named beside it
 - [ ] Deterministic PERSON recall measured and published **as a rule-layer number**, with the ML tier's
       absence stated as the reason it is not higher
-- [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at storage
+- [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at
+      storage. ⚠ **Q-12b revisited 2026-08-27** with a third option that keeps the original encrypted
+      rather than discarding it ([§31.3](#dpg-31)); the decision this sprint owes is
+      [DPG-33](#dpg-33) step 2, not the whole design
+- [ ] **Model output is redacted before persistence, not only model input** (§31.4), on **both**
+      summary-producing prompts. Any prompt-level instruction is recorded as defence in depth and
+      never as a control
 - [ ] **The restore mapping is either never persisted, or protected as the PII it is** — not in `ticketing.*`,
       **never serialised alongside the text it dereferences, and never leaving Nepal**
 - [ ] **Nothing produced by this sprint calls the result "anonymised".** It is pseudonymisation: we hold the
