@@ -56,6 +56,7 @@ from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, US
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
+from backend.services.db_debug_log import text_len_for_log, text_prefix_for_log
 from .task_manager import TaskManager, DatabaseTaskManager
 from .celery_app import celery_app
 
@@ -893,8 +894,12 @@ def classify_and_summarize_grievance_task(self,
 @TaskManager.register_task(task_type='LLM')
 def detect_sensitive_content_task(
     self,
-    text: str,
     language_code: str,
+    # ⚠ `text` is now OPTIONAL and is not sent by the dispatcher (DPG-34 step 3) — the task reads
+    # the narrative from Postgres by `grievance_id`. It is kept, after `language_code`, purely so
+    # LEGACY IN-FLIGHT MESSAGES enqueued before this shipped still deserialise. Remove it with the
+    # classification fallback, after a full queue drain — not before.
+    text: Optional[str] = None,
     grievance_id: Optional[str] = None,
     session_id: Optional[str] = None,
     complainant_id: Optional[str] = None,
@@ -907,31 +912,89 @@ def detect_sensitive_content_task(
     Result is persisted to DB (grievance.grievance_sensitive_issue) via DatabaseTaskManager,
     same pattern as classify_and_summarize_grievance_task, so Submit details can read it.
     """
-    logger = __import__("logging").getLogger(__name__)
     try:
         from backend.services.LLM_services import detect_sensitive_content_llm
     except Exception as e:
         logger.warning(f"detect_sensitive_content_task import failed: {e}")
         return {"detected": False, "level": "low", "message": ""}
 
+    # ── The narrative is READ, not received (DPG-34 step 3, SEAH half) ─────────────────
+    # `text=` used to travel in the payload, putting the grievance narrative — including
+    # harassment disclosures — into Redis, which snapshots to disk (D-63).
+    #
+    # ⚠ This path is NOT the same as classification's, and the difference decides the design.
+    # `persist_grievance_description_for_detection` writes the row before dispatch, but it is
+    # BEST-EFFORT: it returns early when `grievance_id`/`complainant_id` are unset, and swallows
+    # DB exceptions — while classification's write is hard and raises. The dispatch happens
+    # regardless of either. So a missing row is a REACHABLE state here, and reading from the DB
+    # without handling it would turn a best-effort write into a silently skipped safeguarding
+    # check. Hence: retry (the row may land), then fail TERMINALLY AND LOUDLY — never silently.
+    resolved_text = None
+    if grievance_id:
+        try:
+            row = db_manager.get_grievance_core_by_id(grievance_id)
+            resolved_text = (row or {}).get("grievance_description")
+        except Exception as exc:
+            logger.warning(
+                "detect_sensitive_content_task: could not read grievance %s: %s",
+                grievance_id,
+                exc,
+            )
+
+    if not resolved_text and text:
+        # Legacy in-flight message, enqueued before this shipped. Remove with the classification
+        # fallback, after a full queue drain.
+        logger.info(
+            "detect_sensitive_content_task: using legacy in-payload text | grievance_id=%s",
+            grievance_id,
+        )
+        resolved_text = text
+
+    if not resolved_text:
+        max_retries = self.max_retries if self.max_retries is not None else 3
+        if self.request.retries < max_retries:
+            # The row may still be landing — the pre-dispatch write and this task race by a
+            # thread hand-off. Short backoff: this is a database read, not a model call.
+            raise self.retry(countdown=2 * (2 ** self.request.retries))
+        # ⚠ TERMINAL, and it must be loud. A SEAH detection that never ran is invisible
+        # everywhere else: no flag is written, nothing shows a gap, and the ticket simply is
+        # not marked sensitive. The deterministic keyword detector still runs INLINE at submit
+        # (Q-14's floor), so this is the loss of the second signal, not of all detection —
+        # but nothing else will ever say it happened.
+        logger.error(
+            "detect_sensitive_content_task: NO TEXT after %s retries | grievance_id=%s "
+            "complainant_id=%s — the LLM SEAH signal did not run for this grievance. The "
+            "deterministic keyword detector still applied at submit.",
+            self.request.retries,
+            grievance_id,
+            complainant_id,
+        )
+        return {"detected": False, "level": "low", "message": "", "status": FAILED}
+
     logger.info(
-        "detect_sensitive_content_task: start | grievance_id=%s, complainant_id=%s, language_code=%s, text_snippet=%r",
+        "detect_sensitive_content_task: start | grievance_id=%s, complainant_id=%s, language_code=%s, %s",
         grievance_id,
         complainant_id,
         language_code,
-        (text or "")[:120],
+        text_prefix_for_log("text", resolved_text),
     )
-    result = detect_sensitive_content_llm(text, language_code)
+    result = detect_sensitive_content_llm(resolved_text, language_code)
     detected = result.get("detected", False)
     level = result.get("level", "low")
     message = result.get("message", "")
+    # ⚠ `message` is NOT logged, at any length. The prompt asks for "a short excerpt of the
+    # relevant part of the text" — so it is the fragment the model selected BECAUSE it is the
+    # harassment disclosure. That is categorically different from the first 8 characters of a
+    # narrative, and the owner's free-text prefix rule does not extend to it. `detected` and
+    # `level` are the diagnostic signals; the excerpt adds nothing its length does not.
     logger.info(
-        "detect_sensitive_content_task: llm_result | grievance_id=%s, complainant_id=%s, detected=%s, level=%s, message_snippet=%r",
+        "detect_sensitive_content_task: llm_result | grievance_id=%s, complainant_id=%s, "
+        "detected=%s, level=%s, %s",
         grievance_id,
         complainant_id,
         detected,
         level,
-        (message or "")[:120],
+        text_len_for_log("message", message),
     )
 
     if not grievance_id or not complainant_id:

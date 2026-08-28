@@ -145,11 +145,14 @@ everything it checked, which is exactly how an unchecked assumption travels next
   grievance at `grievance_classification_status='pending'` **permanently** — a detectable state that
   nothing detects.
 
-  ⏭ **Still open, and now the smaller half:** SEAH detection still passes `text=` in its payload. Its
-  pre-dispatch write (`persist_grievance_description_for_detection`) is **best-effort** — it returns
-  early without `grievance_id`/`complainant_id` and swallows exceptions — where classification's write
-  is a hard one. Making a **safeguarding** path depend on a best-effort write is not a change to make
-  casually. See the followup.
+  ✅ **The SEAH half shipped too, 2026-08-27, with a different failure mode because the risk differs.**
+  Its pre-dispatch write (`persist_grievance_description_for_detection`) is **best-effort** — early
+  return without ids, swallowed exception — where classification's is hard, so a missing row is
+  **reachable**. The task therefore **retries**, then **fails terminally at ERROR** naming the
+  grievance and stating that the deterministic keyword detector still applied. **Silence was the one
+  unacceptable outcome**: a SEAH detection that never ran writes no flag and shows no gap anywhere.
+  ⭐ Two further leaks went with it — 120 chars of narrative at INFO, and `message_snippet`, **the
+  excerpt the model selected because it is the disclosure**, which is now never logged at any length.
 
   ⏭ And independent of all of it: **no sweeper exists for grievances stuck at `pending`.** That gap
   is real today; it was merely masked by the persistence nobody knew about.

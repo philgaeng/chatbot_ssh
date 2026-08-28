@@ -165,3 +165,136 @@ def test_registered_tasks_does_not_print_at_all():
         f"print() at line(s) {prints} in registered_tasks.py — use the module logger, which a "
         "logging filter can reach and a print cannot"
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# The SEAH half — same fix, different risk, so a different failure mode
+#
+# Classification's pre-dispatch write is HARD (create_or_update_grievance in
+# intake_submit.py raises). SEAH's is BEST-EFFORT: persist_grievance_description_for_detection
+# returns early without grievance_id/complainant_id and swallows DB exceptions, while the
+# dispatch happens regardless of either. So a missing row is REACHABLE here, and reading from
+# the DB without handling it would convert a best-effort write into a silently skipped
+# safeguarding check.
+# ═════════════════════════════════════════════════════════════════════════════
+
+SENSITIVE = REPO_ROOT / "backend/actions/grievance_intake/sensitive.py"
+
+
+def _seah_task() -> ast.FunctionDef:
+    tree = ast.parse(TASKS.read_text(encoding="utf-8"))
+    return next(
+        n for n in ast.walk(tree)
+        if isinstance(n, ast.FunctionDef) and n.name == "detect_sensitive_content_task"
+    )
+
+
+def test_the_seah_dispatch_does_not_send_the_narrative():
+    """`text=` must not be passed to .delay() — that is what put disclosures in Redis."""
+    tree = ast.parse(SENSITIVE.read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr != "delay":
+            continue
+        kwargs = {kw.arg for kw in node.keywords}
+        assert "text" not in kwargs, (
+            "sensitive.py sends `text=` to the SEAH task again. That serialises the grievance "
+            "narrative — harassment disclosures included — into Redis, which persists to disk "
+            "(D-63). The task reads it from Postgres by grievance_id."
+        )
+        assert "grievance_id" in kwargs, (
+            "the SEAH task cannot read the narrative without grievance_id"
+        )
+        return
+    raise AssertionError("no .delay() call found in sensitive.py")
+
+
+def test_the_seah_task_reads_the_narrative_from_the_database():
+    calls = {
+        n.func.attr for n in ast.walk(_seah_task())
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+    }
+    assert "get_grievance_core_by_id" in calls, (
+        "detect_sensitive_content_task must read the narrative from Postgres"
+    )
+    assert "get_grievance_by_id" not in calls, (
+        "use the core accessor — the PII-joining one decrypts contact fields this task never needs"
+    )
+
+
+def test_a_missing_row_retries_rather_than_skipping_the_check():
+    """⭐ The property that makes reading-from-DB safe on a safeguarding path.
+
+    The pre-dispatch write is best-effort, so "no row" is reachable. Retrying gives it time to
+    land; skipping would drop the LLM SEAH signal with nothing anywhere recording that it
+    happened.
+    """
+    fn = _seah_task()
+    retries = [
+        n for n in ast.walk(fn)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "retry"
+    ]
+    assert retries, (
+        "detect_sensitive_content_task no longer retries. On this path a missing row is "
+        "reachable (the pre-dispatch write is best-effort), so no retry means a silently "
+        "skipped harassment check."
+    )
+
+
+def test_exhausted_retries_fail_LOUDLY_at_error_level():
+    """A SEAH detection that never ran is invisible everywhere else — so it must be loud here.
+
+    No flag is written, nothing shows a gap, and the ticket is simply not marked sensitive. This
+    log line is the only artefact that the second signal did not run.
+    """
+    fn = _seah_task()
+    error_logs = [
+        n for n in ast.walk(fn)
+        if isinstance(n, ast.Call)
+        and isinstance(n.func, ast.Attribute)
+        and n.func.attr == "error"
+    ]
+    assert error_logs, (
+        "the terminal no-text path must log at ERROR. At INFO or WARNING it is one line among "
+        "thousands, and a missed safeguarding signal is the thing you most need to find later."
+    )
+
+
+def test_the_model_selected_excerpt_is_never_logged():
+    """⭐ `message` is not free text under the 8-character rule, and the distinction matters.
+
+    The prompt asks for *"a short excerpt of the relevant part of the text"* — so `message` is the
+    fragment the model chose BECAUSE it is the harassment disclosure. A prefix of it is a prefix
+    of the most sensitive string the system produces. `detected` and `level` carry the diagnostic
+    signal; the excerpt adds nothing its length does not.
+    """
+    fn = _seah_task()
+    for node in ast.walk(fn):
+        if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)):
+            continue
+        if node.func.attr not in {"info", "debug", "warning", "error"}:
+            continue
+        for arg in node.args:
+            # `message` reaching a log call is only acceptable inside text_len_for_log(...)
+            for sub in ast.walk(arg):
+                if isinstance(sub, ast.Name) and sub.id == "message":
+                    assert _inside_len_helper(arg, sub), (
+                        f"line {node.lineno}: the model-selected excerpt `message` reaches a log "
+                        "call. Log its LENGTH (text_len_for_log), never its content — not even a "
+                        "prefix."
+                    )
+
+
+def _inside_len_helper(root: ast.AST, target: ast.Name) -> bool:
+    for sub in ast.walk(root):
+        if (
+            isinstance(sub, ast.Call)
+            and isinstance(sub.func, ast.Name)
+            and sub.func.id in {"text_len_for_log", "len"}
+            and any(n is target for n in ast.walk(sub))
+        ):
+            return True
+    return False
