@@ -152,7 +152,18 @@ async def trigger_async_classification(
             or form.district,
             "flask_session_id": session_id,
             "session_id": session_id,
-            "values": {"grievance_description": grievance_description},
+            # ⚠ The grievance narrative is DELIBERATELY ABSENT (DPG-34 step 3). It used to
+            # travel here as `"values": {"grievance_description": ...}`, which serialised the
+            # text into Redis on every intake — and Redis snapshots to disk (D-63), so the
+            # broker held narratives at rest, unencrypted, in a store nothing backs up and no
+            # retention policy names.
+            #
+            # The task reads it from Postgres by `grievance_id` instead. Safe because
+            # `create_or_update_grievance` in `intake_submit.py` is a HARD write on the submit
+            # path and runs BEFORE this trigger — the row is always there.
+            #
+            # ⚠ Do not "helpfully" put the text back to save a query. Removing the store is the
+            # point; a redacted copy would still be a copy.
         }
         form.logger.info(
             "classification_trigger_prepare grievance_id=%s session_id=%s "

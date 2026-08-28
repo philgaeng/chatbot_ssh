@@ -49,6 +49,7 @@ Architecture Benefits:
 - No configuration duplication
 """
 import json
+import logging
 from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
 from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
@@ -57,6 +58,11 @@ from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
 from .task_manager import TaskManager, DatabaseTaskManager
 from .celery_app import celery_app
+
+# Module logger. Tasks previously used bare `print(...)` and per-function
+# `__import__("logging").getLogger(__name__)`; the print wrote the whole task payload —
+# grievance narrative included — to the container logs on every intake (DPG-34).
+logger = logging.getLogger(__name__)
 
 try:
     from backend.services.image_compression import log_heif_availability
@@ -564,7 +570,13 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
     try:
         task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
         db_result = task_mgr.handle_db_operation(result)
-        print(f"Database operation completed: {db_result}")
+        # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+        # and grievance_summary — the narrative and the generated summary, to stdout,
+        # on every success. A print is also invisible to any logging filter (DPG-34).
+        logger.info(
+            "Database operation completed: %s",
+            (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+        )
     except Exception as e:
         error = "error during database operation: " + str(e) #adding context to error message
         task_mgr.fail_task(
@@ -655,13 +667,22 @@ def classify_and_summarize_grievance_task(self,
     input_data['entity_key'] = 'grievance_id'
     
     if not input_data.get('grievance_id'):
-        raise ValueError(f"Missing grievance_id in input data: {input_data}")
+        # Names the shape, not the payload — the payload used to carry the narrative.
+        raise ValueError(
+            f"Missing grievance_id in input data (keys={sorted(input_data.keys())})"
+        )
     
     # Get the Celery task ID from the current task
     self.request.task_id = self.request.id if hasattr(self, 'request') else None
     
     task_mgr = TaskManager(task=self,  emit_websocket=emit_websocket)
-    print(f"Classify and summarize grievance task called with file_data: {input_data}")
+    # ⚠ Was `print(f"... {input_data}")` — the payload carried the grievance narrative, so this
+    # wrote it to stdout and into the container logs on every intake (D-62/DPG-34).
+    logger.info(
+        "classify_and_summarize_grievance_task received grievance_id=%s session_keys=%s",
+        input_data.get("grievance_id"),
+        sorted(input_data.keys()),
+    )
     
     # Extract grievance_id from the file_data
     grievance_id = input_data.get('grievance_id')
@@ -672,18 +693,55 @@ def classify_and_summarize_grievance_task(self,
     # Extract session_id for websocket emission (handle both Rasa and Flask frontends)
     session_id = input_data.get('flask_session_id') or input_data.get('session_id')
     if not session_id:
-        raise ValueError(f"Missing session_id (flask_session_id or session_id) in input data: {input_data} - emission will fail")
+        raise ValueError(
+            "Missing session_id (flask_session_id or session_id) for grievance_id="
+            f"{input_data.get('grievance_id')} - emission will fail"
+        )
     
     # Store context data in TaskManager instance for later retrieval
     # (This is the proper way according to Celery documentation)
     
     # Extract data directly from file_data (transcription result)
     language_code = input_data.get('language_code', 'ne')
-    grievance_description = input_data.get('values', {}).get('grievance_description')  # The transcription text
- 
-        
+    # ── The narrative is READ, not received (DPG-34 step 3) ───────────────────────────
+    # It used to travel in `input_data["values"]["grievance_description"]`, which serialised
+    # the grievance text into Redis on every intake — and Redis snapshots to disk (D-63), so
+    # the broker held narratives at rest. Passing the id and reading from Postgres removes the
+    # store rather than obscuring it.
+    #
+    # Safe because the row is written BEFORE this task is dispatched: `create_or_update_grievance`
+    # in `backend/actions/forms/intake_submit.py` is a hard write on the submit path, and the
+    # trigger fires after it.
+    #
+    # ⚠ The payload fallback is for IN-FLIGHT LEGACY MESSAGES only — anything enqueued before
+    # this shipped still carries `values`, and with RDB persistence those survive a restart.
+    # Delete the fallback once no such message can exist (a full queue drain), not before.
+    grievance_description = None
+    if grievance_id:
+        try:
+            row = db_manager.get_grievance_core_by_id(grievance_id)
+            grievance_description = (row or {}).get('grievance_description')
+        except Exception as exc:
+            logger.warning(
+                "Could not read grievance_description for %s: %s", grievance_id, exc
+            )
+
     if not grievance_description:
-        raise ValueError(f"No transcription text found in input data: {input_data.get('values')}")
+        legacy = input_data.get('values', {}).get('grievance_description')
+        if legacy:
+            logger.info(
+                "Using legacy in-payload description for grievance_id=%s "
+                "(enqueued before DPG-34 step 3)",
+                grievance_id,
+            )
+            grievance_description = legacy
+
+    if not grievance_description:
+        # ⚠ Names the id and the shape, never the text — this message reaches the Celery log.
+        raise ValueError(
+            f"No grievance_description for grievance_id={grievance_id!r}: "
+            f"not in the database and not in the payload (keys={sorted(input_data.keys())})"
+        )
     
     task_mgr.start_task(
         entity_key=entity_key, 
@@ -778,7 +836,13 @@ def classify_and_summarize_grievance_task(self,
     try:
         db_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
         db_result = db_mgr.handle_db_operation(result)
-        print(f"Database operation completed: {db_result}")
+        # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+        # and grievance_summary — the narrative and the generated summary, to stdout,
+        # on every success. A print is also invisible to any logging filter (DPG-34).
+        logger.info(
+            "Database operation completed: %s",
+            (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+        )
     except Exception as e:
         error = "Error in classify_and_summarize_grievance_task during database operation: " + str(e) #adding context to error message
         # A database failure is not a model failure: no retry ladder here, mark it terminal so the
@@ -1006,7 +1070,13 @@ def extract_contact_info_task(self, input_data: Dict[str, Any],
         try:
             task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
             db_result = task_mgr.handle_db_operation(result)
-            print(f"Database operation completed: {db_result}")
+            # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+            # and grievance_summary — the narrative and the generated summary, to stdout,
+            # on every success. A print is also invisible to any logging filter (DPG-34).
+            logger.info(
+                "Database operation completed: %s",
+                (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+            )
         except Exception as e:
             task_mgr.fail_task(
                 error=str(e), 
@@ -1147,7 +1217,13 @@ details=grievance_data)
         try:
             task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
             db_result = task_mgr.handle_db_operation(result)
-            print(f"Database operation completed: {db_result}")
+            # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+            # and grievance_summary — the narrative and the generated summary, to stdout,
+            # on every success. A print is also invisible to any logging filter (DPG-34).
+            logger.info(
+                "Database operation completed: %s",
+                (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+            )
         except Exception as e:
             error = "Error in translate_grievance_to_english_task during database operation: " + str(e)
             task_mgr.fail_task(

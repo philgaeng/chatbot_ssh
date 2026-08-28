@@ -130,12 +130,29 @@ everything it checked, which is exactly how an unchecked assumption travels next
   **Corrected, and the lever replaced**: `compose down`/`rm` discards the writable layer; a restart does
   not. The two actions have different consequences and the runbook no longer treats them as one.
   `14_key_and_secret_lifecycle.md`'s rotation advice inherited the same error and is corrected too.
-- ⏭ **The remaining question is a trade nobody has made, and it is the owner's.** Adding
-  `--save "" --appendonly no` makes the documented containment *true* and minimises PII at rest. **It
-  also means a restart genuinely loses in-flight classification and SEAH-detection tasks, which today
-  survive** — those grievances would simply never be classified, and nothing re-drives them. Weigh
-  before changing; the documents are now honest either way, which is what makes it a free decision
-  rather than an urgent one.
+- ✅ **RESOLVED 2026-08-27 by removing the cause, not by taking the trade.** The question was whether
+  to add `--save "" --appendonly no`, accepting task loss on restart to stop persisting PII. **The
+  better answer was to stop putting the PII there.** DPG-34 step 3 shipped: the classification payload
+  now carries `grievance_id`, and the task reads the narrative from Postgres. Redis no longer holds
+  grievance text on this path, so the persistence setting stops mattering for it — **and the
+  reliability is kept.**
+
+  ⚠ **The reliability question was real, and checking it is what redirected the fix.** *"Won't Celery
+  just retry?"* — **no.** Retry fires when a task **runs and raises**; it re-enqueues a *new* message.
+  A message lost from the broker never ran, so there is no retry state, and **nothing sweeps for the
+  gap**: the chatbot Celery app has **no beat schedule at all**, and `grievance_sync` (ticketing, every
+  2 min) creates tickets and never touches classification. A lost classification would leave the
+  grievance at `grievance_classification_status='pending'` **permanently** — a detectable state that
+  nothing detects.
+
+  ⏭ **Still open, and now the smaller half:** SEAH detection still passes `text=` in its payload. Its
+  pre-dispatch write (`persist_grievance_description_for_detection`) is **best-effort** — it returns
+  early without `grievance_id`/`complainant_id` and swallows exceptions — where classification's write
+  is a hard one. Making a **safeguarding** path depend on a best-effort write is not a change to make
+  casually. See the followup.
+
+  ⏭ And independent of all of it: **no sweeper exists for grievances stuck at `pending`.** That gap
+  is real today; it was merely masked by the persistence nobody knew about.
 
 ⚠ **Do not "fix" this by adding a named volume.** That makes the exposure durable *and* documented,
 which is worse than either alone — a broker holding unredacted SEAH text does not need better
