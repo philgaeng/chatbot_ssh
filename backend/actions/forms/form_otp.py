@@ -8,6 +8,7 @@ from rasa_sdk.events import SlotSet, SessionStarted, ActionExecuted, FollowupAct
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
 from backend.actions.services.otp import verification as otp_verification
+from backend.services.db_debug_log import mask_phone_for_log
 
 class BaseOtpAction(BaseAction):
     def __init__(self):
@@ -166,7 +167,11 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         """
         self._initialize_language_and_helpers(tracker)
         self.logger.debug(f"{self.name()} - requested_slot : {tracker.get_slot('requested_slot')}")
-        self.logger.debug(f"{self.name()} - complainant_phone : {tracker.get_slot('complainant_phone')}")
+        self.logger.debug(
+            "%s - complainant_phone : %s",
+            self.name(),
+            mask_phone_for_log(tracker.get_slot("complainant_phone")),
+        )
         self.logger.debug(f"{self.name()} - otp_consent : {tracker.get_slot('otp_consent')}")
         self.logger.debug(f"{self.name()} - otp_status : {tracker.get_slot('otp_status')}")
         self.logger.debug(f"{self.name()} - otp_input : {tracker.get_slot('otp_input')}")
@@ -309,7 +314,9 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
         tracker: Tracker,
         domain: DomainDict,
     ) -> Dict[Text, Any]:
-        self.logger.info(f"{self.name()} - Received value: {slot_value}")
+        # ⚠ NEVER log `slot_value` here: it is the OTP. No truncation helps — the code is 6
+        # digits, so any prefix of 6+ characters is the whole secret (D-62, 2026-08-27).
+        self.logger.info("%s - Received OTP input (%d chars)", self.name(), len(str(slot_value or "")))
 
         slot_value = slot_value.strip("/").lower()
         
@@ -340,7 +347,9 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
 
         # Validate OTP format
         if not otp_verification.is_valid_otp_format(slot_value):
-            self.logger.info(f"{self.name()} - Invalid OTP format: {slot_value}")
+            self.logger.info(
+                "%s - Invalid OTP format (%d chars)", self.name(), len(str(slot_value or ""))
+            )
             return {"otp_input": None, 
                     "otp_status" : "invalid_format",
                     "otp_resend_count" : tracker.get_slot("otp_resend_count") or 0}

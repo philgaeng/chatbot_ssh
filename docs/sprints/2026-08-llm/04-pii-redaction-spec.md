@@ -626,11 +626,12 @@ instead of nine call sites.
    >
    > 1. **Free text** (narrative, summary, notes) → **first 8 characters**, as asked. This is the case
    >    the rule was written for and it holds.
-   > 2. **Phone** → **not a prefix.** Log a **salted** hash prefix (8 hex chars). It gives *more*
-   >    findability than `[:8]` does — every line for one complainant correlates, and a known number can
-   >    be looked up by hashing it — while the number itself is not in the log. ⚠ **Salted is not
-   >    optional:** the privacy assessment's **F-3** already records unsalted phone hashes as a finding,
-   >    because Nepal's mobile space is small enough to enumerate.
+   > 2. **Phone** → ✅ **last 4 digits only** (owner, 2026-08-27): `***4567`. Six digits hidden rather
+   >    than two, it is the convention people already recognise from banks and telcos, and it answers
+   >    the actual use — an engineer on the phone with a complainant confirming they have the right
+   >    record. ⚠ Weaker than a hash for *correlating across lines* (two complainants can share the
+   >    last four), which is immaterial at pilot volume and worth revisiting only if log correlation
+   >    ever becomes the primary use. **The helper already exists**: `mask_phone_for_log`.
    > 3. **OTP** → **do not log it, at any length.** No truncation of a 6-digit secret is a redaction.
    > 4. ⭐ **Prefer the key that already exists.** `grievance_id` is the correlation key the ticketing
    >    dispatch already logs (`ticketing_dispatch.py:290`), it is not a secret, and it beats any hash
@@ -641,6 +642,33 @@ instead of nine call sites.
    > **The test this needs, and it is the point:** assert the redaction **actually shortens the real
    > value**, using a genuine 10-digit Nepali number and a genuine 6-digit OTP as fixtures — not that a
    > slicing function was called. That is the assertion `form_status_check.py:76` would have failed.
+   >
+   > ## ✅ BUILT 2026-08-27 — `tests/backend/test_log_pii_pruning.py`, 14 assertions
+   >
+   > ⭐ **The convention already existed and stopped at the wrong layer.** `db_debug_log` has had
+   > `mask_phone_for_log` (last 4) and `grievance_row_summary` all along, and `backend/services/`
+   > uses them consistently — `messaging.py` and `grievance_manager.py` mask every phone they log.
+   > **Every raw-logging site DPG-30 found is in `backend/actions/`**, the conversation layer, which
+   > never adopted them. So the fix was adoption, not invention; only `text_prefix_for_log` (the
+   > free-text half) had to be written.
+   >
+   > Sites fixed: `phone.py:27`/`:38`, `form_otp.py:169`/`:312`/`:343`, `form_status_check.py:76`,
+   > `action_outro.py:145`, `form_grievance.py:133`, and four in
+   > `form_grievance_complainant_review.py`.
+   >
+   > ⚠ **Two things the build changed about the plan, both worth carrying forward:**
+   >
+   > 1. **The first version of the test file was decorative and a mutation proved it.** Reverting
+   >    `mask_phone_for_log(slot_value)` to `slot_value` at **both** phone call sites left all ten
+   >    tests green — they tested the *helper*, not the *call site*, and a call site logging a raw
+   >    value was the entire finding. A call-site pin was added (AST: no bare `slot_value` reaches a
+   >    log call unless wrapped). **Testing the helper is not testing the adoption.**
+   > 2. **The pin immediately found three sites the inventory had missed** — status-check picker
+   >    values at `form_status_check.py:223`, `:242`, `:244`, whose label content was never traced.
+   >    Treated conservatively: the redundant one dropped (the `grievance_id` it carries is parsed and
+   >    logged three lines below anyway), the other two wrapped. **A pin written for one property
+   >    found instances the hand inventory did not** — which is the argument for the repo-wide sweep
+   >    the pin is deliberately scoped short of.
    - ✅ **Two sites this list used to name are already fixed** and are not work: `parse_llm_response`
      logs the response length (`:490`, DPG-13), and the translation paths no longer interpolate the
      whole `input_data` dict (DPG-19.3 / D-29)

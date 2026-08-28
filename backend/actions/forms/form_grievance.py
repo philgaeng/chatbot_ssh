@@ -7,6 +7,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, FollowupAction
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
+from backend.services.db_debug_log import text_prefix_for_log
 from backend.actions.forms.intake_submit import complete_grievance_details_intake
 from backend.actions.grievance_intake.ensure_records import (
     grievance_id_set_json,
@@ -130,7 +131,10 @@ class ValidateFormGrievance(BaseFormValidationAction):
             expected_values = ["restart", "add_more_details", "submit_details", "voice_record"]
             normalized_slot_value = slot_value.strip() if isinstance(slot_value, str) else slot_value
 
-            self.logger.debug(f"Validating grievance_new_detail: {slot_value}")
+            self.logger.debug(
+                "Validating grievance_new_detail: %s",
+                text_prefix_for_log("detail", slot_value),
+            )
 
             if normalized_slot_value == "voice_record":
                 return await voice_record.finalize_voice_record(

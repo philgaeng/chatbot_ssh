@@ -14,6 +14,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
+from backend.services.db_debug_log import text_prefix_for_log
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.grievance_intake.classification import (
     load_grievance_for_classification,
@@ -90,7 +91,12 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             follow_up_question = grievance_data.get('follow_up_question', '')
             grievance_classification_status_db = grievance_data.get('grievance_classification_status')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
-            self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
+            self.logger.debug(
+                "Sensitive categories: %s, grievance_categories: %s, %s, alternative: %s",
+                sensitive_categories, grievance_categories,
+                text_prefix_for_log("grievance_summary", grievance_summary),
+                grievance_categories_alternative,
+            )
 
             from backend.config.classification_status import LLM_SKIPPED
             from backend.actions.forms.form_road_hazard import is_road_hazard_intake
@@ -240,7 +246,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         grievance_summary_status = tracker.get_slot("grievance_summary_status")
         grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
         grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
-        self.logger.debug(f"form_grievance_complainant_review - Values of slots: grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_status: {grievance_categories_status}, grievance_summary_status: {grievance_summary_status}, grievance_cat_modify: {grievance_cat_modify}, grievance_summary_temp: {grievance_summary_temp}")
+        self.logger.debug(
+            "form_grievance_complainant_review - slots: categories=%s, %s, categories_status=%s, "
+            "summary_status=%s, cat_modify=%s, %s",
+            grievance_categories,
+            text_prefix_for_log("grievance_summary", grievance_summary),
+            grievance_categories_status, grievance_summary_status, grievance_cat_modify,
+            text_prefix_for_log("grievance_summary_temp", grievance_summary_temp),
+        )
 
 
         # Voice-only intake: classification skipped; officer handles summary/categories.
@@ -346,7 +359,10 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         elif slot_value == False:
             grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
             self.logger.debug(f"validate_grievance_classification_consent: User doesn't want to review")
-            self.logger.debug(f"validate_grievance_classification_consent: grievance_summary_temp = {grievance_summary_temp}")
+            self.logger.debug(
+                "validate_grievance_classification_consent: %s",
+                text_prefix_for_log("grievance_summary_temp", grievance_summary_temp),
+            )
             
             result = {
                 "grievance_classification_consent": slot_value,
@@ -624,7 +640,10 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     "grievance_summary_temp": self.SKIP_VALUE}
         
             if slot_value:
-                self.logger.info(f"validate_grievance_summary_temp: {slot_value}")
+                self.logger.info(
+                    "validate_grievance_summary_temp: %s",
+                    text_prefix_for_log("value", slot_value),
+                )
                 return {"grievance_summary_status": None,
                         "grievance_summary_temp": slot_value,
                         "grievance_summary": slot_value}

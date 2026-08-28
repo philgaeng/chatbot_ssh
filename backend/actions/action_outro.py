@@ -10,6 +10,7 @@ from rasa_sdk.events import SlotSet
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
+from backend.services.db_debug_log import grievance_row_summary
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.forms.form_dust import is_dust_intake
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
@@ -142,7 +143,8 @@ class ActionGrievanceOutro(BaseActionSubmit):
             grievance_data = self._prepare_grievance_outro_data(tracker)
             self.db_manager.submit_grievance_to_db(grievance_data)
             self.logger.debug(
-                f"action_grievance_outro - grievance data saved to the database: {grievance_data}"
+                "action_grievance_outro - grievance saved: %s",
+                grievance_row_summary(grievance_data),
             )
 
             await self.send_recap_email_to_admin(
