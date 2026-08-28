@@ -3,6 +3,9 @@
 > **Raised:** 2026-08-27, building [DPG-30](../04-pii-redaction-spec.md#dpg-30).
 > **Status:** 🟡 **OPEN.** ⚠ **Downgraded from 🔴 the same day it was raised** — the original framing
 > claimed a completed impersonation and that was wrong. See §*What this is not*.
+> ✅ **Two of the findings below are now owner decisions (2026-08-27), not open questions:** add an OTP
+> **validity window**, and **erase the code on successful verification**. Tracked as an 🟠 row in
+> [`TODO.md`](../../../TODO.md); the window length is the one parameter still to confirm.
 > **Size:** XS. Two lines deleted, one line changed.
 
 ---
@@ -56,13 +59,25 @@ is the lifetime of the conversation slot, not a clock.
 
 This matters because *"an OTP stops working after a few minutes"* is the natural assumption — it is
 what the name implies, and it is what makes logging one feel survivable. Here it is not true, and no
-document says so. ⚠ **Do not treat "add a TTL" as an obvious fix**: it changes live intake behaviour
-for every complainant on a slow connection, and it needs the owner's call on the window.
+document said so.
+
+✅ **DECIDED by the owner, 2026-08-27: add a validity window.** The change needs a generated-at
+timestamp stored beside `otp_number` and an age check in `otp_matches`'s caller.
+⚠ **The window length is not yet chosen, and should not be picked silently.** It is a live-intake
+behaviour change for every complainant, and the people it bites hardest are those on a slow rural
+connection who take longest to read an SMS and type six digits — the same population the
+[no-contact-path](no-contact-path-latency-unmeasured.md) finding is about. **Suggest 10 minutes and
+confirm.** Decide the expired-path copy with it: the form must offer a resend rather than dead-end
+(`otp_resend_count` already caps at 3).
 
 **2. `otp_number` is not cleared on successful verification.**
 The success branch (`form_otp.py:352-364`) sets `otp_input`, `otp_status`, `otp_verified` and
 `otp_resend_count` — and never `otp_number: None`. The accepted secret stays in session state after it
-has served its purpose. Clearing it is a one-line change and strictly reduces exposure.
+has served its purpose.
+
+✅ **DECIDED by the owner, 2026-08-27: erase the OTP once the number is verified.** One line, no
+behaviour change, strictly reduces exposure. **Do this one first** — it is independent of the window
+and carries none of its risk.
 
 ## ⚠ Open question — flagged, not claimed
 
