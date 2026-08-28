@@ -321,6 +321,24 @@ prescribes the wrong fix is worse than a missing test**, because four days of re
 
 ## Sprint 3
 
+### DPG-31 — the deterministic PII layer ✅ BUILT 2026-08-27
+
+`tests/backend/test_pii_service.py` — **38 assertions**, 6 mutations checked.
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-31-a** ✅ | ⭐ **A Devanagari-digit phone number is detected.** `९८४१२३४५६७` is a real number and an ASCII `\d` pattern misses it entirely — the defect that passes every test written by an English speaker | ⚠ **Recorded as a NON-KILL, honestly.** Removing the Devanagari half of the numeric character class leaves this green — and correctly so: `find_pii` normalises once, centrally, before any recogniser runs, so the dual-script class is redundant defence-in-depth rather than the working part. **Removing the normalisation call kills 3 tests**, which is the real mechanism, now pinned separately. Claiming the kill I did not get is how a ledger stops meaning anything (the T-23-b precedent) |
+| **T-31-b** ✅ | Offsets are computed on the normalised string and applied to the **original**: the span text is `९८४१२३४५६७`, not its ASCII form. Plus the 1:1 length-preservation the arithmetic rests on, asserted rather than trusted | ✅ **Checked** — normalisation removed → red |
+| **T-31-c** ✅ | Person names by all three recognisers: honorific/role-title (`Er. Rajesh Shrestha`), thar gazetteer with no trigger (`Kamala Devi Chaudhary`), self-identification in both scripts. ⭐ Plus two **regression** cases from defects found while building: a title captured as a name (`contractor Er.` → `Er`), and a lowercase verb phrase captured as one (`I am writing on behalf`) — both caused by a blanket `re.IGNORECASE` defeating `[A-Z][a-z]+` | ✅ **Checked** — the thar recogniser removed → 3 red |
+| **T-31-d** ✅ | ⭐ **A bare district survives.** `Jhapa` must NOT be redacted: the classifier derives district from the narrative and a district alone identifies nobody. Plus an address span that stops at the danda `।` rather than swallowing the next clause | ✅ **Checked** — `Jhapa` added to the qualifier list → red |
+| **T-31-e** ✅ | Replacement semantics: same value → same placeholder within a document; **counters per-document, never process-global**; placeholders not deletion; round-trip lossless with and without PII; `<PERSON_10>` not corrupted by `<PERSON_1>`'s substitution | ✅ **Checked** — fresh token per occurrence → red · global counter → 3 red |
+| **T-31-f** ✅ | ⭐ **The mapping never travels with the text.** `json.dumps(result)` **raises**; no original reaches the log; the redacted text alone cannot be reversed. ⚠ The `json.dumps` guard is a **speed bump, not a wall** (`asdict` still works) and the test says so | ✅ **Checked** |
+| **T-31-g** ✅ | **Measured recall — 87.5% (14/16)**: person_name 7/7, phone 3/3, address 4/6. Asserted as a **≥80% floor**, not a target. Guards the vacuous pass by first asserting the benchmark actually carries ≥5 labelled rows | ✅ **Checked** — the residual is named: both misses are bare settlement names (`Duhabi`, `Itahari`) with no qualifier |
+| **T-31-h** ✅ | **No sprint document calls the output "anonymised".** ⚠ Greps for the **claim**, not the word — a plain substring match flagged the prohibition itself and DPG-32's anonymiser-*service* name on its first run, the markdown-grep trap one layer up | ✅ **Checked** |
+| **T-31-i** ✅ | ⭐ **No caller needs cross-request `restore()`** — asserted by `git grep`, so it **fails the moment a caller appears**, forcing whoever adds one to answer whether the mapping must be persisted rather than inherit the assumption that it must not | ✅ **Checked** |
+
+
+
 ### DPG-31 — the deterministic layer
 
 | ID | Test | Mutation check |

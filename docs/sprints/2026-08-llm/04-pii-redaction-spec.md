@@ -343,32 +343,72 @@ Per-document mapping scope. Never a process-global counter (two concurrent griev
 
 ### Acceptance
 
-- [ ] `backend/services/pii_service.py` exists, follows [`02_python_services.md`](../../engineering/02_python_services.md)
-- [ ] Devanagari normalisation, with an offset-alignment assertion
-- [ ] Nepali mobile / landline / `+977` / citizenship-number / **vehicle-registration** / email recognisers,
+- [x] `backend/services/pii_service.py` exists, follows [`02_python_services.md`](../../engineering/02_python_services.md)
+      — pure functions, public surface first, no env reads, no HTTP, structured logging
+- [x] Devanagari normalisation, with an offset-alignment assertion — offsets computed on the
+      normalised string and applied to the **original**, with the 1:1 length-preservation asserted
+      rather than assumed
+- [x] Nepali mobile / landline / `+977` / citizenship-number / **vehicle-registration** / email recognisers,
       both digit systems
-- [ ] **Person-name recognisers (§31.2b)** — honorific/role-title triggers, family-name gazetteer,
-      self-identification patterns. Tuned for **recall**, per DPG-32: a missed name is a privacy breach,
-      an over-redacted common noun is a small classification cost. The gazetteer is marked as sensitive
-      project data, not a publishable sample
-- [ ] **Address spans (§31.2c)** redacted via settlement qualifiers, while district and province survive
-      for the classifier
-- [ ] Consistent, reversible, per-document placeholder mapping
-- [ ] **Whether any caller needs cross-request `restore()` is established, and recorded.** If none does, the
-      mapping is never persisted and the acceptance says so explicitly
-- [ ] **If the mapping is persisted:** not in `ticketing.*` (data rule 3, pinned by test); same encryption,
-      access control, audit and retention as the record it dereferences; added to DPG-04's data-flow diagram
-- [ ] **The mapping never leaves the country, and never travels with the text it dereferences** — not in a
-      Celery payload, a log line, an exception body, a cached context blob or a backup that ships offsite.
-      **Pinned by a test**, because this is the clause the "only pseudonymised text crosses the border"
-      claim rests on, and it is voided by a single careless `json.dumps`
-- [ ] **No document produced by this sprint describes the output as "anonymised".** Pseudonymised, with the
-      reason. Pinned by the same grep that checks the egress inventory
-- [ ] **`redact_for_model()` runs over model *output* before persistence (§31.4)**, not only over input.
-      A prompt instruction may be added beside it, and is **not** counted as a control
-- [ ] `redact_for_model` / `restore` round-trip is lossless for non-PII text
-- [ ] LOCATION policy decided, with the reason recorded
-- [ ] **No new heavy dependency in this ticket** — it must ship without DPG-32
+- [x] **Person-name recognisers (§31.2b)** — honorific/role-title triggers, family-name gazetteer,
+      self-identification patterns. Tuned for **recall**. The gazetteer lives in
+      `backend/constants/nepali_pii_patterns.py` and is **marked as sensitive project data** in its own
+      docstring, with the reason: Nepali surnames carry caste and ethnicity, so the list is both the
+      thing that makes the recogniser work and a compact index of ethnic markers
+- [x] **Address spans (§31.2c)** redacted via settlement qualifiers, while district and province survive
+      for the classifier — pinned by a test that fails if `Jhapa` is redacted
+- [x] Consistent, reversible, per-document placeholder mapping — and a test that the counters are
+      **not** process-global, because a shared counter would make placeholders a cross-document
+      correlation channel
+- [x] **Whether any caller needs cross-request `restore()` is established, and recorded.** ✅ **No
+      caller exists yet** — DPG-31 ships the library, DPG-33 wires it. Both places that will need
+      `restore()` (translation output, the classification summary) run **inside the same task** that
+      produced the redaction, so the mapping lives in memory and **is never persisted**. ⭐ Pinned by
+      `test_no_caller_needs_cross_request_restore_yet`, which **fails the moment a caller appears** —
+      forcing whoever adds one to answer this question rather than inherit the assumption
+- [ ] — **Conditional, and it did not trigger.** The mapping is not persisted (row above), so the
+      `ticketing.*` / encryption / retention / data-flow-diagram constraints do not apply yet. They
+      apply the day the row above changes
+- [x] **The mapping never leaves the country, and never travels with the text it dereferences** —
+      pinned three ways: `RedactionResult` is a dataclass so `json.dumps` **raises** rather than
+      silently serialising it into a payload; a `caplog` test asserts no original value reaches the
+      log; and a test asserts the redacted text alone cannot be reversed. ⚠ The `json.dumps` guard is
+      a **speed bump, not a wall** — `asdict` still works — and the test says so
+- [x] **No document produced by this sprint describes the output as "anonymised".** Pinned by a grep
+      that looks for the **claim** rather than the word, since the word appears legitimately in the
+      prohibition itself and in DPG-32's anonymiser-*service* name — a plain substring match flagged
+      all three on its first run
+- [ ] ⏭ **`redact_for_model()` runs over model *output* before persistence (§31.4)** — **DPG-33's
+      wiring, not this ticket.** The function it needs now exists
+- [x] `redact_for_model` / `restore` round-trip is lossless for non-PII text — and for text that
+      contains PII
+- [x] LOCATION policy decided, with the reason recorded — **districts and provinces are deliberately
+      absent from every token list**, stated in the constants module: the classifier derives district
+      from the narrative and a district name alone identifies nobody, so redacting it would cost the
+      signal and buy no privacy
+- [x] **No new heavy dependency in this ticket** — plain `re` and curated token lists. No Presidio, no
+      spaCy, no model download. It ships without DPG-32
+
+### 📊 Measured recall — the number, not a vibe
+
+**87.5% (14 of 16 labelled spans)** on the committed benchmark set, by type:
+
+| Type | Recall |
+|---|---|
+| `person_name` | **7/7 — 100%** |
+| `phone` | **3/3 — 100%** |
+| `address` | **4/6 — 67%** |
+
+⚠ **The residual is named, not rounded away** — per DPG-32's rule that what gets disclosed is the
+*measured residual*, never an absence. Both misses are **bare settlement names with no qualifier**
+(`Duhabi`, `Itahari`). The layer catches *qualified* addresses — ward N, tole, gaun, municipality —
+because a qualifier is what distinguishes a settlement address from a district the classifier needs.
+Catching bare place names needs a settlement gazetteer, which is a different and larger thing and
+carries a real risk of redacting the district-level location §31.3 deliberately preserves.
+
+⚠ **This is a floor, not a certification.** The test asserts ≥80% so a regression fails the build;
+the honest figure and its method belong in the evidence pack, and **DPG-32 raises recall — it is not
+the whole control.**
 
 ### Tests
 
