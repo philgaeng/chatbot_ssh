@@ -217,6 +217,19 @@ flowchart TB
 Checked against the code at the cited location on 2026-08-18. `⚠` marks a leg where personal data is
 exposed beyond what a reader would assume.
 
+> ⚠ **Re-checked against the code on 2026-08-27 by [DPG-30](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-30),
+> which enumerated the egress surface independently rather than from this diagram. Four discrepancies,
+> recorded here and in [`pii-egress-inventory.md`](pii-egress-inventory.md) §4.** No leg is missing and
+> none is invented — **the pattern in all four is that the diagram is right about topology and
+> optimistic about content**, assessing a leg as carrying less than it carries.
+>
+> | # | This document says | The code says |
+> |---|---|---|
+> | **R1** | **L3** — Redis is mitigated: *"payloads are not written to durable storage"* | 🔴 **That is an inference, not a check.** Compose declares no volume, but the official image declares its own `VOLUME /data` and `redis-server` with no config file uses default RDB save points. **Unresolved** — it needs three runtime commands and Docker was unavailable. [followup](../sprints/2026-08-llm/followups/redis-persistence-is-inferred-not-verified.md) |
+> | **R2** | **F-6** — one log site, the complainant's phone | 🔴 **At least twelve**, including **the OTP at INFO, twice** (`form_otp.py:312`, `:343`) and one line carrying the whole grievance dict (`action_outro.py:145`). [followup](../sprints/2026-08-llm/followups/otp-and-phone-logged-at-info.md) |
+> | **R3** | **L9** — messaging carries *"complainant phone number and message body"* | The **admin recap email carries the entire grievance dict** — narrative included — to `ADMIN_EMAILS` over the SMTP relay, on **every** submission (`action_outro.py:148`, `:243`). A different recipient and a different payload from the complainant's own recap (`:153`) |
+> | **R4** | **L10** — reports and closure documents, generically | The XLSX quarterly report carries `grievance_summary` (`ticketing/services/report_rows.py:459`), which by CLAUDE.md rule 4's own caveat **can hold self-disclosed and third-party PII**. It is a PII egress to external roles, not a metadata export |
+
 | # | Leg | What it carries | Verified at | Assessment |
 |---|---|---|---|---|
 | **L1** | Complainant → webchat | Narrative, voice recordings, attachments, contact fields, map pin | `channels/REST_webchat/` | TLS at the nginx edge. Anonymous submission supported end-to-end |

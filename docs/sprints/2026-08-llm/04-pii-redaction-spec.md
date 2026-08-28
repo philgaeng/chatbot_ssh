@@ -130,11 +130,21 @@ text leaves the agency's control, found **in the code**, not assumed from the di
 
 ### Acceptance
 
-- [ ] `docs/dpg/pii-egress-inventory.md` written, every egress found in code with a file:line reference
-- [ ] Reconciled against DPG-04's diagram; discrepancies listed in both documents
-- [ ] Redis persistence configuration and backup destination **verified in-container**, not assumed
-- [ ] Ranked by likelihood of real exposure
-- [ ] Anything out of scope for DPG-33/34 logged as a followup + `TODO.md` row
+- [x] `docs/dpg/pii-egress-inventory.md` written, every egress found in code with a file:line reference
+      — **12 egress paths (E1–E12)**, each citation opened and read, none inherited from another document
+- [x] Reconciled against DPG-04's diagram; discrepancies listed in both documents — **four (R1–R4)**, in
+      §4 of the inventory and in `privacy-assessment.md` §2.2. ⭐ The pattern in all four is the same:
+      **the diagram is right about topology and optimistic about content**
+- [ ] 🔴 **Redis persistence configuration and backup destination verified in-container, not assumed** —
+      **could not be done: Docker is unavailable in this WSL distro.** And this is the acceptance item
+      that mattered most, because §2 found that *"no persistence volume"* is an **inference repeated as
+      fact in four documents** and never tested. Three commands settle it; none could be run.
+      [`followups/redis-persistence-is-inferred-not-verified.md`](followups/redis-persistence-is-inferred-not-verified.md).
+      The backup half **is** established from source: `backup_db.sh` supports GPG and an off-box
+      `BACKUP_REMOTE`, both **operator-set and optional**, so the destination is unnamed by design
+- [x] Ranked by likelihood of real exposure — logs first, model call fourth. ⚠ Deliberately not ranked
+      by alarm: the model call is the leak everyone designs against, the logs are the leak that happens
+- [x] Anything out of scope for DPG-33/34 logged as a followup + `TODO.md` row — two followups, two rows
 
 ---
 
