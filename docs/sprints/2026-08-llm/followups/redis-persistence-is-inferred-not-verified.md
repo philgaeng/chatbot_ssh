@@ -1,8 +1,11 @@
 # Follow-up — "Redis has no persistence volume" is an inference, and four documents state it as fact
 
 > **Raised:** 2026-08-27, building [DPG-30](../04-pii-redaction-spec.md#dpg-30).
-> **Status:** 🔴 **OPEN — unresolvable on this machine** (Docker unavailable in this WSL distro).
-> **Size:** XS to check — three commands. S to fix, if the check comes back the wrong way.
+> **Status:** ✅ **RESOLVED 2026-08-27 — measured in-container the same day Docker came back.**
+> The inference was **half right, and the wrong half was load-bearing**: there is no volume, but RDB
+> snapshotting is on and grievance text is written to `/data/dump.rdb`. All four documents corrected.
+> ⏭ **One thing left, and it is a decision rather than work:** whether to disable persistence. See the end.
+> **Size:** XS to check — three commands, as predicted. The fix is a trade, not a task.
 
 ---
 
@@ -61,21 +64,54 @@ Its persistence sentence is *"No data to migrate, as predicted — the service d
 that is accurate about everything it checked can still launder an unchecked assumption sitting next to
 the checked ones.
 
-## What would close it — three commands
+## ✅ What the three commands returned
 
-```bash
-docker compose exec redis redis-cli CONFIG GET save
-docker compose exec redis redis-cli CONFIG GET appendonly
-docker inspect $(docker compose ps -q redis) --format '{{json .Mounts}}'
+```
+docker inspect … .Mounts                        → []            no volume, not even anonymous
+docker image inspect redis:8.10 .Config.Volumes → null          the image declares NO VOLUME
+redis-cli CONFIG GET save                       → 3600 1 300 100 60 10000     RDB IS ON
+redis-cli CONFIG GET appendonly                 → no
+redis-cli CONFIG GET dir  /  ls -la /data       → /data  ·  dump.rdb, 47,407 bytes
+plant key → docker restart → read back          → SURVIVED
+                                                  "DB loaded from disk: keys loaded: 174"
 ```
 
-Then, and only then:
+⭐ **Half of the hypothesis was wrong, and it is worth recording which half.** The mechanism predicted
+above — *the image declares its own `VOLUME /data`* — **is false for `redis:8.10`**; `.Config.Volumes`
+is `null` and no anonymous volume is created. The conclusion still held, by the *other* route: the
+compiled-in `save` defaults write `dump.rdb` into the **container's writable layer**, which needs no
+volume at all.
 
-- **If persistence is off and there is no mount** — the four documents are correct. Add the command
-  output to `19_incident_response.md` so the next person inherits evidence instead of an inference.
-- **If persistence is on, or an anonymous volume exists** — the fix is to make the claim *true* rather
-  than to soften it: add `--save "" --appendonly no` to the compose command, recreate, re-check. Then
-  correct L3, both runbook lines and the lifecycle doc, and record it as a deviation.
+**Being right for the wrong reason is not being right.** Had the check come back with no RDB, the
+volume argument would have made this followup look vindicated when its mechanism was imaginary. The
+three commands were worth running for that as much as for the answer.
+
+## What survives a restart, precisely
+
+| Action | Data survives? |
+|---|---|
+| `docker restart`, `stop`+`start`, host reboot | 🔴 **Yes** — reloaded from `dump.rdb` |
+| `docker compose down`/`up`, `docker rm` | ✅ No — the writable layer goes with the container |
+| `docker commit` / `export` / `cp`, host backup of `/var/lib/docker` | 🔴 **Captured** |
+
+## ✅ Documents corrected
+
+`privacy-assessment.md` L3 (the mitigation), `19_incident_response.md` (**twice** — the exposure row
+and the containment lever, which told an incident responder to do the one thing that reloads the
+exposure), `14_key_and_secret_lifecycle.md` (rotation advice that inherited it), and `TODO.md`.
+
+## ⏭ The one thing left, and it is the owner's call
+
+Adding `--save "" --appendonly no` to the compose command makes the documented containment **true**
+and minimises PII at rest.
+
+⚠ **It also means a restart genuinely loses in-flight tasks, which today it does not.** Those are
+classification and SEAH-detection jobs; a lost one is a grievance that never gets classified, and
+nothing re-drives it. That cost has never been weighed against the exposure it removes.
+
+**The documents are now honest either way**, which is precisely what makes this a free decision rather
+than an urgent one. ⚠ **Do not resolve it by adding a named volume** — that makes the exposure durable
+*and* documented, and a broker holding unredacted SEAH text needs less persistence, not better.
 
 ⚠ **Do not resolve this by adding a named volume.** That makes the exposure durable *and* documented,
 which is worse than either alone — a broker holding unredacted SEAH text does not need better

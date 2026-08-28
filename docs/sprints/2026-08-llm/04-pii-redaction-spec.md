@@ -135,12 +135,17 @@ text leaves the agency's control, found **in the code**, not assumed from the di
 - [x] Reconciled against DPG-04's diagram; discrepancies listed in both documents — **four (R1–R4)**, in
       §4 of the inventory and in `privacy-assessment.md` §2.2. ⭐ The pattern in all four is the same:
       **the diagram is right about topology and optimistic about content**
-- [ ] 🔴 **Redis persistence configuration and backup destination verified in-container, not assumed** —
-      **could not be done: Docker is unavailable in this WSL distro.** And this is the acceptance item
-      that mattered most, because §2 found that *"no persistence volume"* is an **inference repeated as
-      fact in four documents** and never tested. Three commands settle it; none could be run.
-      [`followups/redis-persistence-is-inferred-not-verified.md`](followups/redis-persistence-is-inferred-not-verified.md).
-      The backup half **is** established from source: `backup_db.sh` supports GPG and an off-box
+- [x] ✅ **Redis persistence configuration and backup destination verified in-container, not assumed**
+      — done 2026-08-27, and it was the acceptance item that mattered most: §2 found *"no persistence
+      volume"* was an **inference repeated as fact in four documents** and never tested. **Measured:
+      no volume (`Mounts: []`, and `redis:8.10` declares no `VOLUME`) — but RDB snapshotting is ON**
+      (`save 3600 1 300 100 60 10000`) with `/data/dump.rdb` at 47 KB, and a planted key **survived
+      `docker restart`** (*"DB loaded from disk: keys loaded: 174"*). So grievance text **is** written
+      to disk, in the container's writable layer. All four documents corrected; the remaining question
+      — whether to disable persistence, at the cost of losing in-flight tasks on restart — is a trade
+      for the owner. ⭐ **Half the hypothesis was wrong** (the image declares no VOLUME); the conclusion
+      held by the other route, which is why the commands were worth running rather than reasoned about.
+      The backup half is established from source: `backup_db.sh` supports GPG and an off-box
       `BACKUP_REMOTE`, both **operator-set and optional**, so the destination is unnamed by design
 - [x] Ranked by likelihood of real exposure — logs first, model call fourth. ⚠ Deliberately not ranked
       by alarm: the model call is the leak everyone designs against, the logs are the leak that happens

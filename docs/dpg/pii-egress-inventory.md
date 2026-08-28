@@ -18,14 +18,13 @@
 Each path was traced from the code that produces the text to the code that transmits or stores it.
 Every citation below was opened and read; none is inherited from another document.
 
-🔴 **One acceptance item could not be met, and it is not a formality.** DPG-30 requires *"Redis
-persistence configuration and backup destination **verified in-container**, not assumed"*. **Docker is
-unavailable in this WSL distro** (`docker: command not found` — Docker Desktop's WSL integration is
-off), so nothing here was checked at runtime.
+✅ **Verified in-container 2026-08-27.** DPG-30 requires *"Redis persistence configuration and
+backup destination **verified in-container**, not assumed"*. This document was first written with
+Docker unavailable and said so; Docker came back the same day and **§2 is now measurement, not
+inference** — which changed its conclusion in both directions.
 
-That matters more than usual, because **§2's headline finding is precisely a claim that was inferred
-rather than checked**, and this document cannot close it either — it can only show that it is open.
-Logged: [`followups/redis-persistence-is-inferred-not-verified.md`](../sprints/2026-08-llm/followups/redis-persistence-is-inferred-not-verified.md).
+⚠ **Read §2 before quoting L3 of the privacy assessment**: the mitigation it carried was false, and
+three other documents carried it too.
 
 **What is claimed here and what is not:** every row's *code* facts are verified. Every row's *runtime*
 facts — what a container actually does with them — are marked `⚠ unverified` and say so.
@@ -93,24 +92,54 @@ between them, and neither is visible in the compose file:
 **If both hold, the mitigation is backwards**: grievance narratives are being snapshotted to a host
 volume that no backup covers, no retention policy names, and no document knows exists.
 
-🔴 **This document cannot settle it** — that needs `docker compose exec redis redis-cli CONFIG GET save`,
-`CONFIG GET appendonly` and `docker inspect` on the container's mounts, and Docker is unavailable here
-(§0). **Nor did the 2026-08-18 "✅ VERIFIED LIVE" note settle it**, though it reads as though it might:
-that check verified the *licence and usage* audit — version, auth, `PING`/`SET`/`GET`/`LLEN`, a pub/sub
-round-trip — and its persistence sentence, *"No data to migrate, as predicted — the service declares no
-volume"*, **restates the inference rather than testing it.**
+### ✅ MEASURED 2026-08-27 — and it was half right, which is why it had to be run
 
-**Three consequences, and the third is the one to act on first:**
+| Check | Result |
+|---|---|
+| `docker inspect … .Mounts` | **`[]`** — no volume, not even an anonymous one |
+| `docker image inspect redis:8.10 .Config.Volumes` | **`null`** — ⚠ **the image declares no `VOLUME`**, so hypothesis 1 above was **wrong** |
+| `CONFIG GET save` | 🔴 **`3600 1 300 100 60 10000`** — the compiled-in defaults. **RDB is ON**, so hypothesis 2 was **right** |
+| `CONFIG GET appendonly` | `no` |
+| `CONFIG GET dir` · `ls /data` | `/data` · 🔴 **`dump.rdb`, 47,407 bytes** |
+| Plant a key → `docker restart` → read it back | 🔴 **It survived.** Redis logged *"DB loaded from disk: keys loaded: 174"* |
 
-- **The privacy assessment carries a mitigation that may not exist**, in the leg describing the broker
-  that holds unredacted SEAH disclosures.
-- **The incident-response runbook states a containment property that may be false.** *"Restarting Redis
-  drops queued tasks"* is advice someone will follow **during an incident**, when being wrong is
-  expensive — if an RDB file exists, a restart reloads it and the containment does not happen.
-- ⚠ **Do not "fix" the documents by adding a volume, and do not fix them by deleting the sentence.**
-  Run the three commands. If persistence is on, the fix is `--save ""` plus `--appendonly no` on the
-  command line, which makes the claim *true* rather than merely written down — and that belongs in
-  DPG-34, not here.
+**So the mitigation is false, and the mechanism is not the one predicted.** There is no volume; there
+is a **`dump.rdb` in the container's writable layer**. Grievance narratives in Celery payloads are
+written to disk, unencrypted.
+
+**What that means, precisely — the boundaries matter for the runbook:**
+
+| Action | Does the data survive? |
+|---|---|
+| `docker restart`, `stop`+`start`, host reboot | 🔴 **Yes** — reloaded from `dump.rdb` |
+| `docker compose down`/`up`, `docker rm` | ✅ No — the writable layer goes with the container |
+| `docker commit` / `export` / `cp`, host backup of `/var/lib/docker` | 🔴 **Captured** |
+
+⚠ **Nor did the 2026-08-18 "✅ VERIFIED LIVE" note settle it**, though it reads as though it might:
+that check verified the *licence and usage* audit — version, auth, `PING`/`SET`/`GET`/`LLEN`, a
+pub/sub round-trip — and its persistence sentence, *"No data to migrate, as predicted — the service
+declares no volume"*, **restated the inference rather than testing it.** It was accurate about
+everything it checked, which is exactly how an unchecked assumption travels next to checked ones.
+
+**Three consequences. All three documents are corrected; the third is now a decision, not a finding:**
+
+- ✅ **The privacy assessment carried a mitigation that does not exist**, in the leg describing the
+  broker that holds unredacted SEAH disclosures. **L3 corrected.**
+- ✅ **The incident-response runbook stated a containment property that is false** — *"restarting Redis
+  drops queued tasks"* is advice for the worst possible moment, and a restart **reloads** the exposure.
+  **Corrected, and the lever replaced**: `compose down`/`rm` discards the writable layer; a restart does
+  not. The two actions have different consequences and the runbook no longer treats them as one.
+  `14_key_and_secret_lifecycle.md`'s rotation advice inherited the same error and is corrected too.
+- ⏭ **The remaining question is a trade nobody has made, and it is the owner's.** Adding
+  `--save "" --appendonly no` makes the documented containment *true* and minimises PII at rest. **It
+  also means a restart genuinely loses in-flight classification and SEAH-detection tasks, which today
+  survive** — those grievances would simply never be classified, and nothing re-drives them. Weigh
+  before changing; the documents are now honest either way, which is what makes it a free decision
+  rather than an urgent one.
+
+⚠ **Do not "fix" this by adding a named volume.** That makes the exposure durable *and* documented,
+which is worse than either alone — a broker holding unredacted SEAH text does not need better
+persistence, it needs less.
 
 ---
 

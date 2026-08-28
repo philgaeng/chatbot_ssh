@@ -104,7 +104,7 @@ go there for the evidence.
 | **The uploads volume / its backup tar** | ⚠ **Voice recordings and photographs** — the most directly identifying material here | Nothing at rest. Backups of it are encrypted-or-discarded (§4.1) |
 | **`ticketing.*`** | Ticket summaries, categories, locations, officer notes, case timelines — **no complainant contact PII, by invariant** | `tests/ticketing/test_pii_boundary.py`, `test_boundary_policy.py`. ⚠ `grievance_summary` is free text and can carry self-disclosed PII |
 | **A sensitive-workflow ticket** | ⭐ A SEAH disclosure — survivor, witness, or accused | Cast-only access, pinned by `tests/ticketing/test_sensitive_workflow_access.py`. **Any exposure here is high severity and goes straight to B3** |
-| **Redis** | ⚠ Task payloads carrying `grievance_description` verbatim | No persistence volume — in memory only, but present in any process or host dump |
+| **Redis** | ⚠ Task payloads carrying `grievance_description` verbatim | 🔴 **On disk, not in memory only** — measured 2026-08-27. No *volume* (`Mounts: []`), but **RDB snapshotting is on** (`save 3600 1 300 100 60 10000`) and `/data/dump.rdb` exists in the container's writable layer. Present in any process dump, host dump, `docker commit`/`export`/`cp`, and any backup of `/var/lib/docker`. **D-63** |
 | **A closure-document or report-share URL** | One case's closure PDF or an XLSX export | ⚠ A UUID4 / `token_urlsafe(24)` in the URL and **nothing else — these links do not expire** (`public_closure.py:38,58`). A leaked link is a live exposure until the code changes |
 | **Keycloak** | Officer usernames, emails, names, credential hashes | Self-hosted, same host. No third-party IdP |
 
@@ -122,8 +122,19 @@ is identifiable from what left.
 > deleted with the container, so `down` erases the log of the incident you are investigating.
 > **`restart` and `stop` keep them; `down` and `rm` do not.** Snapshot first (§5), then contain.
 >
-> **Restarting Redis drops queued tasks.** It has no persistence volume — that is a containment
-> lever when the broker is the exposure, and evidence destruction when it is not.
+> 🔴 **CORRECTED 2026-08-27 — "restarting Redis drops queued tasks" is FALSE, and it was advice
+> for the worst possible moment.** Measured: a planted key **survived `docker restart`**, and Redis
+> logged *"DB loaded from disk: keys loaded: 174"*. RDB snapshotting runs on the compiled-in
+> defaults and writes `/data/dump.rdb`; the absence of a *volume* never implied the absence of
+> *persistence*.
+>
+> **So a restart is NOT a containment lever.** If you restart Redis to purge an exposure, the
+> exposure reloads from disk and you have destroyed nothing but your own timeline.
+>
+> **What actually clears it:** `docker compose down` (or `docker rm` on the container) discards the
+> writable layer with the container — *that* is the lever, and it is heavier than a restart, so
+> snapshot first (§5). ⚠ It also drops genuinely queued work, which a restart does not: the two
+> actions now have different consequences and the runbook can no longer treat them as one.
 
 **4.1 — Stop the bleeding.** Pick only what applies:
 
