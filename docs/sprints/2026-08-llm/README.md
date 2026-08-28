@@ -1,6 +1,11 @@
 # Sprint — August 2026: DPG compliance & LLM independence
 
-> **Status: 🟡 in progress** — Sprint 0 ✅, Sprint 1 ✅, Sprint 2 🟡, Sprint 3 queued, Sprint 4 queued.
+> **Status: 🟡 in progress** — Sprint 0 ✅, Sprint 1 ✅, **Sprint 2 ✅ closed 2026-08-27**,
+> **Sprint 3 🟡 starting (`dpg/sprint3-pii`, at DPG-30)**, Sprint 4 queued.
+> ⚠ **Closed ≠ complete.** Sprint 2's DPG-22/23/24 are **⏸ blocked, not done**, each with a named
+> external blocker and no owner inside this repository — and **Sprint 2 did not choose an open model,
+> which was its purpose**. The apparatus is built; the choice is absent because SEAH recall is not
+> measurable here. Closing stops pretending someone is working on it.
 > ⚠ This line read **QUEUED (not started)** until 2026-08-25; the tracker had been the only honest status
 > for weeks. [`PROGRESS.md`](PROGRESS.md) is the authority — read it, not this header.
 > Source narrative: [`DPG-migration-guide-nepal-grm.md`](DPG-migration-guide-nepal-grm.md)
