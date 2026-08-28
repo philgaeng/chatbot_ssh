@@ -294,6 +294,29 @@ Benchmarks (DPG-22/23) are **measurements, not tests** — they produce numbers 
 `docs/dpg/model-benchmarks.md`, and they must not gate CI. A benchmark asserted as a threshold becomes a
 flaky test the first time a provider changes a model behind a tag.
 
+### Unplanned — the taxonomy is authored twice (D-58, 2026-08-27)
+
+`tests/repo/test_category_catalog_sources.py` — **6 assertions**, added out of D-51's fallout rather
+than out of this ledger, and recorded here because a test the ledger does not know about is a test
+nobody maintains.
+
+| ID | Test | Mutation check |
+|---|---|---|
+| **T-58-a** ✅ | ⭐ **The two authored taxonomies agree** — `backend/dev-resources/grievances_categorization_v1.1.csv` and `ticketing/constants/grievance_categories_default.json`, compared **as files**, so drift fails in the repository before any database exists | ✅ **Checked** — they were **64 fields apart** when it was written, which is how the drift was found |
+| **T-58-b** ✅ | The sync script exists and exposes its API — *"a pin whose fix is 'edit 64 fields by hand' gets fixed by suppressing the pin"*, so the repair path is pinned alongside the property | ✅ **Checked** |
+| **T-58-c** ✅ | The script's `SHARED_STRING_FIELDS` matches the catalog module's `_STRING_FIELDS`, and its `derive_category_key` agrees with the catalog's — the script re-implements both to stay importable without SQLAlchemy, and a re-implementation nothing compares is the same defect one layer down | ✅ **Checked** |
+| **T-58-d** ✅ | Every category carries an `intake_route`; both authored files present, named individually when one is missing | ✅ **Checked** |
+
+⚠ **Why the test that already existed could not catch it.**
+`tests/backend/test_benchmark_set.py::test_the_seeded_taxonomy_matches_the_authored_csv` compares the
+**seeded database** to the CSV. It was red on **every CI run of this branch from 2026-08-23**, and its
+failure message prescribed a re-seed — which re-applies the stale JSON and reproduces the failure. It
+could only see `high_priority`, the one drifting field it reads. **A test that reports a symptom and
+prescribes the wrong fix is worse than a missing test**, because four days of red were spent trusting it.
+
+⚠ **Still owed:** one authored source, not two kept in sync —
+[`followups/the-taxonomy-is-authored-twice.md`](followups/the-taxonomy-is-authored-twice.md).
+
 ---
 
 ## Sprint 3

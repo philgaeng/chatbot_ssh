@@ -209,7 +209,7 @@ Stated so you know they were considered and settled rather than overlooked:
 - **"Is Rasa a licence risk?"** — the source narrative flagged this as a week-one alarm. There is no
   Rasa: no `rasa_chatbot/` directory, no Rasa service in either compose file, only `rasa-sdk==3.6.2`
   (Apache-2.0). DPG-02 confirms it mechanically in an hour. Nothing to decide.
-- **"Should ticketing import the backend's LLM *client*?"** — no. `ticketing/clients/llm_client.py:5`
+- **"Should ticketing import the backend's LLM *client*?"** — no. `ticketing/clients/llm_client.py:11`
   states the independence rule, CLAUDE.md backs it, and this sprint does not relitigate service
   boundaries. Two factories, each owning its own construction and lifecycle.
   ⚠ **But "one pattern, replicated" was the wrong conclusion** — replicating the *registry* is what

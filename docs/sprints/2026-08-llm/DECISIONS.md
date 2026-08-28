@@ -57,7 +57,7 @@ in two files with two default sets, and they drift — that drift has *already h
 `backend/config/smtp_config.py` is a frozen-dataclass env resolver already imported by
 `ticketing/auth/keycloak_smtp.py:8` and reached from the live officer-invite path
 (`ticketing/services/officer_admin.py:226`, `:618`). Same shape: one external provider, two surfaces, one
-config. The independence rule in `ticketing/clients/llm_client.py:5` names `backend/**services**/` — the
+config. The independence rule in `ticketing/clients/llm_client.py:11` names `backend/**services**/` — the
 service layer — not `backend/config/`. Packaging cost is zero: one `Dockerfile`, `COPY . /app`, and every
 Python service runs the same image.
 
@@ -206,7 +206,7 @@ evidence available; it is only cheap once there is a model name that the open en
 > flow for the classification to happen in the background while the user fills more forms, so that
 > he can review the results of the classification by himself."*
 
-**Confirmed in the state machine, not taken on description** — `state_machine.py:392`
+**Confirmed in the state machine, not taken on description** — `state_machine.py:393`
 `_start_grievance_review_after_submit`, whose own docstring reads *"Run review after submit"*, is
 invoked immediately after `action_submit_grievance` (`:1802-1815`). The full verified sequence is in
 [DPG-15b §15b.0](02-llm-agnostic-spec.md#dpg-15b).
@@ -437,7 +437,7 @@ transcribe_audio_file_task (contact audio)   → extract_contact_info_task
 
 Contact extraction consumes a **transcription** of spoken contact details; it was never meant to run
 on typed input, which is why the typed path validates phone numbers deterministically instead. And
-`registered_tasks.py:157` records the switch-off in the code itself: *"CB-01 proto: store audio only;
+`registered_tasks.py:200` records the switch-off in the code itself: *"CB-01 proto: store audio only;
 transcription/classification deferred to officers."*
 
 **So my recommendation to delete three of them was wrong**, and it was wrong in an interesting way:
@@ -581,7 +581,7 @@ a compliance obstacle into a submission asset.
 
 Two facts only you have:
 
-1. `gpt-5-nano` (`LLM_services.py:245`) is the model on grievance classification — the product's most
+1. `gpt-5-nano` (declared at `backend/config/llm_config.py:114`, called at `LLM_services.py:312`) is the model on grievance classification — the product's most
    quality-sensitive AI path. A nano-class model there is a real decision with real consequences, and it
    is undocumented. Deliberate cost choice, or drift? 
 2. `transcribe_audio_file` passes `language_code=` where the SDK takes `language=` (`:46`). If the SDK

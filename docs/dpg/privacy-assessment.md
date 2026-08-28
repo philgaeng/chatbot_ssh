@@ -221,9 +221,9 @@ exposed beyond what a reader would assume.
 |---|---|---|---|---|
 | **L1** | Complainant → webchat | Narrative, voice recordings, attachments, contact fields, map pin | `channels/REST_webchat/` | TLS at the nginx edge. Anonymous submission supported end-to-end |
 | **L2** | Webchat → orchestrator → `public.grievances` / `complainants` | As above | `base_manager.py:266`, `:302` | Four contact fields encrypted with pgcrypto. **⚠ The narrative is not** — `grievance_description` is plaintext, and is the field most likely to name a third party |
-| **L3** | Orchestrator → Celery → **Redis** | ⚠ Task payloads containing `grievance_description` verbatim | `classification.py:140,153`; `sensitive.py:35-41` | The broker holds unredacted grievance text, including potential SEAH disclosures. Mitigating: the `redis` service declares **no persistence volume**, so payloads are not written to durable storage — but they are in memory and in any process dump |
-| **L4** | Celery → **model provider** | ⚠ **The raw narrative, unredacted** — **not** name, phone or audio | `LLM_services.py:306`, `:535` | **Two reachable call sites**, established per site rather than counted from source. The other four are the **parked voice flow** — complete, and they will egress the narrative *and* spoken contact details when unparked. The live contact path is deterministic, with no model involved |
-| **L5** | Ticketing Celery → **model provider** | ⚠ Officer notes verbatim; **the whole case timeline, including SEAH cases** | `llm_client.py:152, 230, 309` | **Three call sites** — a second client, same destination. ✅ Both surfaces resolve through one registry, and a test proves one environment change moves both, so a reviewer who redirects one cannot leave the other pointed abroad |
+| **L3** | Orchestrator → Celery → **Redis** | ⚠ Task payloads containing `grievance_description` verbatim | `classification.py:155`; `sensitive.py:35-41` | The broker holds unredacted grievance text, including potential SEAH disclosures. Mitigating: the `redis` service declares **no persistence volume**, so payloads are not written to durable storage — but they are in memory and in any process dump |
+| **L4** | Celery → **model provider** | ⚠ **The raw narrative, unredacted** — **not** name, phone or audio | `LLM_services.py:312`, `:618` | **Two reachable call sites**, established per site rather than counted from source. The other four are the **parked voice flow** — complete, and they will egress the narrative *and* spoken contact details when unparked. The live contact path is deterministic, with no model involved |
+| **L5** | Ticketing Celery → **model provider** | ⚠ Officer notes verbatim; **the whole case timeline, including SEAH cases** | `ticketing/clients/llm_client.py:152, 230, 309` | **Three call sites** — a second client, same destination. ✅ Both surfaces resolve through one registry, and a test proves one environment change moves both, so a reviewer who redirects one cannot leave the other pointed abroad |
 | **L6** | Chatbot → ticketing webhook | Reference, summary, categories, location, priority | `ticketing_dispatch.py` | Internal, non-PII by design. `grievance_summary` is free text and **can** carry self-disclosed PII — cached deliberately; the raw description is not |
 | **L7** | Ticketing → `GET /api/grievance/{id}` | **Plaintext complainant PII** | `grievance_manager.py:190` | Server-side decryption at a single boundary, API-key authenticated, audited. **The platform's strongest privacy control** |
 | **L8** | Ticketing → orchestrator `POST /message` | Officer's reply to the complainant | `clients/orchestrator.py` | Internal. Officer-authored content |
@@ -231,7 +231,7 @@ exposed beyond what a reader would assume.
 | **L10** | Reports and closure documents | XLSX case exports; a closure PDF | `report_export.py`, `closure_pdf.py` | ⚠ The **public closure endpoint is unauthenticated**, gated only by a non-expiring UUID4 token (`public_closure.py:38,58`). Report shares use adequate entropy but also do not expire |
 | **L11** | Backups | ⚠ Full `pg_dump` **plus a tar of the uploads volume** | `backup_db.sh:45-60` | Contact columns stay ciphertext; **narratives, officer notes, voice recordings and photographs are not encrypted by the application.** ✅ An unencryptable dump *and* the uploads archive are discarded unless explicitly overridden (F-4). Retention 14 days; ⚠ off-box destination unspecified in the repository |
 | **L12** | Auth | Officer usernames, emails, names, credentials, login events | `keycloak` schema | Self-hosted Keycloak, same database and host. **No third-party identity provider** — a real jurisdictional advantage |
-| **L13** | Ops monitoring | Aggregate counts only | `ops/reports.py:36-58` | ✅ **Verified PII-free.** Every query is a `count(*)` |
+| **L13** | Ops monitoring | Aggregate counts only | `ops/reports.py:53-69` | ✅ **Verified PII-free.** Every query is a `count(*)` |
 
 ### 2.3 What is not on this diagram, and should be
 
@@ -239,7 +239,7 @@ Named so the omission is deliberate rather than an oversight.
 
 | Not drawn | Status |
 |---|---|
-| **Application logs** | ⚠ **A live PII sink.** Translation error paths interpolate the whole input dict including `grievance_description` (`LLM_services.py:350, 356`); `parse_llm_response` logs the raw model response on a parse error (`:298`). Logs go to the Docker `json-file` driver and a `logs/` directory. Owned by the [redaction work](../sprints/2026-08-llm/04-pii-redaction-spec.md) |
+| **Application logs** | ⚠ **A live PII sink, and narrower than it was.** ✅ The two worst legs are closed: the translation error paths no longer interpolate the whole input dict — `_grievance_ref()` (`LLM_services.py:500`) bounds them to the grievance id plus **three words**, 60-char cap (DPG-19.3) — and `parse_llm_response` logs the response **length**, not the body (`:490`, DPG-13). ⚠ **What remains:** those three words are still narrative, and `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO on every validation** (`:38` again on the invalid path). Logs go to the Docker `json-file` driver and a `logs/` directory. Owned by the [redaction work](../sprints/2026-08-llm/04-pii-redaction-spec.md) |
 | **The Celery result backend** | Task results land in Redis DB 2. Whether any result carries grievance text is `⚠ Not verified` — see §7 |
 | **AWS staging** | Runs outside Nepal and **holds no genuine grievance data** — seeded and demo records only (§0.5) |
 
@@ -347,8 +347,8 @@ of §0.5:** each was ordinary engineering that day and a breach assessment after
 
 **⚠ The gap must not be softened:** a SEAH disclosure — potentially a survivor's account of a sexual
 assault, naming an accused person — **is transmitted verbatim to a commercial model provider outside
-Nepal**, on both the intake path (`LLM_services.py:399`) and the case-summary path
-(`llm_client.py:309`). The access isolation that protects it inside this platform does not follow it
+Nepal**, on both the intake path (`LLM_services.py:618`) and the case-summary path
+(`ticketing/clients/llm_client.py:309`). The access isolation that protects it inside this platform does not follow it
 out. See §4.
 
 ### 3.5 Data-subject rights: access, correction, erasure
@@ -594,7 +594,7 @@ Department of Roads:
 |---|---|
 | `ops` health checks, nightly CVE scan, nightly licence scan → `ops.dependency_findings` | Built |
 | Deduplicated alerting to a configured address (`ops/alerts.py:29`) | Built |
-| Daily ops report — failed logins, contact-reveal counts (`ops/reports.py:50-58`) | Built |
+| Daily ops report — failed logins, contact-reveal counts (`ops/reports.py:53-69`) | Built |
 | `ticketing.admin_audit_log` records reveals and administrative actions | Built |
 | Private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) | Built; points at the runbook and names what is not yet committed |
 | **Deployment** | ⚠ **`ops` is on neither server.** On staging and production this table describes a development stack, not a monitored one |
@@ -687,7 +687,7 @@ not a legal characterisation. Detail for each sits in the section cited.
 | **F-3** | **Unsalted SHA-256** of phone, email, name and address stored as search tokens. Nepal's mobile number space is small enough to enumerate in seconds, so these were reversible — personal data, not pseudonyms | `base_manager.py:559-573` | 🟠 Medium-high | ✅ **Fixed 2026-08-19** — HMAC with a pepper; existing tokens must be re-derived |
 | **F-4** | **Backups unencrypted by default.** Contact columns stayed ciphertext, but narratives, officer notes, voice recordings and photographs were in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | ✅ **Fixed 2026-08-19** — an unencryptable dump *and* the uploads archive are discarded unless explicitly overridden |
 | **F-5** | Grievance text, including potential SEAH disclosures, passes through the **Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | Open — the redaction work |
-| **F-6** | Grievance text reaches **application logs** — translation error paths interpolate the whole input dict; parse errors log the raw model response | `LLM_services.py:299, 337, 350` | 🟠 Medium | Open — the redaction work |
+| **F-6** | PII reaches **application logs** — ⚠ **narrowed, not closed.** The two legs originally cited are fixed: translation errors are bounded to the grievance id plus three words (`LLM_services.py:500`, DPG-19.3) and parse errors log a length, not the body (`:490`, DPG-13). What remains is the complainant's **phone number at INFO on every validation** | `backend/actions/services/contact/phone.py:27`, `:38` · `LLM_services.py:500` | 🟠 Medium | Open — the redaction work |
 | **F-7** | **No retention schedule**, and **contact details are not separable** from the accountability record. ⚪ Erasure of a grievance record is deliberately not offered and is not part of this finding (§3.5) | `ARCHIVING_AND_RETENTION.md` | 🟡 Low-medium | Needs a schedule + legal confirmation of the carve-out |
 | **F-8** | The **breach runbook has three decisions blank** (B1–B3), held on an interim basis by the maintainer rather than agreed | [`19_incident_response.md`](../deployment/19_incident_response.md) | 🟡 Low-medium | Needs a named DOR owner before go-live |
 | **F-9** | **Third parties named in grievances have not consented** and cannot exercise any right. Redaction does reach names, so this is a **measured residual rather than an untouched gap** — but the residual is unquantified, and no redaction gives these people rights over data already held | §4 | 🟠 Medium | Needs a legal position; recall figure outstanding |

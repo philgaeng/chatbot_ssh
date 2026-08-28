@@ -19,9 +19,16 @@ The source narrative was written against a partial read of the codebase. **Five 
 wrong, and one of them is load-bearing.** Each spec restates the corrected version in its own
 §0, but the headline is here so nobody plans off the stale version:
 
+> ⚠ **This table is the state at planning time (2026-08-17) — *"the code says"* means the code as it
+> was then.** Sprints 1 and 2 then fixed every one of these: the four copied model names are gone
+> (DPG-12/17), all nine call sites resolve through one registry, and all seven text tasks run on one
+> model (§18.2). **Its line citations describe code that has since moved or been deleted** — read it as
+> the problem statement it is, not as an inventory. Today's state:
+> [`backend/config/llm_config.py`](../../../backend/config/llm_config.py).
+
 | The guide says | The code says | Consequence |
 |---|---|---|
-| "No provider abstraction exists" — one file, `backend/services/LLM_services.py` | **There are two LLM surfaces and four files.** `ticketing/clients/llm_client.py` is a second, independent OpenAI client with three more hard-coded models (`gpt-4`, `gpt-4o-mini`, `gpt-4o`) and its own settings object — and `ticketing/services/resolved_summary_builder.py:26-27` + `ticketing/tasks/llm.py:163` each keep **their own copy** of the model names | Sprint 1 is **~2× the scope** the guide assumes. A migration that fixes only `backend/` leaves the indicator-4 claim false — and one of those copies is written into a **persisted provenance field**, so drift there publishes a model name that never ran. Hence **DPG-17**: two factories, one config. |
+| "No provider abstraction exists" — one file, `backend/services/LLM_services.py` | **There are two LLM surfaces and four files.** `ticketing/clients/llm_client.py` is a second, independent OpenAI client with three more hard-coded models (`gpt-4`, `gpt-4o-mini`, `gpt-4o`) and its own settings object — and `ticketing/services/resolved_summary_builder.py` and `ticketing/tasks/llm.py` each kept **their own copy** of the model names — at `:26-27` and `:163` respectively, both **deleted by DPG-12** | Sprint 1 is **~2× the scope** the guide assumes. A migration that fixes only `backend/` leaves the indicator-4 claim false — and one of those copies is written into a **persisted provenance field**, so drift there publishes a model name that never ran. Hence **DPG-17**: two factories, one config. |
 | "plus a `gpt-5-nano` reference" (implying a stray typo) | `gpt-5-nano` **is the live grievance-classification model** (`LLM_services.py:247`) — the primary AI path in the product | Not a cleanup item. It is the model selection that Sprint 2 has to benchmark against. |
 | "gpt-3.5-turbo (contact extraction, content detection, grievance classification)" | Classification is `gpt-5-nano`. `gpt-3.5-turbo` covers contact extraction (×2) and sensitive-content detection | Wrong model→task mapping; the benchmark plan inherits it. |
 | §1.5 "Degraded mode — do not skip this" (written as unbuilt) | **Largely already built.** Intake writes to Postgres first, classification is a Celery task with retry, `LLM_FAILED`/`LLM_SKIPPED` status codes exist, and the retrieve step polls with a 20 s deadline | DPG-15 is a *verify-and-close-the-gaps* ticket, not a build ticket. Treating it as greenfield would duplicate working machinery. |
@@ -125,7 +132,7 @@ Sprint 1 no longer ships the open-by-default flip.
 | **DPG-22** | ASR evaluation — Nepali WER on the labelled voice subset | eval | M | [03](03-open-models-spec.md#dpg-22) |
 | **DPG-23** | Text-model evaluation + published benchmark table | eval | M | [03](03-open-models-spec.md#dpg-23) |
 | **DPG-24** | CI platform-independence job + README badge | CI | S | [03](03-open-models-spec.md#dpg-24) |
-| **DPG-25** | T2 vLLM deployment documented and tested once | deployment | M | [03](03-open-models-spec.md#dpg-25) |
+| **DPG-25** | T2 vLLM **documented and costed — not deployed** (T2 parked, Q-03/Q-05); e2e test deferred | deployment | M | [03](03-open-models-spec.md#dpg-25) |
 | **DPG-30** | **Measure first** — enumerate every egress of grievance text | audit | S/M | [04](04-pii-redaction-spec.md#dpg-30) |
 | **DPG-31** | `pii_service.py` deterministic layer (Devanagari digits, Nepali patterns) | backend | M | [04](04-pii-redaction-spec.md#dpg-31) |
 | **DPG-32** | NER layer (Presidio transformers) + licence + image-size decision | backend | M/L | [04](04-pii-redaction-spec.md#dpg-32) |
