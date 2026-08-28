@@ -485,18 +485,66 @@ instead of nine call sites.
    > | Consumer | Where | Needs names? |
    > |---|---|---|
    > | **Complainant-facing** — confirmation email, status-check display | `actions/action_outro.py:220`, `actions/services/status_check/display.py:30` | **Yes.** They wrote the name; `<PERSON_1>` back at them is absurd. ⚠ The email leaves over the SMTP relay, and it can carry the *accused's* name too — an egress in DPG-30's table |
-   > | **Stored / cached / reported** — `public.grievances`, `ticketing.tickets`, queue, search, XLSX | CLAUDE.md rule 4 | **This is the open question.** Names here are what spreads laterally |
+   > | **Stored / cached / reported** — `public.grievances`, `ticketing.tickets`, queue, search, XLSX | CLAUDE.md rule 4 | ✅ **DECIDED 2026-08-27: NO NAMES. Store the pseudonymised summary.** See below |
    > | **Model-facing** — the translation call's input | `LLM_services.py:563` | **No**, unconditionally |
    >
-   > ⭐ **This is the highest-leverage decision in the sprint.** A stored summary with no names makes the
-   > entire officer-side surface clean — queue, search, reports, and the ticketing backup — and it is the
-   > mechanism that could retire rule 4's *"the asymmetry is intentional. Do not 'fix' it"* caveat, which
-   > exists only because there has never been a way to make the summary safe.
+   > ## ✅ DECIDED 2026-08-27 — the stored summary carries no names
    >
-   > **Decide it in this sprint, even if the storage half is built in the next one** (see
-   > [`followups/encrypt-the-original-work-from-the-redacted.md`](followups/encrypt-the-original-work-from-the-redacted.md)).
-   > Restore-into-storage and redacted-storage are opposite implementations; building one and reversing it
-   > is the expensive path.
+   > **And DPG-30's inventory made it cheaper than this section assumed, by finding that the officer
+   > does not get names from the stored summary in the first place.**
+   >
+   > `merge_grievance_into_ticket` reads `grievance_description` **live from `public.grievances`**
+   > (`ticketing/services/grievance_content.py:69`, `:74`) and serves it to the officer through
+   > `api/routers/tickets/crud.py`. The ticket *caches* summary, categories and location; **the narrative
+   > is fetched fresh on every read.**
+   >
+   > ⭐ **So Q-12b's decisive objection — *"a GRM officer needs to know which engineer was named"* — is
+   > already satisfied by a different path, and it was the whole reason Q-12b landed where it did.**
+   > Redacting the cached summary costs the officer nothing: they keep the full narrative, names included,
+   > exactly as today. The reveal machinery in
+   > [`followups/encrypt-the-original-work-from-the-redacted.md`](followups/encrypt-the-original-work-from-the-redacted.md)
+   > is what the *next* sprint adds on top; this decision does not depend on it.
+   >
+   > **What the decision cleans, each verified in code:**
+   >
+   > | Surface | Evidence | Why it matters |
+   > |---|---|---|
+   > | **Officer free-text search** | `crud.py:341` — `Ticket.grievance_summary.ilike(pattern)` | 🔴 **The largest one.** A named third party is searchable by **every officer with queue access**, including those with no connection to the case |
+   > | **XLSX quarterly report** | `report_rows.py:459` — summary only, **no `grievance_description`** (verified) | The report to external ADB/DOR roles goes clean **without touching report code** |
+   > | **Ticketing backup** | `ticketing.tickets` is in the dump | Clean |
+   > | **Queue list view** | the cached summary | Clean |
+   >
+   > ⚠ **Three things that travel with this decision and must not be dropped from it:**
+   >
+   > 1. **Names removed is not identity removed.** The summary keeps ward-level location and
+   >    circumstance, which [§1.2](#dpg-31) already flags as often identifying. The defensible claim is
+   >    ***"the summary carries no names"*** — never *"the summary is anonymous."*
+   > 2. **This does not clean [E5](../../dpg/pii-egress-inventory.md), and E5 is bigger.** The admin recap
+   >    mails the **entire grievance dict, raw narrative included**, to `ADMIN_EMAILS` on every submission.
+   >    ✅ **Also decided 2026-08-27 — see below.**
+   > 3. ⭐ **Ordering decides whether the logs are clean too.** Five sites in
+   >    `form_grievance_complainant_review.py` log `grievance_summary` **chatbot-side, before storage**.
+   >    Redact at storage time and those logs still hold the original; generate the summary **downstream
+   >    of the pseudonymiser** ([§31.4](#dpg-31)) and they never see a name. **That is the argument for
+   >    §31.4's output pass being the implementation, not a storage-time filter.**
+
+   > ## ✅ DECIDED 2026-08-27 — the admin recap email carries a pseudonymised summary and a link, not the record
+   >
+   > **Today** (`backend/actions/action_outro.py:148`, `:243`) it mails the whole `grievance_data` /
+   > `email_data` dict — narrative at `:225`, summary at `:220`, categories, timeline, complainant
+   > contact — to `ADMIN_EMAILS` over the SMTP relay, **on every submission**. It is
+   > [E5](../../dpg/pii-egress-inventory.md) and it ranks above the model call.
+   >
+   > **Change it to: the pseudonymised summary, plus a link to the ticket in the platform.** The recipient
+   > follows the link and reads the case behind Keycloak, with an audit trail — instead of receiving a
+   > copy of the record in a mailbox that has neither.
+   >
+   > ⚠ **The link is not guaranteed to exist when the mail is composed.** `POST /api/v1/tickets` does
+   > return `ticket_id` (`ticketing_dispatch.py:288`), but the dispatch is **non-blocking and never
+   > raises** (`:242`) — on failure it logs a warning and the grievance still exists with no ticket.
+   > **Fall back to the `grievance_id`**, which is stable, already the correlation key in the logs
+   > (`:290`), and lets the recipient find the case once the two-minute sync has created it. **Do not
+   > fall back to including the narrative.**
 3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
    *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
    descriptors"* (`ticketing/clients/llm_client.py:189-190`). **A prompt instruction is not a control** — it does nothing
@@ -556,6 +604,43 @@ instead of nine call sites.
    - Audit the rest against DPG-30's inventory
    - **Follow the existing precedent**: `db_debug_log.text_len_for_log` already logs lengths, not
      content — `LLM_services.py:616` and `:647` use it on the SEAH path
+
+   > ## ✅ DECIDED 2026-08-27 — log a short prefix, enough to find the record and no more
+   >
+   > **The owner's rule:** *"prune the logs by just logging the first 8 characters so someone can find
+   > it."* The intent — keep correlation, drop the content — is right and is what the rest of this
+   > ticket should be built around.
+   >
+   > ⚠ **But "the first 8 characters" cannot be applied uniformly, and applying it uniformly would
+   > rebuild the exact defect DPG-30 just found** (`form_status_check.py:76`'s `slot_value[:20]`, a
+   > truncation that can never fire). Measured against the actual field lengths:
+   >
+   > | Field | Length | What `[:8]` leaves |
+   > |---|---|---|
+   > | **OTP** | **6 digits** | 🔴 **The entire OTP.** 8 > 6, so the truncation does nothing at all |
+   > | **Phone** (Nepali mobile) | **10 digits** | 🔴 **8 of 10 digits.** ~100 candidates before you use the fact that Nepali prefixes are structured — not a redaction |
+   > | **Narrative / summary** | long free text | ✅ A genuine prefix. Works exactly as intended |
+   >
+   > **So the rule is per field type, and it is the same intent everywhere — carry the correlation key,
+   > never a fragment of the secret:**
+   >
+   > 1. **Free text** (narrative, summary, notes) → **first 8 characters**, as asked. This is the case
+   >    the rule was written for and it holds.
+   > 2. **Phone** → **not a prefix.** Log a **salted** hash prefix (8 hex chars). It gives *more*
+   >    findability than `[:8]` does — every line for one complainant correlates, and a known number can
+   >    be looked up by hashing it — while the number itself is not in the log. ⚠ **Salted is not
+   >    optional:** the privacy assessment's **F-3** already records unsalted phone hashes as a finding,
+   >    because Nepal's mobile space is small enough to enumerate.
+   > 3. **OTP** → **do not log it, at any length.** No truncation of a 6-digit secret is a redaction.
+   > 4. ⭐ **Prefer the key that already exists.** `grievance_id` is the correlation key the ticketing
+   >    dispatch already logs (`ticketing_dispatch.py:290`), it is not a secret, and it beats any hash
+   >    for finding a record. Where it is in scope, log it and drop the identifier entirely. ⚠ At
+   >    `phone.py:27` it is **not** in scope — the function receives `action_name` and `slot_value` only
+   >    — so that site needs either the plumbing or the hash.
+   >
+   > **The test this needs, and it is the point:** assert the redaction **actually shortens the real
+   > value**, using a genuine 10-digit Nepali number and a genuine 6-digit OTP as fixtures — not that a
+   > slicing function was called. That is the assertion `form_status_check.py:76` would have failed.
    - ✅ **Two sites this list used to name are already fixed** and are not work: `parse_llm_response`
      logs the response length (`:490`, DPG-13), and the translation paths no longer interpolate the
      whole `input_data` dict (DPG-19.3 / D-29)
