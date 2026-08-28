@@ -201,13 +201,24 @@ def test_call_site_passes_an_explicit_key(site):
     )
 
 
-def test_introspection_sites_are_the_known_four():
-    """Pins the AST+MRO census (4 introspection / 196 explicit / 0 unresolved).
+def test_introspection_sites_are_the_known_five():
+    """Pins the AST+MRO census.
 
     If this count moves, the T3-01 analysis needs redoing rather than quietly widening.
+
+    **4 → 5 on 2026-08-27**, and the pin worked exactly as designed: it caught the addition and
+    made someone look. The new site is `form_otp:390`, the OTP-expired branch (D-62), which reuses
+    `action_ask_otp_input`'s utterance 6 — *"Invalid code. Please try again or type 'resend'"* —
+    rather than adding an "expired" message.
+
+    ⚠ **Why it reuses rather than adds, since that is the part worth checking:** utterances here are
+    bilingual, and inventing Nepali copy for a live complainant-facing flow is not something a
+    logging-and-lifecycle change should do. The behaviour is right (rejected, resend offered); only
+    the *reason* is imprecise. The wording improvement is logged in `TODO.md`, to go through the
+    translation workflow rather than through a guess.
     """
-    assert len(_SITES) == 4, (
-        f"expected 4 BaseFormValidationAction.get_utterance call sites, found "
+    assert len(_SITES) == 5, (
+        f"expected 5 BaseFormValidationAction.get_utterance call sites, found "
         f"{len(_SITES)}: {_IDS}"
     )
 

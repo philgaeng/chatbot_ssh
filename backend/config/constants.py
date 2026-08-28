@@ -144,6 +144,21 @@ ADMIN_EMAILS: List[str] = [
     if addr.strip()
 ]
 
+# ── OTP lifetime ─────────────────────────────────────────────────────────────
+# Owner's decision, 2026-08-27 (D-62). Until then the OTP had NO expiry at all: the code
+# was six digits in a conversation slot compared with `==`, so its validity was bounded by
+# the session's lifetime rather than by a clock — which is not what anyone assumes when
+# they read "one-time password".
+#
+# ⚠ Ten minutes is a trade, not a security parameter to tighten by reflex. The people it
+# costs are complainants on a slow rural connection who wait for an SMS and then type six
+# digits; shortening it makes the resend path the normal path for exactly the users least
+# able to use it. Raise it before lowering it, and measure the resend rate first.
+#
+# Env-overridable so a deployment can adjust without a code change; the default is what a
+# fresh clone gets.
+OTP_VALIDITY_SECONDS: int = int(os.getenv("OTP_VALIDITY_SECONDS", "600"))
+
 ############################
 # MESSAGING TEMPLATES
 ############################

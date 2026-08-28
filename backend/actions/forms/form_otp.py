@@ -9,6 +9,7 @@ from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
 from backend.actions.services.otp import verification as otp_verification
 from backend.services.db_debug_log import mask_phone_for_log
+from backend.config.constants import OTP_VALIDITY_SECONDS
 
 class BaseOtpAction(BaseAction):
     def __init__(self):
@@ -81,6 +82,11 @@ class ActionAskOtpInput(BaseOtpAction):
 
         self.logger.debug(f"{self.name()} - Asking for OTP Input")
         otp_number = tracker.get_slot("otp_number")
+        # ⚠ Pre-bound from the slot, exactly as `otp_number` above is. It is only reassigned
+        # inside the generate/resend branch, and the return below is outside that branch — so
+        # without this line a non-regenerating pass raises UnboundLocalError. Same shape as
+        # D-28 and D-29.
+        otp_issued_at = tracker.get_slot("otp_issued_at")
         phone_number = self.get_otp_phone_number(tracker)
         otp_status = tracker.get_slot("otp_status")
         resend_count = tracker.get_slot("otp_resend_count") or 0
@@ -90,6 +96,10 @@ class ActionAskOtpInput(BaseOtpAction):
         if not otp_status or otp_status == "resend" and resend_count < 3 :
         # OTP already generated
             otp_number = otp_verification.generate_otp_code()
+            # Stamped at generation so verification can age it (D-62). Regenerating on a
+            # resend re-stamps, which is what makes each resend a fresh 10-minute window
+            # rather than an extension of the first one.
+            otp_issued_at = otp_verification.issued_at_stamp()
             message_sms = self.get_utterance(1)
             message_sms = message_sms.format(otp_number=otp_number)
             message_bot = self.get_utterance(2)
@@ -141,7 +151,11 @@ class ActionAskOtpInput(BaseOtpAction):
             dispatcher.utter_message(text=message_skip)
             
 
-        return [SlotSet("otp_number", otp_number), SlotSet("otp_resend_count", resend_count)]
+        return [
+            SlotSet("otp_number", otp_number),
+            SlotSet("otp_issued_at", otp_issued_at),
+            SlotSet("otp_resend_count", resend_count),
+        ]
     
 
 class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
@@ -356,14 +370,43 @@ class ValidateFormOtp(BaseFormValidationAction, BaseOtpAction):
             
         # Verify OTP match
         expected_otp = tracker.get_slot("otp_number")
-        
-        
+
+        # ── Expiry, before the match (D-62, owner 2026-08-27) ──────────────────────────
+        # Checked FIRST and independently of the code's correctness: an expired code must be
+        # rejected even when the digits are right, or the window is decorative. Fails closed —
+        # a missing or unparseable stamp counts as expired (see `is_expired`).
+        # ⚠ Reuses utterance 6 ("Invalid code… or type 'resend'") rather than adding an
+        # "expired" message. The behaviour is right — rejected, with the resend path offered —
+        # and inventing Nepali copy for a live complainant-facing flow is not something this
+        # change should do. The wording improvement is logged, not guessed at.
+        if otp_verification.is_expired(
+            tracker.get_slot("otp_issued_at"), ttl_seconds=OTP_VALIDITY_SECONDS
+        ):
+            self.logger.info(
+                "%s - OTP expired after %d seconds; offering resend",
+                self.name(),
+                OTP_VALIDITY_SECONDS,
+            )
+            dispatcher.utter_message(text=self.get_utterance(6, key="action_ask_otp_input"))
+            return {
+                "otp_input": None,
+                "otp_status": "expired",
+                "otp_number": None,
+                "otp_issued_at": None,
+                "otp_resend_count": tracker.get_slot("otp_resend_count") or 0,
+            }
+
         if otp_verification.otp_matches(slot_value, expected_otp):
             message = self.get_utterance(1, key="validate_otp_input")
             dispatcher.utter_message(text=message)
             result = {"otp_input": slot_value,
                       "otp_status" : "verified",
                       "otp_verified" : True,
+                      # Erased once the number is verified (owner, 2026-08-27). The code has
+                      # served its purpose; keeping it leaves an accepted secret in session
+                      # state with nothing left to protect.
+                      "otp_number" : None,
+                      "otp_issued_at" : None,
                       "otp_resend_count" : 0}
             result.update(
                 self.upsert_active_party_payload(
