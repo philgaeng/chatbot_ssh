@@ -143,11 +143,42 @@ A Nepali mobile number is **10 digits**. The truncation triggers at 21 character
 **the full number is logged**. A reviewer skimming for `[:20]` sees a redaction; there isn't one. This is
 the shape DPG-34 should hunt for specifically — a bound that is real code and always false.
 
-🔴 **The OTP pair is the sharpest finding in this inventory.** A phone number in a log is disclosure. A
-phone number **and** the OTP that authenticates it, both at INFO, in the same log stream, is enough to
-complete a status-check impersonation within the code's validity window. That is an access-control
-consequence, not only a privacy one, and it should not wait for the redaction filter:
-**delete those two lines.** They have no diagnostic value that `len(slot_value)` would not give.
+### ⚠ Corrected 2026-08-27, before anyone acted on it — the OTP finding was overstated
+
+**This section first claimed the logged OTP completes a status-check impersonation. It does not, and
+the claim was made without tracing whether the value is usable.** The correction, and what survives:
+
+**Why it is not directly replayable.** Verification is
+`otp_matches(slot_value, tracker.get_slot("otp_number"))` (`form_otp.py:349-352`) — the expected value
+lives in **that conversation's own slot**. An attacker running their own session holds their own
+`otp_number`, so knowing a victim's OTP string authenticates nothing. Using it would require session
+replay or hijack as well, which is a different finding nobody has established. **Severity 🔴 → 🟡.**
+
+**What survives, and is still worth the two-line fix:** a credential is written to the application log
+at INFO. That is a finding on its own terms — logs are copied, tailed and pasted far more casually than
+databases are, and `len(slot_value)` gives every diagnostic the line currently provides. It is cheap;
+it is just not urgent.
+
+⭐ **And checking it turned up two things that were not in the original finding and are more
+interesting than it:**
+
+1. **There is no expiry on the OTP at all.** `backend/actions/services/otp/verification.py` is three
+   functions — generate six digits, check it is six digits, `input == expected`. **No timestamp, no
+   TTL, no expiry check anywhere in the path.** The bound is the lifetime of the conversation slot, not
+   a clock. Anyone reasoning about this control as time-limited — which is the natural assumption — is
+   reasoning about a window that does not exist.
+2. **`otp_number` is not cleared on successful verification.** The success branch
+   (`form_otp.py:352-364`) sets `otp_input`, `otp_status`, `otp_verified` and `otp_resend_count`, and
+   never `otp_number: None`. The accepted secret stays in session state after it has been used.
+
+⚠ **Open question, flagged rather than claimed because it has not been traced:** when SMS delivery
+fails, `form_otp.py:121` does `dispatcher.utter_message(text=message_sms)` — **the OTP is printed into
+the chat window** as the designed fallback. On the intake path that may be acceptable. On the
+**status-check** path, where the OTP's job is to prove the person controls the phone tied to the
+grievance, printing it to whoever typed the number would defeat the control — and with the DOIT gateway
+having no fallback transport (the SNS path was deleted 2026-08-24), "SMS is down" is a single condition
+that reaches it. **Someone should trace whether the status-check flow hits that branch.** Not asserted
+here; the last claim made in this section without tracing it was wrong.
 
 ---
 
