@@ -472,6 +472,13 @@ true rather than aspirations.
   from an open one, and it had been sitting there for ten days.**
   ⛔ **DOR production is still off**, and is the only environment where a real complainant's officer
   logs in.
+  ⭐ **It paid for itself in four minutes, which is the best argument for the control we have.** The
+  first real logout it recorded wrote `LOGOUT` **and** `LOGOUT_ERROR: invalid_client_credentials` in
+  the same second — a back-channel token revoke that cannot succeed on the password-login path, and
+  which the browser swallows by design (`void fetch`, *"best-effort"*). Narrow impact: on a normal
+  logout the front-channel logout terminates the session anyway; on the stale-session path, which
+  skips the front channel deliberately, it leaves a live refresh token behind. **Nothing else in this
+  platform would have surfaced it** — no test, no report, no user-visible symptom.
 - ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
   count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
   own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and
