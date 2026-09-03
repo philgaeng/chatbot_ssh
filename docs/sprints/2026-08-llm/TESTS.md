@@ -1,5 +1,12 @@
 # Test ledger — DPG compliance & LLM independence
 
+> ⚠ **Every `Mutation check` below is PROSE, not a record — none of them can be re-run.**
+> That is a known gap, scoped for another agent in
+> [`followups/mutation-records-are-prose-not-data.md`](followups/mutation-records-are-prose-not-data.md):
+> the checks become `tests/mutations/*.yml` data plus a runner, and this column cross-references
+> the record id. ⭐ It matters because a mutation caught a **decorative test three times in one
+> session** — a claim these sentences cannot support on their own, and a reviewer cannot verify.
+
 > **These are acceptance criteria, not suggestions.** Every ticket ships with its tests in the same commit
 > ([`README.md`](README.md) → Conventions).
 > Standard: [`docs/engineering/04_testing.md`](../../engineering/04_testing.md) — the pyramid, markers,
