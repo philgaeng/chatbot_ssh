@@ -47,19 +47,44 @@
     Given-name matching is deliberately absent (many Nepali given names double as common nouns),
     so without the thar leg a plainly-written name simply crosses to the model.
 
+- id: T-31-d-district-in-the-surname-gazetteer
+  target: backend/constants/nepali_pii_patterns.py
+  find: '    "Rana", "Malla", "Katuwal", "Bogati", "Chettri", "Chhetri", "Kandel", "Marasini",'
+  replace: '    "Rana", "Malla", "Katuwal", "Bogati", "Chettri", "Chhetri", "Kandel", "Marasini", "Jhapa",'
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  why: >
+    The inverse pin, and the one people get backwards. A bare district MUST survive redaction: the
+    classifier derives district from the narrative (§31.3) and a district name alone identifies
+    nobody, so redacting it costs the signal and buys no privacy. The surname gazetteer is the
+    recogniser most likely to over-fire on a place name — many Nepali thar are also toponyms — and
+    it matches a bare surname with no trigger word, so a district added there is redacted as a
+    PERSON in ordinary prose.
+  note: >
+    ⚠ This is NOT the mutation the ledger originally recorded. That one added the district to the
+    SETTLEMENT QUALIFIER list and stopped killing at commit `7dddf5e8` — see the record below,
+    which keeps that loss executable rather than letting it become prose again.
+
 - id: T-31-d-district-added-to-qualifiers
   target: backend/constants/nepali_pii_patterns.py
   find: '    "municipality", "VDC", "basti", "chowk", "chok", "marg", "house no", "plot no",'
   replace: '    "municipality", "VDC", "basti", "chowk", "chok", "marg", "house no", "plot no", "Jhapa",'
   tests: tests/backend/test_pii_service.py
-  expect: kills
+  expect: survives
   why: >
-    The inverse pin, and the one people get backwards. A bare district MUST survive redaction:
-    the classifier derives district from the narrative (§31.3) and a district name alone
-    identifies nobody, so redacting it costs the signal and buys no privacy. Districts and
-    provinces are deliberately absent from every qualifier list; this proves a test notices when
-    one is added.
-
+    ⚠ **A DOCUMENTED REGRESSION, not a designed non-kill — the only record here of that kind, and
+    it is deliberately kept red-in-meaning rather than deleted.** The ledger recorded this as
+    `✅ Checked — Jhapa added to the qualifier list → red`, and it was: until commit `7dddf5e8`
+    the roman address pattern allowed ZERO trailing digits, so a bare qualifier matched and adding
+    `Jhapa` redacted the district. That commit tightened the pattern to two alternatives — a
+    capitalised word *before* the qualifier, or at least one digit *after* it — which correctly
+    stopped the bare word "ward" being redacted as an address. The side effect is that
+    `"...in Jhapa district..."` (the test's own sentence: lowercase "in" before, no digits after)
+    now matches neither alternative, so the mutation is inert and the test stays green.
+    **What is lost:** the district test no longer notices a district added to the qualifier list,
+    even though `"Birtamod Jhapa"` WOULD still be redacted by alternative 1. What still kills is
+    `T-31-d-district-in-the-surname-gazetteer` above. Write-up:
+    `followups/mutation-records-are-prose-not-data.md` §9.5.
 - id: T-31-e-fresh-token-per-occurrence
   target: backend/services/pii_service.py
   find: "        token = seen.get(key)"

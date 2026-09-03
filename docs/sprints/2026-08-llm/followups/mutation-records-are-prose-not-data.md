@@ -1,8 +1,12 @@
 # Follow-up / scoping — 95 mutation checks are recorded as prose, so none of them can be re-run
 
 > **Raised:** 2026-08-27, at the end of Sprint 3's DPG-33 step 1.
-> **Status:** ⬜ **OPEN — scoped for another agent.** This document is the brief; it is meant to be
-> executable from cold without reading the sprint.
+> **Status:** ✅ **BUILT 2026-09-03** — `tests/mutations/*.yml` (30 records, 6 modules) +
+> [`scripts/ops/run_mutations.py`](../../../../scripts/ops/run_mutations.py). Every record was
+> **verified to reproduce its recorded outcome**. House practice:
+> [`04_testing.md`](../../../engineering/04_testing.md) §5a. The brief below is kept as written;
+> **§9 records what building it actually found**, including the two records that did not reproduce
+> first time and where the brief's estimates were wrong.
 > **Size:** M. One data format, one runner script, one seed set. No new dependency.
 > **Priority:** 🟠 — nothing is broken today. What is missing is the ability to *know* it is not.
 
@@ -176,18 +180,19 @@ best-documented:
 
 ## 7. Acceptance
 
-- [ ] `tests/mutations/*.yml` for at least the six modules in §6
-- [ ] `scripts/ops/run_mutations.py` — applies, runs, restores, compares against `expect`
-- [ ] Refuses to run on a dirty tree; restores in a `finally`; verified by killing it mid-run
-- [ ] `find` asserted to occur **exactly once**, with a clear error naming the record when it does not
-- [ ] `expect: survives` supported as a first-class outcome, and **rejected without a `why`**
-- [ ] `runner: container` supported for the OpenAI-importing suites (§4.3)
-- [ ] **Every seeded record verified to reproduce its recorded outcome** — and any that does not is
+- [x] `tests/mutations/*.yml` for at least the six modules in §6
+- [x] `scripts/ops/run_mutations.py` — applies, runs, restores, compares against `expect`
+- [x] Refuses to run on a dirty tree; restores in a `finally`; verified by killing it mid-run
+- [x] `find` asserted to occur **exactly once**, with a clear error naming the record when it does not
+- [x] `expect: survives` supported as a first-class outcome, and **rejected without a `why`**
+- [x] `runner: container` supported for the OpenAI-importing suites (§4.3)
+- [x] **Every seeded record verified to reproduce its recorded outcome** — and any that does not is
       written up rather than quietly adjusted
-- [ ] NOT wired into CI, with the reason in the script header (§4.4)
-- [ ] `TESTS.md`'s prose records cross-reference their record `id`, so the ledger and the data agree
-- [ ] A short section in [`04_testing.md`](../../../engineering/04_testing.md) — this becomes a house
-      practice or it decays back into prose
+- [x] NOT wired into CI, with the reason in the script header (§4.4) — ⚠ and the reason is now
+      partly different: see §9.4, the set runs in ~20 s
+- [x] `TESTS.md`'s prose records cross-reference their record `id`, so the ledger and the data agree
+- [x] A short section in [`04_testing.md`](../../../engineering/04_testing.md) §5a — rules 5.3–5.8,
+      plus a definition-of-done row and a command-table entry
 
 ## 8. Related
 
@@ -195,3 +200,134 @@ best-documented:
 - [`../../../engineering/04_testing.md`](../../../engineering/04_testing.md) §5 — pinning tests, where the practice belongs
 - [`../PROGRESS.md`](../PROGRESS.md) → **D-42**, the sprint's first decorative test, found the same way
 - [`../../../TODO.md`](../../../TODO.md) — the backlog row
+
+---
+
+## 9. What building it found (2026-09-03)
+
+**Shipped:** 30 records across the six modules in §6, `scripts/ops/run_mutations.py`, and §5a of
+[`04_testing.md`](../../../engineering/04_testing.md). Every acceptance box in §7 is ticked. The
+count is 30 rather than ~25 because two prose records covered more than one edit: the phone-masking
+check reverted **both** call sites (split into one record per site, since the pin now fires per
+site), and `test_celery_payload_carries_no_narrative.py` accumulated a second set of four mutations
+from the SEAH half in `b348773e` after the ledger row was written.
+
+### 9.1 ⭐ The clean-tree refusal fired on its first real run, and was right
+
+§4.1's rule — restore with git, refuse on a dirty tree — reads like defensive boilerplate. On the
+very first invocation it **blocked a `git checkout --` over another session's uncommitted work** on
+`backend/services/pii_service.py` (a DPG-32 output-redaction change in flight). Had the runner used
+the by-hand `/tmp` method, or skipped the check, that work would have been destroyed silently.
+
+One refinement the brief did not anticipate: `git status --porcelain` counts **untracked** files as
+dirty, so the runner refused to start on its own record files before they were committed. Untracked
+files cannot be destroyed by `git checkout -- <target>`, so the blanket refusal now counts **tracked
+modifications only**, while a target that is dirty *or untracked* still hard-refuses. Without that
+split the guard would fire on every run and everyone would learn to pass `--allow-dirty` — D-26's
+lesson in miniature.
+
+### 9.2 Two records did not reproduce first time — both authoring faults, both caught by a guard
+
+§6 warned that transcription is not mechanical. It was right, though not in the way expected: the
+failures were in the *records*, not in the tests.
+
+| What broke | Which guard caught it |
+|---|---|
+| The print-ban anchor was `# Get the Celery task ID…` + `task_id = …` — **boilerplate repeated in three tasks**. Mutating two at once would have tested something nobody wrote down | The **exactly-once assertion** (§3.2/§4.2). Re-anchored on the transcribe task's own docstring tail |
+| The in-place-redaction `replace` was a **single-quoted YAML scalar**, where `\n` stays two literal characters — so the mutation shipped a `SyntaxError` into the container instead of the edit | pytest exits **2** on a collection error, not 1, so it was reported as `broken` rather than miscounted as a kill. A `ast.parse` guard was then added so this fails at validation with a message naming the cause |
+
+The second one is the more interesting: **without a distinct `broken` outcome, a mutation that does
+not compile looks exactly like a mutation the test caught.** That would have manufactured a green
+record for an edit that never ran — the precise failure mode this ticket exists to remove,
+reintroduced one layer up.
+
+### 9.3 ⚠ A trap the brief did not have: stale bytecode makes the runner report the wrong edit
+
+The nastiest bug found while building this, because it produces a **confident wrong answer** rather
+than an error. A record passed in isolation and failed in the full run; the cause was not the record.
+
+CPython validates a cached `.pyc` against the source's `(mtime, size)`, and **the mtime in the pyc
+header has one-second granularity**. Two mutations of the same file that change its length by the
+same number of bytes — utterly ordinary; both of the `T-31-d` pair append `, "Jhapa",` to different
+lists, i.e. **exactly 9 characters each** — produce an identical `(mtime, size)` pair when they run
+inside the same second, which they do at ~0.2 s per record. The second mutation then executed **the
+first mutation's bytecode**, and the runner faithfully reported the result of an edit it had not made.
+
+For a tool whose entire job is to say *"this edit produces this outcome"*, that is the worst
+available failure. Fixed by running every mutated suite with `PYTHONDONTWRITEBYTECODE=1` (host and
+container), plus purging any existing `__pycache__` entry for the target first. Two consecutive full
+runs are now identical at 31/31.
+
+⭐ **Note how it was caught:** by the outcomes disagreeing between a `--module` run and a full run,
+which only happens because the expectations are *recorded* and *compared*. Run by hand, this would
+have looked like one flaky record and been shrugged at.
+
+### 9.4 Where the brief's estimates were wrong
+
+* **Runtime: ~20 s for all 30**, not the "slow, every mutation is a full suite run" §4.4 assumed.
+  These suites are small and fast (0.1–0.9 s each). §4.4's conclusion still stands, but **for a
+  different reason**: 10 of the 30 need a live Compose stack, which CI does not have. If the
+  container records were ever split out, the host set (~13 s) would be a defensible gate.
+* **`docker cp` is genuinely required.** Confirmed rather than assumed: `docker inspect` shows the
+  container has **no bind mounts**, so the code is baked into the image and a host edit is invisible
+  to it. The runner snapshots the container's *own* bytes before mutating rather than assuming they
+  equal the host's — so a stale image surfaces as a `find` that does not match, which is a finding
+  ("rebuild first"), not something to loosen an anchor for.
+* **`git worktree` is the way to run this while other work is in flight.** With `pii_service.py`
+  dirty from another session, the records were verified in a detached worktree at `HEAD` — which is
+  also the *right* baseline, since the records describe committed code.
+
+### 9.5 ⭐ It caught a live regression within an hour of existing — in a commit made while it was being built
+
+The strongest argument for the tool is not the seeding; it is what happened next. Commit
+`7dddf5e8` (DPG-33 output redaction) landed **during** this work and tightened the roman address
+pattern in `_find_addresses`. Re-running the 30 records against the new `HEAD` turned
+`T-31-d-district-added-to-qualifiers` from **kills** to **survives**.
+
+**What the ledger claimed:** *"✅ Checked — `Jhapa` added to the qualifier list → red"*, guarding
+§31.3's rule that a bare district must NOT be redacted, because the classifier derives district
+from the narrative and a district alone identifies nobody.
+
+**What changed.** The old pattern allowed **zero** trailing digits, so a bare qualifier matched and
+adding `Jhapa` redacted the district. `7dddf5e8` replaced it with two alternatives — a capitalised
+word *before* the qualifier, or **at least one digit after it** — which correctly stopped the bare
+word *"ward"* being redacted as an address (a real false positive, found by a test asserting a
+clean summary stayed clean). The side effect: the test's own sentence, *"…in **Jhapa** district…"*,
+has a lowercase `in` before and no digits after, so it matches neither alternative. **The mutation
+became inert and the test went quiet about it.**
+
+**This is the exact failure mode §1.2 predicted** — *"someone refactors, an assertion quietly
+becomes decorative, and the ledger still reads ✅ Checked"* — reproduced end to end, by accident,
+within an hour. Under the old regime nothing would have said so: the test still passes, the commit
+is a genuine improvement, and the ledger row would have gone on claiming a check that no longer
+happens.
+
+**What is actually lost**, stated precisely rather than dramatised: the district test no longer
+notices a district being added to the qualifier list, *even though* `"Birtamod Jhapa"` would still
+be redacted through alternative 1. So the risk is narrowed, not eliminated, and the guard against
+it is gone.
+
+**Handled without quietly adjusting anything** (§7's rule), as two records:
+
+* `T-31-d-district-in-the-surname-gazetteer` — **kills**. Adds `Jhapa` to `THAR_SURNAMES_ROMAN`
+  instead. This is arguably the better mutation for the property anyway: the surname gazetteer is
+  the recogniser most likely to over-fire on a place name (many Nepali *thar* are also toponyms)
+  and it matches a bare surname with no trigger word.
+* `T-31-d-district-added-to-qualifiers` — **survives**, carrying the whole history in its `why` and
+  flagged as a **documented regression rather than a designed non-kill**. Keeping it executable is
+  the point: deleting it would turn the finding back into prose, which is what this ticket exists
+  to stop.
+
+⏭ **Owner decision needed, deliberately not taken here:** whether `test_a_bare_district_survives…`
+should gain a case the tightened pattern still reaches — e.g. `"Birtamod Jhapa"` — restoring the
+qualifier-list mutation as a kill. That is a change to another session's in-flight test file and
+belongs with whoever owns DPG-32/33.
+
+### 9.6 Still open
+
+* **~65 ledger entries remain prose.** Deliberately not back-filled: §6 says start with the freshest
+  and best-documented, and the older ones need their `find`/`replace` reconstructed from commit
+  messages that are thinner. Back-fill a module's records when next touching that module.
+* **No pin ties a `tests/mutations/` record to the test module it names.** A module could be deleted
+  or renamed and its records would rot silently — the same class of decay this ticket was raised
+  about. Small, and worth doing next.

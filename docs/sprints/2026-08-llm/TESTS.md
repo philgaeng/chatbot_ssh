@@ -1,11 +1,14 @@
 # Test ledger — DPG compliance & LLM independence
 
-> ⚠ **Every `Mutation check` below is PROSE, not a record — none of them can be re-run.**
-> That is a known gap, scoped for another agent in
-> [`followups/mutation-records-are-prose-not-data.md`](followups/mutation-records-are-prose-not-data.md):
-> the checks become `tests/mutations/*.yml` data plus a runner, and this column cross-references
-> the record id. ⭐ It matters because a mutation caught a **decorative test three times in one
-> session** — a claim these sentences cannot support on their own, and a reviewer cannot verify.
+> ⚠ **Most `Mutation check` entries below are PROSE, not records — those cannot be re-run.**
+> **31 of them now can.** The six Sprint 3 modules listed in
+> [Mutation records](#mutation-records--the-checks-that-can-be-re-run) were transcribed to
+> `tests/mutations/*.yml` and every one was verified to reproduce its recorded outcome:
+> `python scripts/ops/run_mutations.py` (~20 s). The remaining ~65 are still sentences, and a
+> sentence is a claim whose evidence is itself.
+> ⭐ It matters because a mutation caught a **decorative test three times in one session** — a
+> claim these sentences cannot support on their own, and a reviewer cannot verify.
+> Practice: [`docs/engineering/04_testing.md`](../../engineering/04_testing.md) §5a.
 
 > **These are acceptance criteria, not suggestions.** Every ticket ships with its tests in the same commit
 > ([`README.md`](README.md) → Conventions).
@@ -27,6 +30,58 @@ itself). Record the mutation you ran in the commit message.
 `live_llm` marker introduced here is deselected in `backend-tests` **and selected in
 `dpg-platform-independence`** — it runs on every commit, in a different job. A marker that nothing runs
 is a quarantine with better branding.
+
+---
+
+## Mutation records — the checks that can be re-run
+
+**Two rules govern this ledger and rule 1 is the harder one.** *A test that cannot go red is not a
+test* was enforced by hand for the whole sprint — edit a file, run pytest, read the result, restore
+from a copy in `/tmp` — and recorded as a sentence. **A sentence cannot be re-run.** Nobody could
+reproduce a check, a test that *stopped* catching its mutation would go unnoticed while the row
+still read ✅, and a reviewer could verify none of it — which sits badly beside the DPG pack's
+central claim that every assertion is checkable.
+
+**31 records now exist as data**, in `tests/mutations/*.yml`, and each was verified to reproduce
+the outcome the prose recorded:
+
+```bash
+python scripts/ops/run_mutations.py                       # all 31, ~20 s
+python scripts/ops/run_mutations.py --module test_pii_service
+python scripts/ops/run_mutations.py --list                # no edits, no test runs
+```
+
+| Test module | Records | Where they run | Ledger / source |
+|---|---|---|---|
+| `tests/backend/test_pii_service.py` | 7 (**1 designed non-kill + 1 documented regression**) | host | T-31-a…e, above |
+| `tests/backend/test_celery_payload_carries_no_narrative.py` | 8 | host | DPG-34, commits `8603b9f4` + `b348773e` |
+| `tests/backend/test_log_pii_pruning.py` | 5 | host | DPG-30 log pruning |
+| `tests/backend/actions/test_otp_verification.py` | 4 | host | OTP expiry + erasure, commit `4367e4fa` |
+| `tests/backend/test_redaction_at_the_model_boundary.py` | 4 | **container** `nepal_chatbot-celery_llm-1` | DPG-33 step 1, commit `abf86fb0` |
+| `tests/backend/test_sensitive_flag_only_escalates.py` | 3 | host | D-64, commit `094e45e3` |
+
+⭐ **`expect: survives` is a first-class outcome.** `T-31-a-dual-script-digit-class` is recorded as a
+**non-kill**, and correctly: removing the Devanagari half of the digit class changes no behaviour,
+because `find_pii` normalises centrally before any recogniser runs. Removing the *normalisation* is
+what kills, and it takes 3 tests red. A runner that demanded every mutation kill would force
+someone to delete a useful safety net or fake the record — so a `survives` record is rejected
+unless its `why` says what *does* kill.
+
+⭐ **It caught a live regression within an hour of existing.** Commit `7dddf5e8` landed while the
+records were being seeded and quietly made `T-31-d`'s recorded mutation inert — the test still
+passes, the commit is a genuine improvement, and under the old regime this row would have gone on
+claiming a check that no longer happens. That is precisely the failure the ticket was raised
+about, reproduced by accident. Details in the T-31-d row above and in
+[`followups/…prose-not-data.md`](followups/mutation-records-are-prose-not-data.md) §9.5.
+
+⚠ **The other ~65 entries in this ledger are still prose.** They are not worse than they were, but
+they are not evidence either. Back-fill them when you next touch the module they belong to; the
+transcription is **not mechanical** — the commit message says what changed in words, and the
+`find`/`replace` has to be reconstructed and then verified to actually reproduce the recorded
+outcome. Two of the 30 did not reproduce on the first attempt, and both were authoring faults
+caught by the runner's own guards rather than by review.
+
+Practice and rules: [`docs/engineering/04_testing.md`](../../engineering/04_testing.md) §5a.
 
 ---
 
@@ -334,11 +389,11 @@ prescribes the wrong fix is worse than a missing test**, because four days of re
 
 | ID | Test | Mutation check |
 |---|---|---|
-| **T-31-a** ✅ | ⭐ **A Devanagari-digit phone number is detected.** `९८४१२३४५६७` is a real number and an ASCII `\d` pattern misses it entirely — the defect that passes every test written by an English speaker | ⚠ **Recorded as a NON-KILL, honestly.** Removing the Devanagari half of the numeric character class leaves this green — and correctly so: `find_pii` normalises once, centrally, before any recogniser runs, so the dual-script class is redundant defence-in-depth rather than the working part. **Removing the normalisation call kills 3 tests**, which is the real mechanism, now pinned separately. Claiming the kill I did not get is how a ledger stops meaning anything (the T-23-b precedent) |
-| **T-31-b** ✅ | Offsets are computed on the normalised string and applied to the **original**: the span text is `९८४१२३४५६७`, not its ASCII form. Plus the 1:1 length-preservation the arithmetic rests on, asserted rather than trusted | ✅ **Checked** — normalisation removed → red |
-| **T-31-c** ✅ | Person names by all three recognisers: honorific/role-title (`Er. Rajesh Shrestha`), thar gazetteer with no trigger (`Kamala Devi Chaudhary`), self-identification in both scripts. ⭐ Plus two **regression** cases from defects found while building: a title captured as a name (`contractor Er.` → `Er`), and a lowercase verb phrase captured as one (`I am writing on behalf`) — both caused by a blanket `re.IGNORECASE` defeating `[A-Z][a-z]+` | ✅ **Checked** — the thar recogniser removed → 3 red |
-| **T-31-d** ✅ | ⭐ **A bare district survives.** `Jhapa` must NOT be redacted: the classifier derives district from the narrative and a district alone identifies nobody. Plus an address span that stops at the danda `।` rather than swallowing the next clause | ✅ **Checked** — `Jhapa` added to the qualifier list → red |
-| **T-31-e** ✅ | Replacement semantics: same value → same placeholder within a document; **counters per-document, never process-global**; placeholders not deletion; round-trip lossless with and without PII; `<PERSON_10>` not corrupted by `<PERSON_1>`'s substitution | ✅ **Checked** — fresh token per occurrence → red · global counter → 3 red |
+| **T-31-a** ✅ | ⭐ **A Devanagari-digit phone number is detected.** `९८४१२३४५६७` is a real number and an ASCII `\d` pattern misses it entirely — the defect that passes every test written by an English speaker | ⚠ **Recorded as a NON-KILL, honestly.** Removing the Devanagari half of the numeric character class leaves this green — and correctly so: `find_pii` normalises once, centrally, before any recogniser runs, so the dual-script class is redundant defence-in-depth rather than the working part. **Removing the normalisation call kills 3 tests**, which is the real mechanism, now pinned separately. Claiming the kill I did not get is how a ledger stops meaning anything (the T-23-b precedent). ▶ `T-31-a-dual-script-digit-class` |
+| **T-31-b** ✅ | Offsets are computed on the normalised string and applied to the **original**: the span text is `९८४१२३४५६७`, not its ASCII form. Plus the 1:1 length-preservation the arithmetic rests on, asserted rather than trusted | ✅ **Checked** — normalisation removed → 3 red. ▶ `T-31-b-normalisation-removed` |
+| **T-31-c** ✅ | Person names by all three recognisers: honorific/role-title (`Er. Rajesh Shrestha`), thar gazetteer with no trigger (`Kamala Devi Chaudhary`), self-identification in both scripts. ⭐ Plus two **regression** cases from defects found while building: a title captured as a name (`contractor Er.` → `Er`), and a lowercase verb phrase captured as one (`I am writing on behalf`) — both caused by a blanket `re.IGNORECASE` defeating `[A-Z][a-z]+` | ✅ **Checked** — the thar recogniser removed → 3 red. ▶ `T-31-c-thar-recogniser-removed` |
+| **T-31-d** ✅ | ⭐ **A bare district survives.** `Jhapa` must NOT be redacted: the classifier derives district from the narrative and a district alone identifies nobody. Plus an address span that stops at the danda `।` rather than swallowing the next clause | ⚠ **The recorded check STOPPED WORKING at `7dddf5e8`** — that commit tightened the roman address pattern (a qualifier now needs a capitalised word before it or a digit after), so `Jhapa` added to the qualifier list no longer matches *"…in Jhapa district…"* and the mutation is inert. **The test still passes and still guards the rule; what is gone is the proof that it can go red by that route.** ▶ `T-31-d-district-in-the-surname-gazetteer` (kills, and a better mutation for the property) · ▶ `T-31-d-district-added-to-qualifiers` (kept as a **documented regression**, `expect: survives`). Write-up: [`followups/…prose-not-data.md`](followups/mutation-records-are-prose-not-data.md) §9.5 |
+| **T-31-e** ✅ | Replacement semantics: same value → same placeholder within a document; **counters per-document, never process-global**; placeholders not deletion; round-trip lossless with and without PII; `<PERSON_10>` not corrupted by `<PERSON_1>`'s substitution | ✅ **Checked** — fresh token per occurrence → red · global counter → 3 red. ▶ `T-31-e-fresh-token-per-occurrence`, `T-31-e-global-counter` |
 | **T-31-f** ✅ | ⭐ **The mapping never travels with the text.** `json.dumps(result)` **raises**; no original reaches the log; the redacted text alone cannot be reversed. ⚠ The `json.dumps` guard is a **speed bump, not a wall** (`asdict` still works) and the test says so | ✅ **Checked** |
 | **T-31-g** ✅ | **Measured recall — 87.5% (14/16)**: person_name 7/7, phone 3/3, address 4/6. Asserted as a **≥80% floor**, not a target. Guards the vacuous pass by first asserting the benchmark actually carries ≥5 labelled rows | ✅ **Checked** — the residual is named: both misses are bare settlement names (`Duhabi`, `Itahari`) with no qualifier |
 | **T-31-h** ✅ | **No sprint document calls the output "anonymised".** ⚠ Greps for the **claim**, not the word — a plain substring match flagged the prohibition itself and DPG-32's anonymiser-*service* name on its first run, the markdown-grep trap one layer up | ✅ **Checked** |

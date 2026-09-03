@@ -91,6 +91,42 @@ Some rules are too important to leave to review. These are pinned by a test that
 
 **Rule 5.2 — A new architectural rule ships with its pin, or it isn't a rule.** An unenforced rule survives about two sprints. If you cannot pin it, say so where you write it.
 
+### 5a. Mutation checks — the answer to *"can this test go red?"*
+
+**Rule 5.3 — A test that cannot go red is not a test, and the proof is a mutation check.** Make the specific edit to production code the test claims to catch, run the suite, watch it fail, revert. This is not ceremony: in one working session it caught a **decorative test three separate times** — a test that exercised the *helper* and never the call sites (the call site was the whole finding); one that scanned *any* dict with the right key, so the neighbouring branch satisfied it on the wrong branch's behalf; and one driving *the wrong method entirely*, so the fix sat on a code path the defect does not use. No review found any of the three.
+
+**Rule 5.4 — Record the mutation as data, not as prose.** A sentence in a commit message cannot be re-run, so nobody can reproduce it and a test that *stops* catching its mutation goes unnoticed while the ledger still reads ✅. Records live in `tests/mutations/<test module>.yml`, one file per test module, and the runner is `scripts/ops/run_mutations.py`:
+
+```yaml
+- id: T-31-e-global-counter
+  target: backend/services/pii_service.py
+  find: "    counters: dict[str, int] = {}"     # must occur EXACTLY ONCE
+  replace: '    counters: dict[str, int] = globals().setdefault("_MUTANT_COUNTERS", {})'
+  tests: tests/backend/test_pii_service.py
+  expect: kills                                 # or `survives` — see 5.5
+  min_failures: 3                               # optional; asserts the ledger's "3 red"
+  runner: container                             # optional; + `container:` for OpenAI-importing suites
+  why: >
+    Two concurrent grievances must not share <PERSON_1> — a shared counter makes the mapping
+    ambiguous and turns placeholders into a cross-document correlation channel.
+```
+
+```bash
+python scripts/ops/run_mutations.py                       # every record
+python scripts/ops/run_mutations.py --module test_pii_service
+python scripts/ops/run_mutations.py --list                # no edits, no test runs
+```
+
+**Rule 5.5 — ⭐ `expect: survives` is a first-class outcome, and a `why` is mandatory on it.** Some mutations *should* survive. `T-31-a-dual-script-digit-class` is the worked example: removing the Devanagari half of the digit class changes no behaviour, because `find_pii` normalises centrally *before* any recogniser runs — the dual-script class is redundant defence-in-depth, and removing the **normalisation** is what kills. A runner that demanded every mutation kill would force someone to delete a useful safety net or fake the record, so the runner asserts the **recorded expectation** and rejects a `survives` with no explanation of what *does* kill.
+
+**Rule 5.6 — A record that stops reproducing is a finding; write it up rather than adjusting it.** It means one of two things and both matter: the test stopped catching its mutation, or the original claim was wrong.
+
+**Rule 5.7 — Targeted mutations only; do not reach for `mutmut` or `cosmic-ray`.** Generic tools emit thousands of mutants — flip `+` to `-` — and the value here is in the hand-authored ones that encode a specific real defect: *"the OTP is logged again"*, *"the district is redacted"*, *"expiry is checked after the match"*. No generic tool produces those, because they are statements about **this system's failure modes**, written by whoever just fixed one. 3,000 mutants would bury the 30 that mean something.
+
+**Rule 5.8 — It is deliberately NOT a CI gate.** Every mutation is a full suite run, and a slow gate is the gate nobody watches (D-26, learned over ten red days). The current set is ~20 s for 30 records, but a third of them need a live Compose stack, which CI does not have. Run it before a release, or when touching a pinned invariant.
+
+⚠ **Two traps the runner enforces so you do not have to remember them.** It restores with `git checkout --` in a `finally` rather than a copy in `/tmp`, and therefore **refuses to run when a file a record mutates has uncommitted work** — the restore would destroy it. And `find` must occur **exactly once**: an anchor that also matches a comment, a docstring, or a second call site mutates two places and tests something nobody wrote down. Prefer anchors that include indentation and surrounding syntax.
+
 ---
 
 ## 6. Frontend tests
@@ -114,6 +150,7 @@ Some rules are too important to leave to review. These are pinned by a test that
 | `make test-ticketing-unit` | the no-DB subset |
 | `npm test` (in `channels/ticketing-ui`) | Vitest |
 | `npx tsc --noEmit && npx eslint .` | the frontend gates |
+| `python scripts/ops/run_mutations.py` | the mutation records (§5a) — **not** in CI, run deliberately |
 
 DB credentials for host tests come from compose, never `env.local` — `tests/ticketing/_host_env.py` (D-36).
 
@@ -139,5 +176,6 @@ DB credentials for host tests come from compose, never `env.local` — `tests/ti
 - [ ] A bug fix has a test that fails without the fix
 - [ ] New route: authz matrix row + route snapshot updated
 - [ ] New architectural rule: pinning test, or an explicit note that there is none
+- [ ] Every new test mutation-checked, and the mutation recorded in `tests/mutations/` (§5a) — not only in the commit message
 - [ ] CI green with **nothing** deselected, downgraded, or suppressed
 - [ ] Any deferral logged in `followups/` + `TODO.md`, same commit

@@ -55,6 +55,8 @@ rebuild per mutation, which would make a 25-mutation run unusable.
 from __future__ import annotations
 
 import argparse
+import ast
+import os
 import signal
 import subprocess
 import sys
@@ -229,7 +231,23 @@ def apply_once(content: str, record: Record) -> str:
                 "until it addresses one place; it may also be matching a comment or a docstring."
             )
         )
-    return content.replace(record.find, record.replace, 1)
+    mutated = content.replace(record.find, record.replace, 1)
+
+    # A mutation has to produce RUNNABLE code — one that does not parse tests nothing, and would
+    # otherwise surface as an opaque collection error. The trap this catches is unglamorous and
+    # real: a single-quoted YAML scalar leaves `\n` as two literal characters, so a multi-line
+    # `replace` ships a SyntaxError instead of the edit that was meant.
+    if record.target.endswith(".py"):
+        try:
+            ast.parse(mutated)
+        except SyntaxError as exc:
+            raise RecordError(
+                f"{record.id}: the mutated {record.target} does not parse "
+                f"(line {exc.lineno}: {exc.msg}). The `replace` value is malformed — if it spans "
+                "lines, YAML needs DOUBLE quotes, because a single-quoted scalar keeps \\n as two "
+                "literal characters."
+            ) from None
+    return mutated
 
 
 # ── Git guards ───────────────────────────────────────────────────────────────
@@ -307,16 +325,41 @@ def _classify(exit_code: int, stdout: str) -> tuple[str, Optional[int], str]:
     return "broken", failures, tail
 
 
+def _clean_env() -> dict:
+    """Environment for a mutated run: never write bytecode.
+
+    ⚠ **This is not hygiene, it is correctness, and it cost a silently wrong result to find.**
+    CPython validates a cached `.pyc` against the source's (mtime, size), and the mtime in the
+    header has **one-second granularity**. Two mutations of the same file that happen to change
+    its length by the same number of bytes — which is ordinary, e.g. both appending `, "Jhapa",`
+    to different lists — produce identical (mtime, size) pairs when they run inside the same
+    second, as these runs do at ~0.2 s each. The second mutation then executes the FIRST one's
+    bytecode. That is a mutation runner reporting a result for an edit it did not make.
+    """
+    env = dict(os.environ)
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    return env
+
+
+def _purge_pycache(target: Path) -> None:
+    """Drop any pre-existing bytecode for the file about to be mutated (belt to _clean_env's braces)."""
+    cache = target.parent / "__pycache__"
+    if cache.is_dir():
+        for stale in cache.glob(f"{target.stem}.*.pyc"):
+            stale.unlink(missing_ok=True)
+
+
 def run_host(record: Record, verbose: bool) -> Outcome:
     target = REPO_ROOT / record.target
     original = target.read_text(encoding="utf-8")
     mutated = apply_once(original, record)   # raises before anything is written
 
     try:
+        _purge_pycache(target)
         target.write_text(mutated, encoding="utf-8")
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", record.tests, "-q", "--no-header", "-p", "no:cacheprovider"],
-            cwd=REPO_ROOT, capture_output=True, text=True, check=False,
+            cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=_clean_env(),
         )
     finally:
         restore_host_file(record.target)
@@ -365,8 +408,8 @@ def run_container(record: Record, verbose: bool) -> Outcome:
                 return Outcome(record, "broken", None, -1,
                                detail=f"could not write {remote} to {name}: {put.stderr.strip()}")
             proc = _docker(
-                "exec", name, "python", "-m", "pytest", record.tests,
-                "-q", "--no-header", "-p", "no:cacheprovider",
+                "exec", "-e", "PYTHONDONTWRITEBYTECODE=1", name, "python", "-m", "pytest",
+                record.tests, "-q", "--no-header", "-p", "no:cacheprovider",
             )
         finally:
             back = _docker("cp", str(pristine), f"{name}:{remote}")

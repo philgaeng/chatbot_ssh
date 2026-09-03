@@ -47,8 +47,8 @@
 
 - id: T-DPG34-print-restored-in-a-parked-task
   target: backend/task_queue/registered_tasks.py
-  find: "    # Get the Celery task ID from the current task\n    task_id = self.request.id if hasattr(self, 'request') else None"
-  replace: "    print(f\"transcribe_audio_file_task input: {input_data}\")\n    task_id = self.request.id if hasattr(self, 'request') else None"
+  find: "        - recording_id: ID of the recording\n        - complainant_id: ID of the user\n    \"\"\"\n    # Get the Celery task ID from the current task"
+  replace: "        - recording_id: ID of the recording\n        - complainant_id: ID of the user\n    \"\"\"\n    print(f\"transcribe_audio_file_task input: {input_data}\")\n    # Get the Celery task ID from the current task"
   tests: tests/backend/test_celery_payload_carries_no_narrative.py
   expect: kills
   why: >
@@ -58,6 +58,12 @@
     would leak identically the day it unparks. The defect is the shape, not the function. A print
     also goes to stdout unfiltered and is invisible to any logging filter, which is what makes it
     worth banning outright rather than fixing case by case.
+  note: >
+    ⚠ Trap §4.2, hit while seeding this file. The first anchor was the two lines
+    `# Get the Celery task ID from the current task` + `task_id = ...`, which occur THREE and TWO
+    times respectively — boilerplate repeated across tasks. The exactly-once assertion refused it
+    rather than mutating two tasks at once. Anchored on the transcribe task's own docstring tail
+    instead, which is unique.
 
 # ── The SEAH half (b348773e) — same fix, different risk ──────────────────────
 #
