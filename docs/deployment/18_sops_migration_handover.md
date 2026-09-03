@@ -109,7 +109,33 @@ Those go in **`env.local.extra`** (gitignored), which the generator appends verb
 | 6 | ⚠ **`POSTGRES_PASSWORD=password` is still in 3 tracked files** — `.claude/settings.local.json` (×3) and `.env.example:29`, plus archived history that should stay. ⚠ **Confirmed live on AWS staging by digest comparison, 2026-08-24** — that host still holds the pre-rotation value. In a repo slated for public release. Rotate there (item 4), then purge; or purge now and accept the prompts | you |
 | 5 | ~~The compose-password fix above~~ ✅ **done locally 2026-08-21** — ⚠ but it makes item 4 a **prerequisite for the next deploy**, not a nice-to-have: `${VAR:?}` stops the stack when the value is missing, and neither host can run `make env-local` until its age key is a recipient | deployment |
 
-⚠ **Nothing has been pushed to staging or production.** Local only, on `dpg/sprint2-open-models` — and that is now load-bearing rather than incidental: the compose change in item 5 is **breaking for any host whose database still holds the old credential**, which is both of them.
+⚠⚠ **UPDATED 2026-09-03 — the code IS now on `integration/stage`. Nothing has been DEPLOYED.**
+
+This paragraph used to read *"nothing has been pushed to staging or production"*. That is no longer
+true and the distinction is the whole point:
+
+| | State |
+|---|---|
+| **`origin/integration/stage`** | ✅ Carries all of it — Sprints 2 and 3, and this secrets work |
+| **The AWS staging host** | ⛔ **Untouched.** It only changes when someone runs `make aws-deploy`, which is manual. There is no CD on this branch |
+
+🔴 **So the next `make aws-deploy` breaks staging, and it will break loudly rather than subtly.**
+Item 5 replaced `POSTGRES_PASSWORD: password` with `${POSTGRES_PASSWORD:?}` in every service. On that
+host:
+
+* if the variable is **unset**, `:?` stops the stack at compose time — nothing starts;
+* if it is **set to the rotated value**, the app authenticates with a password that host's Postgres
+  volume does not have — it still holds the pre-rotation one, **confirmed by digest 2026-08-24**
+  (§5a's table, row 4).
+
+Either way the deploy fails at the database. **Item 4 is a prerequisite for the next deploy, not a
+nice-to-have** — and it carries its own measured hazard: `make env-land` … `make env-local` on
+staging would **delete thirty variables**, including `DOIT_SMS_BEARER_TOKEN`, the credential for the
+Government of Nepal SMS gateway. Read §5a before touching that host.
+
+⚠ **DOR production is unmeasured and nothing here has been verified against it.** Hazard 1 —
+overwriting `DB_ENCRYPTION_KEY` and rendering every encrypted PII column permanently unreadable,
+silently, because decryption fails open — is **open for prod and only for prod**.
 
 ---
 
