@@ -119,19 +119,33 @@ true and the distinction is the whole point:
 | **`origin/integration/stage`** | ✅ Carries all of it — Sprints 2 and 3, and this secrets work |
 | **The AWS staging host** | ⛔ **Untouched.** It only changes when someone runs `make aws-deploy`, which is manual. There is no CD on this branch |
 
-🔴 **So the next `make aws-deploy` breaks staging, and it will break loudly rather than subtly.**
-Item 5 replaced `POSTGRES_PASSWORD: password` with `${POSTGRES_PASSWORD:?}` in every service. On that
-host:
+### ⚠ Corrected 2026-09-03 — `aws-deploy` is NOT blocked. `env-local` is the dangerous command.
 
-* if the variable is **unset**, `:?` stops the stack at compose time — nothing starts;
-* if it is **set to the rotated value**, the app authenticates with a password that host's Postgres
-  volume does not have — it still holds the pre-rotation one, **confirmed by digest 2026-08-24**
-  (§5a's table, row 4).
+An earlier version of this paragraph, and a banner in `make help`, said the next `make aws-deploy`
+would break staging at the database. **That was wrong, and it was checked against the host rather
+than reasoned about a second time:**
 
-Either way the deploy fails at the database. **Item 4 is a prerequisite for the next deploy, not a
-nice-to-have** — and it carries its own measured hazard: `make env-land` … `make env-local` on
-staging would **delete thirty variables**, including `DOIT_SMS_BEARER_TOKEN`, the credential for the
-Government of Nepal SMS gateway. Read §5a before touching that host.
+| Check, on the staging host 2026-09-03 | Result |
+|---|---|
+| `POSTGRES_PASSWORD` present in its `env.local` | ✅ yes — so `${VAR:?}` resolves, nothing halts at compose time |
+| Digest of that value | `5e884898da280471` = **the pre-rotation value** |
+| The host's own database | holds the same pre-rotation value (§5a row 4) — **so they match** |
+| How compose is invoked there | `REMOTE_COMPOSE` passes **`--env-file env.local`**, so interpolation reads the host's file |
+| Does `.env.shared` (new, committed) redefine it? | ✅ no — it carries `POSTGRES_DB` and `POSTGRES_USER` only |
+| Does `REMOTE_DEPLOY_CORE` run `make env-local`? | ✅ **no** — it pulls, rebuilds and migrates |
+
+**The credential path is self-consistent on that host**, so the compose change is inert there.
+
+🔴 **The hazard is real but it belongs to a different command.** `make env-local` on staging
+overwrites its `env.local` from `secrets.enc.env` — installing the **rotated** password against a
+database that still holds the old one, and **deleting thirty host-only variables** including
+`DOIT_SMS_BEARER_TOKEN`, the Government of Nepal SMS gateway credential. That is item 4, unchanged,
+and §5a is still required reading before anyone runs it.
+
+⚠ **Why the correction is worth this much space:** a banner saying *"BLOCKED, the deploy will fail"*
+in front of a deploy that works is not a harmless excess of caution. It is the same failure as a
+permanently red build (D-26) — people learn that the warning is wrong, and then they are trained to
+walk past the next one, which will not be.
 
 ⚠ **DOR production is unmeasured and nothing here has been verified against it.** Hazard 1 —
 overwriting `DB_ENCRYPTION_KEY` and rendering every encrypted PII column permanently unreadable,
