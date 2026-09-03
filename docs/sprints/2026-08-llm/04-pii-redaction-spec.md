@@ -782,12 +782,33 @@ instead of nine call sites.
 
 ### Acceptance
 
-- [ ] Logging filter installed at `TaskLogger`, covering every service
-- [ ] The three known raw-text log sites fixed; the rest audited against DPG-30
-- [ ] Celery payload decision made, implemented or logged as a followup with a measured rationale
-- [ ] Redis persistence and backup jurisdiction verified **in-container** and documented
-- [ ] The future-observability rule written into `docs/deployment/13_security.md`
-- [ ] A test proving a grievance narrative passed to a logger does not appear in the emitted record
+- [x] Logging filter installed at `TaskLogger`, covering every service — `backend/logger/pii_filter.py`,
+      on the **logger** rather than a handler, because `_setup_logger` adds two handlers and a
+      handler-level filter is missed by any added later. Idempotent, since `TaskLogger` is
+      constructed per task
+- [x] The three known raw-text log sites fixed; the rest audited against DPG-30 — **eleven** sites in
+      the conversation layer (`b348773e`, `560c7acc`), plus five `print` calls in `registered_tasks.py`
+      that dumped whole payloads. ⭐ The audit's finding was structural: **the convention already
+      existed and stopped at `backend/actions/`** — `db_debug_log`'s helpers were in consistent use
+      across `backend/services/` and the conversation layer had never adopted them
+- [x] Celery payload decision made, implemented or logged as a followup with a measured rationale —
+      **implemented**: both payloads now carry `grievance_id` and the task reads the narrative from
+      Postgres (`8603b9f4`, `b348773e`). ⚠ The SEAH half needed a different failure mode because its
+      pre-dispatch write is best-effort: it **retries, then fails terminally at ERROR**, because a
+      silently skipped safeguarding check was the one unacceptable outcome
+- [x] Redis persistence and backup jurisdiction verified **in-container** and documented — `4367e4fa`.
+      ⭐ The check **inverted a claim four documents carried**: no volume, but RDB snapshotting is on
+      and a planted key survived `docker restart`. ✅ Then resolved by removing the cause rather than
+      taking the trade — the payload no longer carries the text, so the persistence setting stopped
+      mattering for it. Backups: `backup_db.sh` supports GPG and an off-box `BACKUP_REMOTE`, both
+      **operator-set and optional**, so the destination is unnamed *by design* and stated as such
+- [x] The future-observability rule written into `docs/deployment/13_security.md` — §8.1, written
+      **before** any tool exists, because retrofitting after one is capturing prompts is the
+      expensive order. ⚠ Review-time only; nothing tests it, and it says so
+- [x] A test proving a grievance narrative passed to a logger does not appear in the emitted record —
+      `tests/backend/test_log_pii_filter.py`, **including the `%s`-argument case**, which is the shape
+      of nearly every site the inventory found and which a filter rewriting only `record.msg` would
+      pass while leaking
 
 ---
 

@@ -8,6 +8,7 @@ a new file; within the day all sessions/restarts append to that day's file.
 """
 
 import logging
+from backend.logger import pii_filter
 import json
 import time
 from pathlib import Path
@@ -130,6 +131,14 @@ class TaskLogger:
             logger.addHandler(file_handler)
             logger.addHandler(console_handler)
             logger.setLevel(getattr(logging, self.config.LOG_LEVEL))
+
+        # ── PII redaction, installed once, centrally (DPG-34) ────────────────────────────
+        # On the LOGGER rather than a handler: a handler-level filter is missed by any handler
+        # added later, and this method adds two. DPG-30 found at least twelve log sites carrying
+        # complainant data; naming them is not a control, because the thirteenth is written by
+        # whoever adds the next call site. ⚠ A backstop, not a licence — call sites should still
+        # log identifiers, and `db_debug_log`'s helpers remain the first line.
+        pii_filter.install(logger)
         return logger
     
     def log_task_event(self, task_name: str, details: Optional[Dict[str, Any]] = None, service_name: str = None, event_type=None) -> None:

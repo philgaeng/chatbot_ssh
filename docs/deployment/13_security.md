@@ -415,8 +415,40 @@ Contract: [../services/05_messaging_service.md](../services/05_messaging_service
 | **SEAH model tiering** | LLM tasks | Stronger model path for SEAH-sensitive processing |
 | **Structured JSON outputs** | LLM client contracts | Validated response format + retry/failure states |
 | **No PII in staff notification content** | Notification builders | Chatbot/SMS templates use references/links |
+| **Pseudonymisation before transmission** | `backend/services/pii_service.py` → both `call_llm()` chokepoints | ✅ **Built 2026-08-27 (DPG-31/33).** Opt-**out** (`redact=True`), so a new call site is covered without knowing it exists. Phones, emails, citizenship and vehicle numbers, person names and settlement addresses, **in both digit systems**. Measured recall **87.5%** on the committed benchmark; the residual is named, not rounded away |
+| **Output pass before storage** | `_redact_generated_text()` | ✅ **Built (§31.4).** Both summary-producing prompts — including the *translation* call, which generates a summary while reading as a translation step. Catches what the input pass missed; a firing logs at WARNING because it means a name already reached a third party |
+| **Central log redaction** | `backend/logger/pii_filter.py`, installed on `TaskLogger` | ✅ **Built (DPG-34).** On the **logger**, not a handler, so a later-added handler cannot miss it. Redacts the **formatted** message, so `%s` arguments are covered — the shape of nearly every leaking site the egress inventory found |
 
 Policy detail: [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md).
+
+### 8.1 ⚠ The rule for observability tools, written before one is installed
+
+**There is no tracing or APM in this system today** — no Langfuse, no OpenTelemetry, no Sentry, no
+Datadog, verified by `grep` over `requirements*.txt` and the UI manifests
+([`pii-egress-inventory.md`](../dpg/pii-egress-inventory.md) E12). This rule exists **because** that
+is true: it is far cheaper to write now than to retrofit after a tool is already capturing prompts.
+
+**An LLM-tracing tool is the single fastest way to undo this sprint.** Langfuse, LangSmith and
+their peers capture **prompts and completions by default** — that is their product — and the prompt
+is exactly where the grievance narrative lives. Installing one with default settings would
+reconstitute, in a third-party SaaS, the egress that DPG-31/33/34 just closed, and it would look
+like an observability decision rather than a privacy one.
+
+**So, before any tracing, APM or error-reporting tool is added:**
+
+1. **It sees pseudonymised text or it sees nothing.** Capture must sit *downstream* of
+   `redact_for_model` — the same rule the model provider is held to. A tool that hooks the OpenAI
+   SDK directly bypasses the chokepoint and is not acceptable on that basis alone.
+2. **Prompt and completion capture is off unless someone argues for it**, in writing, with the
+   jurisdiction of the vendor named — the same question DPG-04 asks of the model provider.
+3. **Exception reporters must not ship request bodies.** Sentry does by default; that is a Celery
+   payload with a narrative in it.
+4. **It appears in the egress inventory and in DPG-04's data-flow diagram** in the same change that
+   adds it. A leg nobody drew is the failure mode the inventory exists to prevent.
+
+⚠ **This is a rule, and rules decay without enforcement** ([`06_documentation_lifecycle.md`](../engineering/06_documentation_lifecycle.md)
+rule 5.2). Nothing tests it — there is nothing to test until a tool exists. It is review-time only,
+and it is written here rather than in a sprint document so it outlives the sprint.
 
 ### 8.1 ⚠ Self-hosted inference (T2) — the intended posture, **not deployed**
 

@@ -1,0 +1,72 @@
+# Mutation records for tests/backend/test_log_pii_filter.py  (DPG-34, sprint 2026-08-llm)
+#
+# The central logging filter — DPG-34's "installed once, cannot be forgotten by the next call
+# site". Every record below was run against the current tree, not transcribed from prose.
+# Runner: scripts/ops/run_mutations.py
+
+- id: T-34-a-msg-only-not-args
+  target: backend/logger/pii_filter.py
+  find: "        message = record.getMessage()"
+  replace: "        message = record.msg if isinstance(record.msg, str) else str(record.msg)"
+  tests: tests/backend/test_log_pii_filter.py
+  expect: kills
+  min_failures: 2
+  why: >
+    ⭐ The mutation that matters most here, because it produces a filter that LOOKS like it works.
+    `logger.info("phone: %s", phone)` leaves `record.msg` clean and the PII in `record.args`, and
+    that is the shape of nearly every log site DPG-30 found. A filter that rewrote only `msg`
+    would pass the obvious test (a narrative logged as the message) and leak on the common case.
+    Redacting the FORMATTED message and clearing `args` is what closes it.
+    ⚠ One edit is enough to kill this (2 red): reading `record.msg` instead of `getMessage()` is
+    the whole defect. An earlier draft of this record paired it with a second edit and invented an
+    `also:` field the runner does not have — checked, and the single edit reproduces, so the record
+    says what it actually does.
+
+- id: T-34-b-filter-not-installed
+  target: backend/logger/logger.py
+  find: "        pii_filter.install(logger)"
+  replace: "        pass"
+  tests: tests/backend/test_log_pii_filter.py
+  expect: kills
+  why: >
+    The filter existing is not the control; the filter being INSTALLED is. Installed on the
+    logger rather than a handler, deliberately: `_setup_logger` adds two handlers, and a
+    handler-level filter is missed by any handler added later.
+
+- id: T-34-c-install-not-idempotent
+  target: backend/logger/pii_filter.py
+  find: "    if any(isinstance(f, PiiRedactingFilter) for f in logger.filters):\n        return\n"
+  replace: ""
+  tests: tests/backend/test_log_pii_filter.py
+  expect: kills
+  why: >
+    `TaskLogger` is constructed per task, so a non-idempotent install adds one filter per task to
+    a process-global logger — an unbounded list that redacts the same record dozens of times and
+    grows for the life of the worker.
+
+- id: T-34-d-failure-leaks-the-original
+  target: backend/logger/pii_filter.py
+  find: '            record.msg = "⚠ log record suppressed: PII redaction failed (see DPG-34)"
+
+            record.args = ()'
+  replace: "            pass"
+  tests: tests/backend/test_log_pii_filter.py
+  expect: kills
+  why: >
+    ⚠ Two ways to get the failure path wrong and both are worse than the bug being guarded.
+    Raising from a filter drops the record in most configurations — a privacy control turned into
+    an availability incident, losing the very line someone reads DURING one. Swallowing and
+    letting the original through is a leak. So: never raise, and never emit content whose
+    redaction is unknown.
+
+- id: T-34-e-oversized-records-skipped
+  target: backend/logger/pii_filter.py
+  find: "        scanned = message[:_MAX_SCAN_CHARS]"
+  replace: "        if len(message) > _MAX_SCAN_CHARS: return\n        scanned = message"
+  tests: tests/backend/test_log_pii_filter.py
+  expect: kills
+  why: >
+    Skipping an oversized record lets the BIGGEST payloads through untouched, which is exactly the
+    wrong way round — a 30 KB log line is more likely to be a dumped payload than a status message.
+    Bounding the scan and marking the truncation keeps the guard against a pathological input
+    without inverting the control.

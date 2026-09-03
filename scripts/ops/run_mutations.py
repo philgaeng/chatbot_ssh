@@ -154,9 +154,20 @@ def _validate(entry: Any, path: Path, index: int) -> Record:
         raise RecordError(f"{where}: expected a mapping, got {type(entry).__name__}")
 
     required = ("id", "target", "find", "replace", "tests", "expect", "why")
-    missing = [k for k in required if not str(entry.get(k, "")).strip()]
+    # ⚠ `replace` is checked for PRESENCE, not for content. An empty replacement is a DELETION —
+    # "remove this guard" is one of the most natural mutations there is, and the first record
+    # written after this runner shipped hit the restriction (T-34-c, deleting the idempotence
+    # guard in `pii_filter.install`). Requiring non-empty text would have forced that record to
+    # substitute a no-op statement instead, which tests something slightly different from what it
+    # claims to test.
+    missing = [k for k in required if k != "replace" and not str(entry.get(k, "")).strip()]
+    if "replace" not in entry:
+        missing.append("replace")
     if missing:
-        raise RecordError(f"{where}: missing or empty field(s): {', '.join(missing)}")
+        raise RecordError(
+            f"{where}: missing or empty field(s): {', '.join(sorted(missing))}"
+            + ("  (note: `replace: \"\"` is allowed — it means delete)" if "replace" in missing else "")
+        )
 
     expect = str(entry["expect"]).strip()
     if expect not in VALID_EXPECT:
