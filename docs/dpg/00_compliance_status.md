@@ -24,7 +24,7 @@ new ones opened in its place** — one of them created by the same work.
 |---|---|
 | ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
 | 🔴 **One decided control was not built** — the admin recap email still mails the whole grievance record on every submission, and it is ranked **above** the model call for likelihood of exposure | Indicator 7 |
-| 🔴 **A live safeguarding defect: the final submit had been erasing the model's SEAH detections**, in exactly the case the model exists for. Fixed, and it is the strongest evidence in this pack for how the rest was found | Indicator 9 |
+| ✅ **Fixed — a live safeguarding defect in which the final submit erased the model's SEAH detections**, in exactly the case the model exists for. ⚠ It had been live for months, and **how it was found** is the strongest methodological evidence in this pack | Indicator 9 |
 | ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
 | ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
 | ⚠ **The npm vulnerability count held at 4 and every finding behind it changed.** `next` now carries nine advisories of its own, two of them SSRF, in the framework the officer portal ships | Indicator 8 |
@@ -77,7 +77,7 @@ never leaves the process"* is the strongest form available.
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
 | 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **one decided control was not built**; nothing is deployed; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
 | 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework |
-| 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, and its recall is unmeasured. ⚠ **A live defect was erasing its detections until 2026-08-27** |
+| 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, its recall is unmeasured, and **nothing measures the pipeline end to end** — every figure we have scores the model alone |
 
 ---
 
@@ -480,10 +480,10 @@ correcting a ticket's classification (`api/routers/tickets/crud.py:523`) re-reso
 standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixed":** a grievance the
 *complainant* routed to SEAH stays there regardless of categories. Only a machine flag is reversible.
 
-> ### 🔴 Until 2026-08-27, one of the two detection paths was silently erasing the other
+> ### ✅ Fixed 2026-08-27 — until then, one of the two detection paths was silently erasing the other
 >
-> **This belongs at the top of the indicator rather than in the gap list, because it is the strongest
-> evidence in this pack about how the rest of it was found.**
+> **This is closed, and it belongs at the top of the indicator rather than in the gap list, because it
+> is the strongest evidence in this pack about how the rest of it was found.**
 >
 > The asynchronous model check writes its result to the grievance record seconds after dispatch —
 > during the contact and OTP steps. The **final submit** then collected a tracker slot still holding
@@ -498,6 +498,11 @@ standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixe
 > **Fixed:** the flag only ever escalates, expressed **in SQL rather than read-modify-write**, because
 > reading then OR-ing leaves a window and the consequence of losing that race is a missed harassment
 > report. Driven end to end against the live database.
+>
+> ⚠ **Fixed in code, and — like everything else this fortnight — not yet on a server.** The deployed
+> hosts still carry the defect. No genuine grievance has been processed anywhere, so nothing has been
+> misrouted; but **this is the one item on the undeployed list where the cost of waiting is a missed
+> harassment report**, and it should be the reason the next deploy happens rather than a line in it.
 >
 > ⚠ **Two things follow that are worth more than the fix.** First, **no benchmark would have caught
 > it**: every detection figure we publish scores the *model*, and all of them were consistent with a

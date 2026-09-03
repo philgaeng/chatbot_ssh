@@ -397,9 +397,10 @@ of §0.5:** each was ordinary engineering that day and a breach assessment after
   a machine flag is reversible. ⚠ The return is not yet an explicit, audited action
   ([`00_compliance_status.md`](00_compliance_status.md) §9).
 
-> ### 🔴 One of the two detection paths was silently erasing the other, and had been for months
+> ### ✅ Fixed 2026-08-27 — one of the two detection paths had been silently erasing the other for months
 >
-> **Found and fixed 2026-08-27.** The asynchronous LLM check writes `grievance_sensitive_issue=True`
+> **Found and fixed 2026-08-27; the description below is of the defect, not of current behaviour.**
+> The asynchronous LLM check writes `grievance_sensitive_issue=True`
 > to `public.grievances` seconds after dispatch — during the contact and OTP steps. The **final
 > submit** then collected the tracker slot, which still held the **keyword** result from the 0.9 s
 > poll at the end of the grievance form, and wrote `False` over the model's `True` with no falsy

@@ -211,9 +211,9 @@ false-alarm rate is a warning sign, not a selling point**: this system accepts f
 to avoid misses, and a candidate producing none on a set built to be hard is behaving in exactly the
 way the design exists to avoid.
 
-### 3.6 🔴 The benchmark measured a detector whose answer production was throwing away
+### 3.6 ✅ The benchmark measured a detector whose answer production was throwing away — fixed 2026-08-27
 
-**Found in live code 2026-08-27, and it changes how §3.2 should be read.** The detection figures
+**Found in live code and fixed on 2026-08-27, and it changes how §3.2 should be read.** The detection figures
 above measure what the **model returns**. They do not measure what the **system does with it** — and
 for months the system was discarding it.
 

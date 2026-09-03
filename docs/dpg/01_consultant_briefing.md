@@ -126,9 +126,11 @@ the over-flagging — it is that returning a cleared case is not yet an explicit
 **5. ⛔ The finding we would most want you to take from this fortnight is a method one.** We found that
 one of the two safeguarding detection paths had been **silently erasing the other** — the model wrote
 `True`, a later step wrote `False` over it, and it failed in exactly the case the model exists for, so
-a harassment report went to the ordinary queue. **No benchmark could have caught it**: every score we
-publish measures the *model*, and all of them were consistent with a pipeline that routed nothing.
-**It was found because the project owner corrected a claim we had made.** The same pattern holds for
+a harassment report went to the ordinary queue. ✅ **Fixed 2026-08-27**, verified end to end against a
+live database; the flag now only ever escalates. **The method is the point, not the bug.** **No
+benchmark could have caught it**: every score we publish measures the *model*, and all of them were
+consistent with a pipeline that routed nothing. **It was found because the project owner corrected a
+claim we had made.** The same pattern holds for
 the other three live defects of the fortnight — a credential in the logs, narratives persisting in
 Redis against four documents that said otherwise, a decorative test that a mutation exposed. **None
 was in the inventory written to find them.**
