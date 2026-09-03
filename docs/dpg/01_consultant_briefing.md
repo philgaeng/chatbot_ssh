@@ -57,12 +57,11 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
 ⚠ **And one qualification, which we would rather you heard from us than inferred.** Verified inside
 the running containers on the staging host, 2026-09-03: **every privacy control in this pack is live
 there** — redaction, the log filter, the broker fix, the safeguarding correction and the
-email-boundary controls. **Two things are still not:** authentication event logging, which is a
-Keycloak **realm setting** that no deploy carries and which still records **zero** events; and the
-`ops` monitor's nightly licence and CVE scans, which now have a home on staging and **have not yet
-had a night** — though its health checks began writing real rows the same day, the first monitoring
-evidence this platform has produced from a deployed host. ⛔ **DOR production runs none of it**, and
-we could not reach it to check.
+email-boundary controls. **One thing is still not:** the `ops` monitor's nightly licence and
+CVE scans, which now have a home on staging and **have not yet had a night** — though its health
+checks began writing real rows the same day, the first monitoring evidence this platform has produced
+from a deployed host. Authentication event recording was the other, and it was switched on and
+verified on 2026-09-03. ⛔ **DOR production runs none of it**, and we could not reach it to check.
 
 ⭐ **The distinction we would ask you to hold us to is *deployed* versus *has run*.** A scheduled job
 on a server is not yet evidence. If the assessment distinguishes a repository from a running system,

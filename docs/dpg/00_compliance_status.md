@@ -28,7 +28,7 @@ control here runs where the data is. **Verified on the staging host, 2026-09-03:
 | **Redaction, log filter, broker fix, safeguarding escalate-only** | ✅ **running on staging** | `pii_service.py` is in the running image, and the model-call chokepoint resolves `redact` |
 | **`ops` health checks** | ✅ **running on staging, and producing output** | Five checks — db, redis, queue depth, beat liveness, endpoint — all `ok`, first written 2026-09-03 15:49 UTC. **The first evidence this platform has ever produced from a monitored deployed host** |
 | **`ops` dependency & licence scans** | 🟡 **scheduled on staging, never yet run** | `ops.dependency_findings` is **empty**. These are nightly and the container has not had a night |
-| **Keycloak authentication events** | ❌ **still not enabled on staging** | `keycloak.event_entity` holds **0 rows** and the `grm` realm reads `events_enabled=f`. ⚠ **Re-checked after a full ten-service deploy: unchanged.** It is a realm setting, so no deploy will ever carry it |
+| **Keycloak authentication events** | ✅ **enabled on staging 2026-09-03, and proven to record** | `events_enabled=t`, `admin_events_enabled=t`, 90-day expiry — and a deliberate failed-login probe wrote a `LOGIN_ERROR` row, so this is a working control rather than a set flag. ⚠ **Forward-only:** nothing before 16:03 UTC exists, including a real officer login made minutes earlier |
 | **The email-boundary fixes** (indicator 7) | ✅ **running on staging** | Deployed 2026-09-03 15:55 UTC; `admin_notifications.py` is in the running **orchestrator** and **backend** images, and the old full-PII template is gone from both |
 | **DOR production** | ⚠ **not verified** | It tracks `main` and is reachable only over VPN. **Treat every row above as false for production** |
 
@@ -82,7 +82,7 @@ never leaves the process"* is the strongest form available.
 | 5 | Documentation | ✅ Compliant | — |
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
 | 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **nothing is deployed**; no retention schedule; contact details not separable; no systematic search for a fourth email leg — and **no supervisor to validate any of it, while the exposure is criminal** |
-| 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework |
+| 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework; authentication events now recorded on staging but **not on production** |
 | 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, its recall is unmeasured, and **nothing measures the pipeline end to end** — every figure we have scores the model alone |
 
 ---
@@ -461,13 +461,17 @@ true rather than aspirations.
   commitments nobody has agreed to, on a project whose IP ownership is formally open (Q-08-01).
 - ⚠ **Keycloak recorded no login, login-failure or admin events at all until 2026-08-24** — realm event
   storage defaults to off and nothing enabled it, so the platform's primary authentication evidence did
-  not exist. Now enabled **on a development realm only**, forward-only, and **still not applied to
-  staging**: measured 2026-09-03, the staging `grm` realm reads `events_enabled=f`,
-  `admin_events_enabled=f`, and `keycloak.event_entity` holds **0 rows**. ⭐ **Re-measured after a full
-  ten-service deploy and unchanged** — which is the useful part: it is a **realm setting**, so no
-  amount of deploying will ever carry it, and a remedy phrased as *"ships with the next build"* was
-  never going to be true. Production unverified. ⚠ **The platform's primary authentication evidence
-  still does not exist anywhere a real user logs in.**
+  not exist. ✅ **Enabled on staging 2026-09-03** and **verified as a working control, not a set
+  flag**: a deliberate failed-login probe wrote a `LOGIN_ERROR` row. ⚠ **Forward-only, and the cost of
+  the delay was demonstrated on the day** — an officer logged in to staging minutes before it was
+  switched on, and **that login does not exist and cannot be recovered.**
+  ⭐ **The useful part is what it took to get here.** The remedy read *"ships with the next image
+  build"* from 2026-08-24. A full ten-service deploy happened on 2026-09-03 and changed **nothing**,
+  because event storage is a **realm setting** — measured before and after. It was closed by running
+  one function against the realm. **A remedy phrased against the wrong mechanism is indistinguishable
+  from an open one, and it had been sitting there for ten days.**
+  ⛔ **DOR production is still off**, and is the only environment where a real complainant's officer
+  logs in.
 - ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
   count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
   own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and
@@ -478,9 +482,9 @@ true rather than aspirations.
   scheduled scan below, and for deploying the thing that runs it.
 
 **Remedy.** Bump `next` past the advisory range — it is one move and it takes three of the four npm
-rows with it. Apply event logging to both deployed environments — it is a realm setting, not a
-deploy, which is why a deploy did not bring it. Write the governance and versioning documents once
-Q-08-01 and indicator 3 answer.
+rows with it. **Run `setup_realm_event_logging` against the DOR production realm** — not the full
+bootstrap, which also resets demo users, SMTP and client config; staging was closed with the single
+function. Write the governance and versioning documents once Q-08-01 and indicator 3 answer.
 
 **Questions.**
 
