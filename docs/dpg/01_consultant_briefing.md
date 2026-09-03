@@ -47,9 +47,9 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
    model-call boundary at **87.5% measured recall**, and the log boundary and message broker closed
    with it. ⚠ **Pseudonymised is not anonymised** — we keep the mapping, so it stays personal data —
    and the transfer has been **narrowed, not stopped**. ⚠ **And email was the leak we had not been
-   looking at:** three separate email paths each carried the whole grievance record. Two are now
-   fixed; **the third still mails it to an office list derived from the grievance's municipality**,
-   which on a SEAH case means a survivor's record reaching people not cast on it.
+   looking at:** three separate paths each mailed the whole grievance record, one of them to an
+   office list derived from the grievance's *municipality* rather than the case's cast. All three
+   are closed; **nobody has yet grepped for a fourth.**
 4. **Nothing real has been processed yet.** Every grievance record is seed data or a demo dummy —
    which makes every privacy exposure prospective, and puts the remaining work in the window where it
    is a **go-live precondition rather than a remediation**.
@@ -140,7 +140,9 @@ was in the inventory written to find them.**
 admin-email finding, we checked it before building — and found it was two templates rather than one,
 that neither was gated for sensitive cases, and that a third path nobody had inventoried was doing the
 same thing. **None of the three looked wrong at its own call site.** The first was a single
-assignment: an admin body defined as the complainant's own receipt.
+assignment: an admin body defined as the complainant's own receipt. ⚠ **And our own inventory had
+missed the third** — it was found by fixing the second, not by the document written to find exactly
+this.
 
 ⚠ **We are telling you this because it cuts against us as well as for us.** It is the argument for
 taking the measured claims here seriously; it is equally the reason to treat any claim in this pack

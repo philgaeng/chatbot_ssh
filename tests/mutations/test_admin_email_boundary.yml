@@ -4,8 +4,13 @@
 # phone, address and email, mailed to a configured list on every submission, with no gate for
 # sensitive cases. docs/dpg/pii-egress-inventory.md ranks that leg ABOVE the model call.
 #
-# Every record below reverts one half of the fix and asserts the tests go red. `expect: kills`
-# is the only outcome used here: there is no documented non-kill in this module.
+# ⚠ RE-POINTED 2026-09-03, same day, and the reason is recorded rather than quietly applied.
+# Four records below targeted backend/actions/services/messaging/recap_email.py and stopped
+# reproducing when F-22 moved the control to backend/services/admin_notifications.py — a THIRD
+# email path had the same defect, in backend/api/, and a security control with two implementations
+# has one that is out of date. The runner refused them as "the record is broken", which is correct:
+# the anchors no longer existed. The BEHAVIOUR each protects is unchanged, so each was re-pointed
+# at the new file and RE-VERIFIED to kill there, not assumed to.
 
 - id: T-F19-admin-body-realiased
   target: backend/config/constants.py
@@ -32,9 +37,9 @@
     live while looking finished.
 
 - id: T-F19-projection-passes-everything
-  target: backend/actions/services/messaging/recap_email.py
+  target: backend/services/admin_notifications.py
   find: "    safe: Dict[str, Any] = {}\n    for key in ADMIN_SAFE_FIELDS:"
-  replace: "    safe: Dict[str, Any] = dict(grievance_data)  # mutation: deny-list, not allow-list\n    for key in ADMIN_SAFE_FIELDS:"
+  replace: "    safe: Dict[str, Any] = dict(data)  # mutation: deny-list, not allow-list\n    for key in ADMIN_SAFE_FIELDS:"
   tests: tests/backend/test_admin_email_boundary.py
   expect: kills
   why: >
@@ -43,9 +48,9 @@
     are needed: the template check fails the build, this one bounds what a bypass can leak.
 
 - id: T-F19-unknown-sensitivity-defaults-false
-  target: backend/actions/services/messaging/recap_email.py
-  find: "    sensitive = grievance_data.get(\"grievance_sensitive_issue\", _SENSITIVITY_UNKNOWN)"
-  replace: "    sensitive = grievance_data.get(\"grievance_sensitive_issue\", False)"
+  target: backend/services/admin_notifications.py
+  find: "    flag = data.get(\"grievance_sensitive_issue\", SENSITIVITY_UNKNOWN)"
+  replace: "    flag = data.get(\"grievance_sensitive_issue\", False)"
   tests: tests/backend/test_admin_email_boundary.py
   expect: kills
   why: >
@@ -55,9 +60,9 @@
     costs a disclosure that cannot be undone. Same asymmetry as the OTP expiry check.
 
 - id: T-F19-sensitivity-gate-removed
-  target: backend/actions/services/messaging/recap_email.py
-  find: "    if sensitive is _SENSITIVITY_UNKNOWN or bool(sensitive):"
-  replace: "    if False:  # mutation: no sensitivity gate"
+  target: backend/services/admin_notifications.py
+  find: "    suppress, reason = is_suppressed_for_sensitivity(data)\n    if suppress:"
+  replace: "    suppress, reason = is_suppressed_for_sensitivity(data)\n    if False:  # mutation: no sensitivity gate"
   tests: tests/backend/test_admin_email_boundary.py
   expect: kills
   why: >
@@ -67,9 +72,9 @@
     email.
 
 - id: T-F19-keyerror-falls-back-to-full-dict
-  target: backend/actions/services/messaging/recap_email.py
-  find: "        except KeyError as missing:"
-  replace: "        except KeyError as missing:  # mutation: fall back instead of refusing\n            body = template.format(**grievance_data)\n            subject = subject_template.format(**grievance_data)\n        except _NeverRaised as missing:"
+  target: backend/services/admin_notifications.py
+  find: "    except KeyError as missing:"
+  replace: "    except KeyError as missing:  # mutation: fall back instead of refusing\n        return subject_template.format(**data), template.format(**data)\n    except _NeverRaised as missing:"
   tests: tests/backend/test_admin_email_boundary.py
   expect: kills
   why: >
@@ -91,3 +96,31 @@
     detector has already written True — exactly D-64 — and the stale value here would be False,
     which sends. Closing this needs an outro-level test, and it is named in the F-19 follow-up
     rather than left as a green tick.
+
+# ── F-22: the third leg, in backend/api/ (2026-09-03) ────────────────────────
+
+- id: T-F22-office-template-restored
+  target: backend/config/constants.py
+  find: "EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY'] = {\n    \"en\": _OFFICE_STATUS_UPDATE_BODY,\n    \"ne\": _OFFICE_STATUS_UPDATE_BODY,\n}"
+  replace: "EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY'] = {\n    \"en\": \"<p>{grievance_id} {grievance_details} {complainant_phone} {complainant_address}</p>\",\n    \"ne\": \"<p>{grievance_id}</p>\",\n}"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    ⭐ The defect, and its recipient list is what made it worse than the two legs before it.
+    `get_office_emails_for_grievance` resolves recipients from the grievance's MUNICIPALITY, not
+    from the case's assigned cast — so this template on a sensitive case mailed a survivor's
+    narrative, name, phone and address to a location-derived office list that GROWS WITH
+    DEPLOYMENT, where F-19's was a single configured address.
+
+- id: T-F22-call-site-bypasses-the-boundary
+  target: backend/api/routers/grievance.py
+  find: "            built = build_admin_email("
+  replace: "            built = (EMAIL_TEMPLATES[\"GRIEVANCE_STATUS_UPDATE_SUBJECT\"][\"en\"].format(**email_data), EMAIL_TEMPLATES[\"GRIEVANCE_STATUS_UPDATE_BODY\"][\"en\"].format(**email_data)) if False else build_admin_email("
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    ⭐ Pins the WIRING, not the helper. The call site used to format the template itself, which is
+    how it stayed outside F-19's fix entirely — the helper was correct and this path never reached
+    it. `test_the_office_status_route_uses_the_shared_boundary` inspects the source for exactly
+    this shape, because a helper-only test is green while the call site leaks. That is the
+    decorative-test failure DPG-34 found, applied before it could happen again.

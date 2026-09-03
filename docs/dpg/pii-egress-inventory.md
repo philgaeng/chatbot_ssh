@@ -23,17 +23,21 @@
 > | **E2** | Celery payloads → Redis | 🔴 narrative through the broker, persistence unverified | ✅ **cause removed** — payloads carry `grievance_id`; the task reads Postgres |
 > | **E4** | Model provider | 🟠 raw narrative, permanently | 🟢 **pseudonymised at both chokepoints**, 87.5% measured recall — ⚠ *narrower, not closed* |
 > | **E5** | Admin recap email | 🟠 the whole grievance dict, every submission | ✅ **built 2026-09-03** — allow-listed, suppressed for sensitive cases, failing closed |
-> | **E13** | Status-update email → office list | ⚠ *not in the original twelve* | 🔴 **NEW** — full record to an office list derived from **municipality**, not from the case's cast |
+> | **E13** | Status-update email → office list | ⚠ *not in the original twelve* | ✅ **found and closed 2026-09-03** — same shared boundary as E5 |
 > | **E6** | XLSX quarterly report | 🟡 `grievance_summary`, may carry names | 🟢 **the stored summary now carries no names** — no report-code change was needed |
 > | **E9** | Uploads / audio | 🟡 not redactable | 🟡 unchanged, and **still not redactable** (§5) |
 >
-> 🔴 **E13 is now the largest unredacted egress in this inventory, and it was not in the original
-> twelve.** Fixing E5 found it: status-update emails carry the full record to an office list derived
-> from **municipality**, not from the case's cast — so the recipient set grows with deployment.
+> ⭐ **E13 was not in the original twelve, and it is the most useful thing this inventory produced —
+> by being missing from it.** Fixing E5 found it: status-update emails carried the full record to an
+> office list derived from **municipality**, not from the case's cast, so the recipient set grew with
+> deployment. **Three separate email paths each carried the whole grievance record**, each written by
+> somebody solving a different problem, none of them wrong-looking at its own call site.
 >
-> ⭐ **Three separate email paths each carried the whole grievance record**, each written by somebody
-> solving a different problem, none of them wrong-looking at its own call site. **Grep for the
-> templates, not for the senders**, and assume a fourth until someone has looked.
+> All three are now closed, and behind **one** control rather than three copies of one — the
+> allow-list and the sensitivity gate live in `backend/services/admin_notifications.py`, which
+> imports neither the chatbot nor the API package. ⚠ **Nobody has grepped for a fourth.** The way to
+> do it is to grep the **templates**, not the senders: E5 was a single assignment, and no sender
+> looked wrong.
 >
 > ⭐ **The finding that should outlive the sprint.** Of the defects Sprint 3 found in **live** code —
 > the OTP at INFO, the erased SEAH detection, Redis persisting narratives, the classification payload —
@@ -430,7 +434,7 @@ notification that degrades into a record is how this whole finding started.
 
 ---
 
-## 6b. 🔴 E13 — a third leg, found while fixing E5
+## 6b. ✅ E13 — a third leg, found while fixing E5, closed with it
 
 Not in the original twelve. `backend/api/routers/grievance.py:323` mails
 `GRIEVANCE_STATUS_UPDATE_BODY` on every status change, carrying **the full narrative, complainant
@@ -447,9 +451,18 @@ grievance record, and each was written by somebody solving a different problem �
 follow-up, a status notification. None of them looked wrong at its own call site. **Grep for the
 templates, not for the senders**, and assume a fourth until someone has looked.
 
-⏭ **Not fixed here, deliberately.** It is a different subsystem (`backend/api/`, a stable shared
-service) on a safeguarding path, and folding it into E5's change would have hidden a decision inside
-a commit about something else. The helper it needs now exists.
+✅ **Fixed 2026-09-03, in its own commit.** ⭐ **The fix was not a third copy of E5's logic — it was
+making E5's logic shared.** The allow-list and the sensitivity gate moved to
+`backend/services/admin_notifications.py`, which imports neither `backend/actions/` nor
+`backend/api/`, and all three legs delegate to it. A security control with two implementations has
+one that is out of date the first time either changes.
+
+⭐ **And a test found a real bug while it was being written.** The shared builder resolves a subject
+as `f"{body_name}_SUBJECT"`; this template's subject had been authored as
+`GRIEVANCE_STATUS_UPDATE_SUBJECT`, without the `_BODY`, because the old call site formatted both by
+hand. The builder returned `None` and the email would have silently stopped sending. **A
+per-template test would have passed** — it was the parametrised one, added to cover the third leg,
+that caught it.
 
 ---
 
@@ -508,8 +521,9 @@ and the reason is still physics, not effort.
 
 | | Item | Who |
 |---|---|---|
-| 🔴 | **E13 — the status-update email to the municipality-derived office list.** The largest unredacted egress here, and the recipient set grows with deployment | engineering |
+| 🟠 | **Grep the templates for a fourth email leg.** Three carried the whole record and one was found only by fixing another; no systematic search has been done | engineering |
 | ⚪ | ~~E5 — build the decided admin-email change~~ ✅ **done 2026-09-03** | — |
+| ⚪ | ~~E13 — the status-update email to the office list~~ ✅ **done 2026-09-03**, behind the same shared boundary | — |
 | 🟠 | **Name the backup destination and its jurisdiction**, and assign key custody | DOR |
 | 🟠 | **Nothing re-drives a classification that never ran.** Independent of the Redis fix — that removed one way to lose the message, not the absence of recovery | engineering |
 | 🟡 | **The log-pruning call-site pin is scoped to four files on purpose.** The repo-wide sweep is not done | engineering |

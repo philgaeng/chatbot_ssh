@@ -23,7 +23,7 @@ new ones opened in its place** — one of them created by the same work.
 | | |
 |---|---|
 | ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
-| ✅ **The decided admin-email control is built** — allow-listed, suppressed for sensitive cases, failing closed. ⛔ **Building it found a third email leg that is not fixed:** status updates mail the full record to an office list derived from **municipality**, not from the case's cast | Indicator 7 |
+| ✅ **All three email legs that carried the whole grievance record are closed** — a submission receipt, a follow-up request, and a status update to an office list derived from **municipality** rather than the case's cast. ⭐ The third was found only by fixing the second, and **none looked wrong at its own call site** | Indicator 7 |
 | ✅ **Fixed — a live safeguarding defect in which the final submit erased the model's SEAH detections**, in exactly the case the model exists for. ⚠ It had been live for months, and **how it was found** is the strongest methodological evidence in this pack | Indicator 9 |
 | ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
 | ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
@@ -75,7 +75,7 @@ never leaves the process"* is the strongest form available.
 | 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary. ⚠ The **closed** column is now stale too |
 | 5 | Documentation | ✅ Compliant | — |
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
-| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **a third email leg still mails the whole record**; nothing is deployed; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
+| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **nothing is deployed**; no retention schedule; contact details not separable; no systematic search for a fourth email leg — and **no supervisor to validate any of it, while the exposure is criminal** |
 | 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework |
 | 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, its recall is unmeasured, and **nothing measures the pipeline end to end** — every figure we have scores the model alone |
 
@@ -300,11 +300,13 @@ of that equals a regulator**, and **ADB is the nearest candidate standard-setter
   addresses 4/6 — with the residual **named**: bare settlement names carrying no qualifier. A second
   pass runs on what the model **returns**, so the summary that gets *stored* carries no names either.
   ⚠ Read the two paragraphs after this list before quoting any of it.
-- **Admin notifications carry no complainant PII, and nothing at all for a sensitive case.** An
+- **Staff notifications carry no complainant PII, and nothing at all for a sensitive case.** An
   allow-list projected before formatting, a sensitivity gate that **fails closed on an unknown flag**,
   a template naming a non-safe field **refusing to send** rather than retrying with everything, and
-  both call sites reading the flag from the stored row rather than a tracker slot that can hold a
-  stale answer. ⚠ **Two of the three email legs. The third is in the gap list below.**
+  every call site reading the flag from the stored row rather than a tracker slot that can hold a
+  stale answer. ⭐ **One control, not three copies:** it lives in a module that imports neither the
+  chatbot nor the API package, because the same defect existed on three paths across both and a
+  security control with two implementations has one that is out of date.
 - **The logging boundary and the message broker closed with it.** A central filter on the logger
   (not a handler — `_setup_logger` adds two, and a handler filter is missed by any added later)
   redacting the **formatted** message, so `%s` arguments are covered; plus eleven call sites pruned
@@ -340,24 +342,16 @@ credential. *This is the single most important sentence in the indicator.*
 
 **Gaps.**
 
-- 🔴 **Status-update emails mail the entire grievance record — raw narrative, complainant name,
-  phone, municipality, village and address — to an office list resolved from the grievance's
-  *municipality*, not from the case's assigned cast.** So a status change on a SEAH case sends a
-  survivor's record to a location-derived office list. **Open**, and it is now the largest unredacted
-  egress in the system.
+- ⚠ **Nobody has grepped for a fourth email leg.** Three carried the whole grievance record — a
+  submission receipt, a follow-up request, and a status update to an office list derived from the
+  grievance's **municipality** rather than from the case's assigned cast. All three are fixed, but
+  the third was found only by fixing the second, so **the search was never systematic.**
 
-  ⭐ **It was found by fixing the previous one, and the pattern is worth more than either leg.**
-  **Three separate email paths each carried the whole grievance record** — a submission receipt, a
-  follow-up request, a status notification — each written by somebody solving a different problem,
-  and **none of them looked wrong at its own call site.** The first had no admin template at all:
-  `GRIEVANCE_RECAP_ADMIN_BODY` was *assigned* from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so
-  the admin list received the complainant's own receipt. Nobody decided that. **Grep for the
-  templates, not for the senders**, and assume a fourth until someone has looked.
-
-  ⚠ **We are not treating this as closed just because two of the three are.** The two that are fixed
-  were fixed at the boundary — one allow-list, one gate — and that helper is what the third one
-  needs. It was left out of that change deliberately: it is a different subsystem on a safeguarding
-  path, and folding it in would have buried a decision inside a commit about something else.
+  ⭐ **The pattern is worth more than the legs, and it is the reason this stays in the gap list.**
+  **None of the three looked wrong at its own call site** — each was written by somebody solving a
+  different problem. The first had no admin template at all: `GRIEVANCE_RECAP_ADMIN_BODY` was
+  *assigned* from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so the admin list received the
+  complainant's own receipt. Nobody decided that. **Grep the templates, not the senders.**
 - ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
   parked, so there is no future state in which the transfer stops.
 - ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
@@ -392,8 +386,8 @@ credential. *This is the single most important sentence in the indicator.*
   than only as reliability because an uncategorised grievance is also one the keyword safeguarding
   route never scored.
 
-**Remedy.** **Route the status-update email through the same admin boundary** — the helper exists —
-and deploy. Deployment is now the difference between a documented control and an operating one. Then: write the retention schedule and
+**Remedy.** **Deploy.** That is now the whole of the difference between a documented control and an
+operating one — every privacy control above is written, tested and running nowhere. Then: write the retention schedule and
 build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
 file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
 
