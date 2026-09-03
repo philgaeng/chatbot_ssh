@@ -89,15 +89,72 @@ the login counts are exactly the events generated while verifying [F-18](keycloa
 to a wrong value — and it now exits 1 naming the role, where before it reported `healthy`. Credential
 restored, exit 0.
 
+---
+
+## ⭐ It happened a second time — on staging, 2026-09-03 — and the written procedure did not prevent it
+
+**Found by:** checking container health after `make aws-deploy`, because an `aws-deploy OK` line is not
+evidence. **Status:** ✅ **FIXED the same day.**
+
+`ops` is in `AWS_DEPLOY_SERVICES`. So the *ordinary* staging deploy shipped it — **no separate
+decision, no prompt, nobody thinking "I am now deploying `ops` to a host."** Five hours later:
+
+| | |
+|---|---|
+| `ops.system_health_checks` | **`health_rows=0`** — not one row in the container's entire life on that host |
+| Healthcheck | `unhealthy`, **failing streak 309** |
+| Every scheduled job | ran on time and logged `executed successfully` |
+| `ops_app` role | existed, `canlogin=true`, ops migrations at `ops003_reportgrants` |
+| The only missing piece | the role's **password**, so `ops/config.py` fell back to `POSTGRES_PASSWORD` again |
+
+⚠ **Note what the two occurrences have in common and what they do not.** Locally it broke because a
+rotation moved one role's password and not the other's. On staging nothing was rotated — the secret
+simply never arrived, because `make env-local` is unsafe on that host (it would delete thirty host-only
+variables, §5a Hazard 2). **Same silent fallback, two unrelated causes.** The fallback is the defect;
+the trigger is incidental, which is why `ops/config.py`'s `or postgres_password` deserves to be an
+error rather than a warning.
+
+### ⭐ Why writing the procedure down was not enough
+
+The item below said the procedure was written and treated that as sufficient. It was not, for a reason
+worth stating plainly:
+
+> **The runbook is gated on *"if `ops` is ever deployed to a host"* — and both documents also asserted,
+> as present-tense fact, that `ops` ran on neither server.** That sentence made the gate read as
+> permanently closed. Nobody re-evaluated it, because deploying `ops` never felt like a decision: it
+> was one name in a default service list.
+
+**A precondition that no test enforces is a comment with a shelf life.** The honest fix is not a better
+sentence — it is that `selfcheck` should run as part of the deploy, so the gate is checked by the
+machine that opens it. Logged below.
+
+### Fixed on staging
+
+Per [`14_… §5.1`](../../../deployment/14_key_and_secret_lifecycle.md), with step 1 replaced by the
+append-one-variable form (`make env-local` is unsafe there): `env.local` backed up, the variable added
+by piping the decrypted value over SSH without printing it, name count `67 → 68`, digest
+`1a5b66412c05bdc9` matching `secrets.enc.env` on both sides. Then `ALTER ROLE ops_app`, container
+**recreated** (interpolation only re-runs on recreate), migrations at head.
+
+**Evidence, in the order that matters:** `selfcheck` exit 0 → zero auth errors → and three minutes
+later the thing that actually settles it, **the first five rows ever written on that host**:
+`endpoint_check`, `db_connectivity_check`, `queue_depth_check`, `grm_beat_liveness_check`, `redis_check`
+— all `ok`. ⚠ A green `selfcheck` with `health_rows=0` is the exact ambiguous state this file is about,
+so it was not treated as the finish line.
+
 ## Still outstanding
 
-- [ ] ⚠ **`ops` is deployed to neither staging nor DOR production**, so every fix above is live on the
-      development stack only. ✅ **The deployment procedure is now written down** rather than left as a
-      note here — [`14_key_and_secret_lifecycle.md`](../../../deployment/14_key_and_secret_lifecycle.md)
-      §5.1 (the three steps, and the `selfcheck` that proves they landed) and
-      [`18_sops_migration_handover.md`](../../../deployment/18_sops_migration_handover.md) §5a **Hazard 3**
-      (the secret arrives; the role password does not follow it). The recovery one-liner in §5.1 was
-      red-tested by re-breaking the credential and running it verbatim.
+- [x] ✅ **Staging: done 2026-09-03** (above). ⚠ **DOR production still does not run `ops`** — and that
+      is now a sentence with a demonstrated failure mode, not a reassurance. The procedure is in
+      [`14_key_and_secret_lifecycle.md`](../../../deployment/14_key_and_secret_lifecycle.md) §5.1 and
+      [`18_sops_migration_handover.md`](../../../deployment/18_sops_migration_handover.md) §5a **Hazard 3**.
+- [ ] ⭐ **Make the deploy check it instead of the runbook.** `REMOTE_DEPLOY_CORE` should run
+      `docker exec <ops> python -m ops.selfcheck` whenever `ops` is among the built services, and fail
+      the deploy. It would have caught this in the first `make aws-deploy`, five hours before a human did,
+      and it removes the dependence on someone remembering a gate.
+- [ ] ⚠ **`ops/config.py`'s fallback to `POSTGRES_PASSWORD` should be fatal, not a warning.** It has now
+      produced a blind monitor twice from two different causes. Connecting as one role with another
+      role's credential is never the intent.
 - [ ] The other report rows should get the same treatment they just got here — **run them, do not read
       them.** `_health_rows` and the preflight status were not exercised by this pass.
 - [ ] Consider whether `_safe_scalar` returning `n/a` is right at all. It is honest, but three months of

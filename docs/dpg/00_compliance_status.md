@@ -26,15 +26,22 @@ control here runs where the data is. **Verified on the staging host, 2026-09-03:
 | | Verified | |
 |---|---|---|
 | **Redaction, log filter, broker fix, safeguarding escalate-only** | ✅ **running on staging** | `pii_service.py` is in the running image, and the model-call chokepoint resolves `redact` |
-| **`ops` monitor** | 🟡 **deployed, and has produced nothing yet** | The container is healthy and its schema is migrated. `ops.system_health_checks` and `ops.dependency_findings` are **empty** — the scans are nightly and none has fired |
+| **`ops` health checks** | ✅ **running on staging, and producing output** | Five checks — db, redis, queue depth, beat liveness, endpoint — all `ok`, first written 2026-09-03 15:49 UTC. **The first evidence this platform has ever produced from a monitored deployed host** |
+| **`ops` dependency & licence scans** | 🟡 **scheduled on staging, never yet run** | `ops.dependency_findings` is **empty**. These are nightly and the container has not had a night |
 | **Keycloak authentication events** | ❌ **still not enabled on staging** | `keycloak.event_entity` holds **0 rows** |
 | **The email-boundary fixes** (indicator 7) | ❌ **not deployed** | They post-date the staging checkout |
 | **DOR production** | ⚠ **not verified** | It tracks `main` and is reachable only over VPN. **Treat every row above as false for production** |
 
-⭐ **The distinction that matters, and it is the one people skip: *deployed* is not *has run*.**
-`ops` is now on a server, which retires the flat claim that it is on neither — and it has still
-produced no evidence, because a nightly job that has not had a night is a scheduled job, not a
-control. **The pack states the second thing wherever it states the first.**
+⭐ **The distinction that matters, and it is the one people skip: *deployed* is not *has run*.** Both
+halves of `ops` were shipped to staging in the same container on the same day. Its **health checks
+have produced real rows**; its **licence and CVE scans have produced nothing**, because they are
+nightly and it has not had a night. **Same deployment, two different claims** — and only one of them
+is evidence. The pack keeps them apart wherever it states either.
+
+⚠ **The monitor also ran blind for five hours after that deploy**, authenticating with the wrong
+role's password and reporting `executed successfully` throughout — the second time that fallback has
+produced a blind monitor from an unrelated cause. Fixed the same day. It is recorded because *a
+monitor whose failure mode is silence is the one control you cannot infer from its own output.*
 
 ⭐ **One fact reframes the privacy half: no genuine grievance has ever been processed.** Every record
 is seed data or a demo dummy, so every exposure is **prospective** and redaction is a **go-live
@@ -112,12 +119,12 @@ expects. **Remedy:** write it with the submission package, once indicator 3 unbl
 - ⚠ **The licence choice is provisional.** Apache-2.0 was applied so the repository would not sit
   unlicensed; it was not chosen against ADB's preferences.
 - ⚠ **`NOTICE` names no copyright holder** — deliberate, blocked on indicator 3.
-- ⚠ **The nightly licence scan has still never run on a deployed host** — but the reason changed on
-  2026-09-03. `ops` **is now deployed to staging**, healthy, with its schema migrated; and
-  `ops.dependency_findings` is **empty**, because the job is nightly and has not yet had a night.
-  ⭐ **Deployed is not has-run.** The claim to make is *"the scan is scheduled where the data is,
-  and has produced no evidence yet"* — **not a continuous guarantee, and still must not be described
-  as one.**
+- ⚠ **The nightly licence scan has still never run on a deployed host** — but the reason narrowed on
+  2026-09-03. `ops` **is now deployed to staging** and demonstrably working there: its health checks
+  write `ok` rows. **`ops.dependency_findings` is nevertheless empty**, because the licence and CVE
+  scans are nightly and the container has not had a night. ⭐ **So the scan is now scheduled where the
+  data is and has still produced no evidence** — the most precise statement available, and **not a
+  continuous guarantee.**
 - ⚠ **DOR production has no `ops` at all**, and was not reachable to verify from here.
 
 **Remedy.** Let the staging scan run and cite its first real output — at that point this becomes the

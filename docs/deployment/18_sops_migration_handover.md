@@ -117,7 +117,7 @@ true and the distinction is the whole point:
 | | State |
 |---|---|
 | **`origin/integration/stage`** | ✅ Carries all of it — Sprints 2 and 3, and this secrets work |
-| **The AWS staging host** | ⛔ **Untouched.** It only changes when someone runs `make aws-deploy`, which is manual. There is no CD on this branch |
+| **The AWS staging host** | ⚠ **No longer untouched — deployed 2026-09-03.** Three `make aws-deploy` runs shipped Sprints 2 and 3 there (the default service list, then `celery_llm`/`celery_file`, then `orchestrator`). The compose credential path held exactly as the correction below predicted: nothing halted, no migration failed. ⭐ **But the deploy carried `ops` to a server for the first time, and that tripped §5a Hazard 3** — fixed the same day, §5a below. Deploys are still manual; there is no CD on this branch |
 
 ### ⚠ Corrected 2026-09-03 — `aws-deploy` is NOT blocked. `env-local` is the dangerous command.
 
@@ -321,7 +321,7 @@ repairs it. Treat setting it for the first time exactly like rotating it.
 > |---|---|---|---|
 > | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** The irreversible hazard is cleared **for staging** |
 > | `SEARCH_TOKEN_PEPPER` | ⛔ absent | ⛔ absent | ✅ Consistent — see the correction below |
-> | `OPS_DB_PASSWORD` | present | ⛔ absent | Expected; staging runs no `ops` container (Hazard 3) |
+> | `OPS_DB_PASSWORD` | present | ⛔ absent | ~~Expected; staging runs no `ops` container~~ ⚠ **This row's justification expired on 2026-09-03**, when `ops` was deployed there and the absence stopped being harmless. **Now present on staging** (appended 2026-09-03, digest `1a5b66412c05bdc9` on both sides) — Hazard 3, closed for staging |
 > | `POSTGRES_PASSWORD` | rotated 2026-08-21 | ⚠ **still the pre-rotation value**, confirmed by digest | Matches what `14_…` §1 records. This is open item 6 |
 >
 > ⚠ **DOR prod has NOT been checked** — no access from the development box. Until the same comparison
@@ -453,10 +453,17 @@ had no secret of its own and silently fell back to `POSTGRES_PASSWORD`, that was
 **Two things make this much less dangerous than Hazards 1 and 2, and one makes it easy to miss:**
 
 - ✅ **Fully recoverable** — re-run the `ALTER ROLE`. No data is lost, only unmonitored time.
-- ✅ **`ops` runs on neither server today**, so nothing breaks on the next deploy. This is a
-  precondition for *shipping* `ops`, not a blocker for the SOPS migration.
-- ⚠ **But nothing will tell you**, unless you run step 7 below. A monitor that cannot see is
-  indistinguishable from a monitor with nothing to report.
+- ~~✅ **`ops` runs on neither server today**, so nothing breaks on the next deploy.~~
+  🔴 **FALSE from 2026-09-03, and this is the line that let it through.** `ops` is in
+  `AWS_DEPLOY_SERVICES`, so the ordinary `make aws-deploy` shipped it to staging — no separate
+  decision, no prompt. The reassurance was written as a statement of fact about the world, and the
+  world changed without anyone editing it. ⭐ **A precondition that no test enforces is a comment
+  with a shelf life.** DOR prod still does not run `ops`; that is the only half still standing.
+- ⚠ **And nothing told anyone.** Step 7 below was never run — because this bullet said it did not
+  apply. Measured on staging after five hours: **309 consecutive healthcheck failures,
+  `ops.system_health_checks` with `health_rows=0`**, every job logging `executed successfully`.
+  A monitor that cannot see is indistinguishable from a monitor with nothing to report — and that is
+  not a hypothetical in this document any more, it is the second time it has happened here.
 
 Full procedure: [`14_… §5.1`](14_key_and_secret_lifecycle.md).
 
@@ -555,8 +562,12 @@ each one**:
       **every variable the dry run reports missing** added to `secrets.enc.env` (secrets) or `.env.shared`
       (non-secrets) — ⚠ **measured at thirty on staging, not the five this document used to claim**; and the
       name-parity dry run re-run clean afterwards
-- [ ] ⚠ **If `ops` is ever deployed to a host**: `ALTER ROLE ops_app`, ops migrations, and
+- [x] ⚠ **If `ops` is ever deployed to a host**: `ALTER ROLE ops_app`, ops migrations, and
       `python -m ops.selfcheck` exiting 0 — §5a Hazard 3 and [`14_…`](14_key_and_secret_lifecycle.md) §5.1
+      — ⭐ **done on AWS staging 2026-09-03**, *after* the deploy had already put `ops` there and left it
+      blind for five hours (`health_rows=0`, 309 failing checks). `selfcheck` exit 0; first five rows all
+      `ok` three minutes later. ⚠ **Open for DOR prod**, which does not run `ops` yet — the same sentence
+      that was true of staging until the morning of the day it wasn't
 - [x] `Last rotated` recorded as *"unknown — treat as never"* — in **`14_…` §1**, not §5.3.1
 
 ## 9. ⚠ Never

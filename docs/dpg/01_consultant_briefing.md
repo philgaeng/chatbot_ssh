@@ -59,8 +59,10 @@ staging host on 2026-09-03: **redaction is genuinely live there** — the module
 image — along with the log filter, the broker fix and the safeguarding correction. **Three things are
 not:** the email-boundary fixes, which are a few hours newer than that deploy; authentication event
 logging, which is a realm setting a deploy does not carry and which still records **zero** events;
-and the `ops` monitor's nightly scans, which now have a home on staging and **have not yet had a
-night**. ⛔ **DOR production runs none of it**, and we could not reach it to check.
+and the `ops` monitor's nightly licence and CVE scans, which now have a home on staging and **have
+not yet had a night** — though its health checks began writing real rows there the same day, which is
+the first monitoring evidence this platform has produced from a deployed host. ⛔ **DOR production
+runs none of it**, and we could not reach it to check.
 
 ⭐ **The distinction we would ask you to hold us to is *deployed* versus *has run*.** A scheduled job
 on a server is not yet evidence. If the assessment distinguishes a repository from a running system,
