@@ -1,8 +1,9 @@
 # Model benchmarks — what this system scores
 
 > **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
-> grievance set. **Measurements as of 2026-08-24**; where a finding has since been acted on, it says
-> so and carries its own date.
+> grievance set. **Measurements dated 2026-08-20 / 08-21**; where a finding has since been acted on,
+> it says so and carries its own date. ⛔ **The classification measurements are now stale** — see the
+> box below.
 >
 > **What it is not.** Not a model selection — see [§4](#4-the-open-column--the-one-gap) and
 > [§5](#5-seah-recall--not-measurable-from-this-repository). Not an estimate of production accuracy:
@@ -11,6 +12,30 @@
 >
 > **One value per metric.** [§2](#2-the-results) holds the current number for every cell, dated. Where
 > a number changed, the change is in [§7](#7-what-changed-on-2026-08-21-and-why) and nowhere else.
+>
+> ## ⛔ Read this before quoting any classification number (added 2026-09-03)
+>
+> **Every classification figure below was measured against a code path that no longer exists.** On
+> 2026-09-03 redaction became the **default** at the model-call chokepoint, so the text the model now
+> receives has names, phones and addresses replaced by `<PERSON_1>`-style placeholders. The harness
+> calls **the product's own function** — deliberately, and it is the right design — which means it
+> now inherits that default and would measure something different.
+>
+> **What this does and does not invalidate:**
+>
+> | | |
+> |---|---|
+> | ⛔ **Stale for the live path** | Every classification cell in §2, the 08-21 baseline (P 0.773 / R 0.752 / exact 0.686), and §3.1's invention rate |
+> | ✅ **Still valid** | SEAH detection figures — the detection prompt and its inputs are unchanged; latency and token counts, which move with prompt size, not with placeholder substitution |
+> | ⚪ **Unaffected in kind** | §4 (the open column is still unmeasured) and §5 (SEAH recall is still not measurable here) |
+>
+> ⚠ **The direction of the effect is unknown and should not be guessed.** The design reasoning for
+> substituting a token rather than deleting the words — the sentence keeps its grammatical shape, so
+> the classifier still parses it — is a **stated rationale, not a measurement.** It may cost nothing;
+> it may cost something; nobody has run it.
+>
+> ⭐ **This is a cheap re-run and it is the highest-value one available**, because it is the only
+> number in this document that is blocked on neither money nor absent data. It needs one command.
 >
 > **Set:** [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) ·
 > **Harness:** [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)
@@ -60,6 +85,11 @@ measurement date; every empty cell names its blocker.
 ⚠ **Why detection is dated 08-20 and classification 08-21.** The 08-21 change
 ([§7](#7-what-changed-on-2026-08-21-and-why)) touched the **classification** prompt and the taxonomy
 only. The detection figures stand as measured, and will move only if the detection prompt changes.
+
+⛔ **And why every classification cell is now stale**, including the ones dated 08-21: the input to
+that path changed on 2026-09-03 — see the box at the top. **Two independent reasons to re-run**, and
+they arrived three weeks apart: the D-51 storage guard (2026-08-25) and redaction (2026-09-03).
+Neither has been run. **One command clears both.**
 
 ⚠ **Only one open candidate has been benchmarked at all.** The other five reachable candidates have
 capability measured but no accuracy ([`open-model-configuration.md`](open-model-configuration.md)).
@@ -180,6 +210,29 @@ submission as an improvement.** Under a recall-first design
 false-alarm rate is a warning sign, not a selling point**: this system accepts false alarms in order
 to avoid misses, and a candidate producing none on a set built to be hard is behaving in exactly the
 way the design exists to avoid.
+
+### 3.6 🔴 The benchmark measured a detector whose answer production was throwing away
+
+**Found in live code 2026-08-27, and it changes how §3.2 should be read.** The detection figures
+above measure what the **model returns**. They do not measure what the **system does with it** — and
+for months the system was discarding it.
+
+The asynchronous LLM detection writes `grievance_sensitive_issue=True` during the contact and OTP
+steps. The final submit then collected a tracker slot still holding the **keyword** detector's
+earlier result and wrote `False` over the model's `True`. ⭐ **It failed in precisely the case the
+model exists for**: the one where keywords miss and the model catches — the class of item
+[§3.2](#32--the-seah-detector-flags-5-of-the-8-deliberate-confusable-negatives) is about. The flag
+now only ever escalates, in SQL rather than read-modify-write, so the write cannot lose the race.
+
+⚠ **The transferable lesson for this document.** A benchmark scores a **function**. The safeguarding
+property anyone actually cares about is a property of the **pipeline**, and every figure in §2 was
+consistent with a pipeline that routed nothing. **Detector accuracy is necessary and it is not
+sufficient**, and no re-run of this harness would have found it — it was found by driving the flow
+against a live database after the owner corrected a wrong model of it.
+
+⏭ **What would close the gap between the two:** an end-to-end measurement — a grievance in, a
+`is_seah` ticket out — rather than a function-level one. Not built, and it is the measurement §5's
+held-out set would be worth the most against.
 
 ---
 

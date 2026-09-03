@@ -3,10 +3,17 @@
 > **Audience:** a DPG reviewer, or anyone who wants to run this grievance system without depending on
 > a proprietary model provider.
 >
-> **Status (2026-08-24):** the **mechanism** is built, tested and pinned. The **model choices** are
+> **Status (2026-09-03):** the **mechanism** is built, tested and pinned. The **model choices** are
 > not: the whole shortlist has been probed for *capability*, which is a different question from
 > *accuracy*, and only one open candidate has any accuracy result at all — detection only, and not
 > readable as a selection ([`model-benchmarks.md`](model-benchmarks.md) §4).
+>
+> **Changed since 2026-08-24 — the chokepoint gained a second job.** The same two `call_llm()`
+> functions that make the model a configuration value now also **pseudonymise the text before it is
+> sent**, by default. That is worth stating here rather than only in the privacy pack, because it is
+> the same architectural bet paying twice: *one place where a request is built* is what made both a
+> one-line provider switch and a one-line privacy control possible. **Nine call sites would have been
+> nine of each.**
 >
 > Read [What is not yet true](#what-is-not-yet-true) before quoting anything here as evidence.
 
@@ -27,6 +34,21 @@ neither owns.
 | No client is constructed outside the two factories | same file |
 | `.env.example` and the registry agree in **both** directions — undocumented *and* stale variables fail the build | same file |
 | The two configurations declare the same variables and differ only in values | same file |
+
+### The chokepoint does two jobs, and that was not the plan
+
+`call_llm()` was built for indicator 4: one place that resolves the model, the endpoint, the deadline
+and the request shape. When indicator 7's redaction work arrived three weeks later it needed *a place
+where all outbound text passes*, and that place already existed.
+
+| | Sprint 1 built it for | Sprint 3 got for free |
+|---|---|---|
+| `backend/services/llm_client.py:80` | model / endpoint / timeout resolution | pseudonymisation of every outbound message, opt-**out** |
+| `ticketing/clients/llm_client.py:69` | same, second surface | same — including the sharpest payload in the system, a whole case timeline with officer notes |
+
+⚠ **The dependency runs one way and should not be overstated.** Consolidation made the privacy
+control cheap; it did not make it correct. Its recall was measured separately and is **87.5%**, not
+100% ([`privacy-assessment.md`](privacy-assessment.md) F-1).
 
 ## How to switch
 
@@ -186,8 +208,16 @@ needs its own account. **Do not read the fan-out count as a measurement.**
   request** unless the model id pins one (`openai/gpt-oss-120b:groq`). Production must pin; CI need
   not, since it sends synthetic data only. This registry makes the *choice* configurable; it does not
   make the *location of execution* knowable ([privacy assessment](privacy-assessment.md) F-17).
-- ⚠ **Grievance text still reaches the provider unredacted.** Switching providers is not a privacy
-  control.
+- ⚠ **Grievance text still reaches the provider. Switching providers is not a privacy control** —
+  and neither, on its own, is redaction. **Corrected 2026-09-03:** *"unredacted"* is no longer true —
+  the text is pseudonymised at 87.5% measured recall — but the two claims people conflate are still
+  separate. Provider independence answers *"who processes it"*; redaction answers *"what they get"*;
+  **neither answers *"does it leave the country"***, which only self-hosting does
+  ([`vllm-deployment.md`](vllm-deployment.md)).
+- ⛔ **Audio remains outside every layer.** The redactor works on text, so an unparked voice path
+  sends the speaker's name in the speaker's own voice with nothing in between. Today's open
+  configuration cannot transcribe at all, which makes this moot **for the wrong reason** — a 404 is
+  not a control.
 
 ## Related
 

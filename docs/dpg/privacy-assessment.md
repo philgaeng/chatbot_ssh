@@ -3,9 +3,36 @@
 **Nepal GRM Platform** — Grievance Redress Mechanism for ADB-financed road infrastructure
 (Kakarbhitta–Laukahi Road, ADB Loan 52097-003)
 
-**Version:** 1.1 · **Date:** 2026-08-24
+**Version:** 1.2 · **Date:** 2026-09-03 (v1.1 was 2026-08-24)
 **Benchmark:** Nepal's **Individual Privacy Act, 2075 (2018)** — the sole benchmark (see §0.3)
 **Covers:** DPG Standard indicators **7** (privacy), **9** (do no harm) and **9a** (data privacy and security)
+
+> ## What changed in v1.2 — the largest finding in v1.1 is no longer open
+>
+> **F-1 was the whole of §8's "the gap is concentrated in one place": grievance text left Nepal
+> unredacted on every model call.** It is now pseudonymised at both chokepoints before it leaves the
+> process, with **87.5% measured recall** and the residual named rather than rounded away. **F-5**
+> (the Celery broker) and **F-6** (application logs) closed with it, and a fourth control — a second
+> redaction pass on what the model *returns* — means the **stored** summary carries no names.
+>
+> ⚠ **Four things a reader should take from this section before the rest of the document.**
+>
+> 1. **Pseudonymised is not anonymised.** The mapping exists, so the output is still personal data.
+>    The claim that holds is *"only pseudonymised text crosses the border, and the re-identification
+>    key never leaves the process."* Nothing in this document may say *anonymised*.
+> 2. **The border is narrower, not closed.** Every classification still crosses it. §0.4 stands
+>    unchanged: the transfer is permanent, because self-hosting is still parked.
+> 3. **None of it is running anywhere.** The work is on `integration/stage` and **not deployed** —
+>    staging changes only when someone runs a deploy, and the next one is blocked on an unrelated
+>    database credential. **On both servers, the unredacted behaviour is what is live.**
+> 4. ⛔ **One decided control was not built, and it is the leg the egress inventory ranks *above*
+>    the model call.** The admin recap email still mails the whole grievance dict — raw narrative,
+>    name, phone, address — to a configured list on every submission. New finding **F-19**.
+>
+> ⭐ **And the finding that should outlive the sprint:** of the live defects the redaction work found —
+> a credential in the logs, an erased safeguarding flag, Redis persisting narratives — **none was in
+> this document's §2 inventory.** The inventory found the boundaries; the leaks were not at the
+> boundaries. §2 is a control, and it is not a sufficient one.
 
 ---
 
@@ -51,6 +78,18 @@ the transfer does not stop.
 Three consequences run through this document: §3.7 must justify an **indefinite** arrangement;
 redaction becomes the **primary** control rather than defence in depth; and §4, third-party PII, is
 the load-bearing section rather than an appendix.
+
+> ⭐ **v1.2: the primary control now exists, and that sharpens this section rather than softening
+> it.** When redaction was absent, "permanent transfer" and "unredacted transfer" were one problem.
+> They are now two, and only one of them has been worked on. What crosses the border is
+> pseudonymised; **that it crosses at all is unchanged, indefinite, and not a control question** —
+> the transmission is the event needing a lawful basis (§3.7.1), whatever it carries.
+>
+> ⚠ **Audio is the exception with no path.** A voice note carries the speaker's name in the
+> speaker's own voice and there is no step between microphone and model where a redactor could run.
+> **Only moving the inference endpoint solves it.** No waveform is sent today solely because
+> transcription is switched off on cost grounds — a funding decision standing in for a privacy
+> control, which is worth recording as one.
 
 ### 0.5 No genuine grievance has been processed
 
@@ -357,6 +396,29 @@ of §0.5:** each was ordinary engineering that day and a breach assessment after
   grievance the complainant *themselves* routed to SEAH stays there (`workflow_routing.py:78`) — only
   a machine flag is reversible. ⚠ The return is not yet an explicit, audited action
   ([`00_compliance_status.md`](00_compliance_status.md) §9).
+
+> ### 🔴 One of the two detection paths was silently erasing the other, and had been for months
+>
+> **Found and fixed 2026-08-27.** The asynchronous LLM check writes `grievance_sensitive_issue=True`
+> to `public.grievances` seconds after dispatch — during the contact and OTP steps. The **final
+> submit** then collected the tracker slot, which still held the **keyword** result from the 0.9 s
+> poll at the end of the grievance form, and wrote `False` over the model's `True` with no falsy
+> filtering. The ticket's `is_seah` is read from that column by the two-minute sync, so **a
+> harassment report was silently routed to the ordinary queue.**
+>
+> ⭐ **It failed in precisely the case the second path exists for** — the one where the keywords miss
+> and the model catches. The two independent detection paths were not independent; one was
+> overwriting the other, and the direction of the overwrite was always towards *less* protection.
+>
+> **The fix: the flag only ever escalates** — `grievance_sensitive_issue = (COALESCE(col, false) OR
+> %s)`, applied in **both** writers and **in SQL rather than read-modify-write**, because reading then
+> OR-ing leaves a window (read `False` → the task writes `True` → we write `False`) and the
+> consequence of losing that race is a missed harassment report. Driven end to end against the live
+> database.
+>
+> ⚠ **This was found because the owner corrected a wrong model of the intake flow**, not by reading
+> the code and not by any inventory. It is the strongest single argument in this document for the
+> instruction at the end of §7.
 
 **⚠ The gap must not be softened:** a SEAH disclosure — potentially a survivor's account of a sexual
 assault, naming an accused person — **is transmitted verbatim to a commercial model provider outside
@@ -690,47 +752,73 @@ considering on its own merits, but **not** as a backup control, and **not** befo
 
 ## 6. Findings register
 
-Verified against the code on 2026-08-18. Severity is engineering's judgement about privacy impact,
-not a legal characterisation. Detail for each sits in the section cited.
+Verified against the code on 2026-08-18; **F-1, F-5, F-6, F-9 and F-13 re-verified and F-19–F-21
+added 2026-09-03.** Severity is engineering's judgement about privacy impact, not a legal
+characterisation. Detail for each sits in the section cited.
+
+⚠ **A `✅ Fixed` row means fixed in the code on `integration/stage`. It does not mean deployed** —
+see the v1.2 note above. Neither server runs any of it.
 
 | # | Finding | Where | Severity | Status |
 |---|---|---|---|---|
-| **F-1** | Grievance narratives, officer notes and third-party names are transmitted **unredacted** to a commercial model provider outside Nepal, **permanently**. Five live call sites — classification and SEAH detection on the chatbot surface, all three on ticketing. Complainant contact details do not leave today; the four parked voice sites would change that (§3.7) | `LLM_services.py` ×2, `llm_client.py` ×3 | 🔴 High | Open — the redaction work |
+| **F-1** | Grievance narratives, officer notes and third-party names are transmitted to a commercial model provider outside Nepal, **permanently**. Five live call sites — classification and SEAH detection on the chatbot surface, all three on ticketing. Complainant contact details do not leave today; the four parked voice sites would change that (§3.7) | `LLM_services.py` ×2, `llm_client.py` ×3 | 🔴 High → 🟠 Medium | 🟢 **Substantially closed 2026-09-03 — *unredacted* is no longer true; *transmitted* still is.** Pseudonymised at both `call_llm()` chokepoints, opt-**out** so a new call site is covered without its author knowing, pinned by a `git grep` test that no production site opts out. **87.5% measured recall (14/16)** — person_name 7/7, phone 3/3, address 4/6. ⚠ **Residual named, not rounded away:** bare settlement names with no qualifier (`Duhabi`, `Itahari`); a bare district (`Jhapa`) survives **on purpose**, pinned by a test, because the classifier needs it and a district identifies nobody. ⚠ **Not anonymised** — the mapping exists. ⚠ **Not deployed.** ⛔ **Audio cannot be covered at all** (§0.4) |
 | **F-2** | **Encryption at rest failed open.** `_encrypt_field` returned plaintext unchanged when the key was unset *and* when pgcrypto raised, so a degraded deployment stored PII in the clear with nothing downstream able to tell | `base_manager.py:266-297` | 🔴 High | ✅ **Fixed 2026-08-19** — fails closed; a pgcrypto failure abandons the write |
 | **F-3** | **Unsalted SHA-256** of phone, email, name and address stored as search tokens. Nepal's mobile number space is small enough to enumerate in seconds, so these were reversible — personal data, not pseudonyms | `base_manager.py:559-573` | 🟠 Medium-high | ✅ **Fixed 2026-08-19** — HMAC with a pepper; existing tokens must be re-derived |
 | **F-4** | **Backups unencrypted by default.** Contact columns stayed ciphertext, but narratives, officer notes, voice recordings and photographs were in the clear | `scripts/ops/backup_db.sh:45-60` | 🟠 Medium-high | ✅ **Fixed 2026-08-19** — an unencryptable dump *and* the uploads archive are discarded unless explicitly overridden |
-| **F-5** | Grievance text, including potential SEAH disclosures, passes through the **Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | Open — the redaction work |
-| **F-6** | PII reaches **application logs** — ⚠ **narrowed, not closed.** The two legs originally cited are fixed: translation errors are bounded to the grievance id plus three words (`LLM_services.py:500`, DPG-19.3) and parse errors log a length, not the body (`:490`, DPG-13). What remains is the complainant's **phone number at INFO on every validation** | `backend/actions/services/contact/phone.py:27`, `:38` · `LLM_services.py:500` | 🟠 Medium | Open — the redaction work |
+| **F-5** | Grievance text, including potential SEAH disclosures, passes through the **Celery broker** in task payloads | `classification.py:140`, `sensitive.py:35` | 🟠 Medium | ✅ **Closed 2026-09-03 by removing the cause, not by redacting the payload.** Both tasks now carry a `grievance_id` and read the narrative from Postgres. ⭐ **The measurement that forced this was the opposite of what four documents claimed:** Redis has no volume (true) **and RDB snapshotting is on anyway** — `dump.rdb` at 47 KB, a planted key survived `docker restart`. *Being right for the wrong reason is not being right.* ⚠ **The alternative was rejected on reliability, and the reasoning is not obvious:** `--save ""` would have bought PII-at-rest by paying in lost tasks, and Celery **retry does not cover a lost message** — it fires when a task runs and raises. See **F-20** |
+| **F-6** | PII reaches **application logs.** ⚠ **The v1.1 statement understated this by an order of magnitude** — it named one site; reading the code found **at least twelve**, including **two writing an OTP at INFO** and one line carrying the whole grievance dict | `backend/logger/logger.py` · `form_otp.py:312`, `:343` · `contact/phone.py:27`, `:38` · 8 more | 🟠 Medium | ✅ **Closed at the boundary 2026-09-03.** A central filter on `TaskLogger` — on the **logger**, not a handler, because `_setup_logger` adds two and a handler filter is missed by any added later — redacting the **formatted** message so `%s` arguments are covered. Plus 11 call sites pruned to a per-field rule (free text → 8 chars, phone → last 4, OTP → never, dict → ids and lengths). Fails **neither open nor loud**: never raises, never emits unredacted. ⚠ **The call-site pin covers four files on purpose; the repo-wide sweep is owed** |
 | **F-7** | **No retention schedule**, and **contact details are not separable** from the accountability record. ⚪ Erasure of a grievance record is deliberately not offered and is not part of this finding (§3.5) | `ARCHIVING_AND_RETENTION.md` | 🟡 Low-medium | Needs a schedule + legal confirmation of the carve-out |
 | **F-8** | The **breach runbook has three decisions blank** (B1–B3), held on an interim basis by the maintainer rather than agreed | [`19_incident_response.md`](../deployment/19_incident_response.md) | 🟡 Low-medium | Needs a named DOR owner before go-live |
-| **F-9** | **Third parties named in grievances have not consented** and cannot exercise any right. Redaction does reach names, so this is a **measured residual rather than an untouched gap** — but the residual is unquantified, and no redaction gives these people rights over data already held | §4 | 🟠 Medium | Needs a legal position; recall figure outstanding |
+| **F-9** | **Third parties named in grievances have not consented** and cannot exercise any right | §4 | 🟠 Medium | 🟡 **Half closed 2026-09-03: the residual is now quantified.** Person-name recall is **7/7 on the labelled set** and overall recall **87.5%**, so *"names are not redacted"* is false and *"names cannot reach the provider"* is also false — the honest claim is the measured one. ⚠ **The legal half is untouched**, and no redaction gives these people rights over data already held. ⚠ **The measurement is on 16 labelled spans**, which is enough to refuse the two overstatements and not enough to certify the layer |
 | **F-10** | **Public closure endpoint is unauthenticated** with a non-expiring UUID4 token. Deliberate (the complainant has no account), but a forwarded link is a permanent disclosure | `public_closure.py:38,58` | 🟡 Low-medium | Open — add expiry |
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question | §3.8 | 🟡 Low-medium | Open — with the IP determination |
 | **F-12** | ~~SMS fallback routed a complainant's phone number through AWS SNS in Singapore~~ | `sms_config.py` | — | ✅ **Closed — the path was deleted, not mitigated.** SMS has no cross-border route and fails closed to `disabled`. ⛔ Residual: the unused AWS keys remain in `secrets.enc.env` and should be revoked |
-| **F-13** | **Intake does not disclose** that grievance text is sent to an external AI provider. Consent is collected (§3.1), but not for this | `required_slots.py:21,46` | 🟡 Low to fix, high in principle | Open — cheap |
+| **F-13** | **Intake does not disclose** that grievance text is sent to an external AI provider. Consent is collected (§3.1), but not for this | `required_slots.py:21,46` | 🟡 Low to fix, high in principle | **Open — cheap, and the disclosure is now easier to write honestly.** ⚠ It must say *pseudonymised*, never *anonymised*, and it must not imply the transfer stopped |
 | **F-14** | **No environment holds genuine grievance data** — all records are seed data or demo dummies (§0.5). ⚠ A demo participant may have entered their **own** real contact details, so narratives are synthetic while some contact fields may not be. Those rows should be purged before go-live | §0.5, §2.3 | ✅ Closed, with a dated caveat | ⚠ Expires at go-live |
 | **F-15** | ~~A deployment doc forbade cross-schema reads the code had not obeyed for months~~ | `09_privacy.md` | — | ✅ **Closed** — the section states the as-built contract **with its reasoning**, since a rule separated from its reason is what let the contradiction survive |
 | **F-16** | **The provider's data terms are recorded nowhere** — retention window, service-improvement use, prompt caching. These are the mitigations a transfer analysis cites, and citing an unverified mitigation is worse than citing none | Commercial fact, not in the repo | ⚠ Unverified | **Obtain and file before submission** |
 | **F-17** | **Jurisdiction of execution is not knowable.** Pinning a provider does not pin the country inference runs in, so no submission may name a single destination country | §3.7.1 | ⚠ Unverified | State as-is; do not overclaim |
 | **F-18** | **Keycloak recorded no login, login-failure or admin events at all.** ⚠ The daily ops report queried the empty table and reported `0` rather than "not recorded", which is why it survived review | live realm; `ops/reports.py:45,55` | 🟠 Medium | ✅ **Fixed** — event logging enabled, 90-day expiry. ⚠ Forward-only, and not yet on staging or production |
+| **F-19** | 🔴 **The admin recap email sends the entire grievance record — raw narrative, complainant name, phone and address — to a configured list on every submission**, over the SMTP relay. A decision to replace it with a pseudonymised summary plus a link into the platform was taken on 2026-08-27 and **the code is unchanged** | `recap_email.py:52-57` · `action_outro.py:151`, `:243` | 🔴 High | **Open.** ⚠ **This is now the largest unredacted egress in the system**, and the egress inventory ranks this leg **above** the model call for likelihood of real exposure. ⭐ **A recorded decision is not a control** — it is the state most likely to be misread as done |
+| **F-20** | **Nothing re-drives a classification that never ran.** Celery retry covers a task that ran and raised, not a message lost from the broker; the chatbot app has **no beat schedule at all**, and ticketing's two-minute sync never touches classification. A lost classification sits at `pending` **forever** | `backend/task_queue/celery_app.py` · `database_tables.py:41` | 🟡 Low-medium | **Open.** Not a confidentiality finding — an **integrity** one, and it reaches privacy through §3.4: an uncategorised grievance is also one the SEAH keyword route never scored. ⚠ **Independent of the F-5 fix**, which removed one way to lose the message, not the absence of recovery |
+| **F-21** | **The OTP had no expiry of any kind and was not cleared once used** — no timestamp, no TTL, so the bound was the conversation slot rather than a clock | `services/otp/verification.py` · `form_otp.py` | 🟠 Medium | ✅ **Fixed 2026-09-03** — a 10-minute window that **fails closed** (a missing or unparseable stamp counts as expired, so a parse bug cannot mint an eternal code), checked **before** the match so a correct-but-stale code does not verify, and the code erased on success. ⚠ **The finding that led here was overstated and was retracted the same day**: a logged OTP does *not* complete an impersonation, because verification is against that conversation's own slot. The credential-in-a-log finding stands on its own terms |
 
 ---
 
 ## 7. What the next review must verify
 
-The redaction work opens with an egress inventory that checks **this document against the code**.
-**That re-check is what makes §2 a control rather than an artefact.** It must confirm or refute:
+The redaction work opened with an egress inventory that checked **this document against the code**.
+**That re-check is what makes §2 a control rather than an artefact** — and it found this document
+optimistic about content in four places, all recorded in
+[`pii-egress-inventory.md`](pii-egress-inventory.md) §4.
 
-- [ ] That the model call sites are **9**, not more — a tenth would mean this inventory was written against a moving target
-- [ ] Whether the **Celery result backend** carries grievance text (§2.3)
-- [ ] Every log line that can carry grievance text — F-6 lists three found by reading; a sweep will find more
+**Closed by that re-check, 2026-08-27 to 2026-09-03:**
+
+- [x] **The model call sites are 9, not more** — confirmed, and the live/parked split is pinned by a test
+- [x] **Whether the Celery result backend carries grievance text** — it did, on both tasks; the cause is removed
+- [x] **Every log line that can carry grievance text** — F-6 named one; the sweep found **at least twelve**, two of them credentials
+- [x] **Whether `grievance_summary` carries PII in practice** — it did; it is now generated from pseudonymised text and redacted again before storage. ⚠ *Carries no names* is the claim, **not** *anonymous*: ward-level location and circumstance survive
+- [x] **That the re-identification mapping is never persisted** — it is not, and a test fails the day a caller needs it to be
+
+**Still open, and the first two are the ones that matter:**
+
+- [ ] 🔴 **That F-19 has been built.** A decision was taken on the admin recap email and no code changed. **Verify the code, not the decision record**
+- [ ] 🔴 **That any of this is deployed.** Everything above is true on `integration/stage`. Both servers run the unredacted behaviour
 - [ ] That **no environment has begun holding genuine grievance data** (F-14). §0.5 expires, so re-confirm rather than inherit
 - [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code
       fact. Intended to be Nepal government infrastructure; confirm the host, its operator and its
       retention, and whether BU1's key custody has been assigned (§5.4)
-- [ ] Whether `grievance_summary`, cached into `ticketing.tickets`, carries self-disclosed PII in practice
 - [ ] The provider's **retention window, service-improvement terms and prompt-caching behaviour** (F-16)
-- [ ] That the **re-identification mapping** never leaves Nepal and, preferably, is never persisted. The whole "only pseudonymised text crosses the border" claim rests on it
+- [ ] **Whether redaction cost classification accuracy.** The committed benchmark was measured *before*
+      the redactor existed, and the harness calls the product's own function — so those numbers now
+      describe a configuration that no longer runs
+      ([`model-benchmarks.md`](model-benchmarks.md) §3.1)
+- [ ] **The log-pruning sweep beyond the four pinned files**, and whether any new call site logs raw text
+
+⚠ **And one instruction for whoever runs the next review.** This section's v1.1 list was a good list
+and it was not the list that found the defects. The OTP in the logs, the erased safeguarding flag and
+the persisted narratives were found by **driving the code** and by an owner correcting a wrong model
+of the intake flow — **not** by checking boxes against a diagram. Run the commands.
 
 ---
 
@@ -742,14 +830,23 @@ PII boundary pinned by tests that fail the build**, **a single audited server-si
 point**, and **SEAH isolation administrators cannot circumvent**. For a platform of this size that is
 a stronger posture than most, and it was built deliberately.
 
-**The gap is concentrated in one place.** Grievance text — including SEAH disclosures and the names
-of people who never consented — leaves Nepal unredacted on every model call, **permanently**, because
-self-hosting has no cost owner. **The transmission is the event that needs a lawful basis** (§3.7.1):
-not the provider's retention, not whether it trains on the data, and not whether the model is
-open-weights.
+**The gap that was concentrated in one place has moved.** In v1.1 it was a single sentence:
+grievance text left Nepal unredacted on every model call. That is no longer true — it is
+pseudonymised at both chokepoints, at **87.5% measured recall**, and the stored summary carries no
+names. What remains is three separate things, and collapsing them again would be the mistake:
 
-**The timing is the opportunity.** Nothing in §6 describes harm that has happened, which makes
-redaction a **go-live precondition rather than remediation** (§0.5).
+1. **The transfer itself.** Every classification still crosses the border, permanently, because
+   self-hosting has no cost owner. **The transmission is the event that needs a lawful basis**
+   (§3.7.1) — not the provider's retention, not whether it trains on the data, not whether the model
+   is open-weights, and **not what the text was scrubbed of first**.
+2. 🔴 **A control that was decided and not built** (F-19). The admin recap email still mails the whole
+   record on every submission, and the egress inventory ranks that leg **above** the model call.
+3. 🔴 **None of the work is deployed.** Both servers run the v1.1 behaviour. A control on a branch is
+   evidence of intent, not a control.
+
+**The timing is still the opportunity.** Nothing in §6 describes harm that has happened, which keeps
+redaction a **go-live precondition rather than remediation** (§0.5) — and makes items 2 and 3 above
+cheap today and expensive the week after go-live.
 
 **Four decisions cannot be made in this repository:** a retention schedule and legal confirmation of
 the erasure carve-out (F-7), a lawful basis for third-party data and its transfer (F-9), the
@@ -768,6 +865,7 @@ should be a lawyer.**
 | Document | What it adds |
 |---|---|
 | [`00_compliance_status.md`](00_compliance_status.md) | The full DPG indicator-by-indicator assessment; §7 is privacy and §9 is do-no-harm |
+| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which grievance text leaves the agency's control** — 12, ranked by likelihood. §4 there lists the four places this document was optimistic about content |
 | [`dependency-licenses.md`](dependency-licenses.md) | Generated licence inventory (indicator 2) |
 | [`../deployment/09_privacy.md`](../deployment/09_privacy.md) | The privacy *design* spec — data domains, vault, reveal policy |
 | [`../deployment/13_security.md`](../deployment/13_security.md) | Security control inventory |

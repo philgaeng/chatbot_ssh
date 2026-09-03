@@ -1,6 +1,6 @@
 # T2 — self-hosted vLLM: documented and costed, not deployed
 
-> **Status (2026-08-24): ⚠ documented and costed, not deployed.** T2 is **parked**: nobody owns the
+> **Status (2026-09-03): ⚠ documented and costed, not deployed.** T2 is **parked**: nobody owns the
 > GPU running costs. Not starting is the right call — an excellent system nobody funds to keep running
 > is worse than one not built. **This document exists so that unparking is a procurement decision
 > rather than an engineering one.**
@@ -20,6 +20,29 @@
 > That makes it a **policy decision with a stated price** — one a ministry can take — rather than a
 > break-even calculation. The price of sovereignty is roughly the difference between single-digit
 > dollars a month and a few hundred, plus an operator.
+
+> ## Updated 2026-09-03 — what the redaction layer did to this argument
+>
+> Grievance text is now **pseudonymised before it leaves the process** (87.5% measured recall). It
+> would be easy to read that as *"T2 matters less now."* **It does not, and the reason is worth
+> stating precisely, because the mistake is attractive.**
+>
+> | | Redaction buys | T2 buys |
+> |---|---|---|
+> | Text | Names, phones and addresses mostly removed — **87.5%, not 100%** | Everything stays, and nothing crosses the border |
+> | Status of the data | **Still personal data** — the mapping exists, so this is pseudonymisation, not anonymisation | Not transferred at all, so §3.7's cross-border analysis does not arise |
+> | Audio | ⛔ **Nothing.** A waveform cannot be redacted; there is no step between microphone and model | ⭐ **The only thing that has ever solved it** |
+> | The legal event | Unchanged. **The transmission is what needs a lawful basis**, whatever it carries | Removed |
+>
+> ⭐ **So redaction narrowed the exposure and did not touch the argument for T2.** If anything it
+> sharpened it: the residual — a measured 12.5% miss rate, plus an audio path with no control at all —
+> is now a **named number** rather than a general worry, and a named number is what a procurement
+> decision can be taken against.
+>
+> ⚠ **The one thing that did change:** with redaction absent, T2 was the *only* control on the model
+> boundary and unparking it was urgent. It is now the *second* control and the pressure is off. **Off
+> is not gone** — and note what that pressure was actually removed by, which was a funding decision
+> about voice, not a privacy one.
 
 ---
 

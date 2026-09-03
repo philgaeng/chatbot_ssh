@@ -6,7 +6,7 @@
 > `tests/repo/test_dpg_questions_generated.py` fails the build if the two disagree.
 > **To change a question, edit `00_compliance_status.md` and regenerate.**
 >
-> **23 questions**, of which **5 are marked 🔴** — we cannot finish the
+> **25 questions**, of which **5 are marked 🔴** — we cannot finish the
 > work without those.
 >
 > **Numbers are derived from structure**: `Q-04-02` is the second question about indicator 4,
@@ -95,6 +95,12 @@
   executing agency?**
   Without an answer we build to our own reading of an untested statute.
 
+- **Q-07-08 — Does pseudonymisation at the border change the assessment of a cross-border transfer,
+  given that we keep the mapping?**
+  We can state a measured recall figure and we are careful not to call the result anonymised. What we
+  do not know is whether that moves the analysis at all, or whether the transfer is assessed the same
+  way regardless of what the text was scrubbed of first.
+
 ## Indicator 8 — Standards & best practices
 
 - **Q-08-01 — Which project-hygiene artefacts does the DPGA require?**
@@ -127,3 +133,8 @@
 - **Q-00-05 — What are we missing?**
   Anything in the current Standard revision, or the AI-systems guidance, that we would not find by
   reading the published documents.
+
+- **Q-00-06 — Does the assessment look at the repository or at a running deployment?**
+  Several of our controls — the redaction layer, the licence and CVE scans, authentication event
+  logging — are built and tested but run nowhere except a development stack. We would rather know
+  whether that distinction is material to an assessor than discover it matters after a submission.

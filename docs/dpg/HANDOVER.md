@@ -2,6 +2,13 @@
 
 > ## ✅ Done, 2026-08-24. Read this before acting on anything below.
 >
+> ⚠ **And the pack has moved on since.** Sprints 2 and 3 closed on 2026-08-27 and 2026-09-03, and all
+> nine documents were revised for them — plus a sixth evidence document,
+> [`pii-egress-inventory.md`](pii-egress-inventory.md), that did not exist when this was written.
+> **Every count below is the 2026-08-24 count.** This file is the record of one rewrite, not a
+> current description of the pack; for that, start at
+> [`00_compliance_status.md`](00_compliance_status.md).
+>
 > **The rewrite this document specifies has been carried out.** `00`, `02` and `03` are written, `01`
 > is re-derived, and all five evidence documents are revised. §7's order was followed, with one
 > deviation the owner chose:

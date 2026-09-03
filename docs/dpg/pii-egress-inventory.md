@@ -11,6 +11,31 @@
 > ⚠ **Authored by an AI agent. No legal review.** Same honesty marker as
 > [`privacy-assessment.md`](privacy-assessment.md), and for the same reason (Q-07).
 
+> ## ✅ Updated 2026-09-03 — what Sprint 3 did to this inventory
+>
+> **This document was the scope statement; §7 now records the outcome.** Six of the twelve paths
+> changed. The short version, and the order matters because it is the order of likelihood, not of
+> alarm:
+>
+> | | Path | Then | Now |
+> |---|---|---|---|
+> | **E1** | Application logs | 🔴 twelve sites, two of them credentials | ✅ **central filter on `TaskLogger` + 11 call sites pruned + the OTP lines gone** |
+> | **E2** | Celery payloads → Redis | 🔴 narrative through the broker, persistence unverified | ✅ **cause removed** — payloads carry `grievance_id`; the task reads Postgres |
+> | **E4** | Model provider | 🟠 raw narrative, permanently | 🟢 **pseudonymised at both chokepoints**, 87.5% measured recall — ⚠ *narrower, not closed* |
+> | **E5** | Admin recap email | 🟠 the whole grievance dict, every submission | 🔴 **decided 2026-08-27, NOT built — still sends the raw narrative** |
+> | **E6** | XLSX quarterly report | 🟡 `grievance_summary`, may carry names | 🟢 **the stored summary now carries no names** — no report-code change was needed |
+> | **E9** | Uploads / audio | 🟡 not redactable | 🟡 unchanged, and **still not redactable** (§5) |
+>
+> ⚠ **E5 is now the largest unredacted egress in this inventory**, and it outranks the model call on
+> the ranking this document is built on. A decision was taken and the code was not written. That is a
+> worse state than an open question, because the question looks answered.
+>
+> ⭐ **The finding that should outlive the sprint.** Of the defects Sprint 3 found in **live** code —
+> the OTP at INFO, the erased SEAH detection, Redis persisting narratives, the classification payload —
+> **none was in this inventory.** It was necessary and it was not sufficient: it found the
+> *boundaries*, and the leaks were not at the boundaries. They came from driving the code, from the
+> owner correcting a wrong model of the intake flow, and from mutations catching decorative tests.
+
 ---
 
 ## 0. Method, and the one thing that could not be verified
@@ -37,20 +62,23 @@ Ranked as DPG-30 requires: **by how likely the text is to end up somewhere nobod
 how alarming the destination sounds. The model call is the leak everyone designs against; the logs are
 the leak that actually happens.
 
-| # | Egress | What it carries | Verified at | Rank |
-|---|---|---|---|---|
-| **E1** | **Application logs** | OTP codes, phone numbers, the full grievance narrative, the whole grievance dict | §3 | 🔴 **1 — happens continuously, today** |
-| **E2** | **Celery payloads → Redis** | `grievance_description` verbatim | §2 | 🔴 **2 — every intake; persistence unverified** |
-| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** |
-| **E4** | **Model provider** (crosses the border) | Raw narrative, officer notes, whole case timelines | §5 | 🟠 **4 — deliberate, and the only one already designed for** |
-| **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** |
-| **E6** | **XLSX quarterly reports → email** | `grievance_summary`, truncated to 500 chars | `ticketing/services/report_rows.py:459` | 🟡 **6 — quarterly, to named roles** |
-| **E7** | **Complainant recap email → SMTP relay** | Their own grievance data | `backend/actions/action_outro.py:153` | 🟡 **7 — consented-ish; see §6** |
-| **E8** | **Public closure PDF** | Resolution text | `ticketing/api/routers/public_closure.py:38`, `:58` | 🟡 **8 — unauthenticated, non-expiring token** |
-| **E9** | **Uploads volume** | Voice recordings, photographs | `docker-compose.yml:50`, `:110`, `:147` | 🟡 **9 — not redactable; see §5** |
-| **E10** | **SMS → DOIT gateway** | Complainant phone + short message body | `backend/api/routers/messaging.py:95` | 🟢 **10 — in-country by design, no fallback** |
-| **E11** | **`POST /message` → orchestrator** | Officer replies | `ticketing/clients/orchestrator.py` | 🟢 **11 — internal** |
-| **E12** | **Observability** | — | — | ⚪ **none installed — verified** |
+⚠ **The `What it carries` and `Rank` columns are as of 2026-08-27, when this was a scope statement.**
+The `2026-09-03` column is what is true now; where the two disagree, the right-hand column wins.
+
+| # | Egress | What it carries | Verified at | Rank | 2026-09-03 |
+|---|---|---|---|---|---|
+| **E1** | **Application logs** | OTP codes, phone numbers, the full grievance narrative, the whole grievance dict | §3 | 🔴 **1 — happens continuously, today** | ✅ **closed at the boundary** — central filter + 11 sites pruned + OTP lines deleted |
+| **E2** | **Celery payloads → Redis** | `grievance_description` verbatim | §2 | 🔴 **2 — every intake; persistence unverified** | ✅ **cause removed** — id-only payloads, both tasks |
+| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged** — encryption fails closed, destination still unnamed (§5.4) |
+| **E4** | **Model provider** (crosses the border) | Raw narrative, officer notes, whole case timelines | §5 | 🟠 **4 — deliberate, and the only one already designed for** | 🟢 **pseudonymised, both surfaces** — 87.5% recall, residual named (§5) |
+| **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** | 🔴 **UNCHANGED IN CODE** — decided, not built (§6) |
+| **E6** | **XLSX quarterly reports → email** | `grievance_summary`, truncated to 500 chars | `ticketing/services/report_rows.py:459` | 🟡 **6 — quarterly, to named roles** | 🟢 **the summary now carries no names** — upstream, no report change |
+| **E7** | **Complainant recap email → SMTP relay** | Their own grievance data | `backend/actions/action_outro.py:153` | 🟡 **7 — consented-ish; see §6** | ⚪ **deliberately unchanged** — their own words back to them |
+| **E8** | **Public closure PDF** | Resolution text | `ticketing/api/routers/public_closure.py:38`, `:58` | 🟡 **8 — unauthenticated, non-expiring token** | 🟡 **unchanged** — out of scope, tracked as F-10 |
+| **E9** | **Uploads volume** | Voice recordings, photographs | `docker-compose.yml:50`, `:110`, `:147` | 🟡 **9 — not redactable; see §5** | 🟡 **unchanged, and unclosable** — see §5 |
+| **E10** | **SMS → DOIT gateway** | Complainant phone + short message body | `backend/api/routers/messaging.py:95` | 🟢 **10 — in-country by design, no fallback** | 🟢 unchanged |
+| **E11** | **`POST /message` → orchestrator** | Officer replies | `ticketing/clients/orchestrator.py` | 🟢 **11 — internal** | 🟢 unchanged |
+| **E12** | **Observability** | — | — | ⚪ **none installed — verified** | ⚪ still none; **the rule is now written** (`13_security.md` §8.1) |
 
 **E12, verified rather than assumed:** `grep` over `requirements*.txt` and the UI `package.json` files
 finds **no** Langfuse, OpenTelemetry, Sentry, Datadog or New Relic. The source narrative's §3.4 assumes
@@ -165,6 +193,20 @@ persistence, it needs less.
 
 ## 3. 🔴 E1 — the log surface is larger than any document says, and two entries are credentials
 
+> ✅ **Closed 2026-09-03.** The table below is the *finding*; the fix is a **central filter on
+> `TaskLogger`** plus 11 call sites pruned to the owner's per-field rule — free text → first 8
+> characters, phone → last 4, OTP → never logged, whole dict → ids and lengths. Read this section for
+> what was there; read §7 item 3 for what was done about it.
+>
+> ⚠ **A backstop is not a licence.** Call sites are still expected to prune; the filter exists because
+> twelve sites were already too many to fix individually and stay fixed. ⚠ **The call-site pin covers
+> four files on purpose** — the repo-wide sweep is still owed.
+>
+> ⭐ **The first test file written for this was decorative, and a mutation proved it.** Reverting the
+> masking at both phone call sites left all ten assertions green, because they tested the *helper* and
+> not the *call site*. The AST pin added in its place immediately found three more sites the hand
+> inventory had missed.
+
 [`privacy-assessment.md`](privacy-assessment.md) finding **F-6** names the log sink and, as corrected on
 2026-08-27, points at one site: the complainant's phone in `phone.py:27`/`:38`. **Reading the code finds
 more, and two of them are worse than a phone number.**
@@ -269,6 +311,28 @@ run. **Only moving the inference endpoint solves it.** Redaction applies to the 
 after — never before. This is stated here so DPG-33 does not spend time looking for a hook that cannot
 exist.
 
+### ✅ Built 2026-09-03 — and what it does and does not buy
+
+`redact: bool = True`, keyword-only, on **both** `call_llm()` chokepoints — so a call site added
+tomorrow is pseudonymised without its author knowing this exists, and switching it off has to be
+typed into a diff. Pinned three ways: the default value, the keyword-only kind, and a `git grep` test
+that fails if any production site passes `redact=False`. There are none.
+
+A **second pass runs on what comes back** (§31.4), on both producers of a stored summary — including
+the translation call that reads as a translation step and in fact *generates* one. A firing logs at
+**WARNING**, because it means the input pass missed a name that has already reached a third party.
+
+| What can be said | What must not be said |
+|---|---|
+| *"Only pseudonymised text crosses the border"* | ~~*"Grievance text is anonymised"*~~ — the mapping exists, so the output is still personal data |
+| *"The re-identification key never leaves the process"* — the mapping is never persisted, never serialised, never returned to a caller; pinned by a test that fails the day a caller needs it | ~~*"Names cannot reach the provider"*~~ — measured recall is **87.5%**, not 100% |
+| *"The residual is named, not rounded away"* — bare settlement names with no qualifier (`Duhabi`, `Itahari`) | ~~*"The transfer has stopped"*~~ — it has **narrowed**. Every classification still crosses the border |
+| *"A bare district survives on purpose"* (`Jhapa`) — the classifier derives district from the narrative, and a district identifies nobody | ~~*"Audio is covered"*~~ — it is not, and no layer in this sprint can cover it |
+
+⚠ **Unparking voice re-opens an egress this sprint cannot close.** No waveform is sent today only
+because transcription is switched off on cost grounds. That is a funding decision standing in for a
+privacy control, and it should be recorded as one.
+
 ---
 
 ## 6. E5/E6/E7 — the email legs, and a correction to Sprint 3's own decision table
@@ -292,32 +356,89 @@ absurd"* is a good argument about a complainant reading their own words, and **n
 about a recap mailed to a configured admin list. **E5 is an egress that should be assessed on its
 merits, not inherited into the complainant's exemption.**
 
+### 🔴 E5 — decided 2026-08-27, and the code is unchanged as of 2026-09-03
+
+The owner's decision: **send the pseudonymised summary and a link into the platform, never the
+record.** The recipient then reads the case behind Keycloak, with an audit trail, instead of holding a
+copy in a mailbox with neither.
+
+**It has not been implemented.** Verified in the code today: `recap_email.py:53` still formats
+`grievance_description` into the body, alongside `complainant_full_name`, `complainant_phone` and
+`complainant_address` (`:52`, `:56`, `:57`), and `action_outro.py:151` still calls
+`send_recap_email_to_admin` with the whole `grievance_data` dict on **every** submission.
+
+⚠ **This is the state a reader is most likely to get wrong, so it is stated twice.** Sprint 3 closed
+the model boundary, the log boundary and the broker. It did **not** close the leg this document ranks
+*above* the model call. A decision recorded in `TODO.md` and a control in the code are different
+things, and only one of them stops an email.
+
+⚠ **The fallback matters when it is built.** `POST /api/v1/tickets` returns a `ticket_id`
+(`ticketing_dispatch.py:288`) but the dispatch is non-blocking and never raises (`:242`), so the link
+can be absent. **Fall back to the `grievance_id`** — stable, and already the log correlation key —
+**never to including the narrative.**
+
 ---
 
-## 7. Scope statement for DPG-33 / DPG-34
+## 7. Scope statement for DPG-33 / DPG-34 — and what was built against it
+
+**Written 2026-08-27 as a scope statement; closed out 2026-09-03.** Each item keeps its original
+wording so the plan and the outcome can be read against each other.
 
 **DPG-33 (model boundary):** E4's two chokepoints. Audio is out of scope by physics (§5).
+✅ **Built** — both `call_llm()` hooks, opt-out, plus §31.4's output pass. Audio remains out of scope
+and the reason is still physics, not effort.
 
 **DPG-34 (logs, Celery, backups):** E1, E2, E3 — and in this order:
 
 1. 🔴 **Delete the two OTP log lines** (`form_otp.py:312`, `:343`). Not a redaction-filter task; a
    credential does not belong in a log at any level, and this is a two-line change.
+   ✅ **Done** — and the follow-up found more than the two lines: the OTP had **no expiry at all** and
+   was **not cleared on success**. Both fixed (a 10-minute window that fails closed, checked *before*
+   the match; the code erased once the number is verified). ⚠ **The original finding was also wrong
+   and was retracted the same day** — it claimed the logged OTP completed a status-check
+   impersonation. It does not: verification is against that conversation's own slot, so a leaked code
+   authenticates nothing. *A credential in a log is a finding on its own terms; the attack around it
+   was written from the shape of the finding rather than from the check.*
 2. 🔴 **Settle Redis persistence** with the three runtime commands (§2), then make the documents match
    the answer — or make the answer match the documents with `--save "" --appendonly no`.
+   ✅ **Measured, and then resolved by removing the cause rather than taking either trade** — see §2.
 3. 🔴 **The logging filter** at `backend/logger/logger.py` (`TaskLogger`), covering §3's table. Wire it
    once, centrally: twelve call sites is already too many to fix individually and stay fixed.
+   ✅ **Done** — on the **logger**, not a handler (`_setup_logger` adds two, and a handler-level filter
+   is missed by any added later), and it redacts the **formatted** message so `%s` arguments are
+   covered. That last detail is the whole point: a filter rewriting only `record.msg` passes the
+   obvious test and leaks on the common case. Failure path decided deliberately — **never raise**
+   (a raising filter drops the line someone is reading during an incident) and **never emit
+   unredacted** (a record whose redaction failed has unknown contents).
 4. 🟠 **Celery payloads** — pass a `grievance_id` and let the task read from Postgres, rather than
    serialising the narrative into the broker. Cleaner than redacting the payload, and it removes the
    store instead of obscuring it. ⚠ Touches `backend/task_queue/`, a stable shared service.
+   ✅ **Done, both tasks** — and handled *differently* for each, because the risk differs.
+   Classification's pre-dispatch write is hard; SEAH detection's is best-effort, so a missing row is
+   reachable and that task **retries, then fails terminally at ERROR** naming the grievance. Silence
+   was the one outcome not acceptable on a safeguarding path.
 5. 🟠 **Backups** — `backup_db.sh` already supports GPG encryption and an off-box `BACKUP_REMOTE`; both
    are **operator-set and optional**. Name the destination and its jurisdiction, per DPG-04 F-11.
+   🟠 **Not done, and not doable here** — it is a deployment decision with a named owner, addressed to
+   DOR in `privacy-assessment.md` §5.4.
 
 **Out of scope for both, logged rather than fixed:**
 
 - **E8** — the public closure endpoint is unauthenticated behind a non-expiring UUID4 token. Already
-  tracked in the privacy assessment (L10); this inventory adds nothing to it.
+  tracked in the privacy assessment (L10); this inventory adds nothing to it. **Still open.**
 - **E12** — the observability rule. Nothing to redact today; the rule needs writing before a tracing
-  tool arrives, not after.
+  tool arrives, not after. ✅ **Written** — `13_security.md` §8.1, before any such tool exists, which
+  is the only time writing it is cheap.
+
+### ⏭ What this inventory now owes
+
+| | Item | Who |
+|---|---|---|
+| 🔴 | **E5 — build the decided admin-email change.** The largest unredacted egress here | engineering |
+| 🟠 | **Name the backup destination and its jurisdiction**, and assign key custody | DOR |
+| 🟠 | **Nothing re-drives a classification that never ran.** Independent of the Redis fix — that removed one way to lose the message, not the absence of recovery | engineering |
+| 🟡 | **The log-pruning call-site pin is scoped to four files on purpose.** The repo-wide sweep is not done | engineering |
+| ⚪ | **Re-run this inventory when voice is unparked.** Every audio row here is true only while transcription is switched off | whoever unparks it |
 
 ---
 
@@ -328,3 +449,6 @@ merits, not inherited into the complainant's exemption.**
 - [`19_incident_response.md`](../deployment/19_incident_response.md) — carries the Redis containment claim §2 questions
 - [`followups/redis-persistence-is-inferred-not-verified.md`](../sprints/2026-08-llm/followups/redis-persistence-is-inferred-not-verified.md)
 - [`followups/otp-and-phone-logged-at-info.md`](../sprints/2026-08-llm/followups/otp-and-phone-logged-at-info.md)
+- [`04-pii-redaction-spec.md`](../sprints/2026-08-llm/04-pii-redaction-spec.md) — DPG-31/33/34, the work this inventory scoped
+- [`PROGRESS.md`](../sprints/2026-08-llm/PROGRESS.md) — deviations **D-62** (the OTP correction), **D-63** (Redis), **D-64** (the erased SEAH detection)
+- [`13_security.md`](../deployment/13_security.md) §8.1 — the observability rule, written before a tracing tool exists

@@ -1,20 +1,28 @@
 # Dependency licence audit
 
-> **Generated 2026-08-18** · commit `8470df63`
+> **Regenerated 2026-09-03** on `integration/stage` — licences, CVEs and image digests in one pass,
+> so this file now carries **one date** rather than three.
 > **Serves DPG indicator 2** (use of an approved open licence) and, for the container-image set,
 > indicator 4 (platform independence).
 >
-> ⚠ **Licence data generated 2026-08-18; the vulnerability section was measured 2026-08-23.** Two
-> dates, because they are two different commands.
+> **What the re-run changed, and what it did not.**
 >
-> ⛔ **The Python tree changed on 2026-08-24 and this report predates it.** `boto3` was removed from
-> `requirements.txt` with the AWS SNS SMS path (privacy assessment F-12), which also drops
-> **`botocore`, `jmespath` and `s3transfer`** — and `python-dateutil`, unless something else still
-> pulls it. So the counts below are **high by roughly four** and five rows describe packages that are
-> no longer in the tree. **Nothing here becomes wrong in kind** — every departing package was
-> Apache-2.0 or MIT, so *zero non-OSI, zero unknown* still holds — but the numbers are stale until the
-> scan is re-run against a rebuilt image. **Re-run it rather than editing the rows by hand:** a
-> hand-patched generated report is exactly the drift this file exists to remove.
+> - ✅ **The `boto3` prediction was right and is now measured.** The 2026-08-18 report warned it was
+>   *"high by roughly four"* after the AWS SNS SMS path was deleted (privacy assessment F-12). It was
+>   high by exactly four: `boto3`, `botocore`, `jmespath`, `s3transfer`. `python-dateutil` stayed —
+>   something else pulls it. **133 → 129 Python packages; 153 → 149 overall.**
+> - ✅ **The compliance claim is unchanged and is now re-measured rather than reasoned:**
+>   **zero non-OSI, zero unknown**, across all four sets.
+> - ✅ **26 packages moved version** since 08-18 and **no licence changed with them.** That is the
+>   result the pin-drift check exists to make boring — and it is worth stating, because the one time
+>   a licence *did* move under a stable pin is the finding this file was written around.
+> - 🔴 **The npm vulnerability picture changed shape while keeping its count.** Still "4 high", but
+>   they are now four different packages, and `next` itself carries nine advisories. See
+>   [Known vulnerabilities](#known-vulnerabilities--measured-2026-09-03-on-integrationstage).
+> - ⚪ npm licences (16 packages) and all four image digests are **byte-identical** to 08-18.
+>
+> **This report is generated. Re-run it rather than editing the rows by hand** — a hand-patched
+> generated report is exactly the drift this file exists to remove.
 >
 > **This is the authoritative inventory, and it is the only one.** The hand-written summaries it
 > replaced are gone — [`00_compliance_status.md`](00_compliance_status.md) cites this file and keeps no
@@ -24,23 +32,36 @@
 
 ## How this was produced
 
-Every scan ran **inside the running containers**, against the resolved dependency tree, per
-CLAUDE.md §Docker-only. Reading manifests would have missed 98 of the 133 Python packages —
+**Licence scans run inside the running containers**, against the resolved dependency tree, per
+CLAUDE.md §Docker-only. Reading manifests would have missed **95 of the 129** Python packages —
 including the `jwcrypto` LGPL finding, and both LGPL libvips binaries on the npm side. **None of
 those three is anyone's declared dependency**; they arrive transitively, and a licence obligation
 does not care how a package got there.
 
 ```bash
-# Python — the merged tree (see the correction below)
+# Python licences — the merged tree (see the correction below)
 docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml \
   exec ticketing_api sh -c "pip install pip-licenses && pip-licenses --format=json"
 
-# npm — production tree only, from the image that ships
+# Python CVEs — same container, what is actually installed
+docker compose ... exec ticketing_api pip-audit --format=json
+
+# npm licences — production tree only, from the image that ships
 docker compose ... exec grm_ui npx license-checker --production --json
 
 # container images — resolved digests
 docker image inspect <image> --format '{{index .RepoDigests 0}}'
+
+# npm CVEs — ⚠ NOT in-container: the shipped image has no lockfile (ENOLOCK)
+cd channels/ticketing-ui && npm audit --omit=dev --json
 ```
+
+⚠ **The last command is the one exception to "in-container", and it is not cosmetic.** `npm audit`
+requires a lockfile, which a production image deliberately does not ship, so it measures the
+**declared graph** rather than the **installed tree**. The two differ: the image's `node_modules`
+holds 10 entries and the lockfile's production graph is larger. Findings from that command must be
+checked against the image before being treated as shipped exposure — which is exactly what the
+`postcss`/`nanoid` rows in the vulnerability section required.
 
 ### ⚠ There is one Python image, not two
 
@@ -62,11 +83,18 @@ recovered by parsing each requirements file — not by image, which cannot disti
 
 | Set | Packages | Non-OSI | Unknown | Needs a disposition |
 |---|---|---|---|---|
-| Python — declared (both manifests) | 35 | 0 | 0 | 2 |
-| Python — transitive | 98 | 0 | 0 | 4 |
+| Python — declared (both manifests) | 34 | 0 | 0 | 2 |
+| Python — transitive | 95 | 0 | 0 | 4 |
 | npm — production tree | 16 | 0 | 0 | 2 + 1 tool artefact |
 | Container images | 4 | 0 | 0 | 1 |
-| **Total** | **153** | **0** | **0** | **10** |
+| **Total** | **149** | **0** | **0** | **10** |
+
+⚠ **34, not 35.** `pip-licenses` is declared in `requirements.grm.txt` but **excludes itself and its
+own dependencies from its output by default**, so it cannot appear in its own report. It is
+Apache-2.0 (verified from its metadata) and it is a scanning tool that ships in the `ops` image, not
+a runtime dependency of the platform. Recorded here because *"the manifest says 35 and the table
+shows 34"* is precisely the kind of one-off discrepancy that gets explained away twice and
+investigated never.
 
 **No package in any tree carries an unknown, unparseable or non-OSI licence.** Indicator 2 is
 answerable on the dependency tree; the remaining gap is the repository's own licence file, which is
@@ -179,16 +207,15 @@ The claim *"the scan runs on the schedule"* is true **given a
 deployed and correctly configured ops container**, and that caveat belongs with the claim every time
 it is made.
 
-## Python — declared dependencies (35)
+## Python — declared dependencies (34)
 
 | Package | Version | Licence | Declared in |
 |---|---|---|---|
-| `alembic` | 1.18.5 | MIT | chatbot + GRM |
+| `alembic` | 1.19.1 | MIT | chatbot + GRM |
 | `APScheduler` | 3.11.3 | MIT License | GRM/ops |
-| `boto3` | 1.37.28 | Apache Software License | chatbot |
 | `celery` | 5.5.2 | BSD License | chatbot |
 | **`email-validator`** | 2.3.0 | The Unlicense (Unlicense) | chatbot |
-| `fastapi` | 0.139.2 | MIT | chatbot |
+| `fastapi` | 0.141.1 | MIT | chatbot |
 | `Flask` | 3.1.3 | BSD-3-Clause | chatbot |
 | `Flask-SocketIO` | 5.6.1 | MIT License | chatbot |
 | `flower` | 2.0.1 | BSD License | chatbot |
@@ -200,26 +227,26 @@ it is made.
 | `pip_audit` | 2.10.1 | Apache Software License | GRM/ops |
 | **`psycopg2-binary`** | 2.9.10 | GNU Library or Lesser General Public License (LGPL) | chatbot |
 | `pydantic` | 2.13.4 | MIT | chatbot |
-| `pydantic-settings` | 2.14.2 | MIT | chatbot |
+| `pydantic-settings` | 2.15.0 | MIT | chatbot |
 | `pytest` | 9.1.1 | MIT | GRM/ops |
 | `python-dotenv` | 1.1.1 | BSD License | chatbot |
 | `python-jose` | 3.5.0 | MIT License | GRM/ops |
 | `python-keycloak` | 7.1.1 | MIT License | GRM/ops |
 | `python-multipart` | 0.0.32 | Apache-2.0 | chatbot |
-| `python-socketio` | 5.16.3 | MIT | chatbot |
-| `pytz` | 2026.2 | MIT License | chatbot |
+| `python-socketio` | 5.16.4 | MIT | chatbot |
+| `pytz` | 2026.3.post1 | MIT License | chatbot |
 | `pyvips` | 3.1.1 | MIT License | chatbot |
 | `PyYAML` | 6.0.3 | MIT License | chatbot |
 | `RapidFuzz` | 3.13.0 | MIT | chatbot |
 | `rasa-sdk` | 3.6.2 | Apache Software License | chatbot |
 | `redis` | 4.6.0 | MIT License | chatbot |
-| `reportlab` | 5.0.0 | BSD License | GRM/ops |
+| `reportlab` | 5.0.1 | BSD License | GRM/ops |
 | `requests` | 2.34.2 | Apache Software License | chatbot |
-| `SQLAlchemy` | 2.0.51 | MIT | chatbot |
+| `SQLAlchemy` | 2.0.52 | MIT | chatbot |
 | `uvicorn` | 0.49.0 | BSD-3-Clause | chatbot |
 | `Werkzeug` | 3.1.8 | BSD-3-Clause | chatbot |
 
-## Python — transitive dependencies (98)
+## Python — transitive dependencies (95)
 
 Not declared in any manifest; resolved by pip. Included because a licence obligation does not care
 whether you chose the package directly — and because both LGPL findings above live here.
@@ -228,7 +255,7 @@ whether you chose the package directly — and because both LGPL findings above 
 |---|---|---|---|
 | `aiofiles` | 25.1.0 | Apache Software License | transitive |
 | `amqp` | 5.3.1 | BSD License | transitive |
-| `annotated-doc` | 0.0.4 | MIT | transitive |
+| `annotated-doc` | 0.0.5 | MIT | transitive |
 | `annotated-types` | 0.8.0 | MIT | transitive |
 | `anyio` | 4.14.2 | MIT | transitive |
 | `asttokens` | 3.0.2 | Apache 2.0 | transitive |
@@ -237,19 +264,18 @@ whether you chose the package directly — and because both LGPL findings above 
 | `billiard` | 4.2.4 | BSD License | transitive |
 | `blinker` | 1.9.0 | MIT License | transitive |
 | `boolean.py` | 5.0 | BSD-2-Clause | transitive |
-| `botocore` | 1.37.38 | Apache Software License | transitive |
 | `CacheControl` | 0.14.4 | Apache-2.0 | transitive |
 | **`certifi`** | 2026.7.22 | Mozilla Public License 2.0 (MPL 2.0) | transitive |
-| `cffi` | 2.1.0 | MIT-0 | transitive |
-| `charset-normalizer` | 3.4.9 | MIT | transitive |
-| `click` | 8.4.2 | BSD-3-Clause | transitive |
+| `cffi` | 2.1.1 | MIT-0 | transitive |
+| `charset-normalizer` | 3.5.1 | MIT | transitive |
+| `click` | 8.5.0 | BSD-3-Clause | transitive |
 | `click-didyoumean` | 0.3.1 | MIT License | transitive |
 | `click-plugins` | 1.1.1.2 | BSD License | transitive |
 | `click-repl` | 0.2.0 | MIT | transitive |
 | `colorama` | 0.4.6 | BSD License | transitive |
 | `coloredlogs` | 15.0.1 | MIT License | transitive |
-| `cryptography` | 49.0.0 | Apache-2.0 OR BSD-3-Clause | transitive |
-| `cyclonedx-python-lib` | 11.11.0 | Apache Software License | transitive |
+| `cryptography` | 50.0.1 | Apache-2.0 OR BSD-3-Clause | transitive |
+| `cyclonedx-python-lib` | 11.12.0 | Apache Software License | transitive |
 | `defusedxml` | 0.7.1 | Python Software Foundation License | transitive |
 | `deprecation` | 2.1.0 | Apache Software License | transitive |
 | `distro` | 1.9.0 | Apache Software License | transitive |
@@ -258,51 +284,49 @@ whether you chose the package directly — and because both LGPL findings above 
 | `et_xmlfile` | 2.0.0 | MIT License | transitive |
 | `exceptiongroup` | 1.3.1 | MIT License | transitive |
 | `executing` | 2.2.1 | MIT License | transitive |
-| `filelock` | 3.32.0 | MIT | transitive |
-| `greenlet` | 3.5.4 | MIT AND PSF-2.0 | transitive |
+| `filelock` | 3.32.4 | MIT | transitive |
+| `greenlet` | 3.5.5 | MIT AND PSF-2.0 | transitive |
 | `h11` | 0.16.0 | MIT License | transitive |
 | `httpcore` | 1.0.9 | BSD-3-Clause | transitive |
 | `httptools` | 0.8.0 | MIT | transitive |
 | `humanfriendly` | 10.0 | MIT License | transitive |
 | `humanize` | 4.16.0 | MIT | transitive |
-| `idna` | 3.18 | BSD-3-Clause | transitive |
+| `idna` | 3.19 | BSD-3-Clause | transitive |
 | `iniconfig` | 2.3.0 | MIT | transitive |
 | `itsdangerous` | 2.2.0 | BSD License | transitive |
 | `Jinja2` | 3.1.6 | BSD License | transitive |
 | `jiter` | 0.16.0 | MIT | transitive |
-| `jmespath` | 1.1.0 | MIT License | transitive |
-| **`jwcrypto`** | 1.5.8 | LGPL-3.0-or-later | transitive |
+| **`jwcrypto`** | 1.5.9 | LGPL-3.0-or-later | transitive |
 | `kombu` | 5.5.4 | BSD License | transitive |
 | `license-expression` | 30.4.4 | Apache-2.0 | transitive |
-| `Mako` | 1.3.12 | MIT License | transitive |
+| `Mako` | 1.4.1 | MIT | transitive |
 | `markdown-it-py` | 4.2.0 | MIT License | transitive |
 | `MarkupSafe` | 3.0.3 | BSD-3-Clause | transitive |
 | `mdurl` | 0.1.2 | MIT License | transitive |
-| `msgpack` | 1.2.1 | Apache-2.0 | transitive |
+| `msgpack` | 1.2.2 | Apache-2.0 | transitive |
 | `multidict` | 5.2.0 | Apache Software License | transitive |
 | `packageurl-python` | 0.17.6 | MIT License | transitive |
-| `packaging` | 26.2 | Apache-2.0 OR BSD-2-Clause | transitive |
+| `packaging` | 26.3 | Apache-2.0 OR BSD-2-Clause | transitive |
 | `pillow` | 12.3.0 | MIT-CMU | transitive |
 | `pip-api` | 0.0.34 | Apache Software License | transitive |
 | `pip-requirements-parser` | 32.0.1 | MIT | transitive |
-| `platformdirs` | 4.11.0 | MIT | transitive |
+| `platformdirs` | 4.11.5 | MIT | transitive |
 | `pluggy` | 1.6.0 | MIT License | transitive |
-| `prometheus_client` | 0.25.0 | Apache-2.0 AND BSD-2-Clause | transitive |
+| `prometheus_client` | 0.26.0 | Apache-2.0 AND BSD-2-Clause | transitive |
 | `prompt-toolkit` | 3.0.28 | BSD License | transitive |
 | `py-serializable` | 2.1.0 | Apache Software License | transitive |
 | `pyasn1` | 0.6.4 | BSD-2-Clause | transitive |
 | `pycparser` | 3.0 | BSD-3-Clause | transitive |
 | `pydantic_core` | 2.46.4 | MIT | transitive |
-| `Pygments` | 2.20.0 | BSD-2-Clause | transitive |
+| `Pygments` | 2.21.0 | BSD-2-Clause | transitive |
 | `pyparsing` | 3.3.2 | MIT | transitive |
 | `python-dateutil` | 2.9.0.post0 | Apache Software License; BSD License | transitive |
-| `python-engineio` | 4.13.3 | MIT | transitive |
+| `python-engineio` | 4.13.5 | MIT | transitive |
 | `requests-toolbelt` | 1.0.0 | Apache Software License | transitive |
 | `rich` | 15.0.0 | MIT License | transitive |
 | `rsa` | 4.9.1 | Apache Software License | transitive |
 | `ruamel.yaml` | 0.17.40 | MIT License | transitive |
 | `ruamel.yaml.clib` | 0.2.15 | MIT License | transitive |
-| `s3transfer` | 0.11.5 | Apache Software License | transitive |
 | `sanic` | 21.12.2 | MIT License | transitive |
 | `Sanic-Cors` | 2.2.0 | MIT License | transitive |
 | `sanic-routing` | 0.7.2 | MIT License | transitive |
@@ -310,11 +334,11 @@ whether you chose the package directly — and because both LGPL findings above 
 | `six` | 1.17.0 | MIT License | transitive |
 | `sniffio` | 1.3.1 | Apache Software License; MIT License | transitive |
 | `sortedcontainers` | 2.4.0 | Apache Software License | transitive |
-| `starlette` | 1.3.1 | BSD-3-Clause | transitive |
+| `starlette` | 1.6.0 | BSD-3-Clause | transitive |
 | `tomli_w` | 1.2.0 | MIT License | transitive |
-| `tornado` | 6.5.7 | Apache Software License | transitive |
-| **`tqdm`** | 4.69.0 | MPL-2.0 AND MIT | transitive |
-| `typing-inspection` | 0.4.2 | MIT | transitive |
+| `tornado` | 6.5.8 | Apache Software License | transitive |
+| **`tqdm`** | 4.70.0 | MPL-2.0 AND MIT | transitive |
+| `typing-inspection` | 0.4.4 | MIT | transitive |
 | `typing_extensions` | 4.16.0 | PSF-2.0 | transitive |
 | `tzdata` | 2026.3 | Apache-2.0 | transitive |
 | `tzlocal` | 5.4.4 | MIT | transitive |
@@ -361,21 +385,49 @@ row** — verified by rebuilding `grm_ui` and re-running the scan. `private: tru
 
 ---
 
-## Known vulnerabilities — measured 2026-08-23, on `dpg/sprint2-open-models`
+## Known vulnerabilities — measured 2026-09-03, on `integration/stage`
 
 Distinct from the licence question above and recorded here because a reviewer reaching this repository
 through GitHub sees a vulnerability count before they see anything else.
 
-⚠ **GitHub reports 34 alerts (17 high) — against `main`, which is two months stale.** `main` was last
-touched 2026-06-25, sits 333 commits behind this branch, and **all three dependency manifests differ**.
-That number measures a tree this branch has already moved past; it is not a measurement of the code.
-
-**Measured on this branch instead**, in-container against the resolved trees:
+⚠ **GitHub's alert count is measured against `main`, which is stale by months and hundreds of
+commits**, with all three dependency manifests differing. It measures a tree this work has already
+moved past; it is not a measurement of the code. **Measured here instead**, against the resolved
+trees:
 
 | Set | Findings | Notes |
 |---|---|---|
-| Python (`pip-audit`) | **6 across 5 packages** | `ecdsa` ⚠ no fix released · `sanic-cors` · `wheel` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0 |
-| npm, production tree (`npm audit --omit=dev`) | **4 high** | all one package: `sharp` < 0.35.0 inheriting four libvips CVEs |
+| Python (`pip-audit`, in `ticketing_api`) | **6 across 5 packages** — unchanged since 08-23 | `ecdsa` ⚠ no fix released · `sanic-cors` · `wheel` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0 |
+| npm, production tree (`npm audit --omit=dev`) | **4 high** — ⚠ **same count, different findings** | `next` (nine advisories) · `postcss` · `nanoid` · `sharp` |
+
+### 🔴 The npm count stayed at four and stopped meaning the same thing
+
+On 2026-08-23 the four were **one package**: `sharp` inheriting four libvips CVEs, with the fix
+outside the stated Next.js range. Today they are **four packages**, and the composition is worse than
+the count suggests:
+
+* **`next@16.2.6`** now carries **nine** advisories of its own — among them a **middleware/proxy
+  bypass in App Router**, **SSRF in Server Actions on custom servers**, **SSRF in rewrites via an
+  attacker-controlled destination hostname**, and **unauthenticated disclosure of internal Server
+  Function endpoints**. This is the officer portal's framework, it **ships**, and these are not
+  build-time findings. **It is the one row on this page that should be acted on rather than
+  explained.**
+* **`postcss` and `nanoid`** arrive under `next` in the lockfile graph. ⚠ **Neither is present in the
+  shipped image** — verified: `grm_ui`'s `node_modules` holds **10 entries** and contains neither.
+  They are lockfile-graph findings, and counting them as shipped exposure would repeat the mistake
+  the `rasa-sdk` paragraph below corrects.
+* **`sharp` < 0.35.0** — unchanged, still the libvips inheritance, still gated behind a framework
+  bump.
+
+⚠ **The method differs between the two sets, and it matters.** `pip-audit` runs **inside the running
+container**, against what is installed. `npm audit` needs a lockfile, which the production image does
+not ship (`ENOLOCK`), so it runs against `channels/ticketing-ui/package-lock.json` — the **declared
+graph**, not the shipped tree. That is why the `postcss`/`nanoid` distinction above had to be checked
+by hand rather than read off the report.
+
+⭐ **The transferable point, and it is the same one this file makes about licences:** a count that
+holds still is not a tree that holds still. Between two runs three weeks apart the npm number was
+identical and every finding behind it had changed. **Re-run the command; do not re-read the number.**
 
 ### ⚠ Two of the six come from `rasa-sdk` — and neither the fix nor the risk is what it looks like
 
@@ -410,3 +462,15 @@ a characterization net over the intake path first, exactly as was done for the L
   arriving through Next.js image optimisation. ⚠ The advertised fix moves Next.js **outside the stated
   dependency range**, so it is a framework bump, not a patch.
 * **`python-dotenv`, `setuptools`** — ordinary version bumps, no downstream constraint.
+
+### ⏭ What this section owes, ranked
+
+| | Item | Why it is where it is |
+|---|---|---|
+| 🔴 | **Bump `next` past 16.3.0** | Nine advisories in a framework that ships and faces officers, two of them SSRF. The only row here that is reachable, shipped and fixable in one move — and it takes `postcss`, `nanoid` and `sharp` with it |
+| 🟠 | **`ecdsa` — mitigate or move off `python-jose`** | No fix exists, so it cannot be closed by a bump. It sits on the Keycloak JWT path, which is authentication |
+| 🟡 | **`python-dotenv`, `setuptools`** | Free bumps, no constraint. Do them with anything else |
+| ⚪ | **`sanic-cors`, `wheel`** | **Deliberately last.** Unreachable, and doing them first is how a remediation plan optimises the count over the risk |
+
+⚠ **`ops`'s nightly scan is what should be finding all of this, and it is on neither server** — see
+[Staying true](#staying-true). Everything above was found by a person running a command by hand.

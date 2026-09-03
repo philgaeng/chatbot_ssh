@@ -3,15 +3,31 @@
 > **What this is.** An indicator-by-indicator self-assessment against the
 > [DPG Standard](https://www.digitalpublicgoods.net/standard), for ADB's Digital Public Goods
 > consultant. Each indicator states **what we have**, **what is missing**, **what we propose**, and
-> **what we need from you**. **As of 2026-08-24** · branch `dpg/sprint2-open-models`.
+> **what we need from you**. **As of 2026-09-03** · branch `integration/stage`.
 >
 > **What this is not.** Not a record of what was built — that is
 > [`03_remediation_record.md`](03_remediation_record.md), deliberately outside this assessment. Not
-> the evidence: the five documents below hold the measurements, and this file **cites them rather
+> the evidence: the six documents below hold the measurements, and this file **cites them rather
 > than restating them**. Not an argument for its own questions — those are in
 > [`02_questions.md`](02_questions.md), generated from this file.
 >
 > **Twenty minutes before a meeting:** [`01_consultant_briefing.md`](01_consultant_briefing.md).
+
+---
+
+## What changed since 2026-08-24
+
+Three sub-sprints closed. **The largest gap in the previous revision is substantially closed, and two
+new ones opened in its place** — one of them created by the same work.
+
+| | |
+|---|---|
+| ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
+| 🔴 **One decided control was not built** — the admin recap email still mails the whole grievance record on every submission, and it is ranked **above** the model call for likelihood of exposure | Indicator 7 |
+| 🔴 **A live safeguarding defect: the final submit had been erasing the model's SEAH detections**, in exactly the case the model exists for. Fixed, and it is the strongest evidence in this pack for how the rest was found | Indicator 9 |
+| ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
+| ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
+| ⚠ **The npm vulnerability count held at 4 and every finding behind it changed.** `next` now carries nine advisories of its own, two of them SSRF, in the framework the officer portal ships | Indicator 8 |
 
 ---
 
@@ -20,19 +36,29 @@
 Two of the nine indicators have real gaps, **one of which nobody on the engineering team can close**,
 and the AI-specific reading of indicator 4 is the substance of the meeting.
 
-⚠ **One caveat qualifies four indicators at once: almost none of this evidence comes from a deployed
-host.** The licence scan, the CVE scan, the platform-independence CI job and the ops monitor all exist
-and have been run — **on a development stack, by hand.** `ops` is on neither server.
+⛔ **One caveat qualifies every indicator, and it got heavier this fortnight: almost none of this
+evidence comes from a deployed host.** The licence scan, the CVE scan, the platform-independence CI
+job and the ops monitor all exist and have been run — **on a development stack, by hand.** `ops` is on
+neither server. **And now the privacy controls are in the same position**: the redaction layer that
+answers the largest indicator-7 finding is on a branch, not on a server. *A control that has not run
+where the data is is a control in the same sense that a plan is a building.* This is stated once here
+and not repeated under every indicator.
 
 ⭐ **One fact reframes the privacy half: no genuine grievance has ever been processed.** Every record
 is seed data or a demo dummy, so every exposure is **prospective** and redaction is a **go-live
 precondition rather than a remediation**. ⚠ This expires at go-live, and a demo participant may have
 entered their own real contact details.
 
+⚠ **And one word this document will not use.** The redaction layer produces **pseudonymised** text,
+not anonymised: the mapping exists, so the output is still personal data. Every claim below is written
+to that standard, and *"only pseudonymised text crosses the border, and the re-identification key
+never leaves the process"* is the strongest form available.
+
 | Evidence | What it holds |
 |---|---|
-| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, 18 findings, assessed against the Individual Privacy Act 2018 |
-| [`dependency-licenses.md`](dependency-licenses.md) | Generated inventory: 153 packages across four dependency sets, plus measured CVEs |
+| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, **21 findings**, assessed against the Individual Privacy Act 2018 |
+| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which grievance text leaves the agency's control** — 12, ranked by likelihood rather than by alarm, with what closed and what did not |
+| [`dependency-licenses.md`](dependency-licenses.md) | Generated inventory: **149 packages** across four dependency sets, plus measured CVEs — regenerated 2026-09-03 |
 | [`open-model-configuration.md`](open-model-configuration.md) | How this system runs on open models; the measured capability matrix |
 | [`model-benchmarks.md`](model-benchmarks.md) | What the models score on a committed 105-item Nepali set |
 | [`vllm-deployment.md`](vllm-deployment.md) | Self-hosted inference, designed and costed; why it is parked |
@@ -46,12 +72,12 @@ entered their own real contact details.
 | 1 | Relevance to SDGs | ✅ Compliant | Needs writing up, not building |
 | 2 | Open licensing | 🟢 Substantially | The licence choice is provisional; the continuous scan has never run on a deployed host |
 | 3 | Ownership | 🔴 **Blocked** | No IP determination, so **no copyright holder and no submission**. Not closable by this team |
-| 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary |
+| 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary. ⚠ The **closed** column is now stale too |
 | 5 | Documentation | ✅ Compliant | — |
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
-| 7 | Privacy & applicable laws | 🟠 Real gaps | Unredacted egress, no retention schedule, contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
-| 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately |
-| 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, and its recall is unmeasured |
+| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **one decided control was not built**; nothing is deployed; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
+| 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework |
+| 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, and its recall is unmeasured. ⚠ **A live defect was erasing its detections until 2026-08-27** |
 
 ---
 
@@ -73,15 +99,18 @@ expects. **Remedy:** write it with the submission package, once indicator 3 unbl
 **What we have.**
 
 - `LICENSE` — **Apache-2.0**, repository-wide.
-- **Every in-scope source file carries an SPDX header** — 595 of 595, verified 2026-08-24 via
+- **Every in-scope source file carries an SPDX header** — **601 of 601**, verified 2026-09-03 via
   `scripts/ops/add_spdx_headers.py --check`. The check is wired into `tests/repo`, which is what makes
-  *"every"* an **enforced** claim rather than a dated one.
-- **153 packages across four dependency sets** — 35 declared Python, 98 transitive, 16 npm production,
+  *"every"* an **enforced** claim rather than a dated one — the count moves with the codebase and the
+  claim does not have to be re-earned.
+- **149 packages across four dependency sets** — 34 declared Python, 95 transitive, 16 npm production,
   4 container images — with **zero non-OSI and zero unknown licences**, and a disposition for each of
   the 10 entries carrying conditions beyond attribution
-  ([`dependency-licenses.md`](dependency-licenses.md)). ⚠ **Counted 2026-08-18**; removing the AWS SMS
-  path dropped `boto3` and its transitives, so the figure is ~4 lower and the scan needs re-running.
-  **The compliance claim is unaffected** — every departing package was Apache-2.0 or MIT.
+  ([`dependency-licenses.md`](dependency-licenses.md)). ⭐ **Regenerated 2026-09-03**, which replaced
+  the previous revision's estimate with a measurement: it predicted the AWS SMS removal would drop the
+  count *"by roughly four"*, and it dropped by exactly four.
+- ⭐ **26 packages moved version in a fortnight and no licence moved with them.** Stated because the
+  one time a licence *did* move under a stable pin is the finding this whole set exists around.
 - ⭐ **The container-image set is the one that mattered:** a floating `redis:7` tag followed upstream
   onto the non-OSI RSALv2/SSPLv1 line with nobody editing the file. Pinned, AGPLv3 elected from Redis
   8's tri-licence, and a **pin-drift check** added — because that is the shape the drift took.
@@ -153,6 +182,14 @@ a complainant records, an officer handles it — but **automatic transcription i
 grounds** and is not expected to be funded, so the one path the open provider cannot serve is the one
 path that does not run.
 
+⭐ **The consolidation paid a second time, for a different indicator.** Those two `call_llm()`
+functions were built so the model would be a configuration value. When the privacy work needed *a
+single place where all outbound text passes*, that place already existed — so pseudonymisation
+shipped as **two hooks rather than nine call sites**, with an opt-**out** default that covers a call
+site added tomorrow by an author who has never heard of it. ⚠ **The dependency runs one way:**
+consolidation made the privacy control cheap; it did not make it correct. Its recall was measured
+separately, and it is 87.5%, not 100%.
+
 ⚠ **One claim we narrowed, because the loose version is false.** `rasa-sdk` is **not** a type shim —
 49 modules import it and the orchestrator executes its form-validation dispatch. The true and
 sufficient claim is **no Rasa server, no Rasa NLU, no TensorFlow**, and `rasa-sdk` is Apache-2.0
@@ -165,6 +202,13 @@ anyway.
   provider rate limit caused by **our own prompt**, since cut 70%. The blocker is gone and the run has
   not been made — it needs owner-funded inference spend, deferred 2026-08-24
   ([`model-benchmarks.md`](model-benchmarks.md) §4).
+- ⚠ **And as of 2026-09-03 the *closed* column is stale as well**, for a reason worth stating because
+  it is a consequence of doing the privacy work properly. The benchmark harness calls **the product's
+  own functions** rather than a reimplementation — deliberately, and it is the right design — so when
+  redaction became the default at the chokepoint, the harness inherited it. **Every classification
+  figure now describes an input the system no longer sends.** Detection figures are unaffected.
+  ⭐ **This is the cheapest measurement in the pack and the only one blocked on neither money nor
+  absent data.** It needs one command, and nobody has run it.
 - ⛔ **SEAH detection recall is unmeasured for both candidates and cannot be measured from this
   repository** — the committed set holds no harassment reports, by decision. **The one gap money
   cannot close** ([`model-benchmarks.md`](model-benchmarks.md) §5).
@@ -246,20 +290,65 @@ of that equals a regulator**, and **ADB is the nearest candidate standard-setter
 **What we have.**
 
 - A written privacy assessment against Nepal's **Individual Privacy Act, 2075 (2018)**, with a
-  **13-leg data-flow inventory verified at file and line** and **18 findings**.
+  **13-leg data-flow inventory verified at file and line** and **21 findings** — plus a second
+  document, [`pii-egress-inventory.md`](pii-egress-inventory.md), that traces **every** path by which
+  grievance text leaves the agency's control and **ranks them by likelihood of real exposure rather
+  than by how alarming the destination sounds.**
+- ⭐ **Grievance text is pseudonymised before it leaves the process.** Applied at both `call_llm()`
+  chokepoints, **opt-out** rather than opt-in, pinned three ways including a `git grep` test that no
+  production site opts out. **Measured recall 87.5% (14/16)** — person names 7/7, phones 3/3,
+  addresses 4/6 — with the residual **named**: bare settlement names carrying no qualifier. A second
+  pass runs on what the model **returns**, so the summary that gets *stored* carries no names either.
+  ⚠ Read the two paragraphs after this list before quoting any of it.
+- **The logging boundary and the message broker closed with it.** A central filter on the logger
+  (not a handler — `_setup_logger` adds two, and a handler filter is missed by any added later)
+  redacting the **formatted** message, so `%s` arguments are covered; plus eleven call sites pruned
+  to a per-field rule. Celery payloads now carry a `grievance_id` and the task reads the narrative
+  from Postgres, so **the broker no longer holds grievance text at all** — the cause removed rather
+  than the store obscured.
 - An **architecturally enforced PII boundary**: the ticketing subsystem cannot decrypt complainant PII
   and has no accessor for a key — pinned by a test. One audited server-side decryption point.
 - Granular consent, recorded and refusable; **anonymous submission end-to-end**; self-hosted identity;
   an in-country SMS gateway with no cross-border fallback; a full audit trail; archiving implemented.
 - **Three storage-layer defects fixed 2026-08-19**: encryption at rest now **fails closed**; search
   tokens are HMAC rather than unsalted SHA-256 of enumerable phone numbers; backups **discard** an
-  unencryptable dump rather than writing it in the clear.
+  unencryptable dump rather than writing it in the clear. **A fourth, 2026-08-27:** the OTP had no
+  expiry of any kind and was not cleared on use; it now has a ten-minute window that **fails closed**
+  and is erased on success.
+
+⛔ **Three qualifications, and none of them is optional.**
+
+**1. Pseudonymised is not anonymised, and the difference is legal, not linguistic.** The mapping
+exists, so the output remains personal data. The claim that holds is *"only pseudonymised text
+crosses the border, and the re-identification key never leaves the process"* — the mapping is never
+persisted, never serialised and never returned to a caller, pinned by a test that fails the day some
+caller needs it to be.
+
+**2. The border is narrower, not closed.** Every classification still crosses it, permanently,
+because self-hosting is parked. **The transmission is the event that needs a lawful basis** — not the
+provider's retention, not whether it trains on the data, and **not what the text was scrubbed of
+first**. Redaction reduced the payload; it did not change the legal question.
+
+**3. None of it is running anywhere.** All of the above is on `integration/stage`. **Both servers run
+the unredacted behaviour**, and the next staging deploy is blocked on an unrelated database
+credential. *This is the single most important sentence in the indicator.*
 
 **Gaps.**
 
-- ⚠ **Grievance text leaves Nepal unredacted on every model call, permanently** — self-hosted
-  inference is parked, so there is no future state in which the transfer stops. Redaction is **not
-  started**.
+- 🔴 **The admin recap email still mails the entire grievance record — raw narrative, complainant
+  name, phone and address — to a configured list on every submission.** The replacement (a
+  pseudonymised summary plus a link into the platform, so the recipient reads the case behind
+  authentication with an audit trail rather than holding a copy in a mailbox with neither) was
+  **decided on 2026-08-27 and has not been written.** ⭐ **The egress inventory ranks this leg above
+  the model call**, so after a sprint spent on the model boundary this is now the largest unredacted
+  egress in the system. **A recorded decision is the state most easily mistaken for a finished one.**
+- ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
+  parked, so there is no future state in which the transfer stops.
+- ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
+  voice and there is no step between the microphone and the model where a redactor could run. **Only
+  moving the inference endpoint solves it.** No waveform is sent today solely because transcription
+  is switched off on cost grounds — **a funding decision standing in for a privacy control**, and
+  unparking voice re-opens an egress no layer built so far can close.
 - ⭐ **Erasure of a grievance record is deliberately not offered, and we would defend that rather than
   fix it.** This is a government accountability mechanism: the realistic threat is **an officer or
   contractor making an inconvenient complaint disappear**, not a complainant seeking privacy, so a
@@ -280,11 +369,25 @@ of that equals a regulator**, and **ADB is the nearest candidate standard-setter
   **provider's own data terms are recorded nowhere** — retention window, service-improvement use,
   prompt caching. Citing an unverified mitigation is worse than citing none.
 - ⚠ **Intake does not disclose that grievance text is sent to an external AI provider.** Consent is
-  genuinely collected, but not for that.
+  genuinely collected, but not for that. ⚠ The disclosure must say **pseudonymised**, never
+  *anonymised*, and must not imply the transfer stopped.
+- ⚠ **Nothing re-drives a classification that never ran.** Celery retry covers a task that ran and
+  raised, not a message lost from the broker, and there is no periodic sweep. Recorded here rather
+  than only as reliability because an uncategorised grievance is also one the keyword safeguarding
+  route never scored.
 
-**Remedy.** Ship redaction before go-live; write the retention schedule and build contact minimisation
-at closure; purge the demo rows carrying real contact details; obtain and file the provider terms; and
-get a legal review — the last of which we cannot resource ourselves.
+**Remedy.** **Build the admin-email change** and deploy the redaction layer — those two are the
+difference between a documented control and an operating one. Then: write the retention schedule and
+build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
+file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
+
+⚠ **One instruction we would pass to whoever reviews this next, because it is the most transferable
+thing the last fortnight produced.** The defects that mattered — a credential in the logs, a
+safeguarding flag being silently erased, Redis persisting narratives against four documents that said
+it did not — **were not in the data-flow inventory, and no re-reading of it would have found them.**
+They came from running the commands, from driving the code against a live database, and from the
+owner correcting a wrong model of the intake flow. **An inventory finds the boundaries. It does not
+tell you the leaks are somewhere else.**
 
 **Questions.**
 
@@ -312,6 +415,11 @@ get a legal review — the last of which we cannot resource ourselves.
   operational data protection authority, and does ADB impose data-protection requirements on an
   executing agency?**
   Without an answer we build to our own reading of an untested statute.
+- **Q-07-08 — Does pseudonymisation at the border change the assessment of a cross-border transfer,
+  given that we keep the mapping?**
+  We can state a measured recall figure and we are careful not to call the result anonymised. What we
+  do not know is whether that moves the analysis at all, or whether the transfer is assessed the same
+  way regardless of what the text was scrubbed of first.
 
 ---
 
@@ -329,9 +437,19 @@ true rather than aspirations.
 - ⚠ **Keycloak recorded no login, login-failure or admin events at all until 2026-08-24** — realm event
   storage defaults to off and nothing enabled it, so the platform's primary authentication evidence did
   not exist. Now enabled, but **forward-only** and **not yet applied to staging or production.**
+- ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
+  count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
+  own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and
+  it is what the officer portal ships. Two of the other three rows (`postcss`, `nanoid`) are in the
+  lockfile graph but **verified absent from the shipped image**, which is the distinction we would
+  rather make than inflate a count. **Python is unchanged at 6, and 2 of those 6 are unreachable.**
+  ⭐ *A count that holds still is not a tree that holds still* — which is the argument for the
+  scheduled scan below, and for deploying the thing that runs it.
 
-**Remedy.** Apply event logging to both deployed environments; write the governance and versioning
-documents once Q-08-01 and indicator 3 answer.
+**Remedy.** Bump `next` past the advisory range — it is one move and it takes three of the four npm
+rows with it. Apply event logging to both deployed environments; deploy `ops` so the scans run
+somewhere other than a laptop; write the governance and versioning documents once Q-08-01 and
+indicator 3 answer.
 
 **Questions.**
 
@@ -362,6 +480,31 @@ correcting a ticket's classification (`api/routers/tickets/crud.py:523`) re-reso
 standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixed":** a grievance the
 *complainant* routed to SEAH stays there regardless of categories. Only a machine flag is reversible.
 
+> ### 🔴 Until 2026-08-27, one of the two detection paths was silently erasing the other
+>
+> **This belongs at the top of the indicator rather than in the gap list, because it is the strongest
+> evidence in this pack about how the rest of it was found.**
+>
+> The asynchronous model check writes its result to the grievance record seconds after dispatch —
+> during the contact and OTP steps. The **final submit** then collected a tracker slot still holding
+> the **keyword** detector's earlier answer and wrote `False` over the model's `True`. The ticket's
+> SEAH flag is read from that column, so **a harassment report was silently routed to the ordinary
+> queue.**
+>
+> ⭐ **It failed in precisely the case the second detector exists for** — the one where keywords miss
+> and the model catches. Two paths described as independent were not: one was overwriting the other,
+> and always in the direction of *less* protection.
+>
+> **Fixed:** the flag only ever escalates, expressed **in SQL rather than read-modify-write**, because
+> reading then OR-ing leaves a window and the consequence of losing that race is a missed harassment
+> report. Driven end to end against the live database.
+>
+> ⚠ **Two things follow that are worth more than the fix.** First, **no benchmark would have caught
+> it**: every detection figure we publish scores the *model*, and all of them were consistent with a
+> pipeline that routed nothing. **Detector accuracy is necessary and it is not sufficient.** Second,
+> it was found because **the owner corrected a claim we had made** — that the model-based leg barely
+> mattered. It was the most consequential find of the programme and it came from being wrong out loud.
+
 **Gaps.**
 
 - ⚠ **There is no explicit "not SEAH — return to the standard queue" action.** The capability exists
@@ -374,9 +517,17 @@ standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixe
   return.
 - ⛔ **Detection recall is unmeasured** — the metric the design exists to optimise is the one we cannot
   measure here.
+- ⚠ **There is no end-to-end measurement at all** — grievance in, correctly-routed ticket out. Every
+  number we have scores a function. The defect above lived in the gap between the two.
+- ⚠ **The detector's own graded confidence is computed on every call and discarded three times.** It
+  is never persisted, never reaches the ticket, and one code path reads it and always receives its
+  default — so **a queue that by design holds deliberate false positives is presented with no ordering
+  signal.** Plumbing, not a prompt change, and queued.
 
 **Remedy.** Add the explicit return action with its own audit event and a test pinning the
-flag-clearing; instrument the round-trip; measure recall **before** touching the detection prompt.
+flag-clearing; instrument the round-trip; persist the confidence and order the queue by it; build an
+end-to-end routing test; and measure recall **before** touching the detection prompt — the benchmark
+as it stands would reward the wrong change.
 
 **Questions.**
 
@@ -402,3 +553,7 @@ flag-clearing; instrument the round-trip; measure recall **before** touching the
 - **Q-00-05 — What are we missing?**
   Anything in the current Standard revision, or the AI-systems guidance, that we would not find by
   reading the published documents.
+- **Q-00-06 — Does the assessment look at the repository or at a running deployment?**
+  Several of our controls — the redaction layer, the licence and CVE scans, authentication event
+  logging — are built and tested but run nowhere except a development stack. We would rather know
+  whether that distinction is material to an assessor than discover it matters after a submission.
