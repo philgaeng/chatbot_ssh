@@ -54,13 +54,17 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
    which makes every privacy exposure prospective, and puts the remaining work in the window where it
    is a **go-live precondition rather than a remediation**.
 
-⛔ **And one qualification that reaches most of the above: the recent work is on a branch, not on a
-server.** The redaction layer, the licence and CVE scans, the ops health monitor and authentication
-event logging are all built and tested, and **none of them has run anywhere except a development
-stack.** There is no continuous deployment on this branch — a server changes only when someone runs a
-deploy — and the next staging deploy is currently blocked on an unrelated database credential.
-**We would rather you heard that from us than inferred it**, and if the assessment distinguishes a
-repository from a running system we would like to know early (Q-00-06).
+⚠ **And one qualification, which we would rather you heard from us than inferred.** Verified on the
+staging host on 2026-09-03: **redaction is genuinely live there** — the module is in the running
+image — along with the log filter, the broker fix and the safeguarding correction. **Three things are
+not:** the email-boundary fixes, which are a few hours newer than that deploy; authentication event
+logging, which is a realm setting a deploy does not carry and which still records **zero** events;
+and the `ops` monitor's nightly scans, which now have a home on staging and **have not yet had a
+night**. ⛔ **DOR production runs none of it**, and we could not reach it to check.
+
+⭐ **The distinction we would ask you to hold us to is *deployed* versus *has run*.** A scheduled job
+on a server is not yet evidence. If the assessment distinguishes a repository from a running system,
+we would like to know early (Q-00-06).
 
 ---
 

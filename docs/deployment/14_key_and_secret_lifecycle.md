@@ -30,7 +30,7 @@ Impact, cadence and procedure for every secret this project holds. `Last rotated
 | `DB_ENCRYPTION_KEY` | Backend PII vault encryption (`backend` **only**, T3-04) | ⭐ **Permanent PII loss** — encrypted columns unreadable | Decrypt all stored PII | ⚠ Only on compromise | ⚠ **Not a rotation — a migration.** Every pgcrypto value must be decrypted with the old key and re-encrypted with the new. **No script exists.** See §2 | unknown — treat as never |
 | `SEARCH_TOKEN_PEPPER` | `base_manager.py` HMAC lookup tokens (phone / email search) | Stored lookup tokens become unmatchable — search returns nothing | Offline brute-force of lookup tokens: confirm whether a given phone/email is in the system | ⚠ Only on compromise | Change value, then **run [`../../scripts/database/rehash_search_tokens.py`](../../scripts/database/rehash_search_tokens.py) on that box in the same window.** ⚠ Skipping it makes lookup return nothing — **silently, raising nothing** | unknown — treat as never |
 | `POSTGRES_PASSWORD` | Postgres; all services | DB outage | Full DB access | 12 months / on personnel change | `ALTER ROLE … PASSWORD`, `make secrets-edit`, `make env-local`, restart the stack — **and recreate Keycloak separately**, it is behind the `auth` profile so a plain `up -d` leaves it on the old credential until it next restarts. ⚠ Use an **alphanumeric** value: it is embedded in `DATABASE_URL`, where `@ : / # %` corrupt the connection string | ⚠ **2026-08-21 — LOCAL STACK ONLY.** Staging and DOR prod are **not** rotated and still hold the pre-rotation credential. The old value remains in git history; rotation is what makes those copies worthless. ⭐ This is the first entry in this column that is true rather than aspirational: until 2026-08-21 eleven compose literals overrode `env.local`, so rotating this variable changed nothing and a date here would have been a false record. See [`db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md) |
-| `OPS_DB_PASSWORD` | `ops` container (`ops_app` scoped role) | Monitoring can't connect | Read `ops.*` + reporting tables | 12 months / on personnel change | `make secrets-edit` + `make env-local`, then **`ALTER ROLE ops_app PASSWORD` to the same value on every host that runs `ops`**, then recreate the container. ⚠ **It is its own credential — never reuse `POSTGRES_PASSWORD`.** ⚠ **Deploying it to a new host is not just a rotation — see §5.1**, which is what staging and DOR prod will need | **2026-08-24 — LOCAL STACK ONLY.** ⚠ This row previously read *"As `POSTGRES_PASSWORD`, for the scoped role"* and the variable **did not exist anywhere** — not in `.env.shared`, not in `secrets.enc.env`. `ops/config.py` fell back to `POSTGRES_PASSWORD` (`ops_db_password or postgres_password`), so `ops` authenticated as **`ops_app` using the `user` role's credential**. The 2026-08-21 `POSTGRES_PASSWORD` rotation did not touch `ops_app`, and monitoring went blind for three days — 253 auth failures, every report row `n/a`, container still reporting `healthy`. ⭐ **This is the rotation trap this table exists to prevent, and the table itself was carrying it.** Now a distinct 40-char alphanumeric secret. Staging and DOR prod are not rotated and do not run `ops`. See [`ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md) |
+| `OPS_DB_PASSWORD` | `ops` container (`ops_app` scoped role) | Monitoring can't connect | Read `ops.*` + reporting tables | 12 months / on personnel change | `make secrets-edit` + `make env-local`, then **`ALTER ROLE ops_app PASSWORD` to the same value on every host that runs `ops`**, then recreate the container. ⚠ **It is its own credential — never reuse `POSTGRES_PASSWORD`.** ⚠ **Deploying it to a new host is not just a rotation — see §5.1**, which is what staging and DOR prod will need | **2026-08-24 — LOCAL STACK ONLY.** ⚠ This row previously read *"As `POSTGRES_PASSWORD`, for the scoped role"* and the variable **did not exist anywhere** — not in `.env.shared`, not in `secrets.enc.env`. `ops/config.py` fell back to `POSTGRES_PASSWORD` (`ops_db_password or postgres_password`), so `ops` authenticated as **`ops_app` using the `user` role's credential**. The 2026-08-21 `POSTGRES_PASSWORD` rotation did not touch `ops_app`, and monitoring went blind for three days — 253 auth failures, every report row `n/a`, container still reporting `healthy`. ⭐ **This is the rotation trap this table exists to prevent, and the table itself was carrying it.** Now a distinct 40-char alphanumeric secret. ⭐ **AWS staging: set 2026-09-03** — same value (digest verified identical to `secrets.enc.env` on both sides, never printed), `ALTER ROLE ops_app` run there, `selfcheck` exit 0, first health rows recorded. It had run **blind for its whole life on that host** first: see §5.1. **DOR prod still does not run `ops`.** ⚠ One consequence, deliberate and worth an owner's eye: `ops_app` now has **one password across local and staging**, which is what a single `secrets.enc.env` means — the same blast-radius trade [`18_…`](18_sops_migration_handover.md) flags for the Keycloak secrets. See [`ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md) |
 | `REDIS_PASSWORD` | Celery broker/result + Socket.IO bus | Broker outage | Task injection / inspection | 6–12 months / on suspicion | `make secrets-edit`, `make env-local`, then recreate Redis **and every client** — the compose interpolation carries it into `requirepass` and into all 14 `redis://` URLs, so one `up -d` does both. ⚠ Use an **alphanumeric** value: it is embedded in `redis://:PASSWORD@redis:6379/N`. ⚠ 🔴 **Corrected 2026-08-27 (D-63): a restart does NOT drop queued tasks.** Redis has no *volume*, but RDB snapshotting is on and `/data/dump.rdb` is reloaded on restart (measured: *"keys loaded: 174"*). Checking `LLEN` first is still worth doing, but for capacity rather than for loss — recreating the container (`compose down`/`up`), not restarting it, is what discards the queue | ⚠ **2026-08-23 — LOCAL STACK ONLY.** Rotated because a history scan found the previous value in **public git history**, in 9 now-deleted files (`scripts/local/redis.conf`, `scripts/servers/launch_servers.sh` and others). The wiring was always correct — `${REDIS_PASSWORD:-}` interpolation, no compose literal — so unlike `POSTGRES_PASSWORD` this rotation was about an exposed **value**, not an inert variable. Staging and DOR prod still hold the exposed credential. See [`secrets-in-public-git-history.md`](../sprints/followups/secrets-in-public-git-history.md) |
 | `TICKETING_SECRET_KEY` | chatbot ↔ ticketing + ticketing → backend webhooks | Integration outage | Forged webhooks / API calls | 6–12 months / on suspicion | `python -c "import secrets; print(secrets.token_urlsafe(32))"`, **update both sides together** | unknown — treat as never |
 | `MESSAGING_API_KEY` | Messaging API `x-api-key` — ⚠ **also guards `GET /api/grievance/{id}`, which serves plaintext PII** | Messaging outage | Send messages as the system; **read complainant PII** | 6–12 months / on suspicion | Generate, update caller and callee **atomically** | unknown — treat as never |
@@ -112,16 +112,53 @@ Least-privilege roles reduce blast radius if any one service is compromised. `op
 
 **Three steps, and two of them are not the secret.**
 
-**`ops` runs on neither server today.** When it does, `make env-local` alone will not make it work,
-and its failure mode is the one this project has already paid for: the container reports `healthy`
-while writing nothing.
+> ### ⭐ Run on AWS staging 2026-09-03 — and the hazard fired first, exactly as written
+>
+> `ops` reached staging in that day's first `make aws-deploy` (it is in `AWS_DEPLOY_SERVICES`), and
+> **nobody ran these steps, because until that moment they did not apply.** This section still said
+> *"`ops` runs on neither server today"*, so the deploy read as complete.
+>
+> The result, five hours later: **309 consecutive healthcheck failures and `ops.system_health_checks`
+> empty — `health_rows=0`, not one row in the container's entire life** — while every check ran on
+> schedule and every job logged `executed successfully`. `ops_app` existed and could log in; the ops
+> migrations were at head; only the password was never set, so `ops/config.py` fell back to
+> `POSTGRES_PASSWORD` and authenticated as the wrong principal.
+>
+> The sequence below was then run against that host and it worked: `selfcheck` exit 0, and the first
+> five rows (`endpoint`, `db_connectivity`, `queue_depth`, `grm_beat_liveness`, `redis`) landed three
+> minutes later, all `ok`.
+>
+> ⚠ **DOR prod has not run it and does not yet run `ops`.** This section is live for that host.
+
+**When a host first runs `ops`, `make env-local` alone will not make it work**, and its failure mode is
+the one this project has now paid for twice: the container reports `healthy` while writing nothing.
 
 A secret in `secrets.enc.env` carries **one value for every host**, but a **database role's password
 lives in the database, per host**. Publishing the secret does not set the role. All three steps, in
 this order, on each host:
 
+⚠ **Step 1 as written is wrong for any host with host-only variables — which is both of them.**
+`make env-local` regenerates `env.local` from the two committed halves and **silently drops everything
+absent from them**: measured at **thirty variables on staging**, four of them credentials including
+`DOIT_SMS_BEARER_TOKEN`, the Government of Nepal SMS gateway. See
+[`18_… §5a Hazard 2`](18_sops_migration_handover.md). On 2026-09-03 staging was fixed by appending
+**the single variable** instead, which is the safe form until that host's migration is done:
+
 ```bash
-# 1. The secret reaches the host (adds OPS_DB_PASSWORD to that host's env.local)
+# 1-alt (used on staging 2026-09-03). Back up first — env.local is gitignored, there is no other copy.
+cp -a env.local "env.local.pre-ops-$(date +%Y%m%d-%H%M%S)"
+# Decrypt on the workstation, pipe over ssh, never print or paste the value:
+#   sops -d secrets.enc.env | awk -F= '/^OPS_DB_PASSWORD=/{...}' | ssh <host> '... read -r P ...'
+# Then confirm by DIGEST, never by printing, and that the name count rose by exactly one (67 -> 68).
+```
+
+⚠ **Compose reads `${OPS_DB_PASSWORD:-}` from `--env-file env.local`** (`docker-compose.grm.yml:278`,
+an `environment:` entry, which beats `env_file:`). Appending to `env.local` therefore satisfies both
+paths — but the container must be **recreated**, not restarted, for interpolation to re-run.
+
+```bash
+# 1. The secret reaches the host (adds OPS_DB_PASSWORD to that host's env.local).
+#    ⚠ Only on a host whose SOPS migration is complete — otherwise use 1-alt above.
 make env-local
 
 # 2. Set the ROLE to match. Reads the value back out of env.local — never retype or paste it.

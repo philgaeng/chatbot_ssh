@@ -15,34 +15,26 @@
 
 ---
 
-## What changed since 2026-08-24
-
-Three sub-sprints closed. **The largest gap in the previous revision is substantially closed, and two
-new ones opened in its place** — one of them created by the same work.
-
-| | |
-|---|---|
-| ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
-| ✅ **All three email legs that carried the whole grievance record are closed** — a submission receipt, a follow-up request, and a status update to an office list derived from **municipality** rather than the case's cast. ⭐ The third was found only by fixing the second, and **none looked wrong at its own call site** | Indicator 7 |
-| ✅ **Fixed — a live safeguarding defect in which the final submit erased the model's SEAH detections**, in exactly the case the model exists for. ⚠ It had been live for months, and **how it was found** is the strongest methodological evidence in this pack | Indicator 9 |
-| ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
-| ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
-| ⚠ **The npm vulnerability count held at 4 and every finding behind it changed.** `next` now carries nine advisories of its own, two of them SSRF, in the framework the officer portal ships | Indicator 8 |
-
----
-
 ## How to read this
 
 Two of the nine indicators have real gaps, **one of which nobody on the engineering team can close**,
 and the AI-specific reading of indicator 4 is the substance of the meeting.
 
-⛔ **One caveat qualifies every indicator, and it got heavier this fortnight: almost none of this
-evidence comes from a deployed host.** The licence scan, the CVE scan, the platform-independence CI
-job and the ops monitor all exist and have been run — **on a development stack, by hand.** `ops` is on
-neither server. **And now the privacy controls are in the same position**: the redaction layer that
-answers the largest indicator-7 finding is on a branch, not on a server. *A control that has not run
-where the data is is a control in the same sense that a plan is a building.* This is stated once here
-and not repeated under every indicator.
+⚠ **One caveat qualifies several indicators at once, and it is narrower than it was.** Not every
+control here runs where the data is. **Verified on the staging host, 2026-09-03:**
+
+| | Verified | |
+|---|---|---|
+| **Redaction, log filter, broker fix, safeguarding escalate-only** | ✅ **running on staging** | `pii_service.py` is in the running image, and the model-call chokepoint resolves `redact` |
+| **`ops` monitor** | 🟡 **deployed, and has produced nothing yet** | The container is healthy and its schema is migrated. `ops.system_health_checks` and `ops.dependency_findings` are **empty** — the scans are nightly and none has fired |
+| **Keycloak authentication events** | ❌ **still not enabled on staging** | `keycloak.event_entity` holds **0 rows** |
+| **The email-boundary fixes** (indicator 7) | ❌ **not deployed** | They post-date the staging checkout |
+| **DOR production** | ⚠ **not verified** | It tracks `main` and is reachable only over VPN. **Treat every row above as false for production** |
+
+⭐ **The distinction that matters, and it is the one people skip: *deployed* is not *has run*.**
+`ops` is now on a server, which retires the flat claim that it is on neither — and it has still
+produced no evidence, because a nightly job that has not had a night is a scheduled job, not a
+control. **The pack states the second thing wherever it states the first.**
 
 ⭐ **One fact reframes the privacy half: no genuine grievance has ever been processed.** Every record
 is seed data or a demo dummy, so every exposure is **prospective** and redaction is a **go-live
@@ -70,7 +62,7 @@ never leaves the process"* is the strongest form available.
 | # | Indicator | Status | What is missing |
 |---|---|---|---|
 | 1 | Relevance to SDGs | ✅ Compliant | Needs writing up, not building |
-| 2 | Open licensing | 🟢 Substantially | The licence choice is provisional; the continuous scan has never run on a deployed host |
+| 2 | Open licensing | 🟢 Substantially | The licence choice is provisional; the scan is now scheduled on staging but **has not yet produced any output** |
 | 3 | Ownership | 🔴 **Blocked** | No IP determination, so **no copyright holder and no submission**. Not closable by this team |
 | 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary. ⚠ The **closed** column is now stale too |
 | 5 | Documentation | ✅ Compliant | — |
@@ -120,11 +112,17 @@ expects. **Remedy:** write it with the submission package, once indicator 3 unbl
 - ⚠ **The licence choice is provisional.** Apache-2.0 was applied so the repository would not sit
   unlicensed; it was not chosen against ADB's preferences.
 - ⚠ **`NOTICE` names no copyright holder** — deliberate, blocked on indicator 3.
-- ⚠ **The nightly licence scan has never run on a deployed host.** `ops` is on neither server. **Not
-  a continuous guarantee, and must not be described as one.**
+- ⚠ **The nightly licence scan has still never run on a deployed host** — but the reason changed on
+  2026-09-03. `ops` **is now deployed to staging**, healthy, with its schema migrated; and
+  `ops.dependency_findings` is **empty**, because the job is nightly and has not yet had a night.
+  ⭐ **Deployed is not has-run.** The claim to make is *"the scan is scheduled where the data is,
+  and has produced no evidence yet"* — **not a continuous guarantee, and still must not be described
+  as one.**
+- ⚠ **DOR production has no `ops` at all**, and was not reachable to verify from here.
 
-**Remedy.** Deploy `ops` to staging, which turns the scan from an artefact into the continuous control
-this indicator asks for.
+**Remedy.** Let the staging scan run and cite its first real output — at that point this becomes the
+continuous control the indicator asks for, rather than a dated artefact. Then deploy `ops` to
+production.
 
 **Questions.**
 
@@ -336,9 +334,11 @@ because self-hosting is parked. **The transmission is the event that needs a law
 provider's retention, not whether it trains on the data, and **not what the text was scrubbed of
 first**. Redaction reduced the payload; it did not change the legal question.
 
-**3. None of it is running anywhere.** All of the above is on `integration/stage`. **Both servers run
-the unredacted behaviour**, and the next staging deploy is blocked on an unrelated database
-credential. *This is the single most important sentence in the indicator.*
+**3. Live on staging; nowhere else.** Verified in the running image on 2026-09-03: redaction, the log
+filter, the broker fix and the safeguarding escalate-only fix are deployed to staging. **The
+email-boundary fixes are not** — they are hours newer than that deploy. **DOR production runs none of
+it and was not reachable to verify.** *Read every claim in this indicator as true of staging, unproven
+of production.*
 
 **Gaps.**
 
@@ -386,8 +386,9 @@ credential. *This is the single most important sentence in the indicator.*
   than only as reliability because an uncategorised grievance is also one the keyword safeguarding
   route never scored.
 
-**Remedy.** **Deploy.** That is now the whole of the difference between a documented control and an
-operating one — every privacy control above is written, tested and running nowhere. Then: write the retention schedule and
+**Remedy.** **Deploy the rest, and verify production.** Staging has most of it; the email boundary is
+a deploy behind, and production is an unknown rather than a known-bad — which is worse, and cheaper to
+fix than anything else on this page. Then: write the retention schedule and
 build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
 file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
 
@@ -446,7 +447,9 @@ true rather than aspirations.
   commitments nobody has agreed to, on a project whose IP ownership is formally open (Q-08-01).
 - ⚠ **Keycloak recorded no login, login-failure or admin events at all until 2026-08-24** — realm event
   storage defaults to off and nothing enabled it, so the platform's primary authentication evidence did
-  not exist. Now enabled, but **forward-only** and **not yet applied to staging or production.**
+  not exist. Now enabled, but **forward-only**, and **still not applied to staging**: verified
+  2026-09-03, `keycloak.event_entity` on the staging host holds **0 rows**. Production unverified.
+  ⚠ **So the platform's primary authentication evidence still does not exist anywhere a user logs in.**
 - ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
   count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
   own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and
@@ -457,9 +460,9 @@ true rather than aspirations.
   scheduled scan below, and for deploying the thing that runs it.
 
 **Remedy.** Bump `next` past the advisory range — it is one move and it takes three of the four npm
-rows with it. Apply event logging to both deployed environments; deploy `ops` so the scans run
-somewhere other than a laptop; write the governance and versioning documents once Q-08-01 and
-indicator 3 answer.
+rows with it. Apply event logging to both deployed environments — it is a realm setting, not a
+deploy, which is why a deploy did not bring it. Write the governance and versioning documents once
+Q-08-01 and indicator 3 answer.
 
 **Questions.**
 

@@ -31,9 +31,12 @@ Four sub-sprints, 31 tickets, with a test ledger, a decision register and a devi
 Alongside them, three unplanned repairs in the week of 2026-08-19 to 08-24: the storage-layer privacy
 defects, the ops monitor, and the secret inventory.
 
-⚠ **Nothing in this table is deployed.** All of it is on `integration/stage`; both servers run the
-pre-sprint behaviour. That distinction is doing a lot of work throughout this document and it is
-easy to lose.
+⚠ **Deployment is a split answer, and the split is doing a lot of work throughout this document.**
+Verified on the staging host 2026-09-03: Sprints 0–3 are **live on staging** — redaction, the log
+filter, the broker fix and the safeguarding escalate-only fix are all in the running image. The
+email-boundary fixes are **hours newer than that deploy and are on no host**. **DOR production runs
+none of it** and was not reachable to check. ⭐ And *deployed* is still not *has run*: `ops` reached
+staging the same day and has produced no output, because its jobs are nightly.
 
 ---
 
@@ -146,9 +149,11 @@ These are gaps, so they are assessed properly in
   ranks that leg *above* the model call. **A recorded decision is the state most easily mistaken for
   a finished one.**
 - 🔴 **Deployment** — and it now carries more weight than it did. Every redaction control above is on
-  a branch. `ops` is on neither server, so the licence scan, the CVE scan and the health monitor run
-  nowhere but a development stack; the CI platform-independence job has never executed in CI; and
-  Keycloak event logging is enabled only locally.
+  a branch. ⭐ **Partly overtaken 2026-09-03:** staging now runs the redaction layer, the log filter,
+  the broker fix and the safeguarding escalate-only fix — verified in the running image — and `ops`
+  reached staging too, though it has produced no output yet. **Still true:** the email-boundary fixes
+  post-date that deploy, the CI platform-independence job has never executed in CI, Keycloak event
+  logging is still off on staging (0 rows), and **DOR production has none of it.**
 - **The open accuracy column** — unblocked, unmeasured, and waiting on a spending decision. ⚠ **The
   closed column now needs re-running too**, for a reason that did not exist a fortnight ago: the
   benchmark harness calls the product's own function, and that function now redacts by default.

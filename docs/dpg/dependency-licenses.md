@@ -158,10 +158,12 @@ artefact:
   CVE scan, writing to `ops.dependency_findings` with `source='pip-licenses'`. Report-only; it never
   blocks a deploy.
 
-  ⚠ **Scheduled is not the same as running, and it has never run on a deployed host.** The `ops`
-  container is **not deployed to staging or DOR prod**, so this executes only where a development
-  stack happens to be up at 01:50. **Treat this report's freshness as the date at the top, never as a
-  nightly guarantee.**
+  ⚠ **Scheduled is not the same as running, and it has still never run on a deployed host — but
+  the reason changed on 2026-09-03.** The `ops` container **is now deployed to staging**, healthy,
+  with its schema migrated; `ops.dependency_findings` there is **empty**, because the job is nightly
+  and has not yet had a night. DOR production has no `ops` at all. **Treat this report's freshness as
+  the date at the top, never as a nightly guarantee** — and note that *deployed* and *has run* are
+  two claims, not one.
 * Classification lives in `ops/licences.py` — pure logic, unit-tested by
   `tests/repo/test_licence_scan.py`. Anything unrecognised surfaces as a **high** finding rather
   than passing silently, which is the only failure direction that is safe.
@@ -472,5 +474,6 @@ a characterization net over the intake path first, exactly as was done for the L
 | 🟡 | **`python-dotenv`, `setuptools`** | Free bumps, no constraint. Do them with anything else |
 | ⚪ | **`sanic-cors`, `wheel`** | **Deliberately last.** Unreachable, and doing them first is how a remediation plan optimises the count over the risk |
 
-⚠ **`ops`'s nightly scan is what should be finding all of this, and it is on neither server** — see
-[Staying true](#staying-true). Everything above was found by a person running a command by hand.
+⚠ **`ops`'s nightly scan is what should be finding all of this. It is now on staging and has
+produced nothing yet** — see [Staying true](#staying-true). Everything above was found by a person
+running a command by hand.
