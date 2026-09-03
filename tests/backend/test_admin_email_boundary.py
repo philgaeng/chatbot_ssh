@@ -23,8 +23,15 @@ import pytest
 
 from backend.actions.services.messaging import recap_email
 from backend.config.constants import EMAIL_TEMPLATES
+from backend.services import admin_notifications
 
-ADMIN_BODIES = ("GRIEVANCE_RECAP_ADMIN_BODY", "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP")
+# All three legs that carried the whole record. F-19 was the first two, F-22 the third — and the
+# third lives in `backend/api/`, which is why the control is shared rather than duplicated.
+ADMIN_BODIES = (
+    "GRIEVANCE_RECAP_ADMIN_BODY",
+    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP",
+    "GRIEVANCE_STATUS_UPDATE_BODY",
+)
 
 # Anything an admin body must never render. Not an exhaustive PII list — these are the
 # exact fields the pre-fix templates carried.
@@ -53,6 +60,8 @@ def _grievance(**overrides: Any) -> Dict[str, Any]:
         "grievance_categories": ["Air Pollution - Dust"],
         "grievance_location": "Jhapa",
         "grievance_summary": "<PERSON_1> reports dust entering the house.",
+        "grievance_status": "UNDER_REVIEW",
+        "grievance_status_update_date": "2026-09-03",
         "grievance_description": NARRATIVE,
         "complainant_full_name": "Ram Bahadur Shrestha",
         "complainant_name": "Ram Bahadur Shrestha",
@@ -74,7 +83,7 @@ def test_admin_template_references_only_safe_fields(body_name: str, language: st
     """Parses the template string. Adding {grievance_description} fails the build here."""
     template = EMAIL_TEMPLATES[body_name][language]
     referenced = set(PLACEHOLDER.findall(template))
-    allowed = set(recap_email.ADMIN_SAFE_FIELDS) | {"portal_link_html"}
+    allowed = set(admin_notifications.ADMIN_SAFE_FIELDS) | {"portal_link_html"}
     assert referenced <= allowed, (
         f"{body_name}[{language}] references fields outside ADMIN_SAFE_FIELDS: "
         f"{sorted(referenced - allowed)}"
@@ -116,15 +125,15 @@ def test_the_complainant_body_still_carries_their_own_record() -> None:
 
 
 def test_projection_drops_every_unsafe_key() -> None:
-    safe = recap_email._project_admin_fields(_grievance(), not_provided="n/a")
-    assert set(safe) == set(recap_email.ADMIN_SAFE_FIELDS) | {"portal_link_html"}
+    safe = admin_notifications.project_admin_fields(_grievance(), not_provided="n/a")
+    assert set(safe) == set(admin_notifications.ADMIN_SAFE_FIELDS) | {"portal_link_html"}
     rendered = " ".join(str(v) for v in safe.values())
     for secret in (NARRATIVE, "Ram Bahadur Shrestha", "9812345678", "ram@example.com"):
         assert secret not in rendered
 
 
 def test_projection_renders_category_lists_as_text() -> None:
-    safe = recap_email._project_admin_fields(
+    safe = admin_notifications.project_admin_fields(
         _grievance(grievance_categories=["A", "B"]), not_provided="n/a"
     )
     assert safe["grievance_categories"] == "A, B"
@@ -148,7 +157,7 @@ def _send(monkeypatch: pytest.MonkeyPatch, data: Dict[str, Any], body_name: str)
     return sent
 
 
-@pytest.mark.parametrize("body_name", ADMIN_BODIES)
+@pytest.mark.parametrize("body_name", ADMIN_BODIES[:2])
 def test_a_sent_admin_email_contains_no_pii(
     monkeypatch: pytest.MonkeyPatch, body_name: str
 ) -> None:
@@ -196,12 +205,65 @@ def test_a_template_referencing_an_unsafe_field_refuses_to_send(
 
 
 def test_no_portal_url_yields_no_fabricated_link(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(recap_email, "GRM_PORTAL_BASE_URL", "")
-    html = recap_email._admin_portal_link_html()
+    monkeypatch.setattr(admin_notifications, "GRM_PORTAL_BASE_URL", "")
+    html = admin_notifications.portal_link_html()
     assert "href" not in html and "http" not in html
 
 
 def test_a_configured_portal_url_becomes_a_link(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(recap_email, "GRM_PORTAL_BASE_URL", "https://grm.example.org/")
-    html = recap_email._admin_portal_link_html()
+    monkeypatch.setattr(admin_notifications, "GRM_PORTAL_BASE_URL", "https://grm.example.org/")
+    html = admin_notifications.portal_link_html()
     assert 'href="https://grm.example.org/tickets"' in html
+
+
+# ── F-22: the office leg, in backend/api/ ───────────────────────────────────────
+
+
+@pytest.mark.parametrize("body_name", ADMIN_BODIES)
+def test_build_admin_email_renders_no_pii(body_name: str) -> None:
+    """The shared builder, exercised for every template including the office one. This is the
+    test that would have failed before F-22 was fixed — the two above could not reach it,
+    because the office leg never went through `recap_email` at all."""
+    built = admin_notifications.build_admin_email(body_name, _grievance())
+    assert built is not None
+    subject, body = built
+    for secret in (NARRATIVE, "Ram Bahadur Shrestha", "9812345678", "ram@example.com", "Ward 4"):
+        assert secret not in body, f"{body_name} leaked {secret!r}"
+        assert secret not in subject
+
+
+@pytest.mark.parametrize("body_name", ADMIN_BODIES)
+def test_build_admin_email_refuses_a_sensitive_case(body_name: str) -> None:
+    built = admin_notifications.build_admin_email(
+        body_name, _grievance(grievance_sensitive_issue=True)
+    )
+    assert built is None
+
+
+@pytest.mark.parametrize("body_name", ADMIN_BODIES)
+def test_build_admin_email_fails_closed_on_unknown_sensitivity(body_name: str) -> None:
+    data = _grievance()
+    del data["grievance_sensitive_issue"]
+    assert admin_notifications.build_admin_email(body_name, data) is None
+
+
+def test_complainant_id_is_not_a_safe_field() -> None:
+    """It is pseudonymous, not anonymous, and a direct index into the PII record. The pre-fix
+    office template carried it; keeping it would have looked harmless."""
+    assert "complainant_id" not in admin_notifications.ADMIN_SAFE_FIELDS
+
+
+def test_the_office_status_route_uses_the_shared_boundary() -> None:
+    """Pins the wiring, not just the helper. A helper-only test passes while the call site
+    formats the template directly — which is exactly what the call site used to do."""
+    import inspect
+
+    from backend.api.routers import grievance as grievance_router
+
+    src = inspect.getsource(grievance_router._send_status_update_notifications)
+    assert "build_admin_email(" in src, "the office leg must go through the shared boundary"
+    assert "EMAIL_TEMPLATES[" not in src, (
+        "the office leg formats a template directly again — that is F-22"
+    )
+    for pii in ("complainant_full_name", "complainant_address", "grievance_description"):
+        assert pii not in src, f"{pii} is back in the office notification payload"

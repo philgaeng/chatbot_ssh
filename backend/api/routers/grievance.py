@@ -16,7 +16,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from backend.clients.messaging_api import send_email as send_email_via_api
 from backend.clients.messaging_api import send_sms as send_sms_via_api
-from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
+from backend.config.constants import DIC_SMS_TEMPLATES
+from backend.services.admin_notifications import build_admin_email
 from backend.services.database_services.grievance_manager import GrievanceDbManager
 
 router = APIRouter()
@@ -302,39 +303,49 @@ def _send_status_update_notifications(
         if created_by:
             base_context["office_user"] = created_by
 
+        # ⚠ F-22. This email used to carry the whole record — narrative, name, phone,
+        # municipality, village, address — to `office_emails`, which is resolved from the
+        # grievance's MUNICIPALITY and not from the case's assigned cast. Everything that
+        # decides what may be sent now lives in `backend.services.admin_notifications`,
+        # shared with the two chatbot-side paths that had the same defect (F-19): one
+        # allow-list and one sensitivity gate, not three copies drifting apart.
         email_data: Dict[str, Any] = {
             "grievance_id": grievance_id,
-            "complainant_id": grievance.get("complainant_id"),
             "grievance_status": status_code,
             "grievance_timeline": grievance.get("grievance_timeline"),
-            "complainant_full_name": grievance.get("complainant_full_name"),
-            "complainant_phone": complainant_phone,
-            "municipality": grievance.get("complainant_municipality"),
-            "village": grievance.get("complainant_village"),
-            "address": grievance.get("complainant_address"),
-            "grievance_details": grievance.get("grievance_description"),
             "grievance_summary": grievance.get("grievance_summary"),
             "grievance_categories": grievance.get("grievance_categories"),
             "grievance_status_update_date": grievance.get("grievance_status_update_date", "N/A"),
+            # Read from the stored row, never inferred. `build_admin_email` treats an ABSENT
+            # key as sensitive, so a query that stops returning this column fails closed.
+            "grievance_sensitive_issue": grievance.get("grievance_sensitive_issue"),
         }
 
         if office_emails:
-            email_subject = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_SUBJECT"]["en"].format(**email_data)
-            email_body = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_BODY"]["en"].format(**email_data)
-            try:
-                send_email_via_api(
-                    office_emails,
-                    email_subject,
-                    email_body,
-                    context={**base_context, "channel": "email"},
-                )
+            built = build_admin_email(
+                "GRIEVANCE_STATUS_UPDATE_BODY", email_data, language_code="en", not_provided="N/A"
+            )
+            if built is None:
                 logger.info(
-                    "Status update email sent to %d office staff for %s",
-                    len(office_emails),
+                    "Status update email not sent for %s: suppressed at the staff boundary",
                     grievance_id,
                 )
-            except Exception as email_err:
-                logger.error("Failed to send status update email for %s: %s", grievance_id, email_err)
+            else:
+                email_subject, email_body = built
+                try:
+                    send_email_via_api(
+                        office_emails,
+                        email_subject,
+                        email_body,
+                        context={**base_context, "channel": "email"},
+                    )
+                    logger.info(
+                        "Status update email sent to %d office staff for %s",
+                        len(office_emails),
+                        grievance_id,
+                    )
+                except Exception as email_err:
+                    logger.error("Failed to send status update email for %s: %s", grievance_id, email_err)
 
         if complainant_phone:
             sms_data = {

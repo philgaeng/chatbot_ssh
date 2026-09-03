@@ -235,51 +235,6 @@ EMAIL_TEMPLATES = {
         This is an automated notification. Please do not reply to this email.
     """
     },
-    "GRIEVANCE_STATUS_UPDATE_BODY": {"en": """
-        <h2>Grievance Status Update Notification</h2>
-        <p><strong>Grievance ID:</strong> {grievance_id}</p>
-        <p><strong>Complainant ID:</strong> {complainant_id}</p>
-        <p><strong>Status Updated to:</strong> {grievance_status}</p>
-        <p><strong>Updated on:</strong> {grievance_status_update_date}</p>
-        <p><strong>Expected Resolution Date:</strong> {grievance_timeline}</p>
-        
-        <h3>Complainant Information:</h3>
-        <p><strong>Name:</strong> {complainant_full_name}</p>
-        <p><strong>Phone:</strong> {complainant_phone}</p>
-        <p><strong>Municipality:</strong> {municipality}</p>
-        <p><strong>Village:</strong> {village}</p>
-        <p><strong>Address:</strong> {address}</p>
-        
-        <h3>Grievance Details:</h3>
-        <p><strong>Summary:</strong> {grievance_summary}</p>
-        <p><strong>Description:</strong> {grievance_details}</p>
-        <p><strong>Categories:</strong> {grievance_categories}</p>
-        
-        <p><em>This is an automated notification for office staff. Please do not reply to this email.</em></p>
-    """,
-    "ne": """
-        <h2>गुनासो स्थिति अपडेट सूचना</h2>
-        <p><strong>गुनासो ID:</strong> {grievance_id}</p>
-        <p><strong>गुनासो दर्ताकर्ता ID:</strong> {complainant_id}</p>
-        <p><strong>स्थिति अपडेट:</strong> {grievance_status}</p>
-        <p><strong>अपडेट मिति:</strong> {grievance_status_update_date}</p>
-        <p><strong>अनुमानित समाधान तिथि:</strong> {grievance_timeline}</p>
-        
-        <h3>गुनासो दर्ताकर्ता जानकारी:</h3>
-        <p><strong>नाम:</strong> {complainant_full_name}</p>
-        <p><strong>फोन:</strong> {complainant_phone}</p>
-        <p><strong>महानगरपालिका:</strong> {municipality}</p>
-        <p><strong>गाउँपालिका:</strong> {village}</p>
-        <p><strong>पत्ता:</strong> {address}</p>
-        
-        <h3>गुनासो विवरण:</h3>
-        <p><strong>सारांश:</strong> {grievance_summary}</p>
-        <p><strong>विवरण:</strong> {grievance_details}</p>
-        <p><strong>श्रेणी:</strong> {grievance_categories}</p>
-        
-        <p><em>यो कार्यालय कर्मचारीहरूको लागि स्वचालित सूचना हो। कृपया यस इमेलमा जवाफ नदिनुहोस्।</em></p>
-    """
-    },
 }
 
 # ── Admin notification bodies (F-19, 2026-09-03) ─────────────────────────────
@@ -343,6 +298,39 @@ EMAIL_TEMPLATES['GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP'] = {
     "en": _ADMIN_FOLLOW_UP_BODY,
     "ne": _ADMIN_FOLLOW_UP_BODY,
 }
+
+# ⚠ F-22, 2026-09-03. The third of three email paths that each carried the whole record. This one
+# went to `office_emails`, which `get_office_emails_for_grievance` resolves from the grievance's
+# MUNICIPALITY — the PD office plus whichever office covers that location — and NOT from the case's
+# assigned cast. So a status update on a sensitive case mailed a survivor's narrative, name, phone
+# and address to a location-derived list, and unlike the other two that list grows with deployment.
+_OFFICE_STATUS_UPDATE_BODY = """<html>
+<body>
+<h2>Grievance status updated</h2>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>New status:</strong> {grievance_status}</li>
+<li><strong>Updated on:</strong> {grievance_status_update_date}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. The complainant's contact details are in the platform, not in this email.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY'] = {
+    "en": _OFFICE_STATUS_UPDATE_BODY,
+    "ne": _OFFICE_STATUS_UPDATE_BODY,
+}
+# `build_admin_email` resolves the subject as f"{body_name}_SUBJECT". This one was authored as
+# GRIEVANCE_STATUS_UPDATE_SUBJECT — without the _BODY — because its old call site formatted both
+# by hand. Aliased rather than renamed: the old name is referenced elsewhere.
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_SUBJECT']
 # prepare_recap_email resolves subject via f"{body_name}_SUBJECT"
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_ADMIN']
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_COMPLAINANT']
