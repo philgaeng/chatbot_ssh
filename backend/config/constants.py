@@ -144,6 +144,13 @@ ADMIN_EMAILS: List[str] = [
     if addr.strip()
 ]
 
+# ── GRM portal base URL ──────────────────────────────────────────────────────
+# Used to put a LINK into an admin notification instead of the record (F-19). Empty is a
+# safe default and the right one for a fresh clone: the notification then names the
+# grievance id and says to open the portal, rather than carrying a fabricated hostname.
+# ⚠ Never fall back to embedding the narrative because the link is missing.
+GRM_PORTAL_BASE_URL: str = (os.getenv("GRM_PORTAL_BASE_URL") or "").strip()
+
 # ── OTP lifetime ─────────────────────────────────────────────────────────────
 # Owner's decision, 2026-08-27 (D-62). Until then the OTP had NO expiry at all: the code
 # was six digits in a conversation slot compared with `==`, so its validity was bounded by
@@ -273,61 +280,69 @@ EMAIL_TEMPLATES = {
         <p><em>यो कार्यालय कर्मचारीहरूको लागि स्वचालित सूचना हो। कृपया यस इमेलमा जवाफ नदिनुहोस्।</em></p>
     """
     },
-    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP": {
-        "en": """<html>
-<body>
-<h2>Grievance Follow-Up Request</h2>
-<p>The complainant has requested to follow up on their grievance:</p>
-
-<h3>Grievance Details</h3>
-<ul>
-<li><strong>Grievance ID:</strong> {grievance_id}</li>
-<li><strong>Timeline:</strong> {grievance_timeline}</li>
-<li><strong>Summary:</strong> {grievance_summary}</li>
-<li><strong>Description:</strong> {grievance_description}</li>
-<li><strong>Categories:</strong> {grievance_categories}</li>
-</ul>
-
-<h3>Complainant Information</h3>
-<ul>
-<li><strong>Name:</strong> {complainant_name}</li>
-<li><strong>Phone:</strong> {complainant_phone}</li>
-<li><strong>Email:</strong> {complainant_email}</li>
-<li><strong>Municipality:</strong> {complainant_municipality}</li>
-<li><strong>Village:</strong> {complainant_village}</li>
-<li><strong>Address:</strong> {complainant_address}</li>
-</ul>
-</body>
-</html>""",
-        "ne": """<html>
-<body>
-<h2>गुनासो फलोअप अनुरोध</h2>
-<p>उजुरीकर्ताले आफ्नो गुनासोको फलोअप गर्न अनुरोध गर्नुभएको छ:</p>
-
-<h3>गुनासो विवरण</h3>
-<ul>
-<li><strong>गुनासो आईडी:</strong> {grievance_id}</li>
-<li><strong>समयरेखा:</strong> {grievance_timeline}</li>
-<li><strong>सारांश:</strong> {grievance_summary}</li>
-<li><strong>विवरण:</strong> {grievance_description}</li>
-<li><strong>श्रेणीहरू:</strong> {grievance_categories}</li>
-</ul>
-
-<h3>उजुरीकर्ता जानकारी</h3>
-<ul>
-<li><strong>नाम:</strong> {complainant_name}</li>
-<li><strong>फोन:</strong> {complainant_phone}</li>
-<li><strong>इमेल:</strong> {complainant_email}</li>
-<li><strong>नगरपालिका:</strong> {complainant_municipality}</li>
-<li><strong>गाउँ:</strong> {complainant_village}</li>
-<li><strong>ठेगाना:</strong> {complainant_address}</li>
-</ul>
-</body>
-</html>"""
-    },
 }
 
-EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']
+# ── Admin notification bodies (F-19, 2026-09-03) ─────────────────────────────
+# ⚠ THESE MUST NEVER REFERENCE A PII FIELD. Until 2026-09-03 there was no admin body at
+# all: `GRIEVANCE_RECAP_ADMIN_BODY` was ASSIGNED from `GRIEVANCE_RECAP_COMPLAINANT_BODY`,
+# so the admin list was mailed the complainant's own receipt — narrative, name, phone,
+# address and email — on every submission. Nobody decided that; a template written for
+# the one reader who already knows the whole story was reused, and the audience changed
+# without the content changing.
+#
+# The rule now, and `test_admin_email_boundary.py` enforces it by parsing these strings:
+# an admin body may reference ONLY the placeholders in `ADMIN_SAFE_FIELDS`
+# (backend/actions/services/messaging/recap_email.py). Adding {grievance_description} or
+# any complainant_* field here fails the build. The admin reads the case IN the platform,
+# behind authentication and with an audit trail, instead of holding a copy in a mailbox
+# with neither.
+#
+# English only, both language keys. Admin-facing copy is English by convention, and
+# machine-translating an internal notification is the wrong way to fill a language slot
+# (same reasoning as the OTP-expired message).
+_ADMIN_RECAP_BODY = """<html>
+<body>
+<h2>New grievance filed</h2>
+<p>A grievance has been submitted through the chatbot.</p>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>Filed on:</strong> {grievance_timestamp}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+<li><strong>Location:</strong> {grievance_location}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. The full record is not sent by email.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+_ADMIN_FOLLOW_UP_BODY = """<html>
+<body>
+<h2>Grievance follow-up request</h2>
+<p>The complainant has asked to follow up on their grievance.</p>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. Open the case in the platform for the complainant's contact details.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = {"en": _ADMIN_RECAP_BODY, "ne": _ADMIN_RECAP_BODY}
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP'] = {
+    "en": _ADMIN_FOLLOW_UP_BODY,
+    "ne": _ADMIN_FOLLOW_UP_BODY,
+}
 # prepare_recap_email resolves subject via f"{body_name}_SUBJECT"
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_ADMIN']
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_COMPLAINANT']

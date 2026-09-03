@@ -147,6 +147,20 @@ class ActionGrievanceOutro(BaseActionSubmit):
                 grievance_row_summary(grievance_data),
             )
 
+            # ⚠ Read the sensitivity flag back from the DB rather than trusting the
+            # slot. The slot can hold the KEYWORD detector's answer while the async model
+            # detector has already written True — that exact staleness is D-64, which
+            # silently routed a harassment report to the ordinary queue. The column only
+            # ever escalates, so the stored value is the authoritative one. A failed read
+            # leaves the key ABSENT, and the admin send treats absent as sensitive.
+            stored = self.db_manager.get_grievance_core_by_id(grievance_id) if grievance_id else None
+            if stored is not None:
+                grievance_data["grievance_sensitive_issue"] = bool(
+                    stored.get("grievance_sensitive_issue")
+                )
+            elif grievance_id:
+                grievance_data.pop("grievance_sensitive_issue", None)
+
             await self.send_recap_email_to_admin(
                 grievance_data, "GRIEVANCE_RECAP_ADMIN_BODY", dispatcher
             )

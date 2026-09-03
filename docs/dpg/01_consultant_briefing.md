@@ -86,8 +86,8 @@ worked on at all, by anyone here, and it gates the submission rather than merely
 
 **1. We have tried not to overstate, and it cost us some attractive sentences.**
 
-- *"Grievance text is anonymised"* is **false** — it is **pseudonymised**, we keep the mapping, and
-  the output is still personal data. The strongest true claim is *"only pseudonymised text crosses the
+- **We do not use the word "anonymised" about this output, in any sentence.** It is
+  **pseudonymised** — we keep the mapping, so it remains personal data. The strongest true claim is *"only pseudonymised text crosses the
   border, and the re-identification key never leaves the process."* Recall is **87.5%**, not 100%, and
   the residual is named rather than rounded away.
 - *"The open configuration runs the whole system"* is **false for audio**, true for text — acceptable

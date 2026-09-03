@@ -402,6 +402,12 @@ class LegacyActionStatusCheckRequestFollowUp(BaseAction):
                 email_data["grievance_summary"] = grievance.get("grievance_summary") or grievance.get("grievance_description") or self.NOT_PROVIDED
                 email_data["grievance_description"] = email_data.get("grievance_description") or grievance.get("grievance_description") or self.NOT_PROVIDED
                 email_data["grievance_categories"] = grievance.get("grievance_categories") or email_data.get("grievance_categories") or self.NOT_PROVIDED
+                # F-19: the admin send is gated on this and treats an ABSENT key as
+                # sensitive. Take it from the stored row, not the tracker slot — the
+                # column only ever escalates (D-64), so it is the authoritative value.
+                email_data["grievance_sensitive_issue"] = bool(
+                    grievance.get("grievance_sensitive_issue")
+                )
         def _log_email_done(task: asyncio.Task) -> None:
             try:
                 task.result()

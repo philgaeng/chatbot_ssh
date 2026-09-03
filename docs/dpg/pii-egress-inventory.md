@@ -324,7 +324,7 @@ the translation call that reads as a translation step and in fact *generates* on
 
 | What can be said | What must not be said |
 |---|---|
-| *"Only pseudonymised text crosses the border"* | ~~*"Grievance text is anonymised"*~~ — the mapping exists, so the output is still personal data |
+| *"Only pseudonymised text crosses the border"* | ⛔ **The word "anonymised", in any sentence about this output.** The mapping exists, so it remains personal data |
 | *"The re-identification key never leaves the process"* — the mapping is never persisted, never serialised, never returned to a caller; pinned by a test that fails the day a caller needs it | ~~*"Names cannot reach the provider"*~~ — measured recall is **87.5%**, not 100% |
 | *"The residual is named, not rounded away"* — bare settlement names with no qualifier (`Duhabi`, `Itahari`) | ~~*"The transfer has stopped"*~~ — it has **narrowed**. Every classification still crosses the border |
 | *"A bare district survives on purpose"* (`Jhapa`) — the classifier derives district from the narrative, and a district identifies nobody | ~~*"Audio is covered"*~~ — it is not, and no layer in this sprint can cover it |

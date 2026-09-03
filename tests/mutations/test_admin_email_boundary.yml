@@ -1,0 +1,93 @@
+# Mutation records for tests/backend/test_admin_email_boundary.py
+#
+# F-19: an admin notification used to be the complainant's own receipt — raw narrative, name,
+# phone, address and email, mailed to a configured list on every submission, with no gate for
+# sensitive cases. docs/dpg/pii-egress-inventory.md ranks that leg ABOVE the model call.
+#
+# Every record below reverts one half of the fix and asserts the tests go red. `expect: kills`
+# is the only outcome used here: there is no documented non-kill in this module.
+
+- id: T-F19-admin-body-realiased
+  target: backend/config/constants.py
+  find: "EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = {\"en\": _ADMIN_RECAP_BODY, \"ne\": _ADMIN_RECAP_BODY}"
+  replace: "EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    ⭐ The defect itself, restored exactly as it was: ONE assignment. F-19 was never a decision to
+    mail the full record to administrators — a template written for the one reader who already
+    knows the whole story was reused, and the audience changed without the content changing. The
+    mutation is one line because the bug was one line, which is the point.
+
+- id: T-F19-followup-body-restored
+  target: backend/config/constants.py
+  find: "EMAIL_TEMPLATES['GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP'] = {\n    \"en\": _ADMIN_FOLLOW_UP_BODY,\n    \"ne\": _ADMIN_FOLLOW_UP_BODY,\n}"
+  replace: "EMAIL_TEMPLATES['GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP'] = {\n    \"en\": \"<p>{grievance_id} {grievance_description} {complainant_phone}</p>\",\n    \"ne\": \"<p>{grievance_id}</p>\",\n}"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    The SECOND admin template, and the reason the tests are parametrised over both. The status-
+    check follow-up was purpose-written for an administrator and still listed Description, Name,
+    Phone, Email and Address — so a fix scoped to the recap alone would have left half of F-19
+    live while looking finished.
+
+- id: T-F19-projection-passes-everything
+  target: backend/actions/services/messaging/recap_email.py
+  find: "    safe: Dict[str, Any] = {}\n    for key in ADMIN_SAFE_FIELDS:"
+  replace: "    safe: Dict[str, Any] = dict(grievance_data)  # mutation: deny-list, not allow-list\n    for key in ADMIN_SAFE_FIELDS:"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    Turns the allow-list back into a pass-through. This is the mutation that distinguishes
+    "the template happens not to name PII today" from "PII cannot reach .format()". Both controls
+    are needed: the template check fails the build, this one bounds what a bypass can leak.
+
+- id: T-F19-unknown-sensitivity-defaults-false
+  target: backend/actions/services/messaging/recap_email.py
+  find: "    sensitive = grievance_data.get(\"grievance_sensitive_issue\", _SENSITIVITY_UNKNOWN)"
+  replace: "    sensitive = grievance_data.get(\"grievance_sensitive_issue\", False)"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    ⭐ The failure direction that matters. `.get(key, False)` reads "the caller never told us" as
+    "not sensitive", so any caller that forgets the key mails a survivor's case to a list that is
+    not cast on the sensitive workflow. Failing closed costs a missed notification; failing open
+    costs a disclosure that cannot be undone. Same asymmetry as the OTP expiry check.
+
+- id: T-F19-sensitivity-gate-removed
+  target: backend/actions/services/messaging/recap_email.py
+  find: "    if sensitive is _SENSITIVITY_UNKNOWN or bool(sensitive):"
+  replace: "    if False:  # mutation: no sensitivity gate"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    Removes the gate entirely — the pre-fix behaviour, where the admin send was unconditional. The
+    platform's headline safeguarding claim is that administrators can configure sensitive
+    workflows and cannot read the cases; an ungated notification is that claim being false by
+    email.
+
+- id: T-F19-keyerror-falls-back-to-full-dict
+  target: backend/actions/services/messaging/recap_email.py
+  find: "        except KeyError as missing:"
+  replace: "        except KeyError as missing:  # mutation: fall back instead of refusing\n            body = template.format(**grievance_data)\n            subject = subject_template.format(**grievance_data)\n        except _NeverRaised as missing:"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: kills
+  why: >
+    The tempting "helpful" fallback, and precisely how F-19 would come back. A template that
+    references a non-safe field must cause a REFUSAL to send, not a retry with everything — the
+    whole value of projecting before formatting is that the KeyError is the alarm.
+
+- id: T-F19-outro-trusts-the-stale-slot
+  target: backend/actions/action_outro.py
+  find: "            stored = self.db_manager.get_grievance_core_by_id(grievance_id) if grievance_id else None"
+  replace: "            stored = None  # mutation: trust the tracker slot"
+  tests: tests/backend/test_admin_email_boundary.py
+  expect: survives
+  why: >
+    ⚠ A DOCUMENTED NON-KILL, recorded rather than hidden. This module tests the boundary function
+    and does not drive `action_grievance_outro`, so removing the authoritative DB read does not
+    move it. The mutation is kept executable because the behaviour it protects is real and
+    load-bearing: the tracker slot can hold the KEYWORD detector's answer while the async model
+    detector has already written True — exactly D-64 — and the stale value here would be False,
+    which sends. Closing this needs an outro-level test, and it is named in the F-19 follow-up
+    rather than left as a green tick.
