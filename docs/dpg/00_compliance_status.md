@@ -23,7 +23,7 @@ new ones opened in its place** — one of them created by the same work.
 | | |
 |---|---|
 | ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
-| 🔴 **One decided control was not built** — the admin recap email still mails the whole grievance record on every submission, and it is ranked **above** the model call for likelihood of exposure. ⭐ Re-verified 2026-09-03: the admin body **is the complainant body**, aliased in one line, so it now mails a *pseudonymised summary directly above the raw narrative it was pseudonymised from* | Indicator 7 |
+| ✅ **The decided admin-email control is built** — allow-listed, suppressed for sensitive cases, failing closed. ⛔ **Building it found a third email leg that is not fixed:** status updates mail the full record to an office list derived from **municipality**, not from the case's cast | Indicator 7 |
 | ✅ **Fixed — a live safeguarding defect in which the final submit erased the model's SEAH detections**, in exactly the case the model exists for. ⚠ It had been live for months, and **how it was found** is the strongest methodological evidence in this pack | Indicator 9 |
 | ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
 | ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
@@ -75,7 +75,7 @@ never leaves the process"* is the strongest form available.
 | 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary. ⚠ The **closed** column is now stale too |
 | 5 | Documentation | ✅ Compliant | — |
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
-| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **one decided control was not built**; nothing is deployed; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
+| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **a third email leg still mails the whole record**; nothing is deployed; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal** |
 | 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework |
 | 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, its recall is unmeasured, and **nothing measures the pipeline end to end** — every figure we have scores the model alone |
 
@@ -300,6 +300,11 @@ of that equals a regulator**, and **ADB is the nearest candidate standard-setter
   addresses 4/6 — with the residual **named**: bare settlement names carrying no qualifier. A second
   pass runs on what the model **returns**, so the summary that gets *stored* carries no names either.
   ⚠ Read the two paragraphs after this list before quoting any of it.
+- **Admin notifications carry no complainant PII, and nothing at all for a sensitive case.** An
+  allow-list projected before formatting, a sensitivity gate that **fails closed on an unknown flag**,
+  a template naming a non-safe field **refusing to send** rather than retrying with everything, and
+  both call sites reading the flag from the stored row rather than a tracker slot that can hold a
+  stale answer. ⚠ **Two of the three email legs. The third is in the gap list below.**
 - **The logging boundary and the message broker closed with it.** A central filter on the logger
   (not a handler — `_setup_logger` adds two, and a handler filter is missed by any added later)
   redacting the **formatted** message, so `%s` arguments are covered; plus eleven call sites pruned
@@ -335,28 +340,24 @@ credential. *This is the single most important sentence in the indicator.*
 
 **Gaps.**
 
-- 🔴 **The admin recap email still mails the entire grievance record — raw narrative, complainant
-  name, phone, address and email — to a configured recipient on every submission.** The replacement (a
-  pseudonymised summary plus a link into the platform, so the recipient reads the case behind
-  authentication with an audit trail rather than holding a copy in a mailbox with neither) was
-  **decided on 2026-08-27 and has not been written.** ⭐ **The egress inventory ranks this leg above
-  the model call**, so after a sprint spent on the model boundary this is now the largest unredacted
-  egress in the system. **A recorded decision is the state most easily mistaken for a finished one.**
+- 🔴 **Status-update emails mail the entire grievance record — raw narrative, complainant name,
+  phone, municipality, village and address — to an office list resolved from the grievance's
+  *municipality*, not from the case's assigned cast.** So a status change on a SEAH case sends a
+  survivor's record to a location-derived office list. **Open**, and it is now the largest unredacted
+  egress in the system.
 
-  ⭐ **Re-verified end to end on 2026-09-03, and the cause is more interesting than the defect.**
-  There is no admin email template. `GRIEVANCE_RECAP_ADMIN_BODY` is assigned from
-  `GRIEVANCE_RECAP_COMPLAINANT_BODY` in a single line — **the admin is sent the complainant's own
-  receipt.** That is why it carries everything: the template was written for the one reader who
-  already knows the whole story, and reusing it silently changed the audience without changing the
-  content. ⚠ **It is the exact reasoning error the egress inventory warned about in prose** — *"they
-  wrote it, showing it back is absurd"* is a good argument about a complainant and no argument at all
-  about a configured mailing list — sitting in the code as an assignment.
+  ⭐ **It was found by fixing the previous one, and the pattern is worth more than either leg.**
+  **Three separate email paths each carried the whole grievance record** — a submission receipt, a
+  follow-up request, a status notification — each written by somebody solving a different problem,
+  and **none of them looked wrong at its own call site.** The first had no admin template at all:
+  `GRIEVANCE_RECAP_ADMIN_BODY` was *assigned* from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so
+  the admin list received the complainant's own receipt. Nobody decided that. **Grep for the
+  templates, not for the senders**, and assume a fourth until someone has looked.
 
-  ⚠ **And the redaction work reached one field of this email and not the other.** The summary is now
-  pseudonymised, because it comes from the model path; the narrative below it is the raw slot. So the
-  email as it stands renders **`<PERSON_1>` in one paragraph and the person's name in the next**.
-  Nothing is wrong with either half on its own, which is precisely why a boundary control has to be
-  placed at the boundary rather than at the producer.
+  ⚠ **We are not treating this as closed just because two of the three are.** The two that are fixed
+  were fixed at the boundary — one allow-list, one gate — and that helper is what the third one
+  needs. It was left out of that change deliberately: it is a different subsystem on a safeguarding
+  path, and folding it in would have buried a decision inside a commit about something else.
 - ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
   parked, so there is no future state in which the transfer stops.
 - ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
@@ -391,8 +392,8 @@ credential. *This is the single most important sentence in the indicator.*
   than only as reliability because an uncategorised grievance is also one the keyword safeguarding
   route never scored.
 
-**Remedy.** **Build the admin-email change** and deploy the redaction layer — those two are the
-difference between a documented control and an operating one. Then: write the retention schedule and
+**Remedy.** **Route the status-update email through the same admin boundary** — the helper exists —
+and deploy. Deployment is now the difference between a documented control and an operating one. Then: write the retention schedule and
 build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
 file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
 

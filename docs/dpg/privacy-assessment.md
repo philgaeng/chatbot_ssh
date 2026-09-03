@@ -25,9 +25,11 @@
 > 3. **None of it is running anywhere.** The work is on `integration/stage` and **not deployed** —
 >    staging changes only when someone runs a deploy, and the next one is blocked on an unrelated
 >    database credential. **On both servers, the unredacted behaviour is what is live.**
-> 4. ⛔ **One decided control was not built, and it is the leg the egress inventory ranks *above*
->    the model call.** The admin recap email still mails the whole grievance dict — raw narrative,
->    name, phone, address — to a configured list on every submission. New finding **F-19**.
+> 4. ✅ **The leg the egress inventory ranks *above* the model call is now closed too** — the admin
+>    notification was the complainant's own receipt, and it is now allow-listed, gated for sensitive
+>    cases and failing closed (**F-19**). ⛔ **But fixing it found a third leg that is not**: status
+>    updates mail the full record to an office list derived from **municipality**, not from the
+>    case's cast (**F-22**).
 >
 > ⭐ **And the finding that should outlive the sprint:** of the live defects the redaction work found —
 > a credential in the logs, an erased safeguarding flag, Redis persisting narratives — **none was in
@@ -753,8 +755,8 @@ considering on its own merits, but **not** as a backup control, and **not** befo
 
 ## 6. Findings register
 
-Verified against the code on 2026-08-18; **F-1, F-5, F-6, F-9 and F-13 re-verified and F-19–F-21
-added 2026-09-03.** Severity is engineering's judgement about privacy impact, not a legal
+Verified against the code on 2026-08-18; **F-1, F-5, F-6, F-9 and F-13 re-verified and F-19–F-22
+added 2026-09-03; F-19 fixed the same day.** Severity is engineering's judgement about privacy impact, not a legal
 characterisation. Detail for each sits in the section cited.
 
 ⚠ **A `✅ Fixed` row means fixed in the code on `integration/stage`. It does not mean deployed** —
@@ -780,7 +782,8 @@ see the v1.2 note above. Neither server runs any of it.
 | **F-16** | **The provider's data terms are recorded nowhere** — retention window, service-improvement use, prompt caching. These are the mitigations a transfer analysis cites, and citing an unverified mitigation is worse than citing none | Commercial fact, not in the repo | ⚠ Unverified | **Obtain and file before submission** |
 | **F-17** | **Jurisdiction of execution is not knowable.** Pinning a provider does not pin the country inference runs in, so no submission may name a single destination country | §3.7.1 | ⚠ Unverified | State as-is; do not overclaim |
 | **F-18** | **Keycloak recorded no login, login-failure or admin events at all.** ⚠ The daily ops report queried the empty table and reported `0` rather than "not recorded", which is why it survived review | live realm; `ops/reports.py:45,55` | 🟠 Medium | ✅ **Fixed** — event logging enabled, 90-day expiry. ⚠ Forward-only, and not yet on staging or production |
-| **F-19** | 🔴 **The admin recap email sends the entire grievance record — raw narrative, complainant name, phone, address and email — to a configured recipient on every submission**, over the SMTP relay. A decision to replace it with a pseudonymised summary plus a link into the platform was taken on 2026-08-27 and **the code is unchanged** | `recap_email.py:52-57` · `constants.py:172-199`, `:330` · `action_outro.py:151`, `:243` | 🔴 High | **Open — re-verified end to end 2026-09-03** (send fires, payload carries the fields, template renders them, one recipient configured in committed config). ⚠ **The largest unredacted egress in the system**, ranked **above** the model call. ⭐ **There is no admin template:** `GRIEVANCE_RECAP_ADMIN_BODY` is assigned from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so **the admin is sent the complainant's own receipt** — the audience changed and the content did not. ⚠ **Redaction reached one field and not the other:** the summary is pseudonymised, the narrative beneath it is raw, so the mail renders `<PERSON_1>` two lines above the person's name. ⭐ **A recorded decision is not a control** |
+| **F-19** | **The admin notification was the complainant's own receipt** — raw narrative, name, phone, address and email, mailed to a configured recipient on **every** submission, over the SMTP relay. ⭐ There was no admin template: `GRIEVANCE_RECAP_ADMIN_BODY` was *assigned* from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so the audience changed and the content did not. ⚠ **Two templates, not one** — the status-check follow-up was purpose-written for an administrator and carried the same fields. ⚠ **And it was ungated for sensitive cases**, so a SEAH grievance mailed a survivor's narrative and contact details to a list not cast on the sensitive workflow — **an isolation bypass, which the original finding did not record** | `recap_email.py` · `constants.py` · `action_outro.py:151` · `form_status_check.py` | 🔴 High | ✅ **Fixed 2026-09-03 at the boundary**, not per template — the one function every admin send passes through. **(1)** allow-list projection: `ADMIN_SAFE_FIELDS` is what may reach a body, everything else dropped *before* formatting; **(2)** a sensitivity gate that **fails closed on an unknown flag** and suppresses entirely rather than trimming, because categories and a summary would themselves disclose that a SEAH case exists; **(3)** a template naming a non-safe field **refuses to send** rather than retrying with the full dict; **(4)** both call sites read the flag from the **stored row**, since the tracker slot can hold the stale keyword answer (D-64). 19 assertions, 7 mutations as recorded. ⚠ **Residual:** the detector can raise the flag *after* the send; control (1) is what bounds that. ⚠ **Not deployed** |
+| **F-22** | 🔴 **A third leg, found while fixing F-19 and not covered by it.** `POST` status updates mail `GRIEVANCE_STATUS_UPDATE_BODY` — **full narrative, complainant name, phone, municipality, village and address** — to `office_emails`, and `get_office_emails_for_grievance` derives that list from the grievance's **municipality**, not from the case's assigned cast. **So a status update on a SEAH case mails a survivor's record to a location-derived office list** | `backend/api/routers/grievance.py:296`, `:323` · `grievance_manager.py:1015` | 🔴 High | **Open.** ⭐ **Same defect class as F-19, different subsystem** (`backend/api/`, a stable shared service), and it is arguably worse: F-19's recipient was one configured address, this one is derived from geography and grows with deployment. ⏭ The fix is the same shape and the helper now exists — route it through the admin boundary, or give office notifications their own allow-list. **Deliberately not folded into F-19's commit**: it touches a different subsystem on a safeguarding path and deserves its own decision |
 | **F-20** | **Nothing re-drives a classification that never ran.** Celery retry covers a task that ran and raised, not a message lost from the broker; the chatbot app has **no beat schedule at all**, and ticketing's two-minute sync never touches classification. A lost classification sits at `pending` **forever** | `backend/task_queue/celery_app.py` · `database_tables.py:41` | 🟡 Low-medium | **Open.** Not a confidentiality finding — an **integrity** one, and it reaches privacy through §3.4: an uncategorised grievance is also one the SEAH keyword route never scored. ⚠ **Independent of the F-5 fix**, which removed one way to lose the message, not the absence of recovery |
 | **F-21** | **The OTP had no expiry of any kind and was not cleared once used** — no timestamp, no TTL, so the bound was the conversation slot rather than a clock | `services/otp/verification.py` · `form_otp.py` | 🟠 Medium | ✅ **Fixed 2026-09-03** — a 10-minute window that **fails closed** (a missing or unparseable stamp counts as expired, so a parse bug cannot mint an eternal code), checked **before** the match so a correct-but-stale code does not verify, and the code erased on success. ⚠ **The finding that led here was overstated and was retracted the same day**: a logged OTP does *not* complete an impersonation, because verification is against that conversation's own slot. The credential-in-a-log finding stands on its own terms |
 
@@ -803,7 +806,7 @@ optimistic about content in four places, all recorded in
 
 **Still open, and the first two are the ones that matter:**
 
-- [ ] 🔴 **That F-19 has been built.** A decision was taken on the admin recap email and no code changed. **Verify the code, not the decision record**
+- [ ] 🔴 **That F-22 has been built**, and that no *fourth* email leg carries the record. Three did, each written by someone solving a different problem. ⭐ **Grep for the templates, not for the senders** — F-19 was one assignment and no sender looked wrong
 - [ ] 🔴 **That any of this is deployed.** Everything above is true on `integration/stage`. Both servers run the unredacted behaviour
 - [ ] That **no environment has begun holding genuine grievance data** (F-14). §0.5 expires, so re-confirm rather than inherit
 - [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code
@@ -840,8 +843,11 @@ names. What remains is three separate things, and collapsing them again would be
    self-hosting has no cost owner. **The transmission is the event that needs a lawful basis**
    (§3.7.1) — not the provider's retention, not whether it trains on the data, not whether the model
    is open-weights, and **not what the text was scrubbed of first**.
-2. 🔴 **A control that was decided and not built** (F-19). The admin recap email still mails the whole
-   record on every submission, and the egress inventory ranks that leg **above** the model call.
+2. 🔴 **A third egress leg, found while closing the second** (F-22). Status-update emails mail the
+   full record — narrative, name, phone, address — to an office list derived from the grievance's
+   **municipality** rather than from the case's assigned cast. ⭐ **The pattern is the finding:**
+   three separate email legs each carried the whole record, and each was written by someone
+   solving a different problem. **Assume a fourth until someone has looked.**
 3. 🔴 **None of the work is deployed.** Both servers run the v1.1 behaviour. A control on a branch is
    evidence of intent, not a control.
 

@@ -46,9 +46,10 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
 3. **Grievance text no longer reaches the model provider in clear.** It is pseudonymised at the
    model-call boundary at **87.5% measured recall**, and the log boundary and message broker closed
    with it. ⚠ **Pseudonymised is not anonymised** — we keep the mapping, so it stays personal data —
-   and the transfer has been **narrowed, not stopped**. ⚠ **One egress is untouched and we rank it
-   *above* the model call**: an admin recap email still sends the whole grievance record on every
-   submission. The replacement was decided a week ago and has not been written.
+   and the transfer has been **narrowed, not stopped**. ⚠ **And email was the leak we had not been
+   looking at:** three separate email paths each carried the whole grievance record. Two are now
+   fixed; **the third still mails it to an office list derived from the grievance's municipality**,
+   which on a SEAH case means a survivor's record reaching people not cast on it.
 4. **Nothing real has been processed yet.** Every grievance record is seed data or a demo dummy —
    which makes every privacy exposure prospective, and puts the remaining work in the window where it
    is a **go-live precondition rather than a remediation**.
@@ -134,6 +135,12 @@ claim we had made.** The same pattern holds for
 the other three live defects of the fortnight — a credential in the logs, narratives persisting in
 Redis against four documents that said otherwise, a decorative test that a mutation exposed. **None
 was in the inventory written to find them.**
+
+**The same pattern repeated the following week, which is why we mention it twice.** Asked to close the
+admin-email finding, we checked it before building — and found it was two templates rather than one,
+that neither was gated for sensitive cases, and that a third path nobody had inventoried was doing the
+same thing. **None of the three looked wrong at its own call site.** The first was a single
+assignment: an admin body defined as the complainant's own receipt.
 
 ⚠ **We are telling you this because it cuts against us as well as for us.** It is the argument for
 taking the measured claims here seriously; it is equally the reason to treat any claim in this pack

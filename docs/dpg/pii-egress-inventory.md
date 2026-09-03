@@ -22,13 +22,18 @@
 > | **E1** | Application logs | 🔴 twelve sites, two of them credentials | ✅ **central filter on `TaskLogger` + 11 call sites pruned + the OTP lines gone** |
 > | **E2** | Celery payloads → Redis | 🔴 narrative through the broker, persistence unverified | ✅ **cause removed** — payloads carry `grievance_id`; the task reads Postgres |
 > | **E4** | Model provider | 🟠 raw narrative, permanently | 🟢 **pseudonymised at both chokepoints**, 87.5% measured recall — ⚠ *narrower, not closed* |
-> | **E5** | Admin recap email | 🟠 the whole grievance dict, every submission | 🔴 **decided 2026-08-27, NOT built — still sends the raw narrative** |
+> | **E5** | Admin recap email | 🟠 the whole grievance dict, every submission | ✅ **built 2026-09-03** — allow-listed, suppressed for sensitive cases, failing closed |
+> | **E13** | Status-update email → office list | ⚠ *not in the original twelve* | 🔴 **NEW** — full record to an office list derived from **municipality**, not from the case's cast |
 > | **E6** | XLSX quarterly report | 🟡 `grievance_summary`, may carry names | 🟢 **the stored summary now carries no names** — no report-code change was needed |
 > | **E9** | Uploads / audio | 🟡 not redactable | 🟡 unchanged, and **still not redactable** (§5) |
 >
-> ⚠ **E5 is now the largest unredacted egress in this inventory**, and it outranks the model call on
-> the ranking this document is built on. A decision was taken and the code was not written. That is a
-> worse state than an open question, because the question looks answered.
+> 🔴 **E13 is now the largest unredacted egress in this inventory, and it was not in the original
+> twelve.** Fixing E5 found it: status-update emails carry the full record to an office list derived
+> from **municipality**, not from the case's cast — so the recipient set grows with deployment.
+>
+> ⭐ **Three separate email paths each carried the whole grievance record**, each written by somebody
+> solving a different problem, none of them wrong-looking at its own call site. **Grep for the
+> templates, not for the senders**, and assume a fourth until someone has looked.
 >
 > ⭐ **The finding that should outlive the sprint.** Of the defects Sprint 3 found in **live** code —
 > the OTP at INFO, the erased SEAH detection, Redis persisting narratives, the classification payload —
@@ -71,7 +76,8 @@ The `2026-09-03` column is what is true now; where the two disagree, the right-h
 | **E2** | **Celery payloads → Redis** | `grievance_description` verbatim | §2 | 🔴 **2 — every intake; persistence unverified** | ✅ **cause removed** — id-only payloads, both tasks |
 | **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged** — encryption fails closed, destination still unnamed (§5.4) |
 | **E4** | **Model provider** (crosses the border) | Raw narrative, officer notes, whole case timelines | §5 | 🟠 **4 — deliberate, and the only one already designed for** | 🟢 **pseudonymised, both surfaces** — 87.5% recall, residual named (§5) |
-| **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** | 🔴 **UNCHANGED IN CODE** — decided, not built (§6) |
+| **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** | ✅ **closed at the boundary** (§6) |
+| **E13** | **Status-update emails → office list** | The **entire** grievance dict | §6 | ⚠ **not in the original twelve — found 2026-09-03** | 🔴 **open** — and its recipient list grows with deployment (§6) |
 | **E6** | **XLSX quarterly reports → email** | `grievance_summary`, truncated to 500 chars | `ticketing/services/report_rows.py:459` | 🟡 **6 — quarterly, to named roles** | 🟢 **the summary now carries no names** — upstream, no report change |
 | **E7** | **Complainant recap email → SMTP relay** | Their own grievance data | `backend/actions/action_outro.py:153` | 🟡 **7 — consented-ish; see §6** | ⚪ **deliberately unchanged** — their own words back to them |
 | **E8** | **Public closure PDF** | Resolution text | `ticketing/api/routers/public_closure.py:38`, `:58` | 🟡 **8 — unauthenticated, non-expiring token** | 🟡 **unchanged** — out of scope, tracked as F-10 |
@@ -356,7 +362,27 @@ absurd"* is a good argument about a complainant reading their own words, and **n
 about a recap mailed to a configured admin list. **E5 is an egress that should be assessed on its
 merits, not inherited into the complainant's exemption.**
 
-### 🔴 E5 — decided 2026-08-27, and the code is unchanged as of 2026-09-03
+### ✅ E5 — closed 2026-09-03, and closing it found E13
+
+> **Built at the boundary, not per template.** `send_recap_email_to_admin` is the one function
+> every admin send passes through, so the control sits there — the same choice DPG-33 and DPG-34
+> made, for the same reason: *a per-template fix is correct until someone adds a template.*
+>
+> **Four controls, because each has a failure mode the others cover.** An **allow-list**
+> (`ADMIN_SAFE_FIELDS`) projected *before* formatting, so no other key can reach the body; a
+> **sensitivity gate that fails closed** on an unknown flag and suppresses entirely rather than
+> trimming, because categories and a summary would themselves disclose that a SEAH case exists; a
+> **refusal to send** when a template names a non-safe field, rather than a retry with the full
+> dict; and both call sites reading the flag from the **stored row**, since the tracker slot can
+> hold the stale keyword answer (D-64).
+>
+> ⚠ **Residual, stated rather than designed away:** the detector can raise the flag *after* the
+> send. The window is small — it writes during the contact/OTP steps and this runs after them —
+> and the allow-list is what bounds the damage when it happens. That is why both controls exist.
+>
+> 🔴 **And there is a third leg, which this does not cover.** See E13 below.
+
+### What was actually wrong — kept, because the shape of it is the lesson
 
 The owner's decision: **send the pseudonymised summary and a link into the platform, never the
 record.** The recipient then reads the case behind Keycloak, with an audit trail, instead of holding a
@@ -395,10 +421,35 @@ the model boundary, the log boundary and the broker. It did **not** close the le
 *above* the model call. A decision recorded in `TODO.md` and a control in the code are different
 things, and only one of them stops an email.
 
-⚠ **The fallback matters when it is built.** `POST /api/v1/tickets` returns a `ticket_id`
-(`ticketing_dispatch.py:288`) but the dispatch is non-blocking and never raises (`:242`), so the link
-can be absent. **Fall back to the `grievance_id`** — stable, and already the log correlation key —
-**never to including the narrative.**
+⚠ **The link, as built.** `dispatch_grievance_from_tracker` returns `None` — the `ticket_id` is
+logged and never plumbed back — and the portal has no deep link keyed on a grievance id. So the mail
+carries the **grievance id** and a link to the queue, from `GRM_PORTAL_BASE_URL`. **Empty by
+default**, and when empty the mail names the id and says to open the portal. ⭐ **It never falls back
+to including the narrative because the link is missing**, which is the failure mode worth naming: a
+notification that degrades into a record is how this whole finding started.
+
+---
+
+## 6b. 🔴 E13 — a third leg, found while fixing E5
+
+Not in the original twelve. `backend/api/routers/grievance.py:323` mails
+`GRIEVANCE_STATUS_UPDATE_BODY` on every status change, carrying **the full narrative, complainant
+name, phone, municipality, village and address**.
+
+⛔ **The recipient list is the part that makes this worse than E5.**
+`get_office_emails_for_grievance` (`grievance_manager.py:1015`) resolves it from the grievance's
+**municipality** — the PD office plus whichever office covers that location — **not from the case's
+assigned cast.** So a status update on a SEAH case mails a survivor's record to a location-derived
+office list, and unlike E5's single configured address **that list grows with deployment.**
+
+⭐ **The pattern is worth more than the leg.** Three separate email paths each carried the whole
+grievance record, and each was written by somebody solving a different problem — a receipt, a
+follow-up, a status notification. None of them looked wrong at its own call site. **Grep for the
+templates, not for the senders**, and assume a fourth until someone has looked.
+
+⏭ **Not fixed here, deliberately.** It is a different subsystem (`backend/api/`, a stable shared
+service) on a safeguarding path, and folding it into E5's change would have hidden a decision inside
+a commit about something else. The helper it needs now exists.
 
 ---
 
@@ -457,7 +508,8 @@ and the reason is still physics, not effort.
 
 | | Item | Who |
 |---|---|---|
-| 🔴 | **E5 — build the decided admin-email change.** The largest unredacted egress here | engineering |
+| 🔴 | **E13 — the status-update email to the municipality-derived office list.** The largest unredacted egress here, and the recipient set grows with deployment | engineering |
+| ⚪ | ~~E5 — build the decided admin-email change~~ ✅ **done 2026-09-03** | — |
 | 🟠 | **Name the backup destination and its jurisdiction**, and assign key custody | DOR |
 | 🟠 | **Nothing re-drives a classification that never ran.** Independent of the Redis fix — that removed one way to lose the message, not the absence of recovery | engineering |
 | 🟡 | **The log-pruning call-site pin is scoped to four files on purpose.** The repo-wide sweep is not done | engineering |
