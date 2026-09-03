@@ -1,0 +1,55 @@
+# Mutation records for tests/backend/actions/test_otp_verification.py  (OTP expiry + erasure)
+#
+# ⭐ The second decorative test a mutation caught in this session. `test_the_code_is_erased...`
+# originally scanned ANY dict containing an `otp_status` key — and the EXPIRED branch clears the
+# same two keys, so deleting the clearing from the VERIFIED branch satisfied the assertion on its
+# behalf and stayed green. It is now scoped to the dict whose otp_status is literally "verified",
+# and T-OTP-verified-branch-keeps-the-code below is the mutation that must stay red.
+
+- id: T-OTP-expiry-fails-open
+  target: backend/actions/services/otp/verification.py
+  find: "    if not issued_at:\n        return True"
+  replace: "    if not issued_at:\n        return False"
+  tests: tests/backend/actions/test_otp_verification.py
+  expect: kills
+  why: >
+    Expiry fails CLOSED: an unreadable or missing stamp counts as expired. Failing open turns any
+    parse bug — or a session that predates the stamp — into an OTP that never expires, which is
+    the control silently not existing. Rejecting costs the complainant one resend; failing open
+    costs the property the window was added for.
+
+- id: T-OTP-window-widened-to-an-hour
+  target: backend/config/constants.py
+  find: 'OTP_VALIDITY_SECONDS: int = int(os.getenv("OTP_VALIDITY_SECONDS", "600"))'
+  replace: 'OTP_VALIDITY_SECONDS: int = int(os.getenv("OTP_VALIDITY_SECONDS", "3600"))'
+  tests: tests/backend/actions/test_otp_verification.py
+  expect: kills
+  why: >
+    Ten minutes is the owner's number, pinned so a silent widening shows up in a diff rather than
+    in a six-fold longer window nobody chose. The boundary is driven by an injected clock, not by
+    sleeping — a TTL test that cannot address the clock ends up asserting the constant back to
+    itself, which is the decorative shape this repository keeps rediscovering.
+
+- id: T-OTP-expiry-checked-after-the-match
+  target: backend/actions/forms/form_otp.py
+  find: "        if otp_verification.is_expired("
+  replace: "        if not otp_verification.otp_matches(slot_value, expected_otp) and otp_verification.is_expired("
+  tests: tests/backend/actions/test_otp_verification.py
+  expect: kills
+  why: >
+    ORDERING is the property. Short-circuiting the expiry check behind the match means a
+    stale-but-correct code verifies — the window exists precisely to stop that, and the two calls
+    can sit in the same function in the wrong order while every behavioural test still passes.
+    The pin compares their line numbers; this mutation makes `otp_matches` the earlier one.
+
+- id: T-OTP-verified-branch-keeps-the-code
+  target: backend/actions/forms/form_otp.py
+  find: '                      "otp_number" : None,'
+  replace: '                      "otp_number" : slot_value,'
+  tests: tests/backend/actions/test_otp_verification.py
+  expect: kills
+  why: >
+    ⭐ The mutation that exposed a decorative test. An accepted OTP left in the slot is a spent
+    secret kept for nothing. The find string is anchored on the VERIFIED branch's spacing
+    (`"otp_number" : None` with its distinctive alignment) — the expired branch clears the same
+    key with different spacing, and matching that one instead is how the original test got fooled.

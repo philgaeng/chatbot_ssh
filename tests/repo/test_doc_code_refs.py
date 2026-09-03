@@ -103,12 +103,12 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     ("backend/services/LLM_services.py", 89, "language=language_code"),
     ("backend/services/LLM_services.py", 138, "call_llm"),
     ("backend/services/LLM_services.py", 169, "call_llm"),
-    ("backend/services/LLM_services.py", 312, "call_llm"),
-    ("backend/services/LLM_services.py", 558, "call_llm"),
-    ("backend/services/LLM_services.py", 618, "call_llm"),
+    ("backend/services/LLM_services.py", 355, "call_llm"),
+    ("backend/services/LLM_services.py", 603, "call_llm"),
+    ("backend/services/LLM_services.py", 670, "call_llm"),
     # Where an off-catalogue category is repaired or dropped (D-51). Cited by the benchmark
     # evidence and by TODO/PROGRESS as the place the boundary is enforced.
-    ("backend/services/LLM_services.py", 373, "resolve_categories"),
+    ("backend/services/LLM_services.py", 416, "resolve_categories"),
     ("backend/services/category_resolution.py", 94, "def resolve_categories"),
     # Where every model name is declared — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 114, "gpt-5-nano"),

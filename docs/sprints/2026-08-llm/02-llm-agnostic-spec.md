@@ -89,7 +89,7 @@ spec's own acceptance criteria rely on.
 
 `LLM_services.py:247` at the time, in `classify_and_summarize_grievance`, the primary AI path in the
 product. ✅ **Still the live classification model** — declared now at `backend/config/llm_config.py:114`
-and called at `LLM_services.py:312`. The
+and called at `LLM_services.py:355`. The
 guide's §1.4 (*"Confirm whether that reference is intentional. If it is a typo falling through to an
 exception handler, you may have a classification path that has been quietly failing."*) has the right
 instinct pointed at the wrong thing. The real questions are in DPG-14.
@@ -254,7 +254,7 @@ and will report the drift — but a data-flow diagram that has silently gone sta
 rather than a control, which is the assessment's own stated standard.
 
 > ✅ **Done, and it took two passes — which is the lesson.** L4 now cites
-> `LLM_services.py:312` (classification) and `:618` (SEAH detection), L5 cites
+> `LLM_services.py:355` (classification) and `:618` (SEAH detection), L5 cites
 > `ticketing/clients/llm_client.py:197, 230, 309`. ⚠ **The first re-point was itself wrong**: it cited
 > `:306` and `:535`, and `:535` is the **parked** translation path — so a leg claiming *"two reachable
 > call sites"* named one live site and one switched-off one. Re-pointing is not a find-and-replace; each
@@ -584,10 +584,10 @@ task be moved without touching code. Declared in `backend/config/llm_config.py:1
 
 | Task key | Env override | Default (as built) | Was, before §18.2 | Endpoint | Call site |
 |---|---|---|---|---|---|
-| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | `gpt-5-nano` | llm | `LLM_services.py:312` |
+| `classify` | `MODEL_CLASSIFY` | `gpt-5-nano` | `gpt-5-nano` | llm | `LLM_services.py:355` |
 | `extract` | `MODEL_EXTRACT` | `gpt-5-nano` | `gpt-3.5-turbo` | llm | `LLM_services.py:138`, `:169` — ⏸ parked |
-| `translate` | `MODEL_TRANSLATE` | `gpt-5-nano` | `gpt-4` | llm | `LLM_services.py:558` — ⏸ parked |
-| `detect` | `MODEL_DETECT` | `gpt-5-nano` | `gpt-3.5-turbo` | llm | `LLM_services.py:618` (SEAH path) |
+| `translate` | `MODEL_TRANSLATE` | `gpt-5-nano` | `gpt-4` | llm | `LLM_services.py:603` — ⏸ parked |
+| `detect` | `MODEL_DETECT` | `gpt-5-nano` | `gpt-3.5-turbo` | llm | `LLM_services.py:670` (SEAH path) |
 | `asr` | `MODEL_ASR` | `whisper-1` | `whisper-1` | **asr** | `LLM_services.py:82` — ⏸ parked |
 | `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `""` → falls back to `translate` | `gpt-4` | llm | `ticketing/clients/llm_client.py:197` |
 | `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-5-nano` | `gpt-4o-mini` | llm | `ticketing/clients/llm_client.py:275`, `:309` |

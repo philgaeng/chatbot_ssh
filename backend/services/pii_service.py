@@ -365,16 +365,37 @@ def _find_addresses(original: str, normalised: str) -> list[PiiSpan]:
     # clause boundary in a lookahead — so a 21-character address simply never matched, while a
     # short one swallowed the following clause. Counting tokens gets both cases right, and a token
     # class of letters-and-digits stops naturally at the danda `।` or a comma.
+    # ⚠ At least ONE token after the qualifier, not zero. A bare `वडा` on its own is the word
+    # "ward", not an address, and redacting it would fire on ordinary sentences.
     _addr_token = rf"[ऀ-ॿ0-9{_D}]+"
-    dev = re.compile(rf"((?:{dev_q})(?:\s+{_addr_token}){{0,3}})")
+    dev = re.compile(rf"((?:{dev_q})(?:\s+{_addr_token}){{1,3}})")
     for m in dev.finditer(normalised):
+        # ⚠ Require a DIGIT inside the span. Devanagari has no capitalisation to lean on, so
+        # without this the window greedily takes any three words after the qualifier and
+        # "वडा मा धेरै धूलो" — *"a lot of dust in the ward"* — is redacted as an address, on
+        # every dust complaint that mentions a ward. A ward number or house number is what makes
+        # it an address; the bare noun is ordinary prose.
+        #
+        # ⚠ **The cost is stated rather than hidden**: an unnumbered settlement address like
+        # `बुधबारे टोल` is missed. That is the same residual the benchmark already names (bare
+        # settlement names), and it is the right side to err on — over-redacting the word "ward"
+        # damages the classifier on the commonest grievance in the corpus.
+        if not any(ch.isdigit() for ch in normalised[m.start(1) : m.end(1)]):
+            continue
         spans.append(PiiSpan(m.start(1), m.end(1), ADDRESS, original[m.start(1) : m.end(1)]))
 
     roman_q = "|".join(re.escape(q) for q in SETTLEMENT_QUALIFIERS_ROMAN)
     # Case-insensitivity scoped to the qualifier: a blanket flag let `[A-Z][a-z]+` match "in",
     # so "I live in ward 5" captured "in ward 5".
+    #
+    # ⚠ **Two alternatives, each requiring something concrete after or before the qualifier.** The
+    # first version allowed zero trailing digits, so the bare word `ward` matched — and
+    # "making children in the ward sick" was redacted as an address. A qualifier alone is a common
+    # noun; it becomes an address when it carries a NUMBER ("ward 5") or names a PLACE
+    # ("Duhabi municipality). Recall-first does not mean redacting the word "ward".
     roman = re.compile(
-        rf"\b((?:[A-Z][a-z]+\s+)?(?i:{roman_q})\.?\s*(?:no\.?\s*)?{_ANY_DIGIT}{{0,4}}[A-Za-z]*)\b"
+        rf"\b((?:[A-Z][a-z]+\s+(?i:{roman_q}))"
+        rf"|(?:(?i:{roman_q})\.?\s*(?:no\.?\s*)?{_ANY_DIGIT}{{1,4}}[A-Za-z]*))\b"
     )
     for m in roman.finditer(normalised):
         spans.append(PiiSpan(m.start(1), m.end(1), ADDRESS, original[m.start(1) : m.end(1)]))

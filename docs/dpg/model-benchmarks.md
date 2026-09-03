@@ -86,7 +86,7 @@ of their complaint, and synced to ticketing**, where it matched no filter, appea
 was missed by the `high_priority` lookup (`ticketing_dispatch.py:117`) — contributing nothing to
 priority, silently.
 
-**What replaced it** (`LLM_services.py:373` → [`category_resolution.py`](../../backend/services/category_resolution.py)):
+**What replaced it** (`LLM_services.py:416` → [`category_resolution.py`](../../backend/services/category_resolution.py)):
 
 | Tier | Mechanism | Effect |
 |---|---|---|

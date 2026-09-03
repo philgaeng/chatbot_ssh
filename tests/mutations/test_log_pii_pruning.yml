@@ -1,0 +1,72 @@
+# Mutation records for tests/backend/test_log_pii_pruning.py  (DPG-30 log pruning)
+#
+# ⭐ This module is why the whole ticket exists. Its FIRST version was decorative and a mutation
+# proved it: reverting `mask_phone_for_log(slot_value)` to `slot_value` at both phone call sites
+# left all ten tests green, because they tested the HELPER and never the call sites — and a call
+# site logging a raw value was the entire finding. The call-site AST pin was added in response,
+# and the two records below are the mutation that forced it.
+#
+# ⚠ Transcription note: the prose ledger records ONE check for "phone masking reverted at the
+# call sites" (both were reverted together). It is split into two records here, one per site,
+# because the pin now fires per call site and a per-site record says which one regressed. Both
+# were verified; the split is a superset of the original claim, not a weakening of it.
+
+- id: T-34-phone-callsite-validating
+  target: backend/actions/services/contact/phone.py
+  find: '    logger.info("%s - Validating phone: %s", action_name, mask_phone_for_log(slot_value))'
+  replace: '    logger.info("%s - Validating phone: %s", action_name, slot_value)'
+  tests: tests/backend/test_log_pii_pruning.py
+  expect: kills
+  why: >
+    The original defect, at the first of the two sites. A complainant's full mobile number reached
+    the operational log on every phone validation. The helper was already correct — only the call
+    site was wrong, which is exactly the gap a helper-only test cannot see.
+
+- id: T-34-phone-callsite-invalid-format
+  target: backend/actions/services/contact/phone.py
+  find: '        logger.info("%s - Invalid phone format: %s", action_name, mask_phone_for_log(slot_value))'
+  replace: '        logger.info("%s - Invalid phone format: %s", action_name, slot_value)'
+  tests: tests/backend/test_log_pii_pruning.py
+  expect: kills
+  why: >
+    The second site, on the rejection path — which logs the number precisely when it is malformed
+    and therefore most likely to be repeated in a support conversation. Reverting either site alone
+    must go red, or the pin is back to testing the neighbourhood instead of the thing.
+
+- id: T-34-otp-logged-again
+  target: backend/actions/forms/form_otp.py
+  find: '        self.logger.info("%s - Received OTP input (%d chars)", self.name(), len(str(slot_value or "")))'
+  replace: '        self.logger.info("%s - Received OTP input: %s", self.name(), slot_value)'
+  tests: tests/backend/test_log_pii_pruning.py
+  expect: kills
+  why: >
+    The OTP is never logged at any length. No truncation helps: the code is 6 digits, so an
+    8-character "prefix" is the whole secret. The owner's free-text prefix rule is per FIELD TYPE
+    and this is the type it explicitly excludes.
+  note: >
+    ⚠ Trap §4.2 lives here. Line 331 is a comment reading "NEVER log `slot_value` here", so a
+    naive source-level check flags its own documentation. The pin strips comments via tokenize
+    before scanning; the `find` above anchors on the logging call itself, not the phrase.
+
+- id: T-34-mask-widened-to-eight
+  target: backend/services/db_debug_log.py
+  find: '    return f"***{digits[-4:]}"'
+  replace: '    return f"***{digits[-8:]}"'
+  tests: tests/backend/test_log_pii_pruning.py
+  expect: kills
+  why: >
+    Last four digits is the whole of the redaction. Eight characters of a ten-digit Nepali mobile
+    leaves eight of ten — enough to identify the subscriber against any other list — while still
+    LOOKING masked, which is worse than not masking at all.
+
+- id: T-34-text-prefix-made-a-noop
+  target: backend/services/db_debug_log.py
+  find: "    head = text[:chars]"
+  replace: "    head = text"
+  tests: tests/backend/test_log_pii_pruning.py
+  expect: kills
+  why: >
+    The owner's rule (2026-08-27) is that free text is logged as its first 8 characters so someone
+    can find the record. Dropping the slice silently restores whole-narrative logging while every
+    call site still reads as though it is pruned — the failure is invisible at the call site,
+    which is why the helper itself is pinned as well as the sites.

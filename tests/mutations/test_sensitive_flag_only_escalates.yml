@@ -1,0 +1,46 @@
+# Mutation records for tests/backend/test_sensitive_flag_only_escalates.py  (D-64)
+#
+# ⭐ The third decorative test a mutation caught in this session — and the sharpest. The first
+# version drove `update_grievance_with_tracking`, THE WRONG METHOD: the fix was sitting on a code
+# path the defect does not use, so the test passed while proving nothing about the path that
+# erased the flag. No review would have found that. The mutation did.
+
+- id: T-D64-call-removed-from-update-grievance
+  target: backend/services/database_services/grievance_manager.py
+  find: "            update_fields, update_values = self.generate_update_query(data, expected_fields)\n            update_fields = self._escalate_only_sensitive_flag(update_fields)"
+  replace: "            update_fields, update_values = self.generate_update_query(data, expected_fields)"
+  tests: tests/backend/test_sensitive_flag_only_escalates.py
+  expect: kills
+  why: >
+    The rule has to sit at the choke point every writer passes, not at one call site.
+    `update_grievance` is the method the final submit uses — the path that wrote a stale slot
+    False over the LLM's True. This is the exact method the first version of the test failed to
+    drive; the find string is anchored to the preceding line because the identical call also
+    appears in `update_grievance_with_tracking`, the second writer of the column.
+
+- id: T-D64-or-reduced-to-plain-assignment
+  target: backend/services/database_services/grievance_manager.py
+  find: '            f"{cls._SENSITIVE_COL} = (COALESCE({cls._SENSITIVE_COL}, false) OR %s)"'
+  replace: '            f"{cls._SENSITIVE_COL} = %s"'
+  tests: tests/backend/test_sensitive_flag_only_escalates.py
+  expect: kills
+  why: >
+    ⭐ THE fix itself. `detect_sensitive_content_task` writes True seconds after dispatch, while
+    the tracker slot still holds the keyword result from the 0.9 s poll — so the final submit
+    wrote False straight over the model's True, in precisely the case the LLM leg exists for
+    (keywords miss it, the model catches it). The OR is evaluated by Postgres against the row it
+    is updating, so a stored True survives an incoming False atomically. A read-modify-write in
+    Python would leave a race window, and the consequence of losing it is a missed harassment
+    report.
+
+- id: T-D64-rewrite-widened-to-every-field
+  target: backend/services/database_services/grievance_manager.py
+  find: '            if field.strip().startswith(f"{cls._SENSITIVE_COL} =")'
+  replace: "            if True  # mutation: rewrite every field, not just the SEAH flag"
+  tests: tests/backend/test_sensitive_flag_only_escalates.py
+  expect: kills
+  why: >
+    Only the SEAH flag is special-cased. A blanket rewrite would turn every column in the SET
+    clause into the sensitive-flag fragment — a different and much louder bug, but one that a
+    test asserting merely "the flag is OR-ed" would not notice. The guard is what keeps the
+    escalation rule surgical.

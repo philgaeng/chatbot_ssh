@@ -212,6 +212,36 @@ def test_a_bare_district_survives_because_the_classifier_needs_it():
     assert "Jhapa" in result.text, "the district was redacted — the classifier needs it (§31.3)"
 
 
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Dust from the road works is making children in the ward sick.",
+        "the ward chairperson refused to act",
+        "वडा मा धेरै धूलो छ",
+    ],
+)
+def test_a_bare_qualifier_is_not_an_address(text: str):
+    """⚠ Regression, and it was found by a test asserting a CLEAN summary stayed clean.
+
+    The first version allowed zero trailing digits, so the bare word `ward` matched and
+    *"making children in the ward sick"* was redacted as an address — on the commonest grievance
+    in the corpus. A qualifier alone is a common noun; it becomes an address when it carries a
+    **number** ("ward 5") or names a **place** ("Duhabi municipality").
+
+    ⚠ Recall-first does not mean redacting the word "ward". Over-redaction is cheap only while it
+    stays rare; fired on every dust complaint it stops being a small classification cost.
+    """
+    assert ADDRESS not in _kinds(text), f"a bare qualifier was treated as an address in {text!r}"
+
+
+@pytest.mark.parametrize(
+    "text", ["I live in ward 5 of Duhabi", "Duhabi municipality did nothing", "वडा नं ५ बुधबारे"]
+)
+def test_a_qualified_address_still_fires(text: str):
+    """The other half — the tightening must not have bought its precision with recall."""
+    assert ADDRESS in _kinds(text), f"a real address was missed in {text!r}"
+
+
 def test_an_address_span_stops_at_a_clause_boundary():
     """⚠ Regression: the Devanagari span ran past `।` into the next clause, over-redacting and
     round-tripping a sentence fragment."""
@@ -435,6 +465,11 @@ KNOWN_CALLERS = {
     # is stored unredacted. So neither needs cross-request restore.
     "backend/services/llm_client.py",
     "ticketing/clients/llm_client.py",
+    # §31.4's output pass. `_redact_generated_text` uses `redacted.text` and never touches
+    # `.mapping` — the mapping is not merely discarded, it is never read. Nothing restores a
+    # generated summary, because the stored summary carries no names by decision (owner,
+    # 2026-08-27). So this caller cannot need cross-request restore even in principle.
+    "backend/services/LLM_services.py",
 }
 
 
@@ -446,9 +481,10 @@ def test_no_caller_needs_cross_request_restore_yet():
     apply — and DPG-31's "the mapping is never persisted" holds by construction rather than by
     discipline.
 
-    ⭐ **This test already earned its keep once.** It was written when there were no callers at all,
-    and it went red the moment DPG-33 added two — forcing the question to be answered rather than
-    inherited. It stays red for any caller not in `KNOWN_CALLERS`.
+    ⭐ **This test has earned its keep twice.** It was written when there were no callers at all,
+    went red the moment DPG-33's chokepoints appeared, and went red again the moment §31.4's output
+    pass did — each time forcing the question to be answered rather than inherited. It stays red for
+    any caller not in `KNOWN_CALLERS`, which is the whole design.
     """
     import shutil
     import subprocess

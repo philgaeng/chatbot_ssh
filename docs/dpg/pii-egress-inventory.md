@@ -256,7 +256,7 @@ assessed as carrying less than it carries.
 and `ticketing/clients/llm_client.py:69` (DPG-18) are the only places a request is built, which is what
 makes DPG-33 two hooks rather than nine.
 
-- **Live, chatbot:** classification (`LLM_services.py:312`), SEAH detection (`:618`).
+- **Live, chatbot:** classification (`LLM_services.py:355`), SEAH detection (`:618`).
 - **Live, ticketing:** note translation (`:152`), case findings (`:230`), resolved summary (`:309`).
 - **Parked** (`PARKED_TASKS`, `registered_tasks.py:96`): ASR, contact extraction ×2, translation. They
   carry **no production egress** until transcription is funded — inventory them, do not spend

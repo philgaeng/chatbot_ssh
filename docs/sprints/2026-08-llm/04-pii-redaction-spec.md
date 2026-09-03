@@ -317,6 +317,31 @@ generated summary, that summary is redacted again or regenerated. It converts *"
 to"* into *"a summary carrying a detected name cannot be stored"* — deterministic, and pinnable by a test
 the way the boundary rules are.
 
+> ## ✅ BUILT 2026-08-27 — `_redact_generated_text()`, on both producers
+>
+> One helper, two call sites, and **both summary producers are covered by construction** rather than by
+> anyone remembering there are two: `classify_and_summarize_grievance` → `grievance_summary`, and
+> `translate_grievance_to_english_LLM` → `grievance_summary_en` **and** `grievance_description_en`
+> (the description is a full translation of the narrative, so anything the input pass missed is
+> reproduced there in English). Pinned by AST tests that read each function's `return`, so removing
+> the pass from either one goes red.
+>
+> ⭐ **A firing is a signal, not housekeeping.** If this pass has work to do, the *input* recogniser
+> missed a name that already travelled to a third-party provider. It logs at **WARNING** with a count
+> and never the value — the only place that fact surfaces.
+>
+> ⚠ **And building it found a false positive worth more than the feature.** The test asserting a
+> *clean* summary stays clean went red: `"making children in the ward sick"` was being redacted as an
+> address, because the qualifier pattern allowed **zero** trailing digits, so the bare word `ward`
+> matched. On a road-dust GRM that fires on the commonest grievance in the corpus. A qualifier is now
+> an address only when it carries a **number** (`ward 5`) or names a **place** (`Duhabi municipality`),
+> and the Devanagari side requires a digit in the span because it has no capitalisation to lean on.
+>
+> **Recall-first does not mean redacting the word "ward".** Over-redaction is cheap only while it stays
+> rare; fired on every dust complaint it stops being a small classification cost and starts being a
+> broken classifier. ✅ **Measured recall is unchanged at 87.5%** — the tightening cost no true
+> positives, which is what made it obviously right rather than a judgement call.
+
 ⚠ **There are two summary-producing prompts, not one, and the second is easy to miss:**
 
 | Where | Produces | Why it gets missed |

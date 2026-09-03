@@ -1,0 +1,116 @@
+# Mutation records for tests/backend/test_celery_payload_carries_no_narrative.py
+#
+# DPG-34: the Celery payload carries a grievance_id, not the narrative. Redis snapshots to disk
+# (D-63), so anything that travels through the broker is grievance text at rest, unencrypted, in a
+# store nothing backs up and no retention policy names.
+#
+# ⚠ Transcription note: the ledger records 4 mutations for this module, from commit 8603b9f4 (the
+# classification half). The SEAH half landed later in b348773e with 4 more against the SAME test
+# module, so all 8 are seeded here. The split below follows the file's own two-part structure.
+
+# ── The classification half (8603b9f4) ───────────────────────────────────────
+
+- id: T-DPG34-narrative-back-in-the-payload
+  target: backend/actions/grievance_intake/classification.py
+  find: "            \"flask_session_id\": session_id,\n            \"session_id\": session_id,"
+  replace: "            \"flask_session_id\": session_id,\n            \"session_id\": session_id,\n            \"values\": {\"grievance_description\": grievance_description},"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    ⭐ The defect itself. The narrative used to travel as `"values": {"grievance_description":
+    ...}` on every intake, which serialised it into Redis — and Redis persists to disk, so the
+    broker held complainant narratives at rest. The task reads the text from Postgres by
+    grievance_id instead; putting it back "to save a query" restores the store this removed, and
+    a redacted copy would still be a copy.
+
+- id: T-DPG34-db-read-removed
+  target: backend/task_queue/registered_tasks.py
+  find: "            row = db_manager.get_grievance_core_by_id(grievance_id)\n            grievance_description = (row or {}).get('grievance_description')"
+  replace: "            grievance_description = None  # mutation: no DB read"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    The other half of the same trade, and the reason it is safe. If the task does not READ the
+    narrative it must be RECEIVING it — which is the leak. `create_or_update_grievance` is a hard
+    write on the submit path and runs before the trigger, so the row is always there.
+
+- id: T-DPG34-pii-joining-accessor
+  target: backend/task_queue/registered_tasks.py
+  find: "            row = db_manager.get_grievance_core_by_id(grievance_id)\n            grievance_description = (row or {}).get('grievance_description')"
+  replace: "            row = db_manager.get_grievance_by_id(grievance_id)\n            grievance_description = (row or {}).get('grievance_description')"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    Not a style preference. `get_grievance_by_id` JOINs `complainants` and decrypts the four
+    contact fields, so using it here would pull complainant PII into a worker that has no use for
+    it — trading one exposure for a wider one while looking like a fix.
+
+- id: T-DPG34-print-restored-in-a-parked-task
+  target: backend/task_queue/registered_tasks.py
+  find: "    # Get the Celery task ID from the current task\n    task_id = self.request.id if hasattr(self, 'request') else None"
+  replace: "    print(f\"transcribe_audio_file_task input: {input_data}\")\n    task_id = self.request.id if hasattr(self, 'request') else None"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    ⭐ The print ban is MODULE-WIDE and a mutation is why. The first version of the test guarded
+    only `classify_and_summarize_grievance_task`, so restoring a print in one of the other tasks
+    left it green — this record restores one in `transcribe_audio_file_task`, a PARKED path that
+    would leak identically the day it unparks. The defect is the shape, not the function. A print
+    also goes to stdout unfiltered and is invisible to any logging filter, which is what makes it
+    worth banning outright rather than fixing case by case.
+
+# ── The SEAH half (b348773e) — same fix, different risk ──────────────────────
+#
+# Classification's pre-dispatch write is HARD (it raises). SEAH's is BEST-EFFORT: it returns early
+# without the ids and swallows DB exceptions, while the dispatch happens regardless. So a missing
+# row is REACHABLE here, and reading from the DB without handling it would convert a best-effort
+# write into a silently skipped safeguarding check.
+
+- id: T-DPG34-seah-text-sent-again
+  target: backend/actions/grievance_intake/sensitive.py
+  find: "            detect_sensitive_content_task.delay(\n                language_code=language_code,"
+  replace: "            detect_sensitive_content_task.delay(\n                text=text,\n                language_code=language_code,"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    The same Redis-at-rest leak as the classification payload, but the text is a harassment
+    disclosure. `text` is still accepted as a parameter for call-site compatibility and marked
+    `noqa: ARG001` — deliberately NOT transported — which is exactly the shape that invites
+    someone to "fix the unused argument" by passing it on.
+
+- id: T-DPG34-seah-retry-dropped
+  target: backend/task_queue/registered_tasks.py
+  find: "            raise self.retry(countdown=2 * (2 ** self.request.retries))"
+  replace: "            pass  # mutation: no retry, fall straight through"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    ⭐ The property that makes reading-from-DB safe on a safeguarding path. The pre-dispatch write
+    is best-effort, so "no row" is reachable — the write and this task race by a thread hand-off.
+    Retrying gives the row time to land; skipping drops the LLM SEAH signal with nothing anywhere
+    recording that it happened.
+
+- id: T-DPG34-seah-terminal-failure-downgraded
+  target: backend/task_queue/registered_tasks.py
+  find: "        logger.error(\n            \"detect_sensitive_content_task: NO TEXT after %s retries | grievance_id=%s \""
+  replace: "        logger.warning(\n            \"detect_sensitive_content_task: NO TEXT after %s retries | grievance_id=%s \""
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    A SEAH detection that never ran is invisible everywhere else: no flag is written, nothing
+    shows a gap, and the ticket is simply not marked sensitive. This log line is the ONLY artefact
+    that the second signal did not run — at WARNING it is one line among thousands, and a missed
+    safeguarding signal is the thing you most need to find later.
+
+- id: T-DPG34-seah-model-excerpt-logged
+  target: backend/task_queue/registered_tasks.py
+  find: '        text_len_for_log("message", message),'
+  replace: "        message,"
+  tests: tests/backend/test_celery_payload_carries_no_narrative.py
+  expect: kills
+  why: >
+    ⭐ `message` is not free text under the owner's 8-character prefix rule, and the distinction is
+    the point. The prompt asks the model for "a short excerpt of the relevant part of the text",
+    so `message` is the fragment the model chose BECAUSE it is the harassment disclosure — a
+    prefix of it is a prefix of the most sensitive string the system produces. `detected` and
+    `level` carry the whole diagnostic signal; the excerpt adds nothing its length does not.

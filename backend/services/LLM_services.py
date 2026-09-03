@@ -204,6 +204,49 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
             "complainant_address": ""
         }
 
+def _redact_generated_text(values: Dict[str, Any], *fields: str) -> Dict[str, Any]:
+    """Second redaction pass, over the model's OUTPUT, before anything is persisted (§31.4).
+
+    **The ordering is the control; the prompt is not.** The input is already pseudonymised at the
+    `call_llm` chokepoint (DPG-33), so the model never receives a name it could echo. This pass
+    catches the case where the *input* redaction MISSED one — which is exactly where a prompt
+    instruction is least dependable, because a missed name reads to the model as ordinary
+    narrative.
+
+    It converts *"we asked the model not to name anyone"* into **"a summary carrying a detected
+    name is not stored"** — deterministic, and pinnable.
+
+    ⚠ **Applied to BOTH summary-producing fields, which is the point of doing it here rather than
+    per prompt.** There are two, and the second is easy to miss: the classification call produces
+    `grievance_summary`, and the *translation* call produces `grievance_summary_en` — its prompt
+    says *"create a new summary from the translated details"*, so it reads as a translation step
+    while actually generating text. Its output is also the English summary most likely to reach a
+    quarterly report. One output pass covers both; a prompt gate has to be applied twice and stay
+    applied.
+
+    ⚠ **The mapping is discarded.** Nothing restores a generated summary — the stored summary
+    carries no names by decision (owner, 2026-08-27).
+    """
+    from backend.services.pii_service import redact_for_model
+
+    for field in fields:
+        original = values.get(field)
+        if not isinstance(original, str) or not original:
+            continue
+        redacted = redact_for_model(original)
+        if redacted.mapping:
+            # Count only. The values are what this exists to keep out of the record.
+            logger.warning(
+                "%s: input redaction missed %d identifier(s) that the model echoed into '%s'; "
+                "redacted again before storage (DPG-31 §31.4)",
+                "output_redaction",
+                len(redacted.mapping),
+                field,
+            )
+            values[field] = redacted.text
+    return values
+
+
 def classify_and_summarize_grievance(
     grievance_text: str,
     language_code: str = DEFAULT_LANGUAGE_CODE,
@@ -424,7 +467,9 @@ def classify_and_summarize_grievance(
         result = validated.model_dump()
         result["grievance_categories"] = kept
         result["grievance_categories_alternative"] = alternatives
-        return result
+        # §31.4 — the model's own output, before it is persisted. Summary only: the categories are
+        # taxonomy keys resolved against the live catalogue, so they cannot carry a name.
+        return _redact_generated_text(result, "grievance_summary")
 
     except Exception as e:
         logger.error(f"Error in classify_and_summarize_grievance: {str(e)}")
@@ -585,7 +630,14 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
         result["source_language"] = input_data["language_code"]
         result["translation_method"] = "LLM"
         result["grievance_categories_en"] = input_data["grievance_categories"]
-        return result
+        # §31.4 — ⚠ this is the summary-producing prompt that is easy to miss. Its own instruction
+        # says "create a new summary from the translated details", so it GENERATES text while
+        # reading as a translation step, and its output is the English summary most likely to reach
+        # a quarterly report. The description is passed too: it is a full translation of the
+        # narrative, so anything the input pass missed is reproduced here in English.
+        return _redact_generated_text(
+            result, "grievance_summary_en", "grievance_description_en"
+        )
     
     except Exception as e:
         raise ValueError(f"Error translating grievance to English: {_grievance_ref(input_data)}: {e}")
