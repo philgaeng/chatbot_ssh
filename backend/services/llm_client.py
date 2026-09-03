@@ -86,6 +86,7 @@ def call_llm(
     temperature: float | None = None,
     max_output_tokens: int | None = None,
     timeout: float | None = None,
+    redact: bool = True,
 ):
     """
     One entry point for the chatbot surface: the layer picks the model and shapes the request.
@@ -99,6 +100,20 @@ def call_llm(
     Raises `LLMTruncatedError` / `LLMParseError` rather than returning something empty that a
     caller could mistake for an empty answer.
     """
+    # ── Redaction, at the chokepoint, OPT-OUT (DPG-33 step 1) ────────────────────────────
+    # `redact=True` is the default deliberately: a new call site gets pseudonymisation without
+    # knowing it exists, and switching it off is a visible decision in the diff. Opt-IN is the
+    # shape that fails — one forgotten keyword and grievance text crosses the border in clear.
+    #
+    # ⚠ The mapping is NOT returned and the output is NOT auto-restored. Both follow from the
+    # 2026-08-27 decision that the STORED summary carries no names: classification output is
+    # machine-consumed, the summary is stored pseudonymised, and the complainant still sees their
+    # own words in `grievance_description`, which is stored unredacted (redaction is at
+    # transmission, not storage — Q-12b). So no caller needs `restore()` here, and DPG-31's
+    # "the mapping is never persisted" stays true because it never leaves this frame.
+    if redact:
+        messages = _redact_messages(messages, task=task)
+
     # ⚠ Chat completions only. ASR is a different API surface (`audio.transcriptions.create`,
     # multipart, no messages), so `transcribe_audio_file` keeps its own three lines and resolves
     # its model through the same registry. Pretending one function covers both would mean a
@@ -113,6 +128,38 @@ def call_llm(
         timeout=timeout,
     )
     return parse_response(get_llm_client().chat.completions.create(**request), schema)
+
+
+def _redact_messages(messages: list[dict], *, task: str) -> list[dict]:
+    """Pseudonymise every message body before it leaves the process.
+
+    Returns NEW message dicts — the caller's list is untouched, because the caller often still
+    needs the original (the prompt it built, the text it is about to store).
+
+    ⚠ Redacts `content` only. Roles, names and tool metadata are structural.
+    """
+    # Imported here, not at module top, to keep `llm_client` importable in the minimal environment
+    # DPG-24's CI job installs (the OpenAI SDK, pydantic and pytest — no service layer). A
+    # module-level import would drag the constants package into that job for no reason.
+    from backend.services.pii_service import redact_for_model
+
+    out: list[dict] = []
+    spans_total = 0
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, str) or not content:
+            out.append(message)
+            continue
+        result = redact_for_model(content)
+        spans_total += len(result.mapping)
+        out.append({**message, "content": result.text})
+
+    if spans_total:
+        # Counts only — the values are exactly what this function exists to keep out of the logs.
+        logger.info(
+            "call_llm(%s): %d placeholder(s) substituted before transmission", task, spans_total
+        )
+    return out
 
 
 def reset_clients() -> None:

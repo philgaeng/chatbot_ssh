@@ -146,10 +146,19 @@
       "Bash(timeout 60 ssh -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"BRANCH: $\\(git rev-parse --abbrev-ref HEAD\\)\" && echo \"HEAD:   $\\(git rev-parse --short HEAD\\)\" && echo \"--- local mods ---\" && git status --short | head -10 && echo \"--- disk ---\" && df -h / | tail -1')",
       "Bash(timeout 60 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 -o StrictHostKeyChecking=accept-new ubuntu@grm-aws-staging 'cd /home/ubuntu/nepal_chatbot && echo \"BRANCH: $\\(git rev-parse --abbrev-ref HEAD\\)\" && echo \"HEAD:   $\\(git rev-parse --short HEAD\\)\" && echo \"--- local mods ---\" && git status --short | head -10 && echo \"--- disk ---\" && df -h / | tail -1')",
       "Bash(timeout 90 ssh -i /home/philg/.ssh/pg_rasa_train.pem -o ConnectTimeout=20 ubuntu@grm-aws-staging 'docker system df 2>&1 | head -8; echo \"--- running ---\"; docker ps --format \"{{.Names}}\\\\t{{.Status}}\" | head -20')",
-      "Bash(make -n aws-deploy REMOTE_HOST_RUNNING=grm-aws-staging)"
+      "Bash(make -n aws-deploy REMOTE_HOST_RUNNING=grm-aws-staging)",
+      "Bash(cd /home/philg/projects/nepal_chatbot; git status --porcelain | head -5; echo \"--- branch/head ---\"; git log --oneline -1; echo \"--- DPG-33 steps as amended ---\"; sed -n '/^## DPG-33 — Redaction at the model-call boundary/,/^### Acceptance/p' docs/sprints/2026-08-llm/04-pii-redaction-spec.md | head -30)",
+      "Bash(python3 -c \"import ast;ast.parse\\(open\\('ticketing/clients/llm_client.py'\\).read\\(\\)\\);print\\('parses'\\)\")",
+      "Bash(PYTHONPATH=. python3 -c ' *)",
+      "Bash(PYTHONPATH=. python3 -m pytest tests/backend/test_pii_service.py -q -p no:cacheprovider)",
+      "Bash(PYTHONPATH=. python3 -m pytest tests/actions tests/backend tests/orchestrator tests/repo tests/ticketing -q -m \"not live_llm\" --ignore=tests/backend/test_llm_services.py --ignore=tests/backend/test_llm_live.py --ignore=tests/backend/test_redaction_at_the_model_boundary.py -p no:cacheprovider)",
+      "Bash(PYTHONPATH=. python3 -m pytest tests/actions tests/backend tests/orchestrator tests/repo -q -m \"not live_llm\" --ignore=tests/backend/test_llm_services.py --ignore=tests/backend/test_llm_live.py --ignore=tests/backend/test_redaction_at_the_model_boundary.py -p no:cacheprovider)",
+      "Bash(PYTHONPATH=. python3 -m pytest tests/repo -q -p no:cacheprovider)",
+      "Bash(bash /tmp/claude-1000/-home-philg-projects-nepal-chatbot/4392b905-a204-4f58-b9a8-2103404156b2/scratchpad/dl.sh)"
     ],
     "additionalDirectories": [
-      "/home/philg/projects/nepal_chatbot/channels/ticketing-ui/app/api/v1/[...path]"
+      "/home/philg/projects/nepal_chatbot/channels/ticketing-ui/app/api/v1/[...path]",
+      "/home/philg/projects/nepal_chatbot/docs/sprints/2026-08-llm"
     ]
   }
 }

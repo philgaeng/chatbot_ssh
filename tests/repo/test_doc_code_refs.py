@@ -113,9 +113,9 @@ ANCHORS: tuple[tuple[str, int, str], ...] = (
     # Where every model name is declared — one file, one line each (DPG-17).
     ("backend/config/llm_config.py", 114, "gpt-5-nano"),
     # The three ticketing call sites — leg L5.
-    ("ticketing/clients/llm_client.py", 152, "call_llm"),
-    ("ticketing/clients/llm_client.py", 230, "call_llm"),
-    ("ticketing/clients/llm_client.py", 309, "call_llm"),
+    ("ticketing/clients/llm_client.py", 197, "call_llm"),
+    ("ticketing/clients/llm_client.py", 275, "call_llm"),
+    ("ticketing/clients/llm_client.py", 354, "call_llm"),
     ("ticketing/api/routers/tickets/summary.py", 113, "the configured LLM"),
     # The privacy assessment's load-bearing citations (indicators 7, 9a).
     ("backend/services/database_services/base_manager.py", 266, "_encrypt_field"),

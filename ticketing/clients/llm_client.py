@@ -75,6 +75,7 @@ def call_llm(
     temperature: float | None = None,
     max_output_tokens: int | None = None,
     timeout: float | None = None,
+    redact: bool = True,
 ):
     """
     One entry point for the ticketing surface. Same contract as the chatbot surface's, and
@@ -85,6 +86,18 @@ def call_llm(
     `backend/config/llm_config.py` — so the two surfaces cannot ask the same provider for
     different things. Two factories, one config; two callers, one contract.
     """
+    # ── Redaction, at the chokepoint, OPT-OUT (DPG-33 step 1) ────────────────────────────
+    # Same default and the same reason as the chatbot surface: a new call site is pseudonymised
+    # without knowing this exists, and turning it off is a visible decision in the diff.
+    #
+    # ⚠ This surface carries the sharper payload. `generate_case_findings` sends **the whole case
+    # timeline including officer notes**, and on a sensitive workflow that is a SEAH case file.
+    # Step 3 of DPG-33 is about this: the prompt already asks the model not to echo names, but a
+    # prompt instruction does nothing about what is SENT — it only acts on what comes back. That
+    # instruction stays as defence in depth; this is the control.
+    if redact:
+        messages = _redact_messages(messages, task=task)
+
     request = request_for(
         task,
         messages,
@@ -95,6 +108,38 @@ def call_llm(
         timeout=timeout,
     )
     return parse_response(_get_client().chat.completions.create(**request), schema)
+
+
+def _redact_messages(messages: list[dict], *, task: str) -> list[dict]:
+    """Pseudonymise every message body before it leaves the process.
+
+    Returns NEW message dicts; the caller's list is untouched.
+
+    ⚠ **This imports from `backend.services`, which the module docstring's independence rule
+    normally forbids.** The exemption is the same one `backend/config/llm_config.py` already
+    holds and is narrower than it looks: `pii_service` is a **pure function library** — no
+    session, no client, no I/O, no first-party imports beyond a constants module. Duplicating a
+    redaction implementation per surface is the failure mode this sprint exists to avoid: two
+    recognisers drift, and the weaker one becomes the border.
+    """
+    from backend.services.pii_service import redact_for_model
+
+    out: list[dict] = []
+    spans_total = 0
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, str) or not content:
+            out.append(message)
+            continue
+        result = redact_for_model(content)
+        spans_total += len(result.mapping)
+        out.append({**message, "content": result.text})
+
+    if spans_total:
+        logger.info(
+            "call_llm(%s): %d placeholder(s) substituted before transmission", task, spans_total
+        )
+    return out
 
 
 def reset_client() -> None:

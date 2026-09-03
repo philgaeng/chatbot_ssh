@@ -423,28 +423,47 @@ def test_the_redacted_text_alone_cannot_be_reversed():
     assert "9812345678" not in result.text
 
 
+# The callers that exist, and the recorded answer for each. ⚠ A new entry is not a formality:
+# adding one means someone has decided that caller does not need the mapping across requests. If
+# one ever does, §31.3's three constraints apply BEFORE it is added here (never in `ticketing.*`;
+# same encryption, access control, audit and retention as the record it dereferences; a new leg on
+# DPG-04's data-flow diagram).
+KNOWN_CALLERS = {
+    # DPG-33's two chokepoints. Both redact inside `call_llm` and discard the mapping in the same
+    # frame — the output is never restored, because the STORED summary carries no names (owner,
+    # 2026-08-27) and the complainant still sees their own words in `grievance_description`, which
+    # is stored unredacted. So neither needs cross-request restore.
+    "backend/services/llm_client.py",
+    "ticketing/clients/llm_client.py",
+}
+
+
 def test_no_caller_needs_cross_request_restore_yet():
     """⚠ Acceptance item, recorded rather than assumed: is the mapping ever persisted?
 
-    **Today: no caller exists.** DPG-31 ships the library; DPG-33 wires it. The two places that
-    will need `restore()` — translation output and the classification summary — both run inside the
-    *same* task that produced the redaction, so the mapping can live in memory for the duration and
-    never be written.
+    **Answer: no.** The two callers are DPG-33's chokepoints, and both discard the mapping in the
+    frame that created it. Nothing restores, so nothing is persisted, so §31.3's constraints do not
+    apply — and DPG-31's "the mapping is never persisted" holds by construction rather than by
+    discipline.
 
-    **This test fails the moment that stops being true**, which is the point: if a caller appears
-    that needs the mapping across requests, someone has to come here, delete this test, and take
-    the three constraints in §31.3 seriously (never in `ticketing.*`; same encryption, access
-    control, audit and retention as the record it dereferences; a new leg on DPG-04's diagram).
+    ⭐ **This test already earned its keep once.** It was written when there were no callers at all,
+    and it went red the moment DPG-33 added two — forcing the question to be answered rather than
+    inherited. It stays red for any caller not in `KNOWN_CALLERS`.
     """
+    import shutil
     import subprocess
 
+    if shutil.which("git") is None:
+        pytest.skip("git unavailable — repository-hygiene check cannot run here (not a pass)")
     out = subprocess.run(
         ["git", "grep", "-l", "-E", r"redact_for_model|RedactionResult", "--", "backend/", "ticketing/"],
         capture_output=True, text=True, cwd=REPO_ROOT,
     ).stdout.split()
-    callers = [f for f in out if not f.endswith("pii_service.py")]
-    assert not callers, (
-        "pii_service now has callers: " + ", ".join(callers) + ". Establish whether any of them "
-        "needs restore() across requests, record the answer in DPG-31's acceptance, and if the "
-        "mapping must be persisted, apply §31.3's three constraints before deleting this test."
+    callers = {f for f in out if not f.endswith("pii_service.py")}
+    unexpected = sorted(callers - KNOWN_CALLERS)
+    assert not unexpected, (
+        "pii_service has a NEW caller: " + ", ".join(unexpected) + ". Establish whether it needs "
+        "restore() across requests. If it does, apply §31.3's three constraints BEFORE adding it "
+        "to KNOWN_CALLERS — the mapping is a compact, high-value index of exactly the identifiers "
+        "that were removed."
     )

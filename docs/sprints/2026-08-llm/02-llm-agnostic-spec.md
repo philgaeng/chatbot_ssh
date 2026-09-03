@@ -255,7 +255,7 @@ rather than a control, which is the assessment's own stated standard.
 
 > ✅ **Done, and it took two passes — which is the lesson.** L4 now cites
 > `LLM_services.py:312` (classification) and `:618` (SEAH detection), L5 cites
-> `ticketing/clients/llm_client.py:152, 230, 309`. ⚠ **The first re-point was itself wrong**: it cited
+> `ticketing/clients/llm_client.py:197, 230, 309`. ⚠ **The first re-point was itself wrong**: it cited
 > `:306` and `:535`, and `:535` is the **parked** translation path — so a leg claiming *"two reachable
 > call sites"* named one live site and one switched-off one. Re-pointing is not a find-and-replace; each
 > citation is a claim about what is at that line, and the parked/live distinction is invisible to a
@@ -589,8 +589,8 @@ task be moved without touching code. Declared in `backend/config/llm_config.py:1
 | `translate` | `MODEL_TRANSLATE` | `gpt-5-nano` | `gpt-4` | llm | `LLM_services.py:558` — ⏸ parked |
 | `detect` | `MODEL_DETECT` | `gpt-5-nano` | `gpt-3.5-turbo` | llm | `LLM_services.py:618` (SEAH path) |
 | `asr` | `MODEL_ASR` | `whisper-1` | `whisper-1` | **asr** | `LLM_services.py:82` — ⏸ parked |
-| `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `""` → falls back to `translate` | `gpt-4` | llm | `ticketing/clients/llm_client.py:152` |
-| `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-5-nano` | `gpt-4o-mini` | llm | `ticketing/clients/llm_client.py:230`, `:309` |
+| `ticket_translate` | `MODEL_TICKET_TRANSLATE` | `""` → falls back to `translate` | `gpt-4` | llm | `ticketing/clients/llm_client.py:197` |
+| `ticket_findings` | `MODEL_TICKET_FINDINGS` | `gpt-5-nano` | `gpt-4o-mini` | llm | `ticketing/clients/llm_client.py:275`, `:309` |
 | `ticket_findings_seah` | `MODEL_TICKET_FINDINGS_SEAH` | `gpt-5-nano` | `gpt-4o` | llm | same two, via `findings_task(is_seah)` |
 
 > ⚠ **Write `ticketing/clients/llm_client.py` in full, not `llm_client.py`.** Sprint 1 created a second

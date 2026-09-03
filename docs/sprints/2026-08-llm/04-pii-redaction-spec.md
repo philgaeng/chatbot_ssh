@@ -517,6 +517,32 @@ instead of nine call sites.
 
 1. Hook `redact_for_model` into the client factory path — as an explicit, opt-**out** step, not an
    opt-in one a new call site can forget.
+
+   > ## ✅ BUILT 2026-08-27 — `redact: bool = True`, keyword-only, on **both** `call_llm()`
+   >
+   > Two hooks, not nine call sites — which is what Sprint 1 bought and why this ticket depends on
+   > it. `redact=True` is the default so a new call site is pseudonymised **without its author
+   > knowing this exists**; switching it off has to be typed, and shows up in the diff. A test pins
+   > the default, a second pins that it is keyword-only, and a third greps the tree so that no
+   > production call site opts out unnoticed.
+   >
+   > ⚠ **The mapping is not returned and the output is not auto-restored**, and both follow from the
+   > storage decision rather than from convenience: the stored summary carries no names,
+   > classification output is machine-consumed, and the complainant still sees their own words in
+   > `grievance_description` — stored unredacted, because redaction is at *transmission*, not
+   > storage (Q-12b). So nothing needs `restore()` at this boundary, the mapping never leaves the
+   > frame that made it, and **DPG-31's "the mapping is never persisted" holds by construction**.
+   >
+   > ⭐ **DPG-31's caller pin went red the moment this landed** — it was written when `pii_service`
+   > had no callers, and it forced the question *"does this one need cross-request restore?"* to be
+   > answered rather than inherited. Answer recorded, guard kept for the next caller.
+   >
+   > ⚠ **The complainant-facing question, resolved and recorded so it is not re-opened.** The
+   > three-consumer table says complainant-facing *"needs names: yes"*, and the stored summary now
+   > has none. Checked: `prepare_grievance_text_for_display` renders **both**
+   > `grievance_description` and `grievance_summary` (`display.py:28-30`), and the description keeps
+   > its names. So the complainant sees their own words intact; only the *summary* line carries
+   > placeholders. That satisfies the row — by the description, not by the summary.
 2. **Restore where the output needs the original.** Classification output is machine-consumed and stays
    redacted. But `grievance_summary` is shown to the complainant and stored, and translation output
    feeds the English record — those need `restore()` applied to the model's output using the same
