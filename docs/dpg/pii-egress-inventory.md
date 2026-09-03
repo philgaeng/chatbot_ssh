@@ -362,10 +362,33 @@ The owner's decision: **send the pseudonymised summary and a link into the platf
 record.** The recipient then reads the case behind Keycloak, with an audit trail, instead of holding a
 copy in a mailbox with neither.
 
-**It has not been implemented.** Verified in the code today: `recap_email.py:53` still formats
-`grievance_description` into the body, alongside `complainant_full_name`, `complainant_phone` and
-`complainant_address` (`:52`, `:56`, `:57`), and `action_outro.py:151` still calls
-`send_recap_email_to_admin` with the whole `grievance_data` dict on **every** submission.
+**It has not been implemented.** Verified end to end on 2026-09-03, template and recipient included:
+
+| Step | Where | State |
+|---|---|---|
+| The send fires on every submission | `action_outro.py:151` → `send_recap_email_to_admin(grievance_data, …)` | ✅ unchanged |
+| The payload is the whole dict | `recap_email.py:52-57` — `grievance_description`, `complainant_full_name`, `complainant_phone`, `complainant_address`, `complainant_email` | ✅ unchanged |
+| The body renders all of them | `constants.py:172-199` — *Grievance Details*, *Address*, *Phone*, *Email* are literal fields in the template | ✅ unchanged |
+| A recipient is configured | `ADMIN_EMAILS` is empty, so it falls back to `ADMIN_EMAIL` — **one address, in committed config** | ✅ it sends |
+
+⭐ **There is no admin template, and that is the whole explanation.** `constants.py:330`:
+
+```python
+EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']
+```
+
+**The admin is sent the complainant's own receipt.** Nobody chose to mail the full record to an
+administrator; a template written for the one reader who already knows the whole story was reused,
+and the audience changed without the content changing. ⚠ **This is the reasoning error described in
+prose above, present in the code as an assignment** — *"they wrote it, showing it back is absurd"*
+justifies the complainant's copy and justifies nothing about a mailing list, and one line of aliasing
+carried the exemption across.
+
+⚠ **The redaction work reached one field of this email and not the other.** `grievance_summary`
+arrives from the model path and is now pseudonymised; `grievance_description` is the raw slot. The
+email therefore renders **`<PERSON_1>` under *Grievance Summary* and the person's actual name two
+lines below under *Grievance Details*.** Neither half is individually wrong, which is exactly why a
+boundary control belongs at the boundary and not at the producer.
 
 ⚠ **This is the state a reader is most likely to get wrong, so it is stated twice.** Sprint 3 closed
 the model boundary, the log boundary and the broker. It did **not** close the leg this document ranks

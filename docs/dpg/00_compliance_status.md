@@ -23,7 +23,7 @@ new ones opened in its place** — one of them created by the same work.
 | | |
 |---|---|
 | ✅ **Grievance text no longer reaches the model provider in clear.** Pseudonymised at both model-call chokepoints, **87.5% measured recall**, opt-**out** so a new call site is covered without its author knowing. The stored summary carries no names. The log boundary and the message broker closed with it | Indicator 7 |
-| 🔴 **One decided control was not built** — the admin recap email still mails the whole grievance record on every submission, and it is ranked **above** the model call for likelihood of exposure | Indicator 7 |
+| 🔴 **One decided control was not built** — the admin recap email still mails the whole grievance record on every submission, and it is ranked **above** the model call for likelihood of exposure. ⭐ Re-verified 2026-09-03: the admin body **is the complainant body**, aliased in one line, so it now mails a *pseudonymised summary directly above the raw narrative it was pseudonymised from* | Indicator 7 |
 | ✅ **Fixed — a live safeguarding defect in which the final submit erased the model's SEAH detections**, in exactly the case the model exists for. ⚠ It had been live for months, and **how it was found** is the strongest methodological evidence in this pack | Indicator 9 |
 | ⛔ **None of it is deployed.** All of it is on `integration/stage`. **Staging has not been deployed since**, and the DOR production host tracks `main`, which is older still. The next staging deploy is blocked on an unrelated database credential | Everything |
 | ⚠ **The classification benchmark is now stale for a second reason** — the harness calls the product's own function, and that function now redacts | Indicator 4 |
@@ -336,12 +336,27 @@ credential. *This is the single most important sentence in the indicator.*
 **Gaps.**
 
 - 🔴 **The admin recap email still mails the entire grievance record — raw narrative, complainant
-  name, phone and address — to a configured list on every submission.** The replacement (a
+  name, phone, address and email — to a configured recipient on every submission.** The replacement (a
   pseudonymised summary plus a link into the platform, so the recipient reads the case behind
   authentication with an audit trail rather than holding a copy in a mailbox with neither) was
   **decided on 2026-08-27 and has not been written.** ⭐ **The egress inventory ranks this leg above
   the model call**, so after a sprint spent on the model boundary this is now the largest unredacted
   egress in the system. **A recorded decision is the state most easily mistaken for a finished one.**
+
+  ⭐ **Re-verified end to end on 2026-09-03, and the cause is more interesting than the defect.**
+  There is no admin email template. `GRIEVANCE_RECAP_ADMIN_BODY` is assigned from
+  `GRIEVANCE_RECAP_COMPLAINANT_BODY` in a single line — **the admin is sent the complainant's own
+  receipt.** That is why it carries everything: the template was written for the one reader who
+  already knows the whole story, and reusing it silently changed the audience without changing the
+  content. ⚠ **It is the exact reasoning error the egress inventory warned about in prose** — *"they
+  wrote it, showing it back is absurd"* is a good argument about a complainant and no argument at all
+  about a configured mailing list — sitting in the code as an assignment.
+
+  ⚠ **And the redaction work reached one field of this email and not the other.** The summary is now
+  pseudonymised, because it comes from the model path; the narrative below it is the raw slot. So the
+  email as it stands renders **`<PERSON_1>` in one paragraph and the person's name in the next**.
+  Nothing is wrong with either half on its own, which is precisely why a boundary control has to be
+  placed at the boundary rather than at the producer.
 - ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
   parked, so there is no future state in which the transfer stops.
 - ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
