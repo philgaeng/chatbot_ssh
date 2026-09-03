@@ -28,9 +28,16 @@ control here runs where the data is. **Verified on the staging host, 2026-09-03:
 | **Redaction, log filter, broker fix, safeguarding escalate-only** | ✅ **running on staging** | `pii_service.py` is in the running image, and the model-call chokepoint resolves `redact` |
 | **`ops` health checks** | ✅ **running on staging, and producing output** | Five checks — db, redis, queue depth, beat liveness, endpoint — all `ok`, first written 2026-09-03 15:49 UTC. **The first evidence this platform has ever produced from a monitored deployed host** |
 | **`ops` dependency & licence scans** | 🟡 **scheduled on staging, never yet run** | `ops.dependency_findings` is **empty**. These are nightly and the container has not had a night |
-| **Keycloak authentication events** | ❌ **still not enabled on staging** | `keycloak.event_entity` holds **0 rows** |
-| **The email-boundary fixes** (indicator 7) | ❌ **not deployed** | They post-date the staging checkout |
+| **Keycloak authentication events** | ❌ **still not enabled on staging** | `keycloak.event_entity` holds **0 rows** and the `grm` realm reads `events_enabled=f`. ⚠ **Re-checked after a full ten-service deploy: unchanged.** It is a realm setting, so no deploy will ever carry it |
+| **The email-boundary fixes** (indicator 7) | ✅ **running on staging** | Deployed 2026-09-03 15:55 UTC; `admin_notifications.py` is in the running **orchestrator** and **backend** images, and the old full-PII template is gone from both |
 | **DOR production** | ⚠ **not verified** | It tracks `main` and is reachable only over VPN. **Treat every row above as false for production** |
+
+⚠ **One deployment detail worth recording, because it nearly cost the row above.** The default
+`AWS_DEPLOY_SERVICES` list does **not** include the orchestrator, and four of the six changed files
+live in `backend/actions/` — which the orchestrator executes, not `backend`. A default deploy would
+have rebuilt the image, reported `aws-deploy OK`, and left the email fixes not actually running.
+**The OK line verifies two ports; it does not verify that the code you changed is the code now
+executing.** Each claim in the table above was checked inside the running container instead.
 
 ⭐ **The distinction that matters, and it is the one people skip: *deployed* is not *has run*.** Both
 halves of `ops` were shipped to staging in the same container on the same day. Its **health checks
@@ -341,11 +348,11 @@ because self-hosting is parked. **The transmission is the event that needs a law
 provider's retention, not whether it trains on the data, and **not what the text was scrubbed of
 first**. Redaction reduced the payload; it did not change the legal question.
 
-**3. Live on staging; nowhere else.** Verified in the running image on 2026-09-03: redaction, the log
-filter, the broker fix and the safeguarding escalate-only fix are deployed to staging. **The
-email-boundary fixes are not** — they are hours newer than that deploy. **DOR production runs none of
-it and was not reachable to verify.** *Read every claim in this indicator as true of staging, unproven
-of production.*
+**3. Live on staging; nowhere else.** Verified inside the running containers on 2026-09-03:
+redaction, the log filter, the broker fix, the safeguarding escalate-only fix **and the
+email-boundary controls** are all deployed to staging. **DOR production runs none of it and was not
+reachable to verify.** *Read every claim in this indicator as true of staging, unproven of
+production.*
 
 **Gaps.**
 
@@ -393,9 +400,9 @@ of production.*
   than only as reliability because an uncategorised grievance is also one the keyword safeguarding
   route never scored.
 
-**Remedy.** **Deploy the rest, and verify production.** Staging has most of it; the email boundary is
-a deploy behind, and production is an unknown rather than a known-bad — which is worse, and cheaper to
-fix than anything else on this page. Then: write the retention schedule and
+**Remedy.** **Verify production.** Staging now runs every privacy control in this indicator; production
+is an **unknown** rather than a known-bad — which is worse, and cheaper to resolve than anything else
+on this page. Then: write the retention schedule and
 build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
 file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
 
@@ -454,9 +461,13 @@ true rather than aspirations.
   commitments nobody has agreed to, on a project whose IP ownership is formally open (Q-08-01).
 - ⚠ **Keycloak recorded no login, login-failure or admin events at all until 2026-08-24** — realm event
   storage defaults to off and nothing enabled it, so the platform's primary authentication evidence did
-  not exist. Now enabled, but **forward-only**, and **still not applied to staging**: verified
-  2026-09-03, `keycloak.event_entity` on the staging host holds **0 rows**. Production unverified.
-  ⚠ **So the platform's primary authentication evidence still does not exist anywhere a user logs in.**
+  not exist. Now enabled **on a development realm only**, forward-only, and **still not applied to
+  staging**: measured 2026-09-03, the staging `grm` realm reads `events_enabled=f`,
+  `admin_events_enabled=f`, and `keycloak.event_entity` holds **0 rows**. ⭐ **Re-measured after a full
+  ten-service deploy and unchanged** — which is the useful part: it is a **realm setting**, so no
+  amount of deploying will ever carry it, and a remedy phrased as *"ships with the next build"* was
+  never going to be true. Production unverified. ⚠ **The platform's primary authentication evidence
+  still does not exist anywhere a real user logs in.**
 - ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
   count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
   own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and

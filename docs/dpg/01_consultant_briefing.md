@@ -54,15 +54,15 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
    which makes every privacy exposure prospective, and puts the remaining work in the window where it
    is a **go-live precondition rather than a remediation**.
 
-⚠ **And one qualification, which we would rather you heard from us than inferred.** Verified on the
-staging host on 2026-09-03: **redaction is genuinely live there** — the module is in the running
-image — along with the log filter, the broker fix and the safeguarding correction. **Three things are
-not:** the email-boundary fixes, which are a few hours newer than that deploy; authentication event
-logging, which is a realm setting a deploy does not carry and which still records **zero** events;
-and the `ops` monitor's nightly licence and CVE scans, which now have a home on staging and **have
-not yet had a night** — though its health checks began writing real rows there the same day, which is
-the first monitoring evidence this platform has produced from a deployed host. ⛔ **DOR production
-runs none of it**, and we could not reach it to check.
+⚠ **And one qualification, which we would rather you heard from us than inferred.** Verified inside
+the running containers on the staging host, 2026-09-03: **every privacy control in this pack is live
+there** — redaction, the log filter, the broker fix, the safeguarding correction and the
+email-boundary controls. **Two things are still not:** authentication event logging, which is a
+Keycloak **realm setting** that no deploy carries and which still records **zero** events; and the
+`ops` monitor's nightly licence and CVE scans, which now have a home on staging and **have not yet
+had a night** — though its health checks began writing real rows the same day, the first monitoring
+evidence this platform has produced from a deployed host. ⛔ **DOR production runs none of it**, and
+we could not reach it to check.
 
 ⭐ **The distinction we would ask you to hold us to is *deployed* versus *has run*.** A scheduled job
 on a server is not yet evidence. If the assessment distinguishes a repository from a running system,
