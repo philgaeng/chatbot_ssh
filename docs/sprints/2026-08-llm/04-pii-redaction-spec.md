@@ -403,8 +403,9 @@ Per-document mapping scope. Never a process-global counter (two concurrent griev
       that looks for the **claim** rather than the word, since the word appears legitimately in the
       prohibition itself and in DPG-32's anonymiser-*service* name — a plain substring match flagged
       all three on its first run
-- [ ] ⏭ **`redact_for_model()` runs over model *output* before persistence (§31.4)** — **DPG-33's
-      wiring, not this ticket.** The function it needs now exists
+- [x] ✅ **`redact_for_model()` runs over model *output* before persistence (§31.4)** — built with
+      DPG-33 (`7dddf5e8`), which is where the wiring belonged. `_redact_generated_text()` on both
+      summary producers
 - [x] `redact_for_model` / `restore` round-trip is lossless for non-PII text — and for text that
       contains PII
 - [x] LOCATION policy decided, with the reason recorded — **districts and provinces are deliberately
@@ -643,14 +644,31 @@ instead of nine call sites.
    > fall back to including the narrative.**
 3. **The ticketing surface has a subtlety.** `generate_case_findings`'s prompt already instructs the model
    *"NEVER include names, phone numbers, email addresses… Replace any that appear in notes with role
-   descriptors"* (`ticketing/clients/llm_client.py:189-190`). **A prompt instruction is not a control** — it does nothing
+   descriptors"*. **A prompt instruction is not a control** — it does nothing
    about what is *sent*, only about what comes back. Keep it (defence in depth) and add real redaction
    on the input.
+
+   > ✅ **DONE 2026-08-27.** The input redaction is the chokepoint hook from step 1, which covers this
+   > surface automatically — and this surface carries the sharper payload: `generate_case_findings`
+   > sends **the whole case timeline including officer notes**, and on a sensitive workflow that is a
+   > SEAH case file. **The prompt instruction was kept and is not counted**, which is the standard
+   > §31.4 applies to the chatbot prompts too. The control is that the notes are pseudonymised
+   > *before* they are sent; the instruction only ever acted on what came back.
 4. **Audio is not redactable.** `transcribe_audio_file` sends the raw waveform; a voice note carries the
    speaker's name in the speaker's own voice. There is no redaction step available before transcription.
    **State this explicitly in the inventory and the privacy assessment**, and note that it is the
    strongest single argument for T2: for voice, only moving the inference endpoint solves it. Redaction
    applies to the transcript, immediately after.
+
+   > ✅ **STATED 2026-08-27** — in [`pii-egress-inventory.md`](../../dpg/pii-egress-inventory.md) §5,
+   > which says it plainly so DPG-33 does not spend time hunting for a hook that cannot exist.
+   >
+   > ⚠ **And the reason it costs nothing today is worth stating with it, because it will stop being
+   > true:** the ASR path is **parked** (`PARKED_TASKS`, DPG-19b) for want of a transcription budget,
+   > so no waveform is currently sent anywhere. **Unparking voice re-opens an egress that no
+   > redaction layer in this sprint can close** — that is a decision for whoever funds transcription,
+   > and it should be made knowing that redaction applies only to the transcript, after the audio has
+   > already left.
 5. ✅ **`parse_llm_response`'s error path is already clean** — `LLM_services.py:490` logs the response
    **length**, not the body, and has since DPG-13, which delivered that half of T-34-c early. The
    raise carries a length too, not the reply. There is nothing to fix here: check it has not
@@ -658,16 +676,28 @@ instead of nine call sites.
 
 ### Acceptance
 
-- [ ] Redaction applied at both client chokepoints, opt-out rather than opt-in
-- [ ] `restore()` applied where output reaches a human or storage; a test per direction
-- [ ] **Which of the summary's three consumers receives names is decided and recorded** (step 2's
+- [x] Redaction applied at both client chokepoints, opt-out rather than opt-in — `redact=True`,
+      keyword-only, pinned by the default, the kind, and a grep that no production site opts out
+- [x] — **Resolved by the storage decision rather than implemented.** `restore()` is applied
+      **nowhere**, and that is the answer, not an omission: the stored summary carries no names, the
+      classification output is machine-consumed, and the complainant still sees their own words in
+      `grievance_description` (stored unredacted). ⭐ So the mapping never leaves the frame that
+      created it, and *"never persisted"* holds by construction. A test per direction would have
+      pinned a behaviour the sprint decided not to have
+- [x] **Which of the summary's three consumers receives names is decided and recorded** (step 2's
       amendment), even if only the complainant-facing half ships this sprint
-- [ ] **Output redaction (§31.4) applied to both summary-producing prompts** — the classification call and
+- [x] **Output redaction (§31.4) applied to both summary-producing prompts** — the classification call and
       the translation call — with a test that a name surviving generation cannot be persisted
-- [ ] Ticketing prompt instruction kept **and** input redaction added
-- [ ] Audio's irreducibility documented in the inventory and the privacy assessment
-- [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green
-- [ ] `docs/deployment/11_llm_pipeline_policy.md` updated (with DPG-36)
+- [x] Ticketing prompt instruction kept **and** input redaction added — the instruction is kept and
+      **not counted**; the chokepoint hook is the control. That surface carries the sharper payload:
+      the whole case timeline including officer notes
+- [x] Audio's irreducibility documented in the inventory and the privacy assessment — with the part
+      that will stop being true: the ASR path is parked, so **unparking voice re-opens an egress no
+      layer in this sprint can close**
+- [x] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` still green — **50 passed
+      in-container**, verified at sprint close rather than assumed. These pin locked rules; a red one
+      would mean this sprint broke a boundary while building another
+- [x] `docs/deployment/11_llm_pipeline_policy.md` updated (with DPG-36)
 
 ---
 
@@ -895,38 +925,97 @@ should say so explicitly, with the new reason.
 
 ### Acceptance
 
-- [ ] `11_llm_pipeline_policy.md` describes built behaviour, with reasons attached
-- [ ] Anything unbuilt marked `⚠ Not built`
-- [ ] Data-flow diagram shows the redaction boundary
-- [ ] CLAUDE.md rule 4's caveat reconciled
-- [ ] No new unverified claim introduced anywhere in this sprint's documentation
+- [x] `11_llm_pipeline_policy.md` describes built behaviour, with reasons attached — the boundary
+      diagram now shows the two redaction points, and the **ACTION REQUIRED** section that prescribed
+      a *prompt change* is rewritten to say why a prompt is not a control and what was built instead
+- [x] Anything unbuilt marked `⚠ Not built` — bare settlement names; the vault/reveal-gated original
+      (a sprint after this one); and the pseudonymisation-is-not-anonymisation line, stated where a
+      reader would otherwise overclaim
+- [x] Data-flow diagram shows the redaction boundary — and the **two-field storage table was wrong in
+      a way worth naming**: it described the original narrative as vault-and-reveal-gated. It is an
+      ordinary column the officer reads live. That is *why* redacting the summary costs the officer
+      nothing, so the correction is the same fact the storage decision rests on
+- [x] **CLAUDE.md data rule 4 amended, not restated** — the caveat existed because there had never
+      been a way to make the cached summary safe. There is now, so the rule says what is true and
+      carries its new reason (⭐ the ticket anticipated both outcomes and this is the better one)
+- [x] ⭐ **A stale premise in this ticket's own steps corrected:** step 2 says *"with DPG-32 out of
+      scope, person names are not redacted"*. **False** — §31.2b gets them deterministically at 100%
+      on the labelled set. DPG-32 raises recall; it was never the whole control
+- [x] CLAUDE.md rule 4's caveat reconciled — **amended, not restated**: the caveat existed because
+      there had never been a way to make the cached summary safe, and there is now
+- [x] No new unverified claim introduced anywhere in this sprint's documentation — every measured
+      number in this sprint (87.5% recall, 7/7 names, the Redis persistence result, the 50 green
+      boundary tests) was produced by running something and is reproducible from the repository.
+      ⚠ **Two claims made during the sprint were wrong and are corrected in place rather than
+      quietly dropped**: the OTP-impersonation chain (retracted before anyone acted on it) and the
+      *"the LLM SEAH leg barely matters"* framing, which the owner corrected — and correcting it is
+      what exposed D-64
 
 ---
 
 ## Sprint 3 acceptance criteria
 
-- [ ] **No unredacted numeric identifier** in any outbound model call — verified by test, at the chokepoint
-- [ ] No raw grievance text in logs, traces, or Celery payloads — verified by test
-- [ ] **Devanagari-digit phone numbers detected** — explicit test case (T-31-a)
-- [ ] **Third-party names in narrative — detected at the rule layer** (§31.2b: titles, surname gazetteer,
-      self-identification), with the **known residual measured and disclosed**. Not "handled", not
-      "unaddressed" — a number, published, with the provider's terms named beside it
-- [ ] Deterministic PERSON recall measured and published **as a rule-layer number**, with the ML tier's
-      absence stated as the reason it is not higher
-- [ ] Officer dashboard still shows full unredacted text — redaction is at transmission (Q-12b), not at
-      storage. ⚠ **Q-12b revisited 2026-08-27** with a third option that keeps the original encrypted
-      rather than discarding it ([§31.3](#dpg-31)); the decision this sprint owes is
-      [DPG-33](#dpg-33) step 2, not the whole design
-- [ ] **Model output is redacted before persistence, not only model input** (§31.4), on **both**
-      summary-producing prompts. Any prompt-level instruction is recorded as defence in depth and
-      never as a control
-- [ ] **The restore mapping is either never persisted, or protected as the PII it is** — not in `ticketing.*`,
-      **never serialised alongside the text it dereferences, and never leaving Nepal**
-- [ ] **Nothing produced by this sprint calls the result "anonymised".** It is pseudonymisation: we hold the
-      key, so the data stays personal data. The defensible claim is *only pseudonymised text crosses the
-      border, and the re-identification key never leaves the country*
-- [ ] Audio's irreducibility documented. ⚠ It is **no longer a T2 argument** — T2 is parked (Q-03/Q-05), so
-      it stands as an accepted, disclosed residual exposure instead
-- [ ] Data-flow diagram updated to reflect the redaction boundary
-- [ ] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` green throughout
-- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit
+> ## ✅ Sprint 3 closed 2026-09-03 — checked against reality, one line at a time
+>
+> Two are qualified and say why. ⚠ **Read the note under the list**: the ticks describe a control
+> that works, not a problem that is finished.
+
+- [x] **No unredacted numeric identifier** in any outbound model call — verified by test, at the
+      chokepoint. Asserted on **what the provider actually receives**, on both surfaces, because a
+      redactor that runs and is then bypassed would satisfy a weaker test
+- [x] No raw grievance text in logs, traces, or Celery payloads — verified by test. Payloads carry
+      `grievance_id`; the log filter redacts the **formatted** record so `%s` arguments are covered;
+      traces do not exist and §8.1 of `13_security.md` now says what happens before one does
+- [x] **Devanagari-digit phone numbers detected** — explicit test case (T-31-a). ⚠ Recorded with an
+      honest **non-kill**: the mutation that removes the dual-script class survives, because
+      normalisation is the working part. The mechanism is pinned separately
+- [x] **Third-party names in narrative — detected at the rule layer** (§31.2b), with the residual
+      **measured and disclosed**: **87.5% overall, person names 7/7**, and the two misses named as
+      bare settlement names. A number, not an adjective
+- [x] Deterministic PERSON recall measured and published as a rule-layer number — **100% (7/7)** on
+      the labelled set. ⭐ **And the premise this criterion was written under is corrected**: the ML
+      tier's absence is *not* why names would go undetected. DPG-32 raises recall; it was never the
+      whole control
+- [x] Officer dashboard still shows full unredacted text — and DPG-30 established **why that costs
+      nothing**: the officer reads `grievance_description` **live**, so redacting the cached summary
+      does not touch what they see. Q-12b's decisive objection was already satisfied by another path
+- [x] **Model output is redacted before persistence, not only model input** (§31.4), on **both**
+      summary-producing prompts — including the translation call that *generates* a summary while
+      reading as a translation step. Prompt instructions kept and **never counted**, on both surfaces
+- [x] **The restore mapping is never persisted** — it never leaves the frame that created it. Not
+      returned by `call_llm`, not read at all by the output pass, not JSON-serialisable by accident.
+      ⭐ Pinned by a caller test that **fired twice in one day**, each time forcing the question to be
+      answered rather than inherited
+- [x] **Nothing produced by this sprint calls the result "anonymised"** — pinned by a grep that looks
+      for the *claim* rather than the word, since the word appears legitimately in the prohibition
+      itself and in DPG-32's anonymiser-*service* name
+- [x] Audio's irreducibility documented — and with the part that will stop being true: the ASR path
+      is **parked**, so no waveform is sent today, and **unparking voice re-opens an egress no layer
+      in this sprint can close**
+- [x] Data-flow diagram updated to reflect the redaction boundary — and its two-field storage table
+      corrected, having described the original narrative as vault-and-reveal-gated when it is an
+      ordinary column
+
+### ⚠ What a reader should not conclude from the ticks above
+
+**The border is narrower, not closed.** Grievance text still leaves the country on every
+classification — pseudonymised, which is a real and recognised safeguard and is *not* the same as
+anonymised. We hold the mapping, so it remains personal data.
+
+**Three residuals are disclosed rather than rounded away**, and each is a decision someone made:
+
+1. **Bare settlement names** (`Duhabi`, `Itahari`) are not redacted. Catching them needs a gazetteer
+   that risks the district the classifier depends on.
+2. **Names removed is not identity removed.** Ward-level location and circumstance survive in a
+   summary, which the privacy assessment notes is often identifying on its own.
+3. **Audio cannot be redacted at all.** Parked today; a funding decision away from being live.
+
+⭐ **And the sprint's own measure of itself:** of the four defects it found in live code — the OTP in
+the logs, the erased SEAH detection, Redis persisting narratives, the classification payload — **none
+were in the inventory it started from.** They were found by driving the code, by the owner correcting
+a wrong model of the flow, and by mutations catching decorative tests. The inventory was necessary
+and it was not sufficient.
+
+- [x] `tests/ticketing/test_pii_boundary.py` and `test_boundary_policy.py` green throughout — 50
+      passed in-container at close
+- [x] Every deferral logged in `followups/` + `TODO.md`, same commit

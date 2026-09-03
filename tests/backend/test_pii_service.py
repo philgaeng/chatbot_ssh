@@ -470,6 +470,9 @@ KNOWN_CALLERS = {
     # generated summary, because the stored summary carries no names by decision (owner,
     # 2026-08-27). So this caller cannot need cross-request restore even in principle.
     "backend/services/LLM_services.py",
+    # DPG-34's central logging filter. A log record is never un-redacted — restoring one would be
+    # the entire defect the filter exists to prevent. The strongest "no" of the four.
+    "backend/logger/pii_filter.py",
 }
 
 
@@ -481,10 +484,12 @@ def test_no_caller_needs_cross_request_restore_yet():
     apply — and DPG-31's "the mapping is never persisted" holds by construction rather than by
     discipline.
 
-    ⭐ **This test has earned its keep twice.** It was written when there were no callers at all,
-    went red the moment DPG-33's chokepoints appeared, and went red again the moment §31.4's output
-    pass did — each time forcing the question to be answered rather than inherited. It stays red for
-    any caller not in `KNOWN_CALLERS`, which is the whole design.
+    ⭐ **This test has earned its keep three times.** It was written when there were no callers at
+    all, then went red as DPG-33's chokepoints appeared, again at §31.4's output pass, and again at
+    DPG-34's log filter — each time forcing the question to be answered rather than inherited. Four
+    callers now exist and **none needs cross-request restore**, which is a fact about the design
+    rather than a coincidence: every one of them redacts *on the way out* and has no reason to
+    reverse it. It stays red for any caller not in `KNOWN_CALLERS`, which is the whole design.
     """
     import shutil
     import subprocess

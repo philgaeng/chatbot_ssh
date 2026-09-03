@@ -1,7 +1,11 @@
 # Sprint — August 2026: DPG compliance & LLM independence
 
 > **Status: 🟡 in progress** — Sprint 0 ✅, Sprint 1 ✅, **Sprint 2 ✅ closed 2026-08-27**,
-> **Sprint 3 🟡 starting (`dpg/sprint3-pii`, at DPG-30)**, Sprint 4 queued.
+> **Sprint 3 ✅ closed 2026-09-03**, Sprint 4 🔵 queued.
+> ⚠ **Sprint 3 narrowed the border; it did not close it.** Grievance text still leaves the country on
+> every classification — **pseudonymised**, which is a recognised safeguard and is *not* anonymised.
+> Three residuals are disclosed on purpose: bare settlement names, ward-level location surviving in a
+> summary, and **audio, which cannot be redacted at all**.
 > ⚠ **Closed ≠ complete.** Sprint 2's DPG-22/23/24 are **⏸ blocked, not done**, each with a named
 > external blocker and no owner inside this repository — and **Sprint 2 did not choose an open model,
 > which was its purpose**. The apparatus is built; the choice is absent because SEAH recall is not

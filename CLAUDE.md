@@ -193,7 +193,21 @@ grievance_db
 2. **No foreign keys from `ticketing.*` into `public.*`.** Kept, unchanged. This is the half of the March rule that still earns its keep: it preserves extraction optionality, keeps the three migration streams independent, and costs nothing — links are soft `String(64)` refs. **Pinned by a test.**
 3. **No complainant PII columns in `ticketing.*`** (`complainant_full_name` / `complainant_phone` / `complainant_email` / `complainant_address`), and **`public.complainants` is not a PII source for ticketing**. Kept, sharpened back to its original 2026-03 form. This is the one PII rule that stands on its own merits, independent of everything above. **Pinned by a test.**
 4. `ticketing.tickets` caches non-PII at creation: `grievance_summary`, `grievance_categories`, `grievance_location`, `priority`
-   > **Honest caveat:** `grievance_summary` is free text and *can* contain self-disclosed PII. It is cached by design (`models/ticket.py`); `grievance_description` — the raw narrative — deliberately is **not** (`services/grievance_content.py` writes only summary/categories/location). **The asymmetry is intentional. Do not "fix" it** by caching the description.
+   > **Amended 2026-08-27 (DPG-36), and the caveat is narrower than it was.** This used to read
+   > *"`grievance_summary` is free text and can contain self-disclosed PII"* — a caveat that existed
+   > because **there had never been a way to make the cached summary safe.** There is now: the summary
+   > is generated from pseudonymised text (the model never receives a name) and gets a second
+   > redaction pass before storage (§31.4). **The cached summary carries no names** — measured, with
+   > the residual named: bare settlement names like `Duhabi` are not caught, and *names removed is
+   > not identity removed*, since ward-level location and circumstance survive.
+   >
+   > **What has NOT changed, and is still deliberate:** `grievance_description` — the raw narrative,
+   > names intact — is **not cached** in `ticketing.*` (`services/grievance_content.py` writes only
+   > summary/categories/location). ⚠ It is, however, **read live** on every ticket view
+   > (`merge_grievance_into_ticket`), which is how the officer still learns which engineer was named.
+   > **The asymmetry is intentional. Do not "fix" it** by caching the description: caching is what
+   > spreads it to search, reports and backups, and the live read is what keeps the officer served
+   > without doing so.
 5. **Complainant PII** is fetched fresh via `GET /api/grievance/{id}` and never cached in `ticketing.*`. The endpoint returns **plaintext** — the backend decrypts server-side (T3-04) and ticketing holds no encryption key. **This does not extend to grievance content** — ticketing reads `grievance_description` and file metadata directly, per rule 1.
 6. Complainant name: shown by default. Phone: hidden, revealed via "Reveal contact" button (action logged, no OTP for proto)
 
