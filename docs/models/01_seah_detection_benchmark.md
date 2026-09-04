@@ -3,8 +3,7 @@
 **Status (2026-08-19):** the method below is agreed and the collection instrument exists. **The test
 set does not exist yet** — the request has gone to the Nepal team. No number in this document has
 been measured; every figure is a sample-size calculation, not a result.
-**Owner:** [DPG-23](../sprints/2026-08-llm/03-open-models-spec.md#dpg-23) (text-model evaluation),
-building on [DPG-20](../sprints/2026-08-llm/03-open-models-spec.md#dpg-20) (benchmark set).
+**Owner:** the text-model evaluation work, building on the benchmark set it defined.
 
 ---
 
@@ -186,7 +185,8 @@ Requirements on the harness, each of which comes from something that has already
 1. ⚠ **Prove authentication before reporting a single miss.** Assert that one known-positive is
    detected, and abort if it is not. On 2026-08-18 a 401 presented as *"the model cannot detect
    harassment"* — a config error reading exactly like a quality finding, because the SEAH path
-   fails open by design ([D-44](../sprints/2026-08-llm/PROGRESS.md)). Any benchmark that skips this
+   fails open by design — an LLM outage degrades the second pass and leaves the deterministic
+   keyword detector running, which is what makes fail-open defensible. Any benchmark that skips this
    will eventually publish a broken key as a model result.
 2. **Run the same items through every candidate**, so comparison is paired.
 3. **Record the raw reply**, not just the verdict — a miss caused by truncation or a schema
@@ -209,10 +209,9 @@ who finds an unstated limitation stops trusting the stated ones.
 
 ## 8. Related
 
-- [`03-open-models-spec.md`](../sprints/2026-08-llm/03-open-models-spec.md) — DPG-20 (set), DPG-22
-  (ASR), DPG-23 (text evaluation and the published table)
-- [`DECISIONS.md`](../sprints/2026-08-llm/DECISIONS.md) — Q-15 synthetic phase 1 · Q-16 no labeller
-  budget · Q-19 no LLM budget · Q-21 two models
+- [`../dpg/model-benchmarks.md`](../dpg/model-benchmarks.md) — what the models score on the committed
+  Nepali set, one dated value per metric, with the open-accuracy column marked as the gap it is
+- [`../DECISIONS.md`](../DECISIONS.md) — the public record of forks taken, with what was rejected
 - [`06_llm_service.md`](../services/06_llm_service.md) — the three SEAH signals, and the measured
   per-model capability table
 - [`00_compliance_status.md`](../dpg/00_compliance_status.md) — where these numbers are published

@@ -1,6 +1,7 @@
 # Documentation Index
 
 **Status:** index — the map of the tree, not a spec in itself.
+**Audience:** public — published with the open-source repository.
 **Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.

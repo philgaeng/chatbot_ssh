@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-04). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-04 — D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled by the fold pass described in [`sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md`](sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md).
+**Last updated:** 2026-09-04 — D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---

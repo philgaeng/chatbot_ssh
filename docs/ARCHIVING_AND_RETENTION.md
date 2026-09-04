@@ -251,4 +251,4 @@ See also [`docs/services/04_file_processing_service.md`](services/04_file_proces
 
 ## 12) Implementation pointer
 
-Agent prompt: [`docs/sprints/archive/June5/agents/archiving-retention.md`](sprints/archive/June5/agents/archiving-retention.md)
+

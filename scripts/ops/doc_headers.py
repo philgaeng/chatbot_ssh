@@ -56,8 +56,16 @@ SPEC_DIRS = (
     "docs/deployment",
     "docs/engineering",
     "docs/dpg",
+    "docs/models",
 )
-ROOT_DOCS = ("docs/README.md",)
+# Root-level documents that are specifications or public records. `PROGRESS.md` and `TODO.md`
+# are deliberately absent: they are operational logs (lifecycle §1.3), internal by §10.4, and
+# dating them on every commit would be churn with no reader.
+ROOT_DOCS = (
+    "docs/README.md",
+    "docs/DECISIONS.md",
+    "docs/ARCHIVING_AND_RETENTION.md",
+)
 
 EXCLUDE_PARTS = {"archive", "_starter_kit"}
 

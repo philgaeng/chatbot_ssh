@@ -1,5 +1,7 @@
 # GRM Ticketing — Session Progress & Status
 
+**Audience:** internal — an operational log, not a specification (lifecycle §1.3, §10.4).
+
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
 > For open gaps and future features → **`docs/TODO.md`**

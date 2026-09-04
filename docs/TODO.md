@@ -1,5 +1,7 @@
 # GRM Ticketing — TODO / Backlog
 
+**Audience:** internal — an operational log, not a specification (lifecycle §1.3, §10.4).
+
 > This file tracks open gaps, pending tasks, and future features.
 > Updated alongside `PROGRESS.md`. Read both before picking up work.
 > Last reviewed: 2026-07-04 — moved from `docs/sprints/claude-tickets/` to `docs/`; obsolete Cognito rows removed (auth is Keycloak as-built). Entry dates below reflect when items were logged.
