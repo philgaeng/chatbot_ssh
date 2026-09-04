@@ -102,20 +102,26 @@ def test_an_undecodable_token_falls_back_to_the_confidential_client(keycloak) ->
     assert calls[0]["data"]["client_secret"] == "the-client-secret"
 
 
-def test_an_already_invalid_token_counts_as_signed_out(keycloak) -> None:
-    """Keycloak answers 400 for a token already expired or spent. That is the desired END STATE,
-    not a failure — treating it as one would make a retry loop out of a successful sign-out."""
+def test_an_already_invalid_token_is_a_SOFT_NO_not_a_success(keycloak) -> None:
+    """⭐ The hardening. Keycloak answers 400 for a token already expired or spent — and that is
+    NOT proof the session ended: a refresh token can expire while the SSO session it belongs to
+    is still alive, since their lifespans are configured separately.
+
+    Reporting success here would send the browser down the same-origin path and leave that
+    session — plus Keycloak's cookie, which only the front channel clears — intact. So it must
+    not raise (there is nothing wrong) and must not claim a revocation either.
+    """
     _, response = keycloak
     response["status"] = 400
     response["payload"] = {"error": "invalid_grant"}
-    logout_with_refresh_token(REFRESH)  # must not raise
+    assert logout_with_refresh_token(REFRESH) is False
 
 
 @pytest.mark.parametrize("status", [200, 204])
-def test_success_statuses_do_not_raise(keycloak, status: int) -> None:
+def test_only_a_confirmed_revocation_returns_true(keycloak, status: int) -> None:
     _, response = keycloak
     response["status"] = status
-    logout_with_refresh_token(REFRESH)
+    assert logout_with_refresh_token(REFRESH) is True
 
 
 def test_a_rejected_revoke_raises_so_the_caller_can_log_it(keycloak) -> None:
@@ -192,8 +198,18 @@ def test_a_failed_revoke_reports_revoked_false_in_the_BODY(monkeypatch: pytest.M
 def test_a_successful_revoke_reports_revoked_true(monkeypatch: pytest.MonkeyPatch) -> None:
     from ticketing.api.routers import auth as auth_router
 
-    monkeypatch.setattr(auth_router, "logout_with_refresh_token", lambda _t: None)
+    monkeypatch.setattr(auth_router, "logout_with_refresh_token", lambda _t: True)
     assert auth_router.auth_logout(auth_router.LogoutRequest(refresh_token=REFRESH)).revoked is True
+
+
+def test_nothing_to_revoke_is_reported_as_revoked_false(monkeypatch: pytest.MonkeyPatch) -> None:
+    """⚠ The endpoint must PASS THROUGH the soft no rather than flattening it to success.
+    `revoked` answers one question — 'is it safe to skip the front-channel logout?' — and the
+    answer here is no."""
+    from ticketing.api.routers import auth as auth_router
+
+    monkeypatch.setattr(auth_router, "logout_with_refresh_token", lambda _t: False)
+    assert auth_router.auth_logout(auth_router.LogoutRequest(refresh_token=REFRESH)).revoked is False
 
 
 def test_the_endpoint_is_not_jwt_gated() -> None:

@@ -168,8 +168,8 @@ def auth_logout(body: LogoutRequest) -> LogoutResponse:
     up as a `LOGOUT_ERROR` in the realm event log, which is where it belongs.
     """
     try:
-        logout_with_refresh_token(body.refresh_token)
+        revoked = logout_with_refresh_token(body.refresh_token)
     except AuthLoginError as exc:
         logger.warning("auth_logout: revoke did not complete (%s)", exc.code)
         return LogoutResponse(message="Signed out.", revoked=False)
-    return LogoutResponse(message="Signed out.", revoked=True)
+    return LogoutResponse(message="Signed out.", revoked=revoked)

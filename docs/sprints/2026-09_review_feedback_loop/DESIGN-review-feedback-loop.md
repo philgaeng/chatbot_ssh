@@ -193,7 +193,7 @@ reviewer's original screenshot next to its own post-fix screenshot** on the PR �
 
 | # | Decision | Recommendation |
 |---|---|---|
-| **D1** | Where the ticket lives | **GitHub Issues** — no schema, no migration, no fourth Alembic stream, and it is where the triage agent reads from (§2.3) |
+| **D1** | Where the ticket lives | **GitHub Issues** — no schema, no migration, no fourth Alembic stream, and it is where the triage agent reads from (§2.3). ⚠ **Verified 2026-09-04: `philgaeng/chatbot_ssh` is a PUBLIC repository**, so issues and any attached screenshot are **world-readable**. That is defensible only because §2.4 makes staging synthetic — but it is a decision, not a detail: reviewer comments ("this is confusing", "wrong for DOR") also become public. **Confirm, or pick a private tracker.** |
 | **D2** | How the screenshot is captured | **Clipboard paste / `getDisplayMedia()` + a `<canvas>` annotator.** No library (§2.3) |
 | **D3** | PII posture | **Synthetic-only staging**, enforced by an `ops` check rather than a one-time truncate (§2.4) — ✅ *decided 2026-09-04* |
 | **D4** | Does the widget ship to production? | **No** — compiled out by build flag, same pattern as `AUTH_BYPASS` |

@@ -199,8 +199,12 @@ def _refresh_token_client(refresh_token: str) -> str | None:
         return None
 
 
-def logout_with_refresh_token(refresh_token: str) -> None:
+def logout_with_refresh_token(refresh_token: str) -> bool:
     """Revoke a refresh token, choosing credentials by the client that was issued it.
+
+    **Returns True only when Keycloak confirms it ended the session.** The caller uses that to
+    decide whether the same-origin redirect is enough or whether the browser must still make
+    the front-channel Keycloak call.
 
     ⭐ **This is the server's job because only the server knows which clients are confidential.**
     `ticketing-api` needs a `client_secret`; `ticketing-ui` is public and must NOT be sent one.
@@ -247,10 +251,23 @@ def logout_with_refresh_token(refresh_token: str) -> None:
         logger.warning("Keycloak logout request failed: %s", exc)
         raise AuthLoginError("auth_unavailable", "Sign-out service is unavailable.", 503) from exc
 
-    # 204 is success. Keycloak answers 400 for a token that is already invalid or expired, which
-    # is the desired end state — treat it as done rather than as an error the UI must interpret.
-    if resp.status_code in (200, 204, 400):
-        return
+    if resp.status_code in (200, 204):
+        return True
+
+    if resp.status_code == 400:
+        # ⚠ "Already invalid or expired" is NOT "the session is gone", and conflating them is a
+        # real hole: a refresh token can expire while the SSO session it belongs to is still
+        # alive, because their lifespans are configured separately. Reporting success here would
+        # send the browser down the same-origin path and leave that session — and Keycloak's
+        # cookie, which only the front channel clears — intact. So this is a soft NO: nothing
+        # was revoked, let the caller fall back.
+        err, desc = _parse_token_error(resp)
+        logger.info(
+            "Keycloak logout: nothing to revoke for client %s (%s) — falling back",
+            issued_to,
+            err or desc,
+        )
+        return False
 
     err, desc = _parse_token_error(resp)
     # ⚠ Never log the token. The grievance/user id is in the caller's own request context.
