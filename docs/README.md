@@ -1,12 +1,12 @@
 # Documentation Index
 
 **Status:** index — the map of the tree, not a spec in itself.
-**Last updated:** 2026-09-04 — every live spec now carries a dated header (§ *How to read a header*), enforced by a test.
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
 > **`docs/<domain>/` says _what_ we build. [`engineering/`](engineering/) says _how_.** Start there before writing code.
-> Reviews of spec completeness and codebase quality live in [`reviews/`](reviews/).
+> Reviews of spec completeness and codebase quality live in `docs/reviews/` — **internal**, like `docs/sprints/`.
 
 ---
 
@@ -15,7 +15,6 @@ Top-level guide to the spec tree. Every folder has its own index; this page is t
 Every live spec opens with two lines. They answer different questions, and neither is decoration:
 
 ```markdown
-**Status:** live specification (tier 1) — authoritative for what the system does today.
 **Last updated:** 2026-09-04 — what changed, or what was verified
 ```
 
@@ -23,7 +22,6 @@ Every live spec opens with two lines. They answer different questions, and neith
 |---|---|---|
 | `Status:` | Which **tier** it is, so you know its authority ([lifecycle §1](engineering/06_documentation_lifecycle.md)) | the author |
 | `Last updated:` | When the content was last **reviewed against the code** — not when the file was last touched | the author, bumped in the same commit as the change |
-| `⚠ backfilled from git …` | ⚠ **The date is this file's last commit, and nobody has re-verified the content since.** 81 documents carry this after the 2026-09-04 sweep. It is an honest placeholder, not a status — **clearing it is a real review** | `doc_headers.py --stamp`; cleared by a human |
 
 **Which commit does a spec describe?** The header deliberately does not say — a hash cannot be written into the content it describes, because it does not exist yet. Derive it instead:
 
@@ -37,22 +35,26 @@ The full reasoning, and why each workaround is worse than the gap, is [lifecycle
 
 ## Structure
 
-```
-docs/
-├── PROGRESS.md          Operational build log (updated every commit)
-├── TODO.md              Open gaps, next features, tech debt
-├── ARCHIVING_AND_RETENTION.md   Cross-cutting retention + archive policy
-├── engineering/         HOW we build: DB, services, API, tests, frontend, doc lifecycle
-├── _starter_kit/        Portable skeleton of the above, for reuse on a new project
-├── deployment/          Architecture, setup, operations, security, auth, DOCKER runbook
-├── services/            Shared backend service contracts (chatbot + ticketing + ops)
-├── ticketing_system/    GRM ticketing product and implementation specs (+ ui/)
-├── rest_chatbot/        Chatbot architecture, flow, frontend, operations
-├── seah/                SEAH intake flow + privacy/vault/reveal specs
-├── dpg/                Digital Public Good qualification: compliance status + evidence pack
-├── reviews/             Devil's-advocate reviews (specs, codebase)
-└── sprints/             One summary per sprint; full originals in sprints/archive/
-```
+| | Folder | Contents | Audience |
+|---|---|---|---|
+| | [`engineering/`](engineering/) | HOW we build: DB, services, API, tests, frontend, doc lifecycle | 🌍 public |
+| | [`deployment/`](deployment/) | Architecture, setup, operations, security, auth, DOCKER runbook | 🌍 public ¹ |
+| | [`services/`](services/) | Shared backend service contracts (chatbot + ticketing + ops) | 🌍 public |
+| | [`ticketing_system/`](ticketing_system/) | GRM ticketing product and implementation specs (+ `ui/`) | 🌍 public |
+| | [`rest_chatbot/`](rest_chatbot/) | Chatbot architecture, flow, frontend, operations | 🌍 public |
+| | [`seah/`](seah/) | SEAH intake flow + privacy/vault/reveal specs | 🌍 public |
+| | [`dpg/`](dpg/) | Digital Public Good qualification: compliance status + evidence pack | 🌍 public |
+| | [`DECISIONS.md`](DECISIONS.md) | Forks taken: chosen, rejected, what would change the answer | 🌍 public |
+| | [`_starter_kit/`](_starter_kit/) | Portable skeleton of the standards, for reuse on a new project | 🌍 public |
+| | `PROGRESS.md`, `TODO.md` | Operational build log and open gaps — logs, not specs (§1.3) | 🔒 internal |
+| | `reviews/` | Devil's-advocate reviews — dated opinions, adversarial scoring | 🔒 internal |
+| | `sprints/` | One folder per sprint; originals under `sprints/archive/` | 🔒 internal |
+
+¹ **`deployment/` is public with one exception**, declared in the file itself:
+`18_sops_migration_handover.md` is `Audience: internal` — it carries the staging host address and a
+live credential, and those facts are load-bearing rather than incidental, so the control is not
+publishing it. **A folder's audience is a default; a document may override it**, and
+`scripts/ops/doc_headers.py --check` fails on internal-only content in anything not marked.
 
 ---
 
@@ -191,16 +193,23 @@ Qualification of the platform as a [Digital Public Good](https://www.digitalpubl
 | [`HANDOVER.md`](dpg/HANDOVER.md) | How this pack was rebuilt on 2026-08-24, and the traps that made a rebuild necessary. Process, not evidence |
 | [`archive/`](dpg/archive/) | The superseded 2026-08-17 and 2026-08-23 documents. Never edited; excluded from the link checker |
 
-The engineering that closes the gaps is specced in [`sprints/2026-08-llm/`](sprints/2026-08-llm/README.md).
+The engineering that closes the gaps is specced in the sprint folders — **internal**, not part of the published tree.
 
 **Open-source project hygiene** (indicator 8) lives at the repository root, not under `docs/`:
 [`SECURITY.md`](../SECURITY.md) (private disclosure — this platform holds SEAH reports),
 [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md), and the
 issue/PR templates under `.github/`. A governance model and a release/versioning policy are
-deliberately deferred — [`sprints/2026-08-llm/followups/governance-and-versioning-policy.md`](sprints/2026-08-llm/followups/governance-and-versioning-policy.md).
+deliberately deferred, and tracked internally.
 
 ---
 
 ## Sprints (`docs/sprints`)
 
-One summary per sprint — see [`sprints/README.md`](sprints/README.md). Original sprint specs, agent prompts, and handoffs are read-only under [`sprints/archive/`](sprints/archive/).
+**Audience: internal — excluded from the public repository.** One summary per sprint, in `docs/sprints/`; original
+sprint specs, agent prompts and handoffs are read-only under `docs/sprints/archive/`.
+
+A sprint folder records *how the system got here* — dated opinions, deviations, tech-debt scoring and
+infrastructure detail. A live spec describes the system at time T and needs none of it, which is why
+no tier-1 document links into this folder ([`engineering/06`](engineering/06_documentation_lifecycle.md) §10.1).
+**Why a fork is not lost when the sprint folder is:** the reasoning is folded into the spec beside the
+rule, and every real fork gets an entry in [`DECISIONS.md`](DECISIONS.md).

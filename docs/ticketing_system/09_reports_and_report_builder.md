@@ -291,7 +291,7 @@ Please answer by number (copy/paste is fine). Implementation should not start un
 
 1. Which roles can open **Reports**? All logged-in officers, or only `super_admin`, `local_admin`, observers (`adb_*`), and GRC — exclude L1 field officers?  
 2. Should report data respect **the same jurisdiction scopes** as the queue (`OfficerScope`), or can admins see **all org tickets** when filters are empty?  
-3. ~~**SEAH:** include SEAH tickets only for `seah_*` roles (mirror queue), with an explicit "Include SEAH cases" checkbox for dual-role admins?~~ → **ANSWERED 2026-08-02 ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md)):** reports mirror the queue, and the queue rule is now **cast-only** — a grievance on a **sensitive** workflow appears only for officers **cast on that workflow's steps**, never for an admin or oversight role. The **quarterly report excludes sensitive cases** (`include_sensitive`, default **false**); the "include" checkbox is offered **only** to the cast, never to admins.
+3. ~~**SEAH:** include SEAH tickets only for `seah_*` roles (mirror queue), with an explicit "Include SEAH cases" checkbox for dual-role admins?~~ → **ANSWERED 2026-08-02 ([D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system)):** reports mirror the queue, and the queue rule is now **cast-only** — a grievance on a **sensitive** workflow appears only for officers **cast on that workflow's steps**, never for an admin or oversight role. The **quarterly report excludes sensitive cases** (`include_sensitive`, default **false**); the "include" checkbox is offered **only** to the cast, never to admins.
 
 ### 8.2 Period and population  4,5 YES, 6 NO
 
@@ -395,7 +395,7 @@ Use these when answers are silent:
 
 ## 12. Summary tab — ADB Project Director quarterly view (planned)
 
-**Audience:** Same as Overview — **all report viewers** within **OfficerScope** (§13.1). Grievances on a **sensitive** workflow are included **only for officers cast on that workflow** ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §2) — never for admins or oversight roles, and never in the quarterly export.
+**Audience:** Same as Overview — **all report viewers** within **OfficerScope** (§13.1). Grievances on a **sensitive** workflow are included **only for officers cast on that workflow** ([D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system) §2) — never for admins or oversight roles, and never in the quarterly export.
 
 **Purpose:** One executive screen for the quarterly review the ADB Project Director expects: matrix counts by project × package, plus charts for complaints **closed during the selected period(s)**.
 

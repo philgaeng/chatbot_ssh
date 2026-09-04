@@ -1,7 +1,7 @@
 # Integrations
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/06_integrations.md`](archive/06_integrations.md). Twilio/WhatsApp and OAuth sample code removed (never in the current stack).
-**Last updated:** 2026-08-24 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Chatbot → GRM ticketing (the primary integration)
 

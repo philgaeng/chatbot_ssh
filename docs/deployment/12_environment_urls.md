@@ -1,7 +1,6 @@
 # Deployment URLs and paths (dev / stage / prod)
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-07 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/`](../../deployment/nginx/). Values **differ by machine** (WSL paths vs EC2 `ubuntu` home, TLS termination, etc.). To avoid drift, maintain a **single manifest** and derive or update Nginx from it.
 
@@ -54,7 +53,6 @@ Run commands:
 
 ## Related
 
-- Deployment and data architecture (Phase 1 → 2): [`../sprints/archive/deployment refactor/deployment_and_data_architecture.md`](../sprints/archive/deployment%20refactor/deployment_and_data_architecture.md)
 - Nginx configs (the `_compose_*` variants are the live ones): [`deployment/nginx/`](../../deployment/nginx/)
 
 ---

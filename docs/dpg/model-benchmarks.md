@@ -1,7 +1,6 @@
 # Model benchmarks — what this system scores
 
-**Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
 > grievance set. **Measurements dated 2026-08-20 / 08-21**; where a finding has since been acted on,
@@ -170,7 +169,6 @@ assessed in [`00_compliance_status.md`](00_compliance_status.md) §9.
 rests on, and **any change must be measured against the owner's held-out positive set first**
 ([§5](#5-seah-recall--not-measurable-from-this-repository)) — tightening a recall-first detector
 without measuring recall is how a well-intentioned fix introduces a safeguarding miss.
-[Tracked](../sprints/2026-08-llm/followups/seah-detector-flags-gendered-non-harassment-complaints.md).
 
 ### 3.3 Classification is a second route into the same channel
 
@@ -382,7 +380,6 @@ read in another.**
 ⚠ **Still unmeasured:** the six new categories have **no gold items** — they appear only as acceptable
 alternates, so nothing scores whether a model picks them *correctly*, only that it stops inventing
 them.
-[Logged](../sprints/2026-08-llm/followups/road-hazard-categories-have-no-benchmark-items.md).
 
 ---
 

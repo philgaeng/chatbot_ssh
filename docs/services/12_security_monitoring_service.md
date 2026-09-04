@@ -1,7 +1,7 @@
 # Security Monitoring & Hardening Spec
 
 **Status:** As-built (implemented June 2026 — item-level status and remaining hardening backlog in [`agents/PROGRESS.md`](agents/PROGRESS.md)). Companion to [`11_health_and_monitoring_service.md`](11_health_and_monitoring_service.md). Adapts Stratcon `CELERY_REDIS_TASK_QUEUE_SPEC §17/§19` (dependency monitoring) to the **self-hosted** Nepal GRM stack and adds hardening items found by screening the codebase.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Deployment reality:** single Ubuntu host, 2 vCPU / 8 GiB, Docker Compose, self-hosted Postgres + Redis. **No Supabase Advisors** — its DB-advisor checks from the source spec do not apply; we substitute self-hosted equivalents.
 **Authoritative index of *implemented* controls:** [`../deployment/13_security.md`](../deployment/13_security.md). This document covers **monitoring of** security posture + **gaps to close**; it does not restate what `13_security.md` already documents as built.
 

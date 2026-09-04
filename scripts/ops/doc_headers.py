@@ -123,6 +123,43 @@ def git_history_available() -> str | None:
     return None
 
 
+AUDIENCE_RE = re.compile(r"\*\*Audience:\*\*\s*`?(public|internal)`?", re.I)
+
+# Rule 10.5 — what makes a document unpublishable. High-signal only: a check that cries wolf
+# gets muted, and this one guards a one-way door (published is published).
+INTERNAL_MARKERS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("ssh user@host", re.compile(r"\b(?:ubuntu|ec2-user|root)@[\w.\-]+")),
+    ("EC2 instance id", re.compile(r"\bi-[0-9a-f]{8,17}\b")),
+    ("AWS hostname", re.compile(r"\b[\w.\-]*compute\.amazonaws\.com\b")),
+    ("literal credential", re.compile(r"PASSWORD\s*=\s*[\"']?password\b")),
+)
+# An IPv4 only counts when its line is about a host. `click-plugins | 1.1.1.2` is a version,
+# and a scanner that flags it is one people learn to ignore.
+_IPV4 = re.compile(r"(?<![\w.])((?:\d{1,3}\.){3}\d{1,3})(?![\w.])")
+_HOSTISH = re.compile(r"\b(ssh|scp|host|server|curl|ip\b|address|staging|prod)", re.I)
+
+
+def audience_of(path: Path) -> str:
+    """`internal` only when the document says so. Public is the default for tier 1/1b (§10.4)."""
+    head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:HEAD_LINES])
+    m = AUDIENCE_RE.search(head)
+    return m.group(1).lower() if m else "public"
+
+
+def internal_content(path: Path) -> list[str]:
+    """Rule 10.5 findings in a document that would be published."""
+    found: list[str] = []
+    for i, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        for label, pat in INTERNAL_MARKERS:
+            for hit in set(pat.findall(line)):
+                found.append(f"{path.name}:{i} {label}: {hit}")
+        if _HOSTISH.search(line):
+            for hit in set(_IPV4.findall(line)):
+                if not hit.startswith(("0.", "127.", "255.")):
+                    found.append(f"{path.name}:{i} host IP: {hit}")
+    return sorted(set(found))
+
+
 def header_of(path: Path) -> tuple[str | None, str]:
     """Return (iso_date_or_None, the head text searched)."""
     head = "\n".join(path.read_text(encoding="utf-8").splitlines()[:HEAD_LINES])
@@ -167,8 +204,11 @@ def check() -> int:
     future: list[str] = []
     unstamped: list[tuple[str, str]] = []
 
+    leaks: list[str] = []
     why = git_history_available()
     for f in spec_files():
+        if audience_of(f) != "internal":
+            leaks.extend(internal_content(f))
         date, _ = header_of(f)
         if date is None:
             missing.append(rel(f))
@@ -278,9 +318,12 @@ def stamp() -> int:
         )
 
         # Prefer to sit directly under an existing Status line; else under the H1 title.
+        # ⚠ NEVER inside a blockquote. A `> **Status:** …` line is usually one line of a wrapped
+        # sentence, and inserting after it splits that sentence and breaks the quote — this
+        # corrupted six documents on the first run before it was caught and repaired.
         insert_at, needs_blank = None, False
         for i, ln in enumerate(lines[:HEAD_LINES]):
-            if STATUS_LINE_RE.search(ln):
+            if STATUS_LINE_RE.search(ln) and not ln.lstrip().startswith(">"):
                 insert_at = i + 1
                 break
         if insert_at is None:

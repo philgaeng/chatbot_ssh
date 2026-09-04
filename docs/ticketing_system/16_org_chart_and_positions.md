@@ -1,7 +1,7 @@
 # Org chart, positions, and the position→role matrix
 
 **Status:** **As-built (July 2026)** — implemented in the `2026-07_org_chart_positions` sprint. Org forest + `org_category` + territory (migration `m3o5q7s9`, `ticketing/services/org_tree.py`, `ticketing/api/routers/locations.py` org CRUD + CSV import + `descendant_org_ids` CTE). Position types + matrix (migration `o5q7s9u1`, `ticketing/api/routers/position_types.py`, incl. `GET /position-types/{id}/holders`). Officer positions + invite pre-fill + per-`(project,step)` supervisor resolver (migration `s9u1w3y5`, `ticketing/api/routers/officer_positions.py`, `ticketing/services/supervisor.py`). Chart behaviours + SEAH leak-proofing (`ticketing/services/chart_behaviors.py`, `ticketing/engine/escalation.py`). 4-tier admin ladder + org-scoped catalog (migration `q7s9u1w3`, `ticketing/services/admin_access.py`). Officer lifecycle (migration `w3y5a7c9`). UI: `channels/ticketing-ui/components/settings/org/` (tree editor + position types) + `officers-v2/` (invite-as-result). §5.6 donor guardrail + project participants: see [doc 13](13_projects_and_packages.md) (migration `u1w3y5a7`, `ticketing/services/donor_guardrail.py`).
-**Last updated:** 2026-07-13 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [12_workflows_configuration.md](12_workflows_configuration.md)
 
 ---
@@ -96,7 +96,7 @@ Officer's **Watching** tab additionally includes tickets assigned to their repor
 In `auto_assign_officer`, among scope-matched candidates: rank officers whose org unit **territory covers the ticket location** first, then least-loaded. A preference, not a filter — the province fallback ([07 §4.4](07_officer_management_and_assignment.md)) still applies.
 
 ### 5.5 Supervisor: advised on escalation + reassignment on failure
-The supervisor is the **per-`(project, step)` resolver** ([DECISION 2026-07-10](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md) §5) — the project-tree manager, **not** an org-tree reporting line. When a ticket escalates off a step, that step's resolved supervisor is notified (in-app; channel matrix per [12 §9](12_workflows_configuration.md)), falling back to the `supervisor_role` pool. The **same** supervisor is the **reassignment authority** when `auto_assign_officer` fails at a step (park + notify + reassign). Default supervisor = the next step's Handler pool; explicit override per project; **no `parent_organization_id` walk**. (This is distinct from §5.3, which is org-hierarchy *oversight* visibility for admins.)
+The supervisor is the **per-`(project, step)` resolver** ([D-004](../DECISIONS.md#d-004--a-projects-participants-are-typed-fields-staffing-decides-who-acts) §5) — the project-tree manager, **not** an org-tree reporting line. When a ticket escalates off a step, that step's resolved supervisor is notified (in-app; channel matrix per [12 §9](12_workflows_configuration.md)), falling back to the `supervisor_role` pool. The **same** supervisor is the **reassignment authority** when `auto_assign_officer` fails at a step (park + notify + reassign). Default supervisor = the next step's Handler pool; explicit override per project; **no `parent_organization_id` walk**. (This is distinct from §5.3, which is org-hierarchy *oversight* visibility for admins.)
 
 ## 6. SEAH rules
 
@@ -104,7 +104,7 @@ Chart is **shared for directory purposes** — SEAH officers may hold positions.
 
 - Supervisor visibility (§5.3) **never** surfaces `is_seah` tickets through reporting lines.
 - Escalation supervisor notification (§5.5) is **suppressed** on SEAH tickets unless the supervisor independently holds a SEAH role.
-- Donor "informed on final escalation" ([DECISION §3](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) is **suppressed** on the SEAH track — donor roles are not SEAH roles, so donor staff receive **nothing** on a SEAH case.
+- Donor "informed on final escalation" ([DECISION §3](../DECISIONS.md#d-004--a-projects-participants-are-typed-fields-staffing-decides-who-acts)) is **suppressed** on the SEAH track — donor roles are not SEAH roles, so donor staff receive **nothing** on a SEAH case.
 - SEAH ticket visibility remains exactly as [11 §9](11_roles_and_permissions.md).
 
 ## 7. Ownership & permissions

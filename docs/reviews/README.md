@@ -1,5 +1,7 @@
 # Reviews
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
 Adversarial ("devil's advocate") reviews of the project, refreshed on demand. These are point-in-time assessments — check the status header of each.
 
 | Document | Scope |

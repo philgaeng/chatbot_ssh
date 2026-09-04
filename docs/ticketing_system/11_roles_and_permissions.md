@@ -1,14 +1,14 @@
 # Roles and permissions
 
 **Status:** Product spec — **admin ladder revised 2026-07** (§2: 4-tier `super_admin`/`org_admin`/`project_admin`/`officer_admin` + `org_category` actor types + org-scoped catalog; `country_admin` retired → `org_admin`). **Implementation: as-built** — the 4-tier ladder + org-subtree scope + org-scoped catalog shipped in SH-7 (migration `q7s9u1w3`); `country_admin` removed from backend **and** frontend. See §8.  
-**Last updated:** 2026-08-08 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [14_platform_settings.md](14_platform_settings.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md), [13_projects_and_packages.md](13_projects_and_packages.md)
 
 This document covers **`ticketing.roles`** — both the **admin ladder** (who configures the system) and **operational GRM roles** (who handles grievances). It does **not** cover **project participants** — the organizations a project must name. Those come from the **project type's `actor_roles`** catalog and are filled per project ([13](13_projects_and_packages.md), [14 §4](14_platform_settings.md)). The **per-project** catalog `project_actor_roles` stays dead.
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a package-level naming reaches that package only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a package-level naming reaches that package only, and a parent organization sees what its children see ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 ## 1. Two kinds of row in `ticketing.roles`
 
@@ -21,9 +21,9 @@ This document covers **`ticketing.roles`** — both the **admin ladder** (who co
 
 **Delegation model (as-built, 2026-07):** **Four** admin **`role_key`s** — `super_admin`, **`org_admin`** (org-subtree-scoped, **any depth**), `project_admin`, `officer_admin`. **Tier** is the role; **workflow track** (`standard` \| `seah`) is on the **assignment scope** — not a separate role name.
 
-> **⚠ Amended 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** The SEAH track splits into **configure** and **read**, and admins keep only the first. `workflow_track = seah` becomes a **capability to configure sensitive workflows** (author them, staff them, invite officers onto them) and **grants no access to any sensitive grievance or its PII** — for any admin tier, `super_admin` included. Access to a sensitive case comes from **one place only: being cast on that workflow's steps.** Every "read SEAH tickets" capability below is struck.
+> **⚠ Amended 2026-08-02 — [D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system).** The SEAH track splits into **configure** and **read**, and admins keep only the first. `workflow_track = seah` becomes a **capability to configure sensitive workflows** (author them, staff them, invite officers onto them) and **grants no access to any sensitive grievance or its PII** — for any admin tier, `super_admin` included. Access to a sensitive case comes from **one place only: being cast on that workflow's steps.** Every "read SEAH tickets" capability below is struck.
 
-> **As-built 2026-07 (Handover A):** admin authority attaches to an **org node** and cascades over its **subtree at any depth** — a Department-of-Roads admin, and beneath it a district admin — which is what handles ministry scale (DoR ≈ 5,000 staff) and Nepal's federal structure (province assemblies with no national parent). A narrow **`officer_admin`** tier delegates officer onboarding; and org **actor types** (`government` / `local_government` / `donor` / `third_party`) gate who may create each kind of root. Full model: [design §2.5](../sprints/2026-07_org_chart_positions/DESIGN-settings-redesign.md); backend = Handover B **SH-7**.
+> **As-built 2026-07 (Handover A):** admin authority attaches to an **org node** and cascades over its **subtree at any depth** — a Department-of-Roads admin, and beneath it a district admin — which is what handles ministry scale (DoR ≈ 5,000 staff) and Nepal's federal structure (province assemblies with no national parent). A narrow **`officer_admin`** tier delegates officer onboarding; and org **actor types** (`government` / `local_government` / `donor` / `third_party`) gate who may create each kind of root.
 
 ---
 
@@ -86,7 +86,7 @@ One **`role_key`** for all org-tier admins; **`workflow_track` on the assignment
 | Author **custom operational roles / position types** (§3) | ✅ standard track | ✅ SEAH track only |
 | Appoint **lower admins** (`org_admin` below · `project_admin` · `officer_admin`) in its subtree | ✅ ≤ own capabilities | ✅ `track=seah` |
 | Invite/manage operational officers | ✅ standard roles, in subtree | ✅ SEAH roles only |
-| Read tickets in subtree | ✅ standard | ❌ **struck 2026-08-02** — administering sensitive workflows grants no case access ([DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §3) |
+| Read tickets in subtree | ✅ standard | ❌ **struck 2026-08-02** — administering sensitive workflows grants no case access ([D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system) §3) |
 | Manage other track | ❌ | ❌ |
 
 **Appointment:** `super_admin` (top-level org_admins) **or a higher `org_admin`** in the same subtree + track — **attenuated**: never granting a capability the appointer doesn't hold. Sets `organization_id` + `workflow_track`.
@@ -114,7 +114,7 @@ Shared rules (both tracks):
 - **Cannot** appoint `project_admin` or `org_admin` (may appoint `officer_admin` within its project).
 - **Cannot** access platform **Settings → Settings** tab.
 
-**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` adds **third-party** orgs (contractors) and staffs their officers via workflow roles without waiting for an `org_admin` ([DECISION §4](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
+**Rationale for org management (standard track):** Subcontractors join mid-project; standard `project_admin` adds **third-party** orgs (contractors) and staffs their officers via workflow roles without waiting for an `org_admin` ([DECISION §4](../DECISIONS.md#d-004--a-projects-participants-are-typed-fields-staffing-decides-who-acts)).
 
 **Implementation:** extend admin scope model (reuse `officer_scopes` pattern or `admin_scopes` table) with `organization_id` (subtree) + `workflow_track`; API enforces subtree + track on every Settings mutation.
 

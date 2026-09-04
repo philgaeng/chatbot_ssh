@@ -139,3 +139,105 @@ def test_the_header_carries_no_commit_hash(dh):
         "header carries a commit hash — derive it with `--provenance` instead:\n  "
         + "\n  ".join(sorted(set(offenders)))
     )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Rule 10 — audience. What may appear in a document that will be published.
+# ═════════════════════════════════════════════════════════════════════════════
+
+
+def test_no_public_spec_links_into_a_sprint_or_review_folder(dh):
+    """Rule 10.1. A published spec must not depend on a folder the public repo does not have.
+
+    ⚠ **The link is the symptom; the reason is the thing.** Removing a citation without folding
+    its reason into the spec leaves a rule with no justification — the decay §5.1 exists to
+    prevent, and worse than the broken link. Folds happened first; this pins the result.
+
+    Measured before the fold pass on 2026-09-04: **28 of 99 documents carried 93 such links**,
+    51 of them in `ticketing_system/` alone. Twenty-one pointed at four `DECISION-*` documents,
+    which is why `docs/DECISIONS.md` exists: provenance belongs in a public decision log, not in
+    a sprint folder a reader cannot open.
+
+    A document may opt out by declaring `**Audience:** internal` — used by
+    `deployment/18_sops_migration_handover.md`, which is a handover carrying a live credential.
+    """
+    import os
+    import re
+    from urllib.parse import unquote
+
+    PRUNE = ("docs/sprints/", "docs/reviews/")
+    offenders: list[str] = []
+    for f in dh.spec_files():
+        if dh.audience_of(f) == "internal":
+            continue
+        text = f.read_text(encoding="utf-8")
+        for m in re.finditer(r"\]\(([^)#\s]+)\)", text):
+            target = unquote(m.group(1)).split("#")[0]
+            if target.startswith(("http", "mailto:")):
+                continue
+            resolved = os.path.normpath(os.path.join(os.path.dirname(dh.rel(f)), target))
+            if resolved.startswith(PRUNE):
+                offenders.append(f"{dh.rel(f)} → {target}")
+
+    assert not offenders, (
+        f"{len(offenders)} link(s) from a public spec into an internal folder (Rule 10.1).\n"
+        "Fold the reason into the spec, or record the fork in docs/DECISIONS.md — do not just "
+        "delete the link:\n  " + "\n  ".join(offenders)
+    )
+
+
+def test_no_public_spec_carries_internal_only_content(dh):
+    """Rule 10.5 — host addresses, instance ids, ssh logins and credential literals.
+
+    ⚠ **Publishing is a one-way door**, so this guards the direction that cannot be undone. It
+    caught `deployment/18_sops_migration_handover.md`, which sits in a tier-1 folder and carries
+    the staging host's address, an `ssh` login for it, and `POSTGRES_PASSWORD=password` — **the
+    live pre-rotation credential on staging and DOR production, not a stale example.**
+
+    Those facts are load-bearing in that document: its whole argument is that the credential is
+    real and must be rotated rather than deleted. **Redacting them would destroy the document, so
+    the control is not publishing it** — hence the audience opt-out rather than a scrub.
+
+    The IPv4 pattern only fires on host-ish lines, deliberately: `click-plugins | 1.1.1.2` is a
+    version, and a scanner that flags it is one people learn to mute.
+    """
+    offenders = [
+        finding
+        for f in dh.spec_files()
+        if dh.audience_of(f) != "internal"
+        for finding in dh.internal_content(f)
+    ]
+    assert not offenders, (
+        f"{len(offenders)} piece(s) of internal-only content in documents that would be "
+        "published (Rule 10.5). Remove it, or declare `**Audience:** internal`:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_a_stamped_header_is_never_spliced_into_a_blockquote(dh):
+    """Regression: the stamp split a wrapped sentence in six documents.
+
+    `--stamp` inserts its dated line directly under an existing `Status:` line. When that line was
+    *inside a blockquote* — `> **Written:** 2026-08-20. **Status:** 🟨 steps 0–5 done…` — the
+    insertion landed between two lines of one wrapped sentence, breaking both the sentence and the
+    quote. Caught by reading the output rather than by the checker, which was happy: the header
+    existed and carried a date, so every assertion passed while the document was damaged.
+    """
+    import re
+
+    spliced = []
+    for f in dh.spec_files():
+        lines = f.read_text(encoding="utf-8").splitlines()
+        for i, ln in enumerate(lines[: dh.HEAD_LINES + 15]):
+            if not re.match(r"^\*\*Last updated:\*\*", ln):
+                continue
+            # ⚠ The signal is the line BEFORE, not the line after. A header legitimately
+            # precedes a blockquote (`03_admin_setup_flow_evaluation.md` does); it never
+            # legitimately follows one, because that means it was inserted into the quote.
+            # The first version of this assertion checked both and produced a false positive
+            # on a correctly-formatted document — a check that cries wolf gets muted.
+            if i and lines[i - 1].startswith(">"):
+                spliced.append(f"{dh.rel(f)}:{i + 1}")
+    assert not spliced, (
+        "a dated header sits inside a blockquote, splitting it:\n  " + "\n  ".join(spliced)
+    )

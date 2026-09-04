@@ -1,7 +1,7 @@
 # Agent brief: Composer input mode (buttons vs text)
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 **Goal:** Reduce user confusion when quick-reply buttons are shown by disabling and visually de-emphasizing the textarea unless free text is expected (e.g. Skip-able form fields).
 

@@ -1,7 +1,6 @@
 # Handover — rewriting the DPG compliance pack from scratch
 
-**Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > ## ✅ Done, 2026-08-24. Read this before acting on anything below.
 >
@@ -276,8 +275,7 @@ hazards, as they now stand:
   host; until someone runs `ALTER ROLE ops_app PASSWORD` on that box, `ops` cannot authenticate and will
   report `healthy` while writing nothing. Recoverable, but nothing tells you.
 - Then: the Postgres credential + `ALTER ROLE`, the Redis credential, `TICKETING_SECRET_KEY` (empty),
-  and the taxonomy re-seed. Database credentials:
-  [`../sprints/followups/db-password-hardcoded-in-compose.md`](../sprints/followups/db-password-hardcoded-in-compose.md).
+  and the taxonomy re-seed. Database credentials:.
 
 ### The rest
 

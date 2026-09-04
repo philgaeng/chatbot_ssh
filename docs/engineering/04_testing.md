@@ -162,7 +162,8 @@ DB credentials for host tests come from compose, never `env.local` — `tests/ti
 
 ## 8. When you cannot test it now
 
-**Rule 8.1 — Skipping, quarantining, `xfail`, downgrading a lint rule, `# noqa`, or `@ts-expect-error` is a deferral**, and a deferral that is not logged is a defect. In the **same commit**: a follow-up doc at `docs/sprints/<sprint>/followups/<slug>.md` (measured inventory + definition of done) **and** a one-line row in [`TODO.md`](../TODO.md) under 🔵 TECH DEBT. → [`../sprints/README.md`](../sprints/README.md)
+**Rule 8.1 — Skipping, quarantining, `xfail`, downgrading a lint rule, `# noqa`, or `@ts-expect-error` is a deferral**, and a deferral that is not logged is a defect. In the **same commit**: a follow-up doc at `docs/sprints/<sprint>/followups/<slug>.md` (measured inventory + definition of done) **and** a one-line row in [`TODO.md`](../TODO.md) under 🔵 TECH DEBT.
+*Why:* an unlogged deferral is indistinguishable from a bug nobody noticed — the marker is in the code, where only the next reader of that line will find it, and the debt never reaches a list anyone plans from.
 
 **Rule 8.2 — Untested-by-decision is fine; untested-by-silence is not.** The manual browser sweep is a legitimate, written decision. An untested path nobody mentioned is how the SEAH intake shipped an HTTP 500.
 

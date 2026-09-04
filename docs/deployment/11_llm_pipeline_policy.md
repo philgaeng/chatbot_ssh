@@ -1,7 +1,6 @@
 # LLM Pipeline Policy
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 ## How the GRM ticketing system queries LLMs, and what PII guarantees apply
 
@@ -158,8 +157,8 @@ names, so officer free-text search, the XLSX quarterly report to ADB/DOR, the ti
 queue view are all clean — while the officer keeps the names via a different path they already used.
 
 **The vault-and-reveal design in the old version of this row is a real proposal, and it is a sprint
-after this one:**
-[`followups/encrypt-the-original-work-from-the-redacted.md`](../sprints/2026-08-llm/followups/encrypt-the-original-work-from-the-redacted.md).
+after this one** — encrypt the original narrative at rest and serve the redacted derivative by default,
+revealing the original only through the audited reveal path.
 It needs a redacted derivative to exist first — which is what this sprint built. ⚠ Until it ships,
 **do not describe the narrative as vaulted or reveal-gated**: `begin_reveal`/`close_reveal` gate
 *contact details*, not the narrative.

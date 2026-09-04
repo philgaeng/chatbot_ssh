@@ -1,6 +1,6 @@
 # UI copy & plain-language guide (officer / admin portal)
 
-**Status:** authoritative (2026-07-30). The **single source for on-screen wording** in `channels/ticketing-ui`. Consolidates the cross-cutting "Language / legibility pass" ([DESIGN §2.3](../../sprints/2026-07_org_chart_positions/DESIGN-settings-redesign.md)) and the de-jargon decisions from the Projects & packages review ([ui/04 §13](04_projects_packages_ux_review.md), [doc 12 §6.2](../12_workflows_configuration.md)).
+**Status:** authoritative (2026-07-30). The **single source for on-screen wording** in `channels/ticketing-ui`. Consolidates the cross-cutting "Language / legibility pass" and the de-jargon decisions from the Projects & packages review ([ui/04 §13](04_projects_packages_ux_review.md), [doc 12 §6.2](../12_workflows_configuration.md)).
 **Referenced by:** [docs/README.md](../../README.md) and [02_design_system.md](02_design_system.md).
 **Scope:** governs **user-facing strings** (labels, help text, buttons, empty states, errors). Internal specs may use precise technical terms (e.g. "seat", "tier") *with a definition*; those terms should not surface verbatim in the UI.
 

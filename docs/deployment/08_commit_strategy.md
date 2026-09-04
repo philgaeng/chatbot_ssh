@@ -1,7 +1,7 @@
 # Commit Strategy: Dev Branch + Docker Validation
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-06-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 This document defines the standard development and commit workflow for this repository.
 

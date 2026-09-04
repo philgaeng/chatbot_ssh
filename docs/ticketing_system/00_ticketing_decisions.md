@@ -1,7 +1,7 @@
 # Ticketing System – Decisions (as-built, June 2026)
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-10 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 This file records **settled product, architecture, and integration decisions** for the GRM ticketing system.
 It reflects what has actually been built. Questions that drove these decisions are in `00_ticketing_overview_and_questions.md`.

@@ -1,7 +1,6 @@
 # 17 — Manual browser sweep (clears the pending-human debt)
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-22 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > **One session, ~60–75 min.** Clears the browser-only checks carried since Tier 1:
 > **D-17 · D-24 · D-33 · D-49 · D-56** (Tier 3) and the inherited **HR-07 · H2-02 · H2-06 · H2-08**.
@@ -249,7 +248,6 @@ The portal has a **role switcher** in the header (bypass builds only — it writ
 > On reload the backend answers as super_admin (no cookie) and the portal re-picks a privileged
 > officer — you're back to admin.
 >
-> Full write-up: [`../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md`](../sprints/archive/2026-08_tier3_structural/followups/demo-officer-switcher-one-way-door.md)
 
 For each role below: switch, then click **My Queue → All Tickets → Escalated → GRC → Reports
 → Settings**.
@@ -299,9 +297,9 @@ For each role below: switch, then click **My Queue → All Tickets → Escalated
 
 ## Recording the result
 
-Update the checklist items in
-[`../sprints/archive/2026-08_tier3_structural/PROGRESS.md`](../sprints/archive/2026-08_tier3_structural/PROGRESS.md)
-(the `- [ ] Manual:` lines) and mark the deviations D-17/24/33/49/56 as cleared.
+Record the outcome in [`../PROGRESS.md`](../PROGRESS.md) and mark the deviations D-17/24/33/49/56
+cleared there. ⚠ **Not in the sprint archive** — archived documents are read-only history; editing one
+to record a result that post-dates it makes the record say something it never said (lifecycle §8.2).
 
 **If something fails, it is a finding, not a chore.** Log it the way the sprint logs
 everything — a `followups/<slug>.md`, a `docs/TODO.md` 🔵 TECH DEBT row, **and** a PROGRESS

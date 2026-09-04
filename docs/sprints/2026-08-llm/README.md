@@ -1,5 +1,7 @@
 # Sprint — August 2026: DPG compliance & LLM independence
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
 > **Status: 🟡 in progress** — Sprint 0 ✅, Sprint 1 ✅, **Sprint 2 ✅ closed 2026-08-27**,
 > **Sprint 3 ✅ closed 2026-09-03**, Sprint 4 🔵 queued.
 > ⚠ **Sprint 3 narrowed the border; it did not close it.** Grievance text still leaves the country on

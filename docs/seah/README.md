@@ -1,7 +1,9 @@
 # SEAH Specifications (permanent)
 
+**Audience:** public — published with the open-source repository.
+
 **Status:** As-built, July 2026. This folder is the durable home for SEAH (Sexual Exploitation, Abuse, and Harassment) intake + privacy specification content, consolidated from sprint folders. Sprint specs remain as history; when they conflict with this folder, **this folder wins**.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 ## Documents
 

@@ -1,7 +1,6 @@
 # Privacy assessment and data-flow inventory
 
-**Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 **Nepal GRM Platform** — Grievance Redress Mechanism for ADB-financed road infrastructure
 (Kakarbhitta–Laukahi Road, ADB Loan 52097-003)
@@ -264,7 +263,7 @@ flowchart TB
 Checked against the code at the cited location on 2026-08-18. `⚠` marks a leg where personal data is
 exposed beyond what a reader would assume.
 
-> ⚠ **Re-checked against the code on 2026-08-27 by [DPG-30](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-30),
+> ⚠ **Re-checked against the code on 2026-08-27,
 > which enumerated the egress surface independently rather than from this diagram. Four discrepancies,
 > recorded here and in [`pii-egress-inventory.md`](pii-egress-inventory.md) §4.** No leg is missing and
 > none is invented — **the pattern in all four is that the diagram is right about topology and
@@ -272,8 +271,8 @@ exposed beyond what a reader would assume.
 >
 > | # | This document says | The code says |
 > |---|---|---|
-> | **R1** | **L3** — Redis is mitigated: *"payloads are not written to durable storage"* | 🔴 **That is an inference, not a check.** Compose declares no volume, but the official image declares its own `VOLUME /data` and `redis-server` with no config file uses default RDB save points. **Unresolved** — it needs three runtime commands and Docker was unavailable. [followup](../sprints/2026-08-llm/followups/redis-persistence-is-inferred-not-verified.md) |
-> | **R2** | **F-6** — one log site, the complainant's phone | 🔴 **At least twelve**, including **the OTP at INFO, twice** (`form_otp.py:312`, `:343`) and one line carrying the whole grievance dict (`action_outro.py:145`). [followup](../sprints/2026-08-llm/followups/otp-and-phone-logged-at-info.md) |
+> | **R1** | **L3** — Redis is mitigated: *"payloads are not written to durable storage"* | 🔴 **That is an inference, not a check.** Compose declares no volume, but the official image declares its own `VOLUME /data` and `redis-server` with no config file uses default RDB save points. **Unresolved** — it needs three runtime commands and Docker was unavailable. |
+> | **R2** | **F-6** — one log site, the complainant's phone | 🔴 **At least twelve**, including **the OTP at INFO, twice** (`form_otp.py:312`, `:343`) and one line carrying the whole grievance dict (`action_outro.py:145`). |
 > | **R3** | **L9** — messaging carries *"complainant phone number and message body"* | The **admin recap email carries the entire grievance dict** — narrative included — to `ADMIN_EMAILS` over the SMTP relay, on **every** submission (`action_outro.py:148`, `:243`). A different recipient and a different payload from the complainant's own recap (`:153`) |
 > | **R4** | **L10** — reports and closure documents, generically | The XLSX quarterly report carries `grievance_summary` (`ticketing/services/report_rows.py:459`), which by CLAUDE.md rule 4's own caveat **can hold self-disclosed and third-party PII**. It is a PII egress to external roles, not a metadata export |
 
@@ -299,7 +298,7 @@ Named so the omission is deliberate rather than an oversight.
 
 | Not drawn | Status |
 |---|---|
-| **Application logs** | ⚠ **A live PII sink, and narrower than it was.** ✅ The two worst legs are closed: the translation error paths no longer interpolate the whole input dict — `_grievance_ref()` (`LLM_services.py:500`) bounds them to the grievance id plus **three words**, 60-char cap (DPG-19.3) — and `parse_llm_response` logs the response **length**, not the body (`:490`, DPG-13). ⚠ **What remains:** those three words are still narrative, and `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO on every validation** (`:38` again on the invalid path). Logs go to the Docker `json-file` driver and a `logs/` directory. Owned by the [redaction work](../sprints/2026-08-llm/04-pii-redaction-spec.md) |
+| **Application logs** | ⚠ **A live PII sink, and narrower than it was.** ✅ The two worst legs are closed: the translation error paths no longer interpolate the whole input dict — `_grievance_ref()` (`LLM_services.py:500`) bounds them to the grievance id plus **three words**, 60-char cap (DPG-19.3) — and `parse_llm_response` logs the response **length**, not the body (`:490`, DPG-13). ⚠ **What remains:** those three words are still narrative, and `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO on every validation** (`:38` again on the invalid path). Logs go to the Docker `json-file` driver and a `logs/` directory. Owned by the [redaction boundary](../deployment/11_llm_pipeline_policy.md) |
 | **The Celery result backend** | Task results land in Redis DB 2. Whether any result carries grievance text is `⚠ Not verified` — see §7 |
 | **AWS staging** | Runs outside Nepal and **holds no genuine grievance data** — seeded and demo records only (§0.5) |
 
@@ -552,8 +551,9 @@ intake. That is a different thing and the word is correct there.)*
    would be false.**
 2. **Currently unredacted.** The complainant's words, their name and phone, and third-party names all
    leave the country as written. There is no technical control at that boundary today.
-3. **The mitigation is specified, scheduled and partial.** The
-   [redaction work](../sprints/2026-08-llm/04-pii-redaction-spec.md) covers more than numeric
+3. **The mitigation is now built, deployed and partial.** ⭐ **Updated 2026-09-04 — it is no longer
+   "specified and scheduled": the deterministic layer runs on staging**, at both model chokepoints,
+   with a second pass over the generated summary before storage. It covers more than numeric
    patterns: alongside phone numbers, emails, citizenship and vehicle-registration numbers, three
    person-name recognisers need no ML at all — honorific and role-title triggers (`श्री`, `Er.`,
    Engineer, overseer, ward chairperson), a Nepali family-name (thar) gazetteer, and
@@ -889,5 +889,5 @@ should be a lawyer.**
 | [`../deployment/13_security.md`](../deployment/13_security.md) | Security control inventory |
 | [`../deployment/14_key_and_secret_lifecycle.md`](../deployment/14_key_and_secret_lifecycle.md) | Key and secret rotation |
 | [`../ARCHIVING_AND_RETENTION.md`](../ARCHIVING_AND_RETENTION.md) | The implemented archiving policy |
-| [`../sprints/2026-08-llm/04-pii-redaction-spec.md`](../sprints/2026-08-llm/04-pii-redaction-spec.md) | Sprint 3 — the redaction work this assessment scopes |
+| [`../deployment/11_llm_pipeline_policy.md`](../deployment/11_llm_pipeline_policy.md) | The redaction boundary as built — what is scrubbed, where, and what survives it |
 | [`../../SECURITY.md`](../../SECURITY.md) | Vulnerability disclosure |

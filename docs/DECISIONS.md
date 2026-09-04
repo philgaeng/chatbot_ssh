@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-04). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-04 — created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled by the fold pass described in [`sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md`](sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md).
+**Last updated:** 2026-09-04 — D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled by the fold pass described in [`sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md`](sprints/2026-09_public_repo_split/HANDOFF-spec-restructure.md).
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -66,3 +66,148 @@ is never simply deleted.**
 **What would change the answer:** wanting external contributors to see the full working history, or a
 DPG assessment requiring published process evidence. Neither applies today; the compliance pack in
 [`dpg/`](dpg/) is published on its own merits.
+
+---
+
+## D-003 · Container images are built in CI and pulled, not built on the deploy host
+
+**Date:** 2026-09-04 · **Status:** decided, implementation pending
+
+**Chosen:** both images — one Python application image and the officer-UI image — are built by CI,
+pushed to a registry tagged by commit, and **pulled** by whichever host runs them.
+
+**Rejected:** continuing to build on the deployment host. It is simpler and needs no registry, and it
+took the staging environment off the network for 41 minutes on the day this was decided: a 3825 MB
+swapless host cannot build a Next.js application while also running the application. Every AWS-side
+signal reported healthy throughout, which is the part worth remembering — the instance was never down,
+it simply could not accept anything new.
+
+**Consequences, both wanted:** deploying becomes **pulling a named tag**, so *deploying an older tag is
+a rollback* — a capability the project did not previously have. And an image that runs anywhere can be
+started by a test harness, which is what makes automated end-to-end testing possible at all.
+
+**What would change the answer:** a production environment that cannot reach a public registry. That is
+an open question for the DOR host specifically, and until it is answered production keeps building
+locally while staging does not.
+
+---
+
+## D-004 · A project's participants are typed fields; staffing decides who acts
+
+**Date:** 2026-07-10 · **Status:** decided, built
+
+**Chosen:** a project names an **accountable agency** and zero or more **donors** as thin typed fields.
+Who *handles, oversees or is informed* at each level comes from **staffing — the workflow ladder** —
+not from any structure on the project itself. Three things stay strictly orthogonal: the org forest
+(who employs an officer), project participants (who the project is with), and staffing (who acts).
+
+**Rejected:** a per-project **actor-role catalog** — `project_actor_roles`,
+`project_organizations.org_role`, an "+ Add role" action and a `super_admin`-authored role vocabulary.
+It tried to encode in structure what is either **constant** (the implementing agency is the signing
+ministry) or already **implied by staffing**, so every project re-authored the same answer and the two
+copies could disagree.
+
+**What would change the answer:** a deployment where the accountable agency genuinely varies per
+grievance rather than per project — at which point it is a property of the case, not of either layer.
+
+---
+
+## D-005 · The project type is the template; a typed project cannot deviate from it
+
+**Date:** 2026-08-04 · **Status:** decided, built
+
+**Chosen:** a **project type** is a complete, reusable template owned by a top-level organization. It
+binds the workflows a project runs, names the organizations it must have, and routes categories.
+Creating a project is *pick the organization → pick one of its types → allocate the remaining
+organizations*. **If a project's configuration is wrong, you fix the type, not the project.**
+
+**Rejected:** configuring each project directly. The type is the only layer that can express *"a
+donor-funded road project has a sensitive workflow; a municipal one does not"* **once**, for every
+project of that kind — and it lets an administrator use the words on their contract ("Executing
+Agency", "Ward Office", "Concessionaire") instead of the vocabulary the platform happened to pick.
+
+**What would change the answer:** projects that are each genuinely unique, where a template is
+overhead with no second instance to amortise it.
+
+---
+
+## D-006 · An organization's grievances are its projects' grievances
+
+**Date:** 2026-08-04 · **Status:** decided, built
+
+**Chosen:** visibility is decided by **membership**. Every organization named on a project sees that
+project's grievances — donor, ministry, department, contractor alike. An organization named on a single
+lot sees that lot only, and because organizations form a tree, **a parent sees everything its children
+see**, deduplicated.
+
+**Rejected:** stamping one owning organization onto each grievance (the `routing_org_role` anchor →
+`tickets.organization_id`). ⭐ **The stamp holds one value, so one organization owned the grievance and
+every other organization on the project owned nothing.** On KL Road the anchor was DOR, and **ADB — the
+donor funding the road — matched zero grievances.** There is no value of the anchor that makes both
+reports right, because *"whose grievance is this?"* has more than one true answer. The anchor was also
+**authored** per type, which made an unavoidable modelling error look like a configuration choice.
+
+**Two things confirmed the shape rather than merely simplifying it:** the codebase already expanded
+**location** filters down a tree with a recursive CTE, and the org tree has the identical shape with
+`descendant_org_ids` already built; and the old filter already carried the comment *"Legacy filter;
+prefer project/location filters"* — it had been recognised as wrong before it was replaced.
+
+**What would change the answer:** a legal requirement that exactly one organization be the record
+owner of each grievance — which would make the stamp correct and the membership view a report.
+
+---
+
+## D-007 · SEAH is a property of a workflow, not a concept in the system
+
+**Date:** 2026-08-02 · **Status:** decided; access slice built and pinned, rename outstanding
+
+**Chosen:** **SEAH is the name someone gives a workflow.** What makes it special is one property set
+when the workflow is authored — `is_sensitive`. Everything that keyed off a track keys off that flag.
+**Only officers cast on a sensitive workflow may see its grievances or their PII: being an admin — of
+any tier, `super_admin` included — grants no access.** A sensitive workflow may not be a project's
+default (422), or every unmatched grievance would silently enter the restricted track; a project may
+have none at all; and the quarterly report excludes sensitive cases.
+
+**Rejected:** the two-track model, `workflow_type ∈ {standard, seah}`. It made "sensitive" a system
+concept with exactly two values, so a second kind of restricted case (say, a corruption channel) needed
+a schema change and a new branch everywhere the track was read — and it tied confidentiality to a name
+rather than to a decision an author makes.
+
+**What would change the answer:** a regulator requiring SEAH cases to be modelled as a distinct legal
+category rather than a confidentiality property.
+
+⚠ **Naming lag, deliberate and recorded:** the code still says `workflow_type == 'seah'` / `is_seah` /
+`workflow_track`. The **behaviour** above is as-built and pinned by
+`tests/ticketing/test_sensitive_workflow_access.py`; the rename follows with its migration.
+
+---
+
+## D-008 · Ticketing reads `public.*` directly, from a closed enumerated set
+
+**Date:** 2026-07-15 · **Status:** decided, built, pinned by a test
+
+**Chosen:** ticketing reads — and in three places writes — a **closed, enumerated set** of `public.*`
+tables through its own SQLAlchemy session. The set is closed: adding a table is a deliberate decision,
+not a default, and the table of permitted access is **parsed by a test** that fails when it and the code
+disagree. Grievance **state** changes still go over HTTP (`POST /api/grievance/{id}/status`), never SQL —
+that invariant is kept. **No foreign keys** from `ticketing.*` into `public.*`; links are soft string
+refs.
+
+**Rejected:** the original 2026-03 rule that ticketing must reach `public.*` only over HTTP. It existed
+to keep two options open — move ticketing to its own database by changing a connection string, and keep
+the chatbot working if ticketing were removed. ⭐ **Both goals had been abandoned in the code, by both
+sides, months before anyone amended the rule:** ticketing issued 11 statements against `public.*`, and
+the chatbot's intake location validation read `ticketing.locations` through its own connection. The rule
+had no enforcement (one database, one role) and had been false for months.
+
+**And honouring it today would have *degraded* security**, which is the part that settles it: the direct
+read sits behind a Keycloak JWT and a jurisdiction gate that `GET /api/grievance/{id}` cannot offer.
+
+**What would change the answer:** extracting ticketing into its own database or service — at which point
+the enumerated set becomes the exact list of endpoints that must exist first. Keeping the no-FK half is
+what preserves that option cheaply.
+
+⚠ **The lesson that outlived the rule:** a documentation reorganisation deleted the rule's *rationale*
+and left the bare rule, which then read as arbitrary fiat for months while both sides quietly violated
+it. **When you amend a rule, its reason moves with it** — a rule without its reason decays into cargo
+cult, and cargo cult is either obeyed pointlessly or discarded silently.

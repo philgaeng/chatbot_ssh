@@ -1,7 +1,6 @@
 # Privacy and Sensitive Data Safety Spec
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-08-18 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > For the full platform security feature index, see [13_security.md](13_security.md).
 
@@ -33,7 +32,7 @@ This spec is implementation-facing and aligned with:
 > ownership split below is kept because **schema ownership is real architecture** — it is what
 > keeps the three migration streams from fighting over the same DDL — but it does not depend on
 > worktrees, and never really did. Rule 4 below was also **factually false** and is corrected.
-> Evidence: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+> The fork and its rejected alternative: [D-008](../DECISIONS.md#d-008--ticketing-reads-public-directly-from-a-closed-enumerated-set).
 
 | Ownership | Owner | Schema/tables | Responsibilities |
 |---|---|---|---|
@@ -227,7 +226,7 @@ Audit stream ownership:
 > (one database, one role), had been false for months, and honouring it today would **degrade privacy**:
 > the direct read sits behind a Keycloak JWT and a jurisdiction gate that `GET /api/grievance/{id}`
 > cannot offer. Evidence and the decision:
-> [`sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+> [D-008](../DECISIONS.md#d-008--ticketing-reads-public-directly-from-a-closed-enumerated-set).
 >
 > A doc reorganisation in June deleted that rationale and left the bare rule, which is why it read as
 > arbitrary fiat and then survived a correction it should not have. **If you amend a rule here, move its

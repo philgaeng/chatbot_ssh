@@ -1,7 +1,7 @@
 # Platform settings (locations, reports, types, system JSON)
 
 **Status:** Product reference (June 2026). **Access:** `super_admin` only for this entire main tab — see [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.  
-**Last updated:** 2026-08-05 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **UI:** Settings → **Settings** (platform tab)  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [18_geography_and_locations.md](18_geography_and_locations.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
 
@@ -9,7 +9,7 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 ## 1. Sub-tabs and access
 
@@ -82,7 +82,7 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 > where nobody looking at a workflow would find it. The model, the freeze rules and the
 > validation stay documented here because every other doc already points at "14 §4".
 
-**Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
+**Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
 
 **Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
 **API:** `ticketing/api/routers/project_types.py`
@@ -98,7 +98,7 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 | `is_active` | **"Can be chosen when creating a project."** Off → the type is not offered in New project *and* `POST /projects` refuses it — but **projects already using it keep working**. This is how a template is retired; it is also why a **Use as template** copy starts off |
 | `workflow_bindings` | The project's workflow links — name, workflow, default, `intake_route`, `classifications` |
 | `actor_roles` | **The organization catalog** (primary again): `{key, label, description, required, required_package, scope}`. The author's words — "Executing Agency", "Ward Office", "Concessionaire" |
-| ~~`routing_org_role`~~ | **Retired 2026-08-04** ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)). No organization is *the* one: every organization named on a project sees its grievances. The column survives, unused, until a cleanup migration |
+| ~~`routing_org_role`~~ | **Retired 2026-08-04** ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances)). No organization is *the* one: every organization named on a project sees its grievances. The column survives, unused, until a cleanup migration |
 | `standard_workflow_id`, `seah_workflow_id` | Legacy mirrors of the bindings |
 
 ### 4.1 A type with a live project is frozen

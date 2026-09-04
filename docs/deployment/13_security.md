@@ -1,7 +1,7 @@
 # Security Features — Platform Overview (June 2026)
 
 **Status:** As-built reference for implemented controls and locked policies.  
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **Related:** [09_privacy.md](09_privacy.md), [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md), [../ticketing_system/06_messaging_rules_whatsapp_sms.md](../ticketing_system/06_messaging_rules_whatsapp_sms.md), [../services/05_messaging_service.md](../services/05_messaging_service.md), [../ticketing_system/00_ticketing_decisions.md](../ticketing_system/00_ticketing_decisions.md)
 
 This document is the **single index of security features** across chatbot, backend, and GRM ticketing.
@@ -453,8 +453,7 @@ and it is written here rather than in a sprint document so it outlives the sprin
 
 ### 8.1 ⚠ Self-hosted inference (T2) — the intended posture, **not deployed**
 
-Added by [DPG-25](../sprints/2026-08-llm/03-open-models-spec.md#dpg-25), 2026-08-20. **None of this
-is built.** T2 is parked because nobody owns the GPU running costs (Q-05), and this section exists so
+Written 2026-08-20. **None of this is built.** T2 is parked because nobody owns the GPU running costs (Q-05), and this section exists so
 that unparking starts from a decided network posture instead of an improvised one. Full document:
 [`../dpg/vllm-deployment.md`](../dpg/vllm-deployment.md).
 
@@ -473,9 +472,13 @@ in memory.
 
 ⚠ **And note what T1 means for this section while T2 stays parked.** T1 is the **steady state, not a
 transition**: grievance text — including SEAH narratives — leaves the country indefinitely, reaches a
-provider that is selected per request unless the model id pins one, and is unredacted until
-[Sprint 3](../sprints/2026-08-llm/04-pii-redaction-spec.md) lands. That is the trade this parking
-decision makes, and it is the reason redaction moved from prudent to necessary
+provider that is selected per request unless the model id pins one. ⭐ **Corrected 2026-09-04: the
+text is no longer unredacted.** The deterministic PII layer is built and **running on staging** —
+names, phones, emails and addresses are replaced with placeholders before the model call, and the
+generated summary gets a second pass before storage. ⚠ **Redaction is not anonymisation**: the
+mapping is retained to restore the officer's view, ward-level location and circumstance survive, and
+bare settlement names are not caught. So what leaves the country is pseudonymised, not anonymous —
+which is the trade this parking decision makes, and the reason redaction moved from prudent to necessary
 ([privacy assessment](../dpg/privacy-assessment.md) F-17).
 
 ---

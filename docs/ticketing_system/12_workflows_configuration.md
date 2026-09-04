@@ -25,7 +25,7 @@ A **single project** may link **N workflows** (not just one Standard + one SEAH)
 
 Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_types.py`. Admins add, rename, or remove links via `PUT /projects/{id}/workflows`.
 
-> **⚠ Superseded 2026-08-02 — [`DECISION-sensitive-workflows.md`](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md).** `workflow_type ∈ {standard, seah}` becomes a single boolean **`is_sensitive`** set by the workflow author. **SEAH is not a mode — it is the name of a workflow.** A sensitive workflow's grievances are visible **only to officers cast on its steps** (no admin, no oversight role, not `super_admin`), and their PII is vault-gated to that same cast. Sensitive workflows are **optional** on a project and **may not be the default**. Sections below still written in track terms are superseded by the DECISION; code change is outstanding (DECISION §7).
+> **⚠ Superseded 2026-08-02 — [D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system).** `workflow_type ∈ {standard, seah}` becomes a single boolean **`is_sensitive`** set by the workflow author. **SEAH is not a mode — it is the name of a workflow.** A sensitive workflow's grievances are visible **only to officers cast on its steps** (no admin, no oversight role, not `super_admin`), and their PII is vault-gated to that same cast. Sensitive workflows are **optional** on a project and **may not be the default**. Sections below still written in track terms are superseded by the DECISION; code change is outstanding (DECISION §7).
 
 `workflow_type` (`standard` \| `seah`) still controls **visibility** as-built — it is not the routing dimension.
 
@@ -41,7 +41,7 @@ Seeds: `ticketing/constants/workflow_routing.py` + `ticketing/services/project_t
 | `workflow_key` | Slug (auto from name) |
 | `display_name` | Admin-facing name |
 | `description` | Optional |
-| `workflow_type` | `standard` \| `seah` (visibility gate) — **being replaced by `is_sensitive` (bool)**, [DECISION](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md) §6 |
+| `workflow_type` | `standard` \| `seah` (visibility gate) — **being replaced by `is_sensitive` (bool)**, [D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system) §6 |
 | `status` | `draft` \| `published` \| `archived` |
 | `version` | Incremented on publish |
 | `is_template` | Reusable blueprint; not assigned to tickets directly |
@@ -174,7 +174,7 @@ On-screen copy (LOCKED — [ui/05](ui/05_ui_copy_style.md)):
 > ☐ **Sensitive workflow**
 > Only officers staffed on this workflow can see these grievances. Contact details stay hidden until an officer opens them, and every time is recorded. **A sensitive workflow can't be a project's default.**
 
-What ticking it does — the whole contract, in one place ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-sensitive-workflows.md)):
+What ticking it does — the whole contract, in one place ([DECISION §2](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system)):
 
 | | |
 |---|---|
@@ -202,7 +202,7 @@ A step is a **cast**, not one role ([13 §5A.1](13_projects_and_packages.md)): *
 - **Name + description** (`tier_labels`) — each tier starts from a **default** (from its type — e.g. supervisor → "oversees; can reassign") that the author can **edit per step, here in the Workflows tab**; e.g. L1 actor named "Safeguard Officer", L3 actor "GRC Chairman". These (default or edited) labels — never generic words like "Handles it" — are what the staffing and case UI display (**read-only there; edited only here**).
 - **Mandatory or not** (`required_tiers`) — the **actor is always required**; the author decides, **per step**, whether **supervisor / participant / observer** are mandatory. A tier not marked mandatory is optional and never blocks go-live.
 
-**Effect on project go-live (staffing gate):** a project blocks activation if any step has a **required** tier with no officer staffed for it ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). The supervisor's default (next-step handler pool, [DECISION §5](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)) satisfies a mandatory supervisor **except on the top step**, where an explicit one is required. Requiredness is a **workflow** property, so it is consistent across every project that uses the workflow.
+**Effect on project go-live (staffing gate):** a project blocks activation if any step has a **required** tier with no officer staffed for it ([13 §5A.5 / §7 A4](13_projects_and_packages.md)). The supervisor's default (next-step handler pool, [DECISION §5](../DECISIONS.md#d-004--a-projects-participants-are-typed-fields-staffing-decides-who-acts)) satisfies a mandatory supervisor **except on the top step**, where an explicit one is required. Requiredness is a **workflow** property, so it is consistent across every project that uses the workflow.
 
 **UI (wireframe):** the step-cast editor — bind a role, name each tier + add a description, mark required — is mocked at [`ui/06_workflows_step_cast_editor.html`](ui/06_workflows_step_cast_editor.html). The author-set names + required flags then drive the **read-only** Staffing screen ([13 §5A](13_projects_and_packages.md); mockup [`ui/04`](ui/04_projects_packages_redesign.html)).
 

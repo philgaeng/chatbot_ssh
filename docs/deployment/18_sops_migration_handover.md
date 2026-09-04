@@ -1,11 +1,25 @@
 # Handover — migrate this project's secrets to SOPS + age, and rotate
 
+**Status:** internal handover — a runbook for in-flight work, not a specification.
+**Audience:** internal
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+
+> 🔴 **This document is excluded from the public repository, deliberately.** It carries the staging
+> host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is the
+> live pre-rotation credential on staging and DOR production**, not a stale example. Those facts are
+> load-bearing here: the document's whole argument is that the credential is real, published in tracked
+> files, and must be *rotated* rather than deleted. **Redacting them would destroy the document; the
+> correct control is not publishing it** (lifecycle §10.5). ⚠ It is also not a specification — it is a
+> handover for in-flight work, tier 3 in substance while living in a tier-1 folder. If the folder is
+> ever published wholesale rather than per-document, **move it** rather than trimming it.
+> **Enforced** by `scripts/ops/doc_headers.py --check`, which fails on this content in any document not
+> marked `Audience: internal`.
+
 > **For:** an agent or engineer picking this up cold.
 > **Scope:** **`nepal_chatbot` only.** The policy in
 > [`13_security.md`](13_security.md) §5 covers every repository under `~/projects/`; this document is
 > the slice for this one, so the issue can be closed here without waiting on the others.
 > **Written:** 2026-08-20. **Status:** 🟨 **steps 0–5 done 2026-08-21; step 6 (rotation) and the
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > staging/production migration are not.** See *What actually happened* below before doing anything.
 > **Prerequisite that is not yours:** the owner answers the `TBC` cells in `13_security.md` §5.3.1.
 > You can do steps 1–4 without them; step 6 needs them.

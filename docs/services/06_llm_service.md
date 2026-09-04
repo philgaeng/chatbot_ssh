@@ -1,7 +1,6 @@
 # LLM Service Spec
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-08-18 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 ## 1) Scope
 
@@ -20,6 +19,34 @@ module built one at import (swallowing the failure into `client = None`, which i
 functions carry five different guards) *and* a second one inside `classify_and_summarize_grievance`
 that shadowed it. Both are gone; a test fails if a third appears
 (`tests/backend/test_llm_config_pins.py`).
+
+## 1a) ⚠ Four of the capabilities below do not run
+
+**§2 describes nine capabilities. Five are live.** The other four exist, are registered as Celery
+tasks, and are **switched off** — no caller reaches them. `backend/task_queue/registered_tasks.py`
+holds this in code as `PARKED_TASKS`, with a reason per entry, and a test pins it. **That dict is
+the authority; this table is a reader's convenience.**
+
+| Capability | §2 section | Live? |
+|---|---|---|
+| Grievance classification + summarisation | Classification | ✅ live |
+| Sensitive-content (SEAH) detection | Sensitive-content detection | ✅ live |
+| Case findings / summary generation | Classification | ✅ live |
+| Ticket-side translation | Translation | ✅ live |
+| Structured-output ladder | §3 | ✅ live |
+| **Audio transcription** | Audio transcription | ⛔ **parked** — audio is stored, never transcribed (CB-01). Unparking needs a transcription budget and a Nepali WER baseline, which does not exist |
+| **Contact extraction** | Contact extraction | ⛔ **parked** — it consumes a *transcription* of spoken contact details. The typed path never needed it and validates phone numbers deterministically (`backend/actions/services/contact/phone.py`) |
+| **Translate grievance to English** | Translation | ⛔ **parked** with transcription. ⚠ Officers still read English: the ticketing surface generates it, so nothing is missing — `grievance_description_en` simply is not populated by the chatbot |
+
+⭐ **Why this section exists, and why counting call sites is not an inventory.** *Unreachable* and
+*switched off on purpose* look identical to a `grep`. Four documents carried "nine LLM call sites"
+for three weeks on that basis, and a privacy assessment reached a wrong conclusion the same way —
+it counted a leg that no caller reaches. **A capability list without a live/parked column invites
+exactly that mistake**, which is why the distinction lives in code with a test rather than only here.
+
+**Models are deliberately not restated in this table.** `backend/config/llm_config.py` is the only
+place any model name is declared (DPG-17); a spec that names one becomes a second source to drift.
+Resolve with `model_for("<task>")`.
 
 ## 2) Capabilities
 

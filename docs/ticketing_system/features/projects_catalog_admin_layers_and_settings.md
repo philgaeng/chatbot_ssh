@@ -1,7 +1,7 @@
 # Feature: Projects catalog (DB) + country-agnostic admin layers + settings CRUD
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## Goal
 

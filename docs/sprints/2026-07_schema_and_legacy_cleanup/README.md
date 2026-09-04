@@ -1,5 +1,7 @@
 # Sprint — July 2026: Canonical Cleanup (schema, channels, config)
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
 > **Status: PLANNED** · Grew out of the hardening sprint's CI verification (which exposed that `public.*` can't be rebuilt from migrations), then widened to canonicalize the dev-phase config sprawl. Evidence: [`AUDIT_FINDINGS.md`](AUDIT_FINDINGS.md).
 > **The unlock:** prod is **not live — 0 real records** (owner-confirmed). So we don't reconcile or preserve anything — we define the **canonical** shape and rebuild to it. Clean, canonical, bulletproof.
 

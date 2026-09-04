@@ -1,7 +1,8 @@
 # Shared Service Specifications
 
-**Status:** index — the map of this folder, not a spec in itself.
-**Last updated:** 2026-06-23 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Audience:** public — published with the open-source repository.
+
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 This folder contains production specs for backend services used across multiple project areas.
 

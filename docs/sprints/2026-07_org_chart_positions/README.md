@@ -1,5 +1,7 @@
 # Sprint — July 2026: Org Chart & Positions
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
 > **▶ Current build entry point (2026-08-04):** [`HANDOVER-author-defined-slots-build.md`](HANDOVER-author-defined-slots-build.md) — what shipped, what's next, and the traps. Plan: [`DECISION-author-defined-slots.md`](DECISION-author-defined-slots.md).
 
 > **Status: PLANNED** · Feature source: [`docs/ticketing_system/16_org_chart_and_positions.md`](../../ticketing_system/16_org_chart_and_positions.md) (Agreed design, not yet implemented)

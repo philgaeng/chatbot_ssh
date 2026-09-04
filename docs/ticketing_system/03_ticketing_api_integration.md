@@ -1,7 +1,6 @@
 # Ticketing System – API Reference (as-built, July 2026)
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-08-05 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 Integration with the ticketing system is API-first. This document covers:
 1. **Inbound** — chatbot/backend calls ticketing
@@ -15,7 +14,7 @@ Integration with the ticketing system is API-first. This document covers:
 
 ---
 
-> **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+> **⚠ Reinstated 2026-08-04 — [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
 
 
 ## 1. Chatbot → Ticketing (Inbound)
@@ -87,9 +86,9 @@ Policy helpers (no DB): `ticketing/services/grievance_sync_policy.py`.
 
 `ticketing/services/project_routing.py` → `resolve_ticket_organization(db, project_code=…, package_id=…)`:
 
-1. **Prefer** the project's `implementing_agency_org_id` ([DECISION §2](../sprints/2026-07_org_chart_positions/DECISION-project-participants-and-supervision.md)).
+1. **Prefer** the project's `implementing_agency_org_id` ([DECISION §2](../DECISIONS.md#d-004--a-projects-participants-are-typed-fields-staffing-decides-who-acts)).
 2. **Legacy fallback** (projects predating that field): `package_organizations` (if `package_id`) then `project_organizations` for the routing role (default `implementing_agency`) — deprecated.
-   > **Superseded 2026-08-04:** `tickets.organization_id` is a **descriptive stamp** — reporting is membership ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md)). It takes the project type's **first required** organization role, with this field as the fallback.
+   > **Superseded 2026-08-04:** `tickets.organization_id` is a **descriptive stamp** — reporting is membership ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances)). It takes the project type's **first required** organization role, with this field as the fallback.
 
 Used on **ticket create** and on **field-officer invite / add scope** (`validate_jurisdiction` overrides wrong org, e.g. contractor vs DOR). Country/global observer roles (`jurisdiction_mode=country`) keep the submitted org (e.g. ADB).
 
@@ -150,7 +149,7 @@ Called from ticket detail view to fetch **complainant PII** (name, phone) on-dem
 
 ## 3b. Ticketing → `public.*` direct access (NOT via the API)
 
-**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The full decision and evidence: [`../sprints/archive/2026-08_tier3_structural/00-reassessment.md`](../sprints/archive/2026-08_tier3_structural/00-reassessment.md) §6.
+**Ticketing reads — and in three places writes — a closed, enumerated set of `public.*` tables through its own SQLAlchemy session.** This is **deliberate and documented as of 2026-07-15**, not a violation and not tech debt to pay down. The fork, the rejected alternative, and why honouring the old rule would now *degrade* security: [D-008](../DECISIONS.md#d-008--ticketing-reads-public-directly-from-a-closed-enumerated-set).
 
 Measured surface — **11 statements, 5 tables, 3 writes**:
 
@@ -280,7 +279,7 @@ Full contract in [12_workflows_configuration.md](12_workflows_configuration.md) 
 | `GET` | `/projects/{id}/go-live` | Go-live readiness check |
 | `GET/PATCH` | `/projects/{id}/messaging` | Project officer SMS/WhatsApp config |
 | `GET/PUT` | `/projects/{id}/workflows` | Workflow slot bindings |
-| `/projects/{id}/organizations` · ~~`…/actor-roles`~~ | **Reinstated 2026-08-04** — `…/organizations` stores filled organization slots (`org_role` = a key from the project type's `actor_roles`). `…/actor-roles` stays **dead**: the catalog lives on the type, not per project ([DECISION-author-defined-slots](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)) |
+| `/projects/{id}/organizations` · ~~`…/actor-roles`~~ | **Reinstated 2026-08-04** — `…/organizations` stores filled organization slots (`org_role` = a key from the project type's `actor_roles`). `…/actor-roles` stays **dead**: the catalog lives on the type, not per project ([D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it)) |
 | `GET/POST/DELETE` | `/projects/{id}/locations…` | Project location links |
 | `GET/POST/PATCH` | `/projects/{id}/packages…` | Package CRUD |
 | `POST/DELETE` | `/projects/{id}/packages/{pkg}/locations/{code}`, `…/organizations/{org}` | Package location + org links |

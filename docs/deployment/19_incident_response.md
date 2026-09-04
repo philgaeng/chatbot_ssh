@@ -82,8 +82,7 @@ When the answer stops being zero, §2 onwards applies in full and B1's clock sta
 > and the container reporting `healthy` throughout. Repairing it uncovered three further defects that
 > meant **the activity and security rows had never returned a number on any deployment**: one aborted
 > transaction blanked every row after it, four queries named columns that do not exist, and `ops_app`
-> lacked SELECT on five of the tables it reads. All fixed, all verified —
-> [`../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md`](../sprints/2026-08-llm/followups/ops-cannot-authenticate-since-rotation.md).
+> lacked SELECT on five of the tables it reads. All fixed, all verified.
 >
 > **So the detection table above is now true of the development stack, and of nothing else.** Deploying
 > `ops` to staging and production is the cheapest remaining improvement to this procedure.
@@ -261,7 +260,7 @@ Individual Privacy Act 2018, and to which authority. That is Q15's dependency, t
   finding value in — **what did we believe was true that was not?** The Keycloak gap in §5 was found
   exactly that way: a claim in a privacy document, checked against the database.
 - Every fix that comes out of a review gets a ticket and a follow-up file, per
-  [`../sprints/README.md`](../sprints/README.md). A lesson with no ticket is a lesson lost.
+  the follow-up + `TODO.md` pair, in the same commit. A lesson with no ticket is a lesson lost.
 
 ---
 

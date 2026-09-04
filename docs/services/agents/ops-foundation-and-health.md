@@ -1,7 +1,7 @@
 # Agent: Ops foundation & health monitoring
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 **Copy this entire file into a new Cursor agent session. Build in phase order — A0 first (everything else depends on it).**
 

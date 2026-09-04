@@ -42,7 +42,7 @@ If you read nothing else, these are the rules that get violated most and cost mo
 5. **Authorization is a dependency, not an `if`.** It is declared on the route, and it is tested. → [03](03_api_layer.md#4-authorization)
 6. **No complainant PII in `ticketing.*`**, ever, in any form — column, cache, or log. Ticketing cannot decrypt and must not learn how. → [`CLAUDE.md`](../../CLAUDE.md) data rules, pinned by `tests/ticketing/test_pii_boundary.py`
 7. **A rule without its reason decays into cargo cult.** When you write, amend, or move a rule, move its *why* with it. → [06](06_documentation_lifecycle.md#5-how-to-write-a-rule)
-8. **Never silence a test or a lint.** A deferral that is not logged in `sprints/<sprint>/followups/` **and** `TODO.md` in the same commit is a defect, not a deferral. → [`../sprints/README.md`](../sprints/README.md)
+8. **Never silence a test or a lint.** A deferral that is not logged in `sprints/<sprint>/followups/` **and** `TODO.md` in the same commit is a defect, not a deferral.
 9. **Never write a doc claim you have not verified.** If the code doesn't do it yet, the spec says `⚠ Not built`. → [06](06_documentation_lifecycle.md#4-honesty-markers)
 10. **Every user-facing string** goes through the copy guide and the canonical vocabulary. → [`ui/05`](../ticketing_system/ui/05_ui_copy_style.md)
 
@@ -56,7 +56,7 @@ A ticket is done when **all** of these are true. This list is the shared definit
 - [ ] Migrations, if any, in the right stream and replayable from empty — [01](01_database.md)
 - [ ] Tests written at the right level, and CI is green **without** deselecting anything — [04](04_testing.md)
 - [ ] The **live spec** reflects the new behaviour, with an honest verification marker — [06](06_documentation_lifecycle.md)
-- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit — [`../sprints/README.md`](../sprints/README.md)
+- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit
 - [ ] `PROGRESS.md` updated
 
 ---

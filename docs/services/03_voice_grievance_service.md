@@ -1,7 +1,6 @@
 # Voice Grievance Service Spec
 
-**Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-08-20 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > **RETIRED (CL-02, July 2026).** The accessible voice channel (`channels/accessible/`)
 > and its exclusive backend — the `voice_grievance.py` router
@@ -99,7 +98,6 @@ Behavior:
 > classification consumes and not what transcription consumes. Nothing in this repository can author
 > a recording, and TTS would not close the gap: synthetic speech is cleaner than a person on a rural
 > mobile connection, so a WER measured on it would flatter every candidate.
-> [Follow-up](../sprints/2026-08-llm/followups/no-audio-subset-for-asr-benchmark.md).
 >
 > **2. ⚠ The open configuration's ASR endpoint returns 404.** `.env.open` ships
 > `ASR_BASE_URL=https://router.huggingface.co/v1`, and that router **does not expose**
@@ -109,7 +107,6 @@ Behavior:
 > them audio**. **So whoever unparks this flow must first choose an ASR provider that does serve the
 > OpenAI-compatible audio surface** — the registry already keeps `ASR_BASE_URL` and `ASR_API_KEY`
 > separate from the chat endpoint precisely so that is a two-line change.
-> [Follow-up](../sprints/2026-08-llm/followups/the-open-config-has-no-working-asr-endpoint.md).
 >
 > **3. Licences verified from the model cards, at probe time** — this is the part that *is* settled:
 >

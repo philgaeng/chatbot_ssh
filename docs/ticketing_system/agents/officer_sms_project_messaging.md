@@ -1,7 +1,7 @@
 # Agent: Project-level officer SMS (assignment alerts)
 
 **Status:** live specification (tier 1) — authoritative for what the system does today.
-**Last updated:** 2026-07-10 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 **Copy this entire file into a new Cursor agent session and run in one pass.**
 

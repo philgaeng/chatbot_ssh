@@ -1,7 +1,7 @@
 # Officer management and ticket assignment
 
 **Status:** As-built reference (updated June 2026).  
-**Last updated:** 2026-07-10 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md) (admin ladder), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
 
 ---

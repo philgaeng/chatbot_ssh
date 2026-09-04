@@ -1,7 +1,6 @@
 # Remediation record — what the DPG sprints changed
 
-**Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > **What this is.** A record of the work done between 2026-08-17 and 2026-09-03 to prepare this
 > platform for a DPG assessment, and of what that work found. **As of 2026-09-03.**
@@ -14,8 +13,8 @@
 > **When to send it:** in response to a question about what changed, or about whether the process
 > that produced the assessment is one worth trusting. Not otherwise, and never instead of `00`.
 >
-> **Source:** [`docs/sprints/2026-08-llm/PROGRESS.md`](../sprints/2026-08-llm/PROGRESS.md), which is
-> the live tracker and is more detailed than this summary.
+> **Source:** the sprint tracker — **internal**, and more detailed than this summary. Everything this
+> document asserts is restated here rather than cited, so it reads without it.
 
 ---
 
@@ -174,6 +173,6 @@ These are gaps, so they are assessed properly in
 
 - [`00_compliance_status.md`](00_compliance_status.md) — the assessment. Read that first
 - [`02_questions.md`](02_questions.md) — what we need from the consultant
-- [`../sprints/2026-08-llm/PROGRESS.md`](../sprints/2026-08-llm/PROGRESS.md) — the live tracker, ticket by ticket
-- [`../sprints/2026-08-llm/DECISIONS.md`](../sprints/2026-08-llm/DECISIONS.md) — the decision register
-- [`../sprints/2026-08-llm/followups/`](../sprints/2026-08-llm/followups/) — every deferral, with a definition of done
+- [`../DECISIONS.md`](../DECISIONS.md) — the forks taken, with what was rejected
+- The per-ticket tracker, decision register and deferral log are **internal** and not published; every
+  claim this document makes is stated here rather than cited, so nothing depends on them.

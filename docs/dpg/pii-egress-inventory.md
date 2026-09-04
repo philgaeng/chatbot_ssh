@@ -1,14 +1,11 @@
 # PII egress inventory — every path by which grievance text leaves the agency's control
 
-**Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
-> **Ticket:** [DPG-30](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-30) · **Written:** 2026-08-27
-> · **Branch:** `dpg/sprint3-pii`
+> **Written:** 2026-08-27
 >
-> **What this is.** The scope statement for [DPG-33](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-33)
-> and [DPG-34](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-34), and an indicator-7 artefact in
-> its own right. Every row was found **by reading the code**, not by reading the data-flow diagram —
+> **What this is.** The scope statement for the redaction work — the model-call boundary and the
+> application logs — and an indicator-7 artefact in its own right. Every row was found **by reading the code**, not by reading the data-flow diagram —
 > and §4 lists what the diagram got wrong, which is the point of doing it this way round.
 >
 > ⚠ **Authored by an AI agent. No legal review.** Same honesty marker as
@@ -357,9 +354,8 @@ privacy control, and it should be recorded as one.
 | **E5 — admin recap** | `:148` (submission), `:243` (status-check follow-up) | `ADMIN_EMAILS` (`backend/config/constants.py:141`, env-configured) | The whole `grievance_data` / `email_data` dict — narrative at `:225`, summary at `:220`, categories, timeline |
 | **E7 — complainant recap** | `:153`, gated on a valid `complainant_email` | The complainant | Their own grievance data |
 
-⚠ **This corrects the three-consumer table in
-[`04-pii-redaction-spec.md`](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-33) (added 2026-08-27),
-and the correction changes the reasoning rather than a citation.** That table cites
+⚠ **This corrects the three-consumer table the redaction work started from, and the correction
+changes the reasoning rather than a citation.** That table cites
 `action_outro.py:220` as **complainant-facing**, with the rationale *"they wrote the name;
 `<PERSON_1>` back at them is absurd."* **`:220` is in the block that feeds
 `send_recap_email_to_admin` at `:243`** — it is the *admin* leg. The complainant-facing send is `:153`.
@@ -536,11 +532,15 @@ and the reason is still physics, not effort.
 
 ## 8. Related
 
-- [DPG-30](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-30) — the ticket
 - [`privacy-assessment.md`](privacy-assessment.md) §2.2 — the diagram this reconciles against; §4's four discrepancies are recorded there too
 - [`19_incident_response.md`](../deployment/19_incident_response.md) — carries the Redis containment claim §2 questions
-- [`followups/redis-persistence-is-inferred-not-verified.md`](../sprints/2026-08-llm/followups/redis-persistence-is-inferred-not-verified.md)
-- [`followups/otp-and-phone-logged-at-info.md`](../sprints/2026-08-llm/followups/otp-and-phone-logged-at-info.md)
-- [`04-pii-redaction-spec.md`](../sprints/2026-08-llm/04-pii-redaction-spec.md) — DPG-31/33/34, the work this inventory scoped
-- [`PROGRESS.md`](../sprints/2026-08-llm/PROGRESS.md) — deviations **D-62** (the OTP correction), **D-63** (Redis), **D-64** (the erased SEAH detection)
+- [`../deployment/11_llm_pipeline_policy.md`](../deployment/11_llm_pipeline_policy.md) — the redaction boundary this inventory scoped, as built
+
+**Three corrections this inventory produced, recorded here rather than cited** (the working notes are internal):
+
+| | Believed | Measured |
+|---|---|---|
+| **Redis durability** | *"payloads are not written to durable storage"* — asserted in four documents | 🔴 **False.** RDB snapshotting is on and `dump.rdb` survives a restart. No volume is not no persistence. Resolved by removing the cause: task payloads now carry a `grievance_id`, not the narrative |
+| **The OTP in logs** | one log site, the complainant's phone | **At least twelve**, including the OTP itself at `INFO`, twice. ⚠ The impersonation risk was **over-stated** on first analysis and corrected: verification compares against per-session state, so a leaked code authenticates nothing — but there was **no expiry at all**, which is the real defect and is now a 10-minute window that fails closed |
+| **The SEAH flag** | the final submit is harmless | 🔴 **It erased the model's detection.** A stale keyword `False` overwrote the LLM's `True` in exactly the case the LLM leg exists for, silently un-routing a harassment report. The column now only ever escalates, in SQL |
 - [`13_security.md`](../deployment/13_security.md) §8.1 — the observability rule, written before a tracing tool exists

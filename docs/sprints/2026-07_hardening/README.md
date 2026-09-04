@@ -1,5 +1,7 @@
 # Sprint — July 2026: Tier-1 Hardening
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
 > **Status: ACTIVE** · Source: [`docs/reviews/devils_advocate_codebase.md`](../../reviews/devils_advocate_codebase.md) §3 Tier 1
 > Goal: close the highest-risk, lowest-effort findings from the July 2026 adversarial codebase review. Target: overall quality ~55% → ~68% (security 55→75, correctness 55→70, portal robustness 48→60).
 > Estimated total effort: ~2 engineer-weeks including tests.

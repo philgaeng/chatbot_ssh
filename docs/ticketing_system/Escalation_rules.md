@@ -1,7 +1,9 @@
 # Ticketing System – SLA and Escalation Rules
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **Status (July 2026):** Fully implemented. Auto-escalation Celery watchdog runs every 15 min. Manual escalation available via ESCALATE action. Auto-assign on escalation wired. Complainant notification fires automatically on RESOLVE and ESCALATE. Overdue episodes tracked in `ticket_overdue_episodes`.
-**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 This document specifies how **SLAs** and **escalation rules** work in the ticketing system. All roles, levels, timelines, and actions are **configurable through settings** (see [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md)). Concrete roles are described in **TOR GRMS** (Terms of Reference – Grievance Redress System); the system supports 100% configuration of access levels and escalation behaviour.
 

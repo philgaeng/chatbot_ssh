@@ -1,8 +1,8 @@
 # Documentation lifecycle
 
 **Status:** authoritative (2026-09-04). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-04 — §6.1 gained an enforcement point (it had none for a month, and was obeyed only in this folder); §6.8 answers the commit-hash question.
-**Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../sprints/README.md`](../sprints/README.md) (the deferral-logging rule).
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
 
@@ -183,7 +183,6 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 **Rule 6.1 — Status header on every doc**, with a date. A doc with no date is untrustworthy by construction. Two fields, because they answer different questions:
 
 ```markdown
-**Status:** live specification (tier 1) — authoritative for what the system does today.
 **Last updated:** 2026-09-04 — <one line: what changed, or what was verified>
 ```
 
@@ -201,7 +200,6 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 >
 > ⭐ **Obeyed in the folder the rule lives in, and essentially nowhere else** — Rule 5.2 demonstrated
 > against the document that states it. The 81 backfilled headers carry
-> `⚠ backfilled from git … not re-verified against the code`, and their date is the file's **last
 > commit date, not the backfill date**: stamping 81 documents "reviewed today" would have been 81
 > claims nobody made (Rule 4.1). **Clearing that marker is a real review**, per Rule 4.2.
 
@@ -269,7 +267,7 @@ git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why
 - [ ] **Every spec the change touches has its `Last updated:` bumped in the same commit** (§6.1a) — `python scripts/ops/doc_headers.py --check` green
 - [ ] Unverified behaviour carries an honesty marker (§4)
 - [ ] Every new rule has its reason, and its enforcement point or an admission that it has none
-- [ ] Every deferral logged in `followups/` + `TODO.md`, **same commit** ([`../sprints/README.md`](../sprints/README.md))
+- [ ] Every deferral logged in `followups/` + `TODO.md`, **same commit**
 - [ ] `PROGRESS.md` updated
 - [ ] Relative links resolve (CI link job)
 - [ ] If a doc moved: forwarding line added, inbound links fixed
