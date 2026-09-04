@@ -43,7 +43,13 @@ register **generated** from it in CI and pinned by a test (07 §9.3 — the patt
 already proves). (4) Re-evaluate Linear only if the GitHub board proves painful in daily use — it buys
 UI, not capability, and its opinions are strong enough that we would adapt to it more than it to us.
 
-> **Answer:**
+> **Answer:** ✅ **2026-09-04 — follow the sequence, and step (2) is decided.** The working repository
+> goes **private** ([D-010](../../DECISIONS.md)) on GitHub Team, one seat (~$4/month — measured against
+> ~750 billed CI minutes/month today, ~1,500–2,500 after the QA sprint, against 2,000 free). The public
+> repository becomes a **versioned release artifact** cut on production deploy ([D-009](../../DECISIONS.md)),
+> not a continuous mirror. **GitHub Issues + Projects** is therefore the tracker, once the flip has
+> happened — it is safe only after it. Linear stays a later re-evaluation, not a plan.
+> ⚠ **The decision is taken; the flip is not.** OM-07 is gated on the flip, not on this answer.
 
 ### Q-03 · What happens to `docs/TODO.md`?
 

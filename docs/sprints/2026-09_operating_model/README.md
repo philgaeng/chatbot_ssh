@@ -23,9 +23,10 @@ rather than at the moment it merges** — and put the answer in one register tha
 | [OM-05](05-OM-05-product-and-roadmap.md) | `PRODUCT.md`, scope + launch definition, `ROADMAP.md` | M | Q-09 *(reco is safe)* | ✅ now |
 | [OM-06](06-OM-06-standard-amendments.md) | Reference packs · design gate · verification ladder · session close | M | OM-01 | ✅ now |
 | [OM-07](07-OM-07-intake-and-tracker.md) | Unify intake; decide the tracker | M | OM-02 · Q-02 · **`D-002`** | ⛔ gated |
+| [OM-09](09-OM-09-release-and-versioning.md) | Release + versioning: a tag is cut on production deploy | M | D-009 · D-010 *(both decided)* | ✅ now |
 | [OM-08](08-OM-08-starter-kit-extraction.md) | Extract the generic model into `_starter_kit/` | S | OM-01…OM-06 | ⛔ last |
 
-**Total ~5–6 days** for one person; **~3–4 elapsed** with the two streams below in parallel.
+**Total ~6–7 days** for one person; **~4–5 elapsed** with the two streams below in parallel.
 
 ## How this splits across agents
 
@@ -33,7 +34,7 @@ rather than at the moment it merges** — and put the answer in one register tha
  Stream A — the register                    Stream B — the standards
  (docs/SPINE.md · TODO · PROGRESS)          (engineering/* · AGENTS.md · PRODUCT · ROADMAP)
  ─────────────────────────────────          ────────────────────────────────────────────────
- OM-02 ─▶ OM-03                             OM-04   OM-05   OM-06   (independent of each other)
+ OM-02 ─▶ OM-03                             OM-04   OM-05   OM-06   OM-09   (independent of each other)
     │                                                  │
     └────────────────┬─────────────────────────────────┘
                      ▼
