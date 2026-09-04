@@ -81,6 +81,13 @@ def test_no_commit_changes_a_spec_body_without_touching_its_header(dh):
     red — see the module docstring. It cannot be satisfied by editing prose and leaving a stale
     date, because the same commit has to touch the header line.
     """
+    why = dh.git_history_available()
+    if why is not None:
+        # ⚠ SKIP, never pass. The app containers have no git binary and `actions/checkout`
+        # defaults to a shallow clone; either would let this "succeed" having checked nothing.
+        # A green tick that inspected zero commits is the `health_rows=0` failure in test form.
+        pytest.skip(f"cannot verify rule 6.1a: {why}")
+
     violations = [v for f in dh.spec_files() for v in dh.commits_touching_body_without_header(f)]
     assert not violations, (
         f"{len(violations)} commit(s) since {dh.CUTOFF} changed a spec's body without bumping "

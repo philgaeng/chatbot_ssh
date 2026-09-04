@@ -107,6 +107,13 @@ jobs:
       SMTP_FROM: ci@example.com
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow depth-1 clone. tests/repo/test_doc_headers.py
+          # checks that no commit changed a spec's body without touching its header, which needs
+          # `git log -- <file>` to see more than the tip. ⚠ On a shallow clone that test SKIPS
+          # rather than passes (it says so) — but a skipped rule enforces nothing, so give it
+          # the history it needs here rather than discovering the gap later.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:

@@ -92,10 +92,35 @@ def spec_files() -> list[Path]:
     return out
 
 
+class GitUnavailable(RuntimeError):
+    """git is missing, or the clone is shallow — history checks cannot be trusted."""
+
+
 def _git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True
-    ).stdout.strip()
+    try:
+        return subprocess.run(
+            ["git", *args], cwd=REPO_ROOT, capture_output=True, text=True
+        ).stdout.strip()
+    except FileNotFoundError:
+        return ""
+
+
+def git_history_available() -> str | None:
+    """Return None if history is usable, else why it is not.
+
+    ⚠ Two ways this silently under-enforces, and both were real here:
+    the app containers have **no git binary** (`sh: 1: git: not found`), and
+    `actions/checkout` defaults to **`fetch-depth: 1`** — a shallow clone where
+    `git log -- <file>` sees at most the tip commit. Either would let rule 6.1a
+    report success while checking nothing, which is the failure mode this project
+    has now hit twice in monitoring (`ops` blind on staging, `health_rows=0`).
+    So the caller must skip **loudly**, never pass quietly.
+    """
+    if not _git("rev-parse", "--is-inside-work-tree"):
+        return "git is unavailable (no binary, or not a work tree)"
+    if _git("rev-parse", "--is-shallow-repository") == "true":
+        return "the clone is shallow — set `fetch-depth: 0` on actions/checkout"
+    return None
 
 
 def header_of(path: Path) -> tuple[str | None, str]:
@@ -142,6 +167,7 @@ def check() -> int:
     future: list[str] = []
     unstamped: list[tuple[str, str]] = []
 
+    why = git_history_available()
     for f in spec_files():
         date, _ = header_of(f)
         if date is None:
@@ -149,7 +175,8 @@ def check() -> int:
             continue
         if date > today:
             future.append(f"{rel(f)} (header says {date}, today is {today})")
-        unstamped.extend(commits_touching_body_without_header(f))
+        if why is None:
+            unstamped.extend(commits_touching_body_without_header(f))
 
     fail = False
     if missing:
@@ -282,7 +309,9 @@ def provenance() -> int:
     print(f"{'document':<62} {'commit':<9} {'date':<11} subject")
     print("-" * 120)
     for f in spec_files():
-        line = _git("log", "-1", "--format=%h\x00%ad\x00%s", "--date=short", "--", rel(f))
+        # `%x00` is git's escape, expanded by git. A literal NUL here would be rejected by
+        # subprocess ("embedded null byte") — which is exactly how this line first failed.
+        line = _git("log", "-1", "--format=%h%x00%ad%x00%s", "--date=short", "--", rel(f))
         if not line:
             print(f"{rel(f):<62} {'—':<9} {'uncommitted':<11}")
             continue
