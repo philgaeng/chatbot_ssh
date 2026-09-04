@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-04). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-04 — D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
+**Last updated:** 2026-09-04 — D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -216,7 +216,7 @@ cult, and cargo cult is either obeyed pointlessly or discarded silently.
 
 ## D-009 · The public repository is a versioned release artifact, not a mirror
 
-**Date:** 2026-09-04 · **Status:** decided, implementation pending · **Refines:** [D-002](#d-002--the-public-repository-is-a-generated-copy-not-the-working-repository)
+**Date:** 2026-09-04 · **Status:** decided, implementation pending · **Refines:** [D-002](#d-002--the-public-repository-is-a-generated-copy-not-the-working-repository) · **Depends on** [D-010](#d-010--the-working-repository-is-private-the-boundary-is-the-repository-not-a-filter), ✅ done
 
 **Chosen:** the public repository publishes **releases**. It is generated at tag time from the prune
 list, carries one commit per release on a clean root, and **a version is cut when — and only when — a
@@ -247,7 +247,7 @@ deliberately, rather than eroding.
 
 ## D-010 · The working repository is private; the boundary is the repository, not a filter
 
-**Date:** 2026-09-04 · **Status:** decided, implementation pending
+**Date:** 2026-09-04 · **Status:** ✅ **decided and done** — `philgaeng/chatbot_ssh` was made private on 2026-09-04, verified `gh repo view` → `PRIVATE`. Public from 2025-01-21 to that date; see the *not covered* note below
 
 **Chosen:** the working repository becomes **private** (GitHub Team, one seat, ≈ $4/month). Everything
 published goes out through the release artifact of [D-009](#d-009--the-public-repository-is-a-versioned-release-artifact-not-a-mirror).

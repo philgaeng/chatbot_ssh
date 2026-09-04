@@ -4,6 +4,7 @@
 set does not exist yet** — the request has gone to the Nepal team. No number in this document has
 been measured; every figure is a sample-size calculation, not a result.
 **Owner:** the text-model evaluation work, building on the benchmark set it defined.
+**Last updated:** 2026-09-04 — §3.3 reason 1 re-based: the repository went private (D-010), but the conclusion is unchanged and now rests on the release artifact (D-009), not on the working repo's visibility.
 
 ---
 
@@ -92,9 +93,14 @@ Two properties of the request that matter more than they look:
 
 **The completed workbook and every derived dataset stay out of the repository.** Reasons, in order:
 
-1. The repository is public under Apache-2.0 and part of a DPG submission. Three hundred realistic
-   Nepali harassment complaints sitting in it will be read as leaked case data by somebody,
-   regardless of how the file is labelled.
+1. **The project publishes.** The working repository went private on 2026-09-04 ([D-010](../DECISIONS.md)),
+   but it publishes a **release artifact** under Apache-2.0 as part of a DPG submission
+   ([D-009](../DECISIONS.md)) — so anything in the working tree is one prune-list entry away from being
+   published. Three hundred realistic Nepali harassment complaints will be read as leaked case data by
+   somebody, regardless of how the file is labelled. ⭐ **And a prune list is exactly the kind of
+   control D-010 rejected** for confidentiality: a filter you have to remember. Keeping the workbook out
+   of git entirely is the boundary that cannot be forgotten.
+   ⚠ **Reasons 2 and 3 stand on their own** — this conclusion was never dependent on reason 1.
 2. It is test material, not product. Nothing in the running system loads it.
 3. ⚠ **It must never be seeded into the demo database.** Officers browsing the demo would see what
    look like real SEAH cases.

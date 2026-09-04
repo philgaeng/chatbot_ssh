@@ -1,7 +1,7 @@
 # Work items — intake, classification, and gates
 
 **Status:** authoritative (2026-09-04) — ⚠ **adopted, not yet in force.** §11 lists exactly which rules the repository does not satisfy yet, and the sprint that closes each one. Nothing here supersedes an existing standard; it decides **which of them apply to a given piece of work, and when that is decided.**
-**Last updated:** 2026-09-04 — created; `G-RELEASE` gains the version-tag requirement and §11 row 8 records the tracker decision (D-009/D-010).
+**Last updated:** 2026-09-04 — created; `G-RELEASE` gains the version-tag requirement, and §11 row 8 closes: the repository is private as of 2026-09-04, so the tracker is now available (D-009/D-010).
 **Audience:** public.
 **Reads with:** [`00_engineering_index.md`](00_engineering_index.md) (the ten rules and the shared definition of done) · [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) (tiers, promotion, honesty markers) · [`../sprints/README.md`](../sprints/README.md) (the standing deferral rule).
 
@@ -184,5 +184,5 @@ At sprint close, the existing audit ([`06`](06_documentation_lifecycle.md) §3c)
 | 5 | **The design gate (G-DESIGN) is not written down** in [`05_frontend.md`](05_frontend.md); it has been followed once, by instinct, for the settings redesign. | OM-06 |
 | 6 | **The verification ladder is not in [`06`](06_documentation_lifecycle.md) §4**, which today carries document honesty markers only — not item states. | OM-06 |
 | 7 | **Five intake vocabularies still coexist** and share no identifier: the issue templates (`bug`/`enhancement` + Area), the PR sensitive-path list, sprint ticket IDs, the deviations/`followups`/TODO debt trail, and the triage vocabulary proposed by the review-feedback-loop sprint. | OM-02, OM-07 |
-| 8 | **The tracker is decided but not usable yet.** [D-010](../DECISIONS.md) makes the working repository private and [D-009](../DECISIONS.md) makes the public one a versioned release artifact, so **GitHub Issues + Projects** is the answer — *after the flip*. The repository is still public today. | OM-07 |
+| 8 | **The tracker is decided and now available, but not wired.** [D-010](../DECISIONS.md) is ✅ **done** — the repository went private 2026-09-04 — so **GitHub Issues + Projects** is usable. Nothing is generated from it yet, and rule 9.3's pinning test does not exist. | OM-07 |
 | 9 | **The standard binds new items only.** The ~40 open rows in `docs/TODO.md` are classified as they are scheduled, not in a big-bang pass. *This is a deliberate scope decision, not an oversight.* | — |

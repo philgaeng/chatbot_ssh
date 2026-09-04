@@ -1,7 +1,7 @@
 # OM-07 — Unify intake, and decide the tracker
 
 > **kind:** feature (process) · **profile:** backend-feature minus DATA · **size:** M
-> **depends on:** OM-02, Q-02 — ⚠ **and gated on `D-002`** (the working repo is public today)
+> **depends on:** OM-02, Q-02 — ✅ **ungated 2026-09-04**: the repository is private ([D-010](../../DECISIONS.md))
 
 ## Context
 
@@ -11,8 +11,7 @@ lives: GitHub Issues … Confirm, or pick a private tracker"* — is the same qu
 ticket settles both, and it must land before that sprint starts** or the triage agent will invent a
 seventh vocabulary.
 
-⚠ **`philgaeng/chatbot_ssh` is public.** Issues on a platform receiving SEAH reports would be
-world-readable — bug reports, screenshots, and reviewer comments alike. `D-002` is what makes this safe.
+✅ **Resolved 2026-09-04.** `philgaeng/chatbot_ssh` was public when this ticket was written, which would have made issues on a SEAH-receiving platform world-readable. [D-010](../../DECISIONS.md) closed it: the repository is now **private**, verified `gh repo view` → `PRIVATE`. ⚠ After [D-009](../../DECISIONS.md) there will also be a **public release repository** — issues stay on the private working repo; the release repo carries code and specs only.
 
 ## Scope
 

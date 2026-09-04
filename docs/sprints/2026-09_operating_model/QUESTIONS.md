@@ -49,7 +49,7 @@ UI, not capability, and its opinions are strong enough that we would adapt to it
 > repository becomes a **versioned release artifact** cut on production deploy ([D-009](../../DECISIONS.md)),
 > not a continuous mirror. **GitHub Issues + Projects** is therefore the tracker, once the flip has
 > happened — it is safe only after it. Linear stays a later re-evaluation, not a plan.
-> ⚠ **The decision is taken; the flip is not.** OM-07 is gated on the flip, not on this answer.
+> ✅ **And the flip is done** — 2026-09-04, verified `gh repo view` → `PRIVATE`. **OM-07 is unblocked.**
 
 ### Q-03 · What happens to `docs/TODO.md`?
 

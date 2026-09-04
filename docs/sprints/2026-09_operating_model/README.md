@@ -22,7 +22,7 @@ rather than at the moment it merges** — and put the answer in one register tha
 | [OM-04](04-OM-04-sensitive-path-at-intake.md) | Sensitive-path question moved from merge to intake | S | OM-01 | ✅ now |
 | [OM-05](05-OM-05-product-and-roadmap.md) | `PRODUCT.md`, scope + launch definition, `ROADMAP.md` | M | Q-09 *(reco is safe)* | ✅ now |
 | [OM-06](06-OM-06-standard-amendments.md) | Reference packs · design gate · verification ladder · session close | M | OM-01 | ✅ now |
-| [OM-07](07-OM-07-intake-and-tracker.md) | Unify intake; decide the tracker | M | OM-02 · Q-02 · **`D-002`** | ⛔ gated |
+| [OM-07](07-OM-07-intake-and-tracker.md) | Unify intake; wire the tracker | M | OM-02 · Q-02 | ⛔ after OM-02 — ✅ **no longer gated**, repo is private |
 | [OM-09](09-OM-09-release-and-versioning.md) | Release + versioning: a tag is cut on production deploy | M | D-009 · D-010 *(both decided)* | ✅ now |
 | [OM-08](08-OM-08-starter-kit-extraction.md) | Extract the generic model into `_starter_kit/` | S | OM-01…OM-06 | ⛔ last |
 
