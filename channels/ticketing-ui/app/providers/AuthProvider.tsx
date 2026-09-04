@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { OIDCAuthClient, refreshTokens, type TokenPayload } from "@/lib/auth/oidc-auth";
 import { AUTH_BYPASS, OIDC_ISSUER, OIDC_CLIENT_ID } from "@/lib/auth/runtime-config";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
+import { installCrossTabSignOut } from "@/lib/auth/session-expired";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
 import { getUserPreferences, getMyProfile, getMySession, listOfficerRoster, getAdminContext, type OfficerRosterEntry, type AdminContext } from "@/lib/api";
@@ -224,6 +225,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
           : (process.env.NEXT_PUBLIC_REDIRECT_SIGN_IN ?? ""),
       )
     : null;
+
+  // Sign-out in one tab must reach the others. `storage` fires only in OTHER tabs, so the
+  // tab that signed out navigates itself and the rest come here. Without this a second tab
+  // keeps showing the app — and stale case data — until the next API call 401s.
+  useEffect(() => installCrossTabSignOut(), []);
 
   const refreshAdminContext = useCallback(async () => {
     try {

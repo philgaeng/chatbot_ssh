@@ -76,3 +76,53 @@ export function handleSessionExpired(): never {
 export function isSessionExpiredError(err: unknown): boolean {
   return err instanceof SessionExpiredError;
 }
+
+
+/**
+ * True when this `storage` event means "the user signed out in another tab".
+ *
+ * `storage` fires only in OTHER tabs, never the one that made the change, which is exactly
+ * the signal needed: the tab that ran `signOut()` navigates itself, and the rest learn from
+ * this. Without it a second tab keeps rendering the app until the next API call 401s — so it
+ * looks signed in, and shows stale case data, until someone clicks something.
+ *
+ * ⚠ **Keyed on REMOVAL, not on change.** A token refresh writes new values with `setItem`
+ * (`persistAuthTokens`) and never removes a key, so a refresh in one tab cannot sign the
+ * others out. Verified: the only `localStorage.removeItem` calls for these keys are in
+ * `clearAuthTokens` and `clearAuthStorage`, both of which mean a real sign-out.
+ */
+export function isSignedOutElsewhere(event: StorageEvent): boolean {
+  // `storageArea` is null in some synthetic events; only reject a positive mismatch.
+  if (event.storageArea && event.storageArea !== localStorage) return false;
+  // `key === null` is `localStorage.clear()`, which takes the tokens with it.
+  if (event.key === null) return true;
+  return (
+    (AUTH_STORAGE_KEYS as readonly string[]).includes(event.key) && event.newValue === null
+  );
+}
+
+/**
+ * Send this tab to the login page when another tab signs out. Returns the uninstaller.
+ *
+ * ⚠ **No `reason` parameter, deliberately.** `handleSessionExpired` appends
+ * `?reason=session_expired`, which is true when a token ran out and false here — the user
+ * signed out on purpose, and telling them their session expired would be both wrong and
+ * faintly alarming. Landing on the login page needs no explanation.
+ */
+export function installCrossTabSignOut(): () => void {
+  if (typeof window === "undefined") return () => {};
+
+  const onStorage = (event: StorageEvent) => {
+    if (!isSignedOutElsewhere(event)) return;
+    if (redirecting) return;
+    // Already on the login page: nothing to leave, and redirecting would loop.
+    if (window.location.pathname.startsWith("/login")) return;
+    redirecting = true;
+    // `replace`, not `href`: the signed-out page must not sit in history behind the login
+    // page, where Back would render the app shell with no tokens.
+    window.location.replace("/login");
+  };
+
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}
