@@ -66,7 +66,7 @@ publishing it. **A folder's audience is a default; a document may override it**,
 |---|---|
 | [`PROGRESS.md`](PROGRESS.md) | Current build state, demo DB, deviations, commit log |
 | [`SPINE.md`](SPINE.md) | **The register** — every open item with its kind, profile, state and verification level |
-| [`TODO.md`](TODO.md) | ⚠ **Retired 2026-09-04** — a forwarding stub. Full file: [`sprints/archive/TODO-2026-09-04.md`](sprints/archive/TODO-2026-09-04.md) |
+| [`TODO.md`](TODO.md) | ⚠ **Retired 2026-09-04** — a forwarding stub; the stub itself names where the full file was preserved (internal) |
 | [`ARCHIVING_AND_RETENTION.md`](ARCHIVING_AND_RETENTION.md) | Resolved-case archiving schedule, `archiving_policy` settings, attachment tiering |
 | [`models/01_seah_detection_benchmark.md`](models/01_seah_detection_benchmark.md) | **How a model change on the SEAH path is tested** — where the examples come from (authored by the Nepal team, never real cases), how many are needed, and why the set screens rather than ranks. ⚠ The dataset itself is deliberately **not** in this repository |
 

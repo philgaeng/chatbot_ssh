@@ -13,7 +13,7 @@
 |---|---|---|---|---|---|
 | OM-01 standard | — | ✅ done | `implemented` — *the standard is not in force; §11 is the gap list* | `dev/operating-model` | Landed with the sprint's first commit |
 | OM-02 register | A | ✅ done | `implemented` | `dev/operating-model` | [`SPINE.md`](../../SPINE.md) · 64 rows absorbed from `TODO.md` · `PROGRESS.md` § *In progress / next* deleted · 07 §1.2/§5 reconciled |
-| OM-03 test | A | ⬜ **ready** | — | — | ⭐ **Next, and not optional** — the register is unvalidated until it exists |
+| OM-03 test | A | ✅ done | `tested` | `dev/operating-model` | `tests/repo/test_spine.py` — **9 checks, each proven to fail on the defect it exists for** by a mutation sweep. ⚠ The sweep caught **two holes review had not**: `startswith` let a `chore+SENSITIVE` profile satisfy the *kind* check, and every non-`GRM` row (`OM-*`, `QA-*`, `HR-*`) was invisible to every field check. It also caught a **substantive miss** — four rows described as "promoted to the Register" existed only in the security view |
 | OM-04 intake gate | B | ⬜ ready | — | — | ✅ can start |
 | OM-05 product + roadmap | B | ⬜ ready | — | — | ✅ can start (Q-09 reco is safe) |
 | OM-06 amendments | B | ⬜ ready | — | — | ✅ can start |

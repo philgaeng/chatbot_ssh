@@ -31,7 +31,30 @@ number, and let git surface a double-claim as a merge conflict, which is the beh
 **Historical prefixes are never renumbered** (§8.2): `OM-`, `QA-`, `HR-`, `DPG-`, `T3-`, `H2-`, `SH-`,
 `TP-`, `CL-` keep their identity and are cited across the tree.
 
-⚠ **`GRM-065` is the next free id.**
+⚠ **`GRM-067` is the next free id.** (`GRM-065` and `GRM-066` were opened 2026-09-04.)
+
+---
+
+## Open security findings
+
+⭐ **This section exists because a `+SENSITIVE` row buried in a backlog reads as less urgent than it
+is.** Severity is a field here, not a marker inside prose, so *"how many open high-severity findings"*
+is answerable without a grep — a question ADB and a DPG assessor both ask.
+Full list, including the low-severity ones: § *Backlog → Carrying `+SENSITIVE`*.
+
+| Id | Severity | Item | State | Note |
+|---|---|---|---|---|
+| `GRM-065` | 🔴 **high** | **The orchestrator's port is published on every deployed host, and the only control left is a firewall nobody has checked** | `ready` | ⚠ **Neither `GRM-013` nor `GRM-014` says this alone — it is their product.** Verified 2026-09-04: [`docker-compose.grm.yml:120-122`](../docker-compose.grm.yml) publishes `"8000:8000"` with **no `127.0.0.1:` bind prefix**, its own comment saying *"expose 8000 for local testing"*; and **every deploy stack includes `grm.yml`** — `COMPOSE_AWS` and the prod path both use `-f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml`, with neither overlay overriding `ports`. **First action is a measurement, not a fix:** `curl` `:8000` from outside the DOR host |
+| `GRM-014` | 🔴 **high** | Orchestrator `:8000` has no auth | `ready` | `backend/orchestrator/main.py:102`. The half of `GRM-065` that a firewall cannot fix |
+| `GRM-013` | 🔴 **high** | DOR prod firewall for `:5001` is **unverified** | `ready` | Minutes to check, and it is the other half of `GRM-065` |
+| `GRM-001` | 🔴 **high** | `next@16.2.6` ships nine advisories in the officer portal | `ready` | Middleware/proxy bypass in App Router · SSRF in Server Actions · SSRF in rewrites · unauthenticated disclosure of internal Server Function endpoints. **Ships.** ⭐ Chore-shaped, `+SENSITIVE` by blast radius (§4.2) |
+| `GRM-008` | 🔴 high | A routine `make aws-deploy` took staging off the network for ~40 min | `ready` | **Owned by [QA-01](sprints/2026-09_qa_automation/01-QA-01-deploy-safety.md)** — not loose |
+| `GRM-006` `GRM-007` `GRM-009` `GRM-010` | 🟠 med ×4 | ops selfcheck on deploy · `AWS_DEPLOY_SERVICES` omits the orchestrator · `ops` password fallback should be fatal · Keycloak event storage on DOR prod | `proposed` | Backlog |
+| `GRM-002` `GRM-003` `GRM-004` `GRM-011` | 🟡🔵 low ×4 | See the backlog table | `proposed` | Backlog |
+
+⚠ **Four `🔴 high` findings are `ready` and unassigned.** Three of them (`GRM-065`, `GRM-014`,
+`GRM-013`) are one connected question about the production host, and the first action on all three is
+**a measurement, not a fix.**
 
 ---
 
@@ -62,6 +85,11 @@ Items someone could pick up today. Sprint tickets keep their own IDs and link to
 | [QA-03](sprints/2026-09_qa_automation/03-QA-03-stack-isolation.md) — `COMPOSE_PROJECT_NAME` + ports | feature | chore | `blocked` | S | qa *(not approved)* | **Blocker:** QA-02 |
 | [QA-04](sprints/2026-09_qa_automation/04-QA-04-browser-harness.md) — Playwright harness + coverage | feature | chore+TEST | `ready` | L | qa *(not approved)* | ⚠ 04c needs a flow inventory that does not exist |
 | [QA-05](sprints/2026-09_qa_automation/05-QA-05-ci-gate-and-coverage.md) — run it in CI | feature | chore+TEST | `blocked` | M | qa *(not approved)* | **Blockers:** QA-02, QA-03, QA-04; and its own Q-16 |
+| `GRM-065` — the orchestrator port is published on every deployed host | deviation | chore+SENSITIVE | `ready` | S | standing | 🔴 **First action is a measurement:** `curl` `:8000` from outside the DOR host. The fork is which side moves — close the port, or document the exposure and rely on the firewall |
+| `GRM-014` — orchestrator `:8000` has no auth | deviation | backend-feature+SENSITIVE | `ready` | M | standing | 🔴 The half of `GRM-065` a firewall cannot fix. `backend/orchestrator/main.py:102` |
+| `GRM-013` — DOR prod firewall for `:5001` unverified | chore | chore+SENSITIVE | `ready` | XS | standing | 🔴 Minutes. ⭐ **A chore with a register row** — §1.2, because `+SENSITIVE` is never waived (§4.2) |
+| `GRM-066` — `dpg/02_questions.md` has drifted from the source it is generated from | bug | chore+TEST | `ready` | XS | standing | Found 2026-09-04 while running the full `tests/repo` suite for OM-03. `test_dpg_questions_generated` is **red at the session's starting commit** with `docs/dpg/` untouched — so it is pre-existing, not caused by this sprint. ⭐ **It is a bug, not debt:** the generator's own pinning test says the two must agree, and they do not. Fix is `python scripts/ops/gen_dpg_questions.py`, then read the diff before committing — the drift is the finding |
+| `GRM-001` — bump `next` off 16.2.6 | chore | chore+SENSITIVE | `ready` | S | standing | 🔴 Nine advisories, ships. Chore-shaped, Opus-and-boundary-tests by blast radius |
 | **HR-05** — prove a red build blocks | bug | chore+TEST | `ready` | XS | hardening | ⭐ **Five minutes.** The ruleset is active; nobody has watched it refuse a merge ([17](deployment/17_manual_browser_sweep.md)) |
 | **HR-07** — manual browser sweep | chore | chore+VERIFY | `ready` | M | hardening | [`deployment/17_manual_browser_sweep.md`](deployment/17_manual_browser_sweep.md) · 60–75 min · ⚠ read its warning first |
 | **DPG sprint** — `2026-08-llm` | feature | mixed | `current` *(own lane)* | XL | dpg | 27 tickets, in progress — [tracker](sprints/2026-08-llm/PROGRESS.md). ⚠ **XL means split**, and it is already split into four sub-sprints |
@@ -82,22 +110,18 @@ done in their own text; those resolve as they are picked up.
 
 ⚠ §4.2: **the modifier is never waived by kind or by size.** A one-line fix on any of these is not a chore.
 
-| Id | Kind | Profile | Item | Where |
-|---|---|---|---|---|
-| `GRM-001` | debt | **+SENSITIVE** | 🔴 **`next@16.2.6` ships nine advisories in the officer portal, and nothing outside the DPG pack tracks it** | `channels/ticketing-ui/package.json` · measured in [`dpg/dependency-licenses.md`](dpg/dependency-licenses.md#known-vulnerabilit… |
-| `GRM-002` | debt | **+SENSITIVE** | 🟡 **The officer's category correction overwrites the AI's answer with no record of what it proposed** | `ticketing/api/routers/tickets/crud.py:523` · `backend/services/database_services/grievance_manager.py:83` |
-| `GRM-003` | debt | **+SENSITIVE** | 🟡 **The SEAH detector's confidence is computed on every call and thrown away** | `backend/services/LLM_services.py:633` · `backend/actions/grievance_intake/sensitive.py:103` · `ticketing/models/ticket.py:94` |
-| `GRM-004` | debt | **+SENSITIVE** | ⏳ **The classification benchmark has not been re-run since the D-51 storage guard** | `scripts/ops/llm_benchmark.py` · [`docs/dpg/model-benchmarks.md`](dpg/model-benchmarks.md) §3.1 |
-| `GRM-005` | debt | **+SENSITIVE** | ✅ **FIXED 2026-08-24 — the ops monitor was blind, and the report had never worked** | `ops/config.py:107`, `docker-compose.grm.yml:278` |
-| `GRM-006` | debt | **+SENSITIVE** | 🟠 **The deploy should run `ops.selfcheck`, not trust a runbook** | `Makefile` (`REMOTE_DEPLOY_CORE`) |
-| `GRM-007` | debt | **+SENSITIVE** | 🟠 **`AWS_DEPLOY_SERVICES` omits the orchestrator, which is what executes `backend/actions/`** | `Makefile:88` (`AWS_DEPLOY_SERVICES`) · `REMOTE_VERIFY_GRM_PORTS` |
-| `GRM-008` | debt | **+SENSITIVE** | 🔴 **A routine `make aws-deploy` took staging OFF THE NETWORK for ~40 minutes — the box has 4 GB and no swap, and builds the Next.js image on itself** | `Makefile` (`REMOTE_DEPLOY_CORE` → `build --pull`) · EC2 `i-07e144c2f6d9db18e` (`t4g.medium`, 2 vCPU / 3825 MB / **swap 0**) |
-| `GRM-009` | debt | **+SENSITIVE** | 🟠 **`ops/config.py`'s password fallback should be fatal, not a warning** | `ops/config.py:104-118` |
-| `GRM-010` | debt | **+SENSITIVE** | **Keycloak event storage** — ✅ **local 2026-08-24, STAGING 2026-09-03**; ⛔ **DOR production still OFF** | `ticketing/auth/keycloak_setup.py` (`setup_realm_event_logging`) |
-| `GRM-011` | debt | **+SENSITIVE** | 🔵 **`NEXT_PUBLIC_OIDC_CLIENT_ID` holds the CONFIDENTIAL client, and the name says the opposite** | `docker-compose.grm.yml:322` · `channels/ticketing-ui/lib/auth/runtime-config.ts:22` · `channels/ticketing-ui/Dockerfile:25` |
-| `GRM-012` | debt | **+SENSITIVE** | **Breach procedure: B1/B2/B3 have no DOR owner** | [`deployment/19_incident_response.md`](deployment/19_incident_response.md) §0 |
-| `GRM-013` | debt | **+SENSITIVE** | **DOR prod firewall for `:5001` is UNVERIFIED** | `grm-chatbot.dor.gov.np` |
-| `GRM-014` | debt | **+SENSITIVE** | **Orchestrator `:8000` is open to `0.0.0.0/0` and has no auth** | `backend/orchestrator/main.py:102`, `docker-compose.grm.yml:122` |
+| Id | Severity | Kind | Profile | Item | Where |
+|---|---|---|---|---|---|
+| `GRM-002` | 🟡 low | debt | **+SENSITIVE** | 🟡 **The officer's category correction overwrites the AI's answer with no record of what it proposed** | `ticketing/api/routers/tickets/crud.py:523` · `backend/services/database_services/grievance_manager.py:83`  |
+| `GRM-003` | 🟡 low | debt | **+SENSITIVE** | 🟡 **The SEAH detector's confidence is computed on every call and thrown away** | `backend/services/LLM_services.py:633` · `backend/actions/grievance_intake/sensitive.py:103` · `ticketing/models/ticket.py:94`  |
+| `GRM-004` | ⏳ stale | debt | **+SENSITIVE** | ⏳ **The classification benchmark has not been re-run since the D-51 storage guard** | `scripts/ops/llm_benchmark.py` · [`docs/dpg/model-benchmarks.md`](dpg/model-benchmarks.md) §3.1  |
+| `GRM-006` | 🟠 med | debt | **+SENSITIVE** | 🟠 **The deploy should run `ops.selfcheck`, not trust a runbook** | `Makefile` (`REMOTE_DEPLOY_CORE`)  |
+| `GRM-007` | 🟠 med | debt | **+SENSITIVE** | 🟠 **`AWS_DEPLOY_SERVICES` omits the orchestrator, which is what executes `backend/actions/`** | `Makefile:88` (`AWS_DEPLOY_SERVICES`) · `REMOTE_VERIFY_GRM_PORTS`  |
+| `GRM-008` | 🔴 high | debt | **+SENSITIVE** | 🔴 **A routine `make aws-deploy` took staging OFF THE NETWORK for ~40 minutes — the box has 4 GB and no swap, and builds the Next.js image on itself** | `Makefile` (`REMOTE_DEPLOY_CORE` → `build --pull`) · EC2 `i-07e144c2f6d9db18e` (`t4g.medium`, 2 vCPU / 3825 MB / **swap 0**)  |
+| `GRM-009` | 🟠 med | debt | **+SENSITIVE** | 🟠 **`ops/config.py`'s password fallback should be fatal, not a warning** | `ops/config.py:104-118`  |
+| `GRM-010` | — unset | debt | **+SENSITIVE** | **Keycloak event storage** — ✅ **local 2026-08-24, STAGING 2026-09-03**; ⛔ **DOR production still OFF** | `ticketing/auth/keycloak_setup.py` (`setup_realm_event_logging`)  |
+| `GRM-011` | 🔵 info | debt | **+SENSITIVE** | 🔵 **`NEXT_PUBLIC_OIDC_CLIENT_ID` holds the CONFIDENTIAL client, and the name says the opposite** | `docker-compose.grm.yml:322` · `channels/ticketing-ui/lib/auth/runtime-config.ts:22` · `channels/ticketing-ui/Dockerfile:25`  |
+| `GRM-012` | — unset | debt | **+SENSITIVE** | **Breach procedure: B1/B2/B3 have no DOR owner** | [`deployment/19_incident_response.md`](deployment/19_incident_response.md) §0  |
 
 ### Debt
 
@@ -163,6 +187,7 @@ done in their own text; those resolve as they are picked up.
 | [OM-01](sprints/2026-09_operating_model/01-OM-01-work-item-standard.md) — the work-item standard | feature | 2026-09-04 | `implemented` — ⚠ the standard is adopted, **not in force**; its §11 is the gap list |
 | **A-3 / HR-05 (settings half)** — branch protection | chore | 2026-09-04 | `verified` — ruleset active on `main` + `integration/*`, read back through the API. ⚠ The **proof** half is `GRM-`-less and sits in the register above |
 | **D-010** — the working repository is private | chore | 2026-09-04 | `verified` — `gh repo view` → `PRIVATE` |
+| `GRM-005` — the ops monitor was blind and the report had never worked | debt | 2026-08-24 | `deployed` — ⚠ absorbed from `TODO.md` already marked ✅ FIXED; **not re-verified in this pass** |
 
 *Closed items move to `sprints/archive/` at quarter end (Q-06).*
 
