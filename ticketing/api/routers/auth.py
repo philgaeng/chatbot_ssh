@@ -60,6 +60,19 @@ class MessageResponse(BaseModel):
     message: str
 
 
+class LogoutResponse(BaseModel):
+    """⚠ `revoked` is the whole point of this model, and it is NOT the HTTP status.
+
+    The status stays 200 even when the revoke fails, because a sign-out that returns an error
+    invites a UI that keeps the user signed in. But the client still has to *know*, so it can
+    fall back to the front-channel Keycloak logout — which is the guaranteed mechanism. Putting
+    that in the body keeps both properties: never fail the sign-out, never hide the failure.
+    """
+
+    message: str
+    revoked: bool
+
+
 def _http_error(exc: AuthLoginError):
     from fastapi import HTTPException
 
@@ -139,10 +152,10 @@ def auth_reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db
 
 @router.post(
     "/auth/logout",
-    response_model=MessageResponse,
+    response_model=LogoutResponse,
     summary="Revoke a refresh token issued to the confidential API client",
 )
-def auth_logout(body: LogoutRequest) -> MessageResponse:
+def auth_logout(body: LogoutRequest) -> LogoutResponse:
     """End the Keycloak session for a password-login token.
 
     ⚠ **Deliberately not JWT-gated.** The refresh token *is* the credential, and the access token is
@@ -158,5 +171,5 @@ def auth_logout(body: LogoutRequest) -> MessageResponse:
         logout_with_refresh_token(body.refresh_token)
     except AuthLoginError as exc:
         logger.warning("auth_logout: revoke did not complete (%s)", exc.code)
-        return MessageResponse(message="Signed out.")
-    return MessageResponse(message="Signed out.")
+        return LogoutResponse(message="Signed out.", revoked=False)
+    return LogoutResponse(message="Signed out.", revoked=True)

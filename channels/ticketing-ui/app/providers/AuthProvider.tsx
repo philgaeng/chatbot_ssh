@@ -399,7 +399,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     } else {
       clearCookie(BYPASS_COOKIE);
       clearCookie(LEGACY_MOCK_COOKIE);
-      client!.signOut();
+      // `signOut` is async now: it awaits the server-side revoke so it can choose between a
+      // same-origin redirect and the Keycloak fallback. The context signature stays sync —
+      // callers are click handlers with nothing to await — so the promise is voided here, and
+      // a rejection is logged rather than becoming an unhandled rejection.
+      void client!.signOut().catch((err) => console.error("signOut failed", err));
     }
   };
 

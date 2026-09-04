@@ -78,36 +78,42 @@ async function doRefresh(): Promise<string | null> {
 }
 
 /**
- * Back-channel logout: invalidate the refresh token (and its Keycloak session)
- * server-side. `keepalive` so it survives the imminent front-channel navigation.
- * Best-effort — a failed revoke must not block sign-out.
+ * Back-channel logout: ask the server to revoke the refresh token and end the session.
+ * Resolves **true only when the server confirms the session was revoked.**
  *
- * ⭐ **The browser does not decide how to authenticate this, and that is the point.**
- * Whether a revoke needs a `client_secret` depends on whether the token's client is
- * confidential — a fact about the *realm*, which only the server can know. So the browser
- * always posts here, and `ticketing/services/auth_login.py` picks the credentials.
+ * ⭐ **Checked, not fire-and-forget, and that is the point of the design.** The caller uses the
+ * answer to decide whether the same-origin redirect is enough or whether it must fall back to
+ * the front-channel Keycloak logout. Both bugs found in this file were invisible *because* this
+ * result used to be discarded.
  *
- * ⚠ **Two earlier versions of this got it wrong, in the same way.** The original posted
- * straight to Keycloak with `client_id` alone, which is valid only for a public client. The
- * first fix routed on `azp !== clientId`, assuming `clientId` was always the public UI
- * client — **on this deployment `NEXT_PUBLIC_OIDC_CLIENT_ID` is `ticketing-api`, the
- * confidential one** (`docker-compose.grm.yml` feeds it from `KEYCLOAK_CLIENT_ID`), so the
- * two were equal and the condition never fired. Both failures were invisible in the browser:
- * the result is discarded by design. Both were found in the Keycloak realm event log.
+ * ⚠ **`revoked` comes from the BODY, not the status.** The endpoint deliberately answers 200
+ * even when the revoke fails — a sign-out that returns an error invites a UI that keeps the
+ * user signed in — so `resp.ok` is always true and would never trigger the fallback.
  *
- * **Do not reintroduce a client-identity test here.** The browser cannot tell a confidential
- * client from a public one, and every attempt to infer it has been wrong.
+ * ⚠ **The browser does not decide how to authenticate this.** Whether a revoke needs a
+ * `client_secret` depends on whether the token's client is confidential, a fact about the
+ * *realm* that only the server knows. Two earlier versions tried to infer it here and both
+ * were wrong. Do not reintroduce a client-identity test.
  */
-function revokeRefreshToken(refreshToken: string): void {
+async function revokeRefreshToken(refreshToken: string, timeoutMs = 3000): Promise<boolean> {
+  // A hung request must not strand the user on a page they asked to leave, so the fallback
+  // is time-boxed rather than waited on indefinitely.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    void fetch("/api/v1/auth/logout", {
+    const resp = await fetch("/api/v1/auth/logout", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refresh_token: refreshToken }),
-      keepalive: true,
+      signal: controller.signal,
     });
+    if (!resp.ok) return false;
+    const body = (await resp.json()) as { revoked?: boolean };
+    return body.revoked === true;
   } catch {
-    /* best-effort */
+    return false; // aborted, offline, or unparseable — all mean "not confirmed"
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -215,7 +221,7 @@ export class OIDCAuthClient {
     return !!localStorage.getItem(TOKEN_STORAGE.ACCESS_TOKEN);
   }
 
-  signOut(): void {
+  async signOut(): Promise<void> {
     if (typeof window === "undefined") return;
 
     const postLogoutUri = `${window.location.origin}/login`;
@@ -233,18 +239,33 @@ export class OIDCAuthClient {
       isAccessTokenExpired(accessToken);
 
     // Revoke the refresh token server-side before we leave. Matters most on the
-    // sessionStale path below, which skips the front-channel logout entirely and
-    // would otherwise leave a live refresh token behind.
-    if (refreshToken) revokeRefreshToken(refreshToken);
-
+    // Clear BEFORE the round trip: the `storage` event is what signs the user's other tabs
+    // out, and they should not keep rendering case data while we wait on the network.
     clearAuthStorage();
 
-    // Stale or missing tokens: skip Keycloak (expired id_token_hint shows an error page).
+    const revoked = refreshToken ? await revokeRefreshToken(refreshToken) : false;
+
+    // ⭐ Happy path: the server confirmed the session is gone, so there is nothing left for
+    // Keycloak to end. Staying SAME-ORIGIN is the entire benefit — the cross-origin hop is
+    // what spawns a separate window for anyone running this as an app window, and what makes
+    // Keycloak log a spurious LOGOUT_ERROR (`session_expired`) against an already-dead
+    // session, in the audit log we rely on as breach evidence.
+    if (revoked) {
+      window.location.replace(postLogoutUri);
+      return;
+    }
+
+    // Stale or missing tokens: Keycloak cannot help either — an expired `id_token_hint`
+    // renders an error page rather than logging anyone out.
     if (sessionStale) {
       window.location.replace(postLogoutUri);
       return;
     }
 
+    // ⚠ FALLBACK, and the reason the front channel is kept at all. The revoke was not
+    // confirmed — API down, offline, timed out — so the session may still be live. This is a
+    // browser NAVIGATION, which the browser guarantees to run, where the fetch above is
+    // best-effort. It also clears Keycloak's own cookie, which the back channel never does.
     // Password login uses ticketing-api; PKCE uses ticketing-ui — client_id must match azp.
     const logoutClientId = azp ?? this.clientId;
     const p = new URLSearchParams({

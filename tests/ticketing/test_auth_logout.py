@@ -161,8 +161,7 @@ def test_the_token_is_never_logged(keycloak, caplog) -> None:
 
 def test_the_endpoint_answers_200_even_when_the_revoke_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     """⚠ Deliberate. A sign-out that reports failure invites a UI that keeps the user signed in.
-    The client clears its storage regardless, so the wrong direction to fail is 'still logged in'.
-    The failure is logged, and shows up as LOGOUT_ERROR in the realm event log."""
+    The client clears its storage regardless, so the wrong direction to fail is 'still logged in'."""
     from ticketing.api.routers import auth as auth_router
 
     def _raise(_token: str) -> None:
@@ -171,6 +170,30 @@ def test_the_endpoint_answers_200_even_when_the_revoke_fails(monkeypatch: pytest
     monkeypatch.setattr(auth_router, "logout_with_refresh_token", _raise)
     result = auth_router.auth_logout(auth_router.LogoutRequest(refresh_token=REFRESH))
     assert result.message == "Signed out."
+
+
+def test_a_failed_revoke_reports_revoked_false_in_the_BODY(monkeypatch: pytest.MonkeyPatch) -> None:
+    """⭐ The flag the client falls back on, and why it cannot be the HTTP status.
+
+    The status stays 200 by design (above), so `resp.ok` is always true and could never
+    trigger the fallback. Putting the outcome in the body keeps both properties: the sign-out
+    never fails, and the failure is never hidden. Without this the client would take the
+    same-origin redirect while the session was still live on Keycloak.
+    """
+    from ticketing.api.routers import auth as auth_router
+
+    def _raise(_token: str) -> None:
+        raise AuthLoginError("logout_failed", "nope", 502)
+
+    monkeypatch.setattr(auth_router, "logout_with_refresh_token", _raise)
+    assert auth_router.auth_logout(auth_router.LogoutRequest(refresh_token=REFRESH)).revoked is False
+
+
+def test_a_successful_revoke_reports_revoked_true(monkeypatch: pytest.MonkeyPatch) -> None:
+    from ticketing.api.routers import auth as auth_router
+
+    monkeypatch.setattr(auth_router, "logout_with_refresh_token", lambda _t: None)
+    assert auth_router.auth_logout(auth_router.LogoutRequest(refresh_token=REFRESH)).revoked is True
 
 
 def test_the_endpoint_is_not_jwt_gated() -> None:
