@@ -1,6 +1,6 @@
 # 17 — Manual browser sweep (clears the pending-human debt)
 
-**Last updated:** 2026-09-04 — HR-05's settings half landed (a branch ruleset, ⚠ not yet enforcing); its deliberate-failure proof stays open. Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-04 — HR-05's settings half landed and is **active** (a branch ruleset, verified through the API); its deliberate-failure proof stays open. Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 
 > **One session, ~60–75 min.** Clears the browser-only checks carried since Tier 1:
 > **D-17 · D-24 · D-33 · D-49 · D-56** (Tier 3) and the inherited **HR-07 · H2-02 · H2-06 · H2-08**.
@@ -291,7 +291,7 @@ For each role below: switch, then click **My Queue → All Tickets → Escalated
 | Item | Why | What it needs |
 |---|---|---|
 | **H2-01** — Keycloak token-expiry | The current stack is `AUTH_MODE=bypass`, so there are no tokens to expire. `NEXT_PUBLIC_*` are **baked at build time**, so this isn't a runtime toggle. | `AUTH_MODE=keycloak` + `KEYCLOAK_ISSUER=http://localhost:18080/realms/grm` in `env.local`, `docker compose --profile auth up -d keycloak`, **rebuild `grm_ui`**, then log in as a demo officer and idle past token expiry. Its own session. |
-| **HR-05** — deliberate-failure + branch protection | Not a browser check — it is GitHub settings + a red CI run. ✅ **The settings half landed 2026-09-04**: a ruleset covers `main` and `integration/*` with five required checks and no bypass (⚠ `enforcement` still `disabled` — one toggle). **The proof half is still open, and it is the half that matters.** | Set the ruleset to *Active*. Then push a deliberately-failing commit to a scratch branch; confirm CI goes red, that the PR **cannot** be merged, and that `main` refuses a direct push. A protection rule nobody has watched fail is a claim, not a control. |
+| **HR-05** — deliberate-failure + branch protection | Not a browser check — it is GitHub settings + a red CI run. ✅ **The settings half landed 2026-09-04**: a ruleset is **active** on `main` and `integration/*` with five required checks and no bypass actors, verified through the API. **The proof half is still open, and it is the half that matters.** | Push a deliberately-failing commit to a scratch branch; confirm CI goes red, that the PR **cannot** be merged, and that `main` refuses a direct push. A protection rule nobody has watched fail is a claim, not a control. |
 
 ---
 
