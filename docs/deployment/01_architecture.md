@@ -1,6 +1,7 @@
 # Architecture — Nepal Chatbot + GRM Ticketing
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/01_architecture.md`](archive/01_architecture.md).
+**Last updated:** 2026-07-07 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 The whole stack is **Docker Compose only** — no systemd services, no standalone Rasa server, no Flask. One repo, one image for all Python services, plus a Next.js image for the officer UI and stock images for Postgres/Redis/nginx/Keycloak.
 

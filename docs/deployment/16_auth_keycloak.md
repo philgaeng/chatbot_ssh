@@ -1,6 +1,7 @@
 # Auth — Keycloak (canonical auth ops doc)
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/AUTH_MIGRATION.md` (the Cognito→Keycloak migration notes). Keycloak is the identity provider **everywhere** (dev auth profile, AWS staging, DOR prod); Cognito is fully retired.
+**Last updated:** 2026-08-24 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Architecture
 

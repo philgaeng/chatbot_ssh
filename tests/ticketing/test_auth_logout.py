@@ -52,16 +52,54 @@ def keycloak(monkeypatch: pytest.MonkeyPatch):
     return calls, calls_response
 
 
-def test_the_revoke_carries_the_client_secret(keycloak) -> None:
+def _jwt(claims: dict) -> str:
+    import base64
+    import json
+
+    def seg(d: dict) -> str:
+        return base64.urlsafe_b64encode(json.dumps(d).encode()).decode().rstrip("=")
+
+    return f"{seg({'alg': 'RS256'})}.{seg(claims)}.sig"
+
+
+def test_a_confidential_client_token_carries_the_client_secret(keycloak) -> None:
     """⭐ The whole point. Without this the request is the one that was silently failing."""
     calls, _ = keycloak
-    logout_with_refresh_token(REFRESH)
+    logout_with_refresh_token(_jwt({"azp": "ticketing-api"}))
 
     assert len(calls) == 1
     assert calls[0]["url"].endswith("/protocol/openid-connect/logout")
     assert calls[0]["data"]["client_secret"] == "the-client-secret"
-    assert calls[0]["data"]["refresh_token"] == REFRESH
-    assert calls[0]["data"]["client_id"]
+    assert calls[0]["data"]["client_id"] == "ticketing-api"
+
+
+def test_a_public_client_token_is_revoked_WITHOUT_a_secret(keycloak) -> None:
+    """⚠ Not symmetry for its own sake — Keycloak REJECTS a secret sent for a public client,
+    so "always send it" is not a simpler correct answer."""
+    calls, _ = keycloak
+    logout_with_refresh_token(_jwt({"azp": "ticketing-ui"}))
+
+    assert calls[0]["data"]["client_id"] == "ticketing-ui"
+    assert "client_secret" not in calls[0]["data"]
+
+
+def test_the_azp_equalling_the_configured_client_id_still_gets_a_secret(keycloak) -> None:
+    """⭐ THE REGRESSION. The first fix routed on `azp != NEXT_PUBLIC_OIDC_CLIENT_ID`, assuming
+    that variable names the PUBLIC client. On staging it is `ticketing-api` — the confidential
+    one — so the test compared a value against itself, never fired, and the bug survived a
+    deploy while looking fixed. Equality must NOT mean "no secret needed"."""
+    calls, _ = keycloak
+    logout_with_refresh_token(_jwt({"azp": "ticketing-api"}))
+    assert calls[0]["data"].get("client_secret") == "the-client-secret"
+
+
+def test_an_undecodable_token_falls_back_to_the_confidential_client(keycloak) -> None:
+    """Fail towards the client that needs credentials: a missing secret is a guaranteed
+    rejection, while an unnecessary one fails no worse than guessing the other way."""
+    calls, _ = keycloak
+    logout_with_refresh_token("not-a-jwt-at-all")
+    assert calls[0]["data"]["client_id"] == "ticketing-api"
+    assert calls[0]["data"]["client_secret"] == "the-client-secret"
 
 
 def test_an_already_invalid_token_counts_as_signed_out(keycloak) -> None:

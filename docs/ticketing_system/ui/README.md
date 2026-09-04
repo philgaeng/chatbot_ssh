@@ -1,6 +1,7 @@
 # Officer Portal UI — Specification
 
 > **Status:** As-built, July 2026. Consolidated from sprint docs (`docs/sprints/archive/claude-tickets/UI_SPEC.md`, `UI_DESIGN_SYSTEM.md`, `UI_HANDOFF_thread_redesign.md`, `UI_REVIEW.md`, `queue-tile-logic.md`).
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > This folder is the permanent home for the ticketing-ui specification. The sprint docs above are historical snapshots; where they disagree with this folder, **this folder wins**.
 
 ## Contents

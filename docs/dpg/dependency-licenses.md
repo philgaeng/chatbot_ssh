@@ -1,5 +1,8 @@
 # Dependency licence audit
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **Regenerated 2026-09-03** on `integration/stage` — licences, CVEs and image digests in one pass,
 > so this file now carries **one date** rather than three.
 > **Serves DPG indicator 2** (use of an approved open licence) and, for the container-image set,

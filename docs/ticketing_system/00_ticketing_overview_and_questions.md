@@ -1,5 +1,8 @@
 # Ticketing System – Overview (as-built, June 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-15 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > All design questions from the original spec have been resolved. This document is the stable vision statement.
 > For settled decisions → `00_ticketing_decisions.md`. For schema → `04_ticketing_schema.md`. For API → `03_ticketing_api_integration.md`.
 

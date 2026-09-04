@@ -1,5 +1,8 @@
 # Ticketing System – API Reference (as-built, July 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-05 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 Integration with the ticketing system is API-first. This document covers:
 1. **Inbound** — chatbot/backend calls ticketing
 2. **Outbound** — ticketing calls chatbot, messaging, grievance API

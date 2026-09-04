@@ -1,6 +1,7 @@
 # Officer Portal — Design System
 
 > **Status:** As-built, July 2026. Consolidated from `docs/sprints/archive/claude-tickets/UI_DESIGN_SYSTEM.md` (April 2026), reconciled with the thread redesign (`UI_HANDOFF_thread_redesign.md`) and current code in `channels/ticketing-ui/`.
+**Last updated:** 2026-08-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > Applies to all new components in `channels/ticketing-ui/`.
 > **On-screen wording (voice, plain language, glossary):** see [`05_ui_copy_style.md`](05_ui_copy_style.md) — the copy source of truth. This doc covers the *visual* system; that one covers *words*.
 

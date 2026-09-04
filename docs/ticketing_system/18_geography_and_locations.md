@@ -1,6 +1,7 @@
 # Geography and locations (reference model + submit-time mapping)
 
 **Status:** As-built (July 2026). Promoted from `docs/sprints/archive/Refactor specs/May5_seah/01_ticketing_geography_reference_model.md` + `03_submission_mapping_and_fallback.md`.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Code:** `ticketing/models/country.py`, `ticketing/seed/location_import_core.py`, `ticketing/seed/import_locations_json.py`, `backend/shared_functions/location_mapping.py`
 **Migrations:** `f1a3e9c72b05` (geography redesign), `q9r7s1u3` (canonical `P1` / `P1_*` codes), `y0z2a4b6` (lat/long centroids)
 **Related:** [LOCATION_CODES.md](LOCATION_CODES.md) (code scheme), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [14_platform_settings.md](14_platform_settings.md) §2 (Locations admin UI)

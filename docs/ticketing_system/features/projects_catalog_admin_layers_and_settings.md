@@ -1,5 +1,8 @@
 # Feature: Projects catalog (DB) + country-agnostic admin layers + settings CRUD
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## Goal
 
 Introduce a **`projects`** table (and later chatbot **project picker** / `project_uuid` on grievances) so projects are **managed from backend settings**, not only free text. Geography on each project should be **country-agnostic** in the schema while still matching the chatbot’s location vocabulary where the bot runs (e.g. Nepal).

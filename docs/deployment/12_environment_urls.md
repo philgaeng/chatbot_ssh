@@ -1,5 +1,8 @@
 # Deployment URLs and paths (dev / stage / prod)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-07 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/`](../../deployment/nginx/). Values **differ by machine** (WSL paths vs EC2 `ubuntu` home, TLS termination, etc.). To avoid drift, maintain a **single manifest** and derive or update Nginx from it.
 
 ## Files

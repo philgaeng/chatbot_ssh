@@ -1,6 +1,7 @@
 # Ticket queue — search and filters (officer UI)
 
 > **Status:** Implemented June 2026  
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > **Screens:** Desktop `/queue` (primary), `/tickets` (all-tickets list)  
 > **Audience:** Supervising officers (Supervisor tab, All Tickets) and field officers who need to narrow a long list
 

@@ -1,5 +1,8 @@
 # Privacy assessment and data-flow inventory
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 **Nepal GRM Platform** — Grievance Redress Mechanism for ADB-financed road infrastructure
 (Kakarbhitta–Laukahi Road, ADB Loan 52097-003)
 

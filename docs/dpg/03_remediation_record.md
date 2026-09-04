@@ -1,5 +1,8 @@
 # Remediation record — what the DPG sprints changed
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **What this is.** A record of the work done between 2026-08-17 and 2026-09-03 to prepare this
 > platform for a DPG assessment, and of what that work found. **As of 2026-09-03.**
 >

@@ -1,6 +1,7 @@
 # Docker — Build & Run Reference
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/DOCKER.md` (worktree-era; paths and the Cognito-era build-args table updated). Architecture/service map: [`01_architecture.md`](01_architecture.md). Setup runbook: [`02_setup.md`](02_setup.md).
+**Last updated:** 2026-07-07 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 > **All commands must run from WSL (Ubuntu), never Git Bash or a Windows terminal.**
 > 1. UNC paths (`\\wsl.localhost\...`) break npm builds inside containers.

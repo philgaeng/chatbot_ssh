@@ -1,5 +1,8 @@
 # REST Chatbot Flow Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-19 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Flow Engine
 
 Primary flow controller:

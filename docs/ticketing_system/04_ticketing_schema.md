@@ -1,5 +1,8 @@
 # Ticketing System – Database Schema (as-built, July 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-05 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 All tables live in the `ticketing` schema inside `grievance_db`.
 No cross-schema FK from `ticketing.*` into `public.*`.
 All SQLAlchemy models use `__table_args__ = {"schema": "ticketing"}`.

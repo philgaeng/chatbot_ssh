@@ -1,6 +1,7 @@
 # Messaging Rules – WhatsApp and SMS (Staff Notifications)
 
 **Status (June 2026):** Active policy + **project-level officer SMS** (implemented — see agent runbook).  
+**Last updated:** 2026-08-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Related:** [../services/05_messaging_service.md](../services/05_messaging_service.md), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)  
 **Implementation:** [`agents/officer_sms_project_messaging.md`](agents/officer_sms_project_messaging.md)
 

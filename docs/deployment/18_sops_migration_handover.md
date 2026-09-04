@@ -5,6 +5,7 @@
 > [`13_security.md`](13_security.md) §5 covers every repository under `~/projects/`; this document is
 > the slice for this one, so the issue can be closed here without waiting on the others.
 > **Written:** 2026-08-20. **Status:** 🟨 **steps 0–5 done 2026-08-21; step 6 (rotation) and the
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > staging/production migration are not.** See *What actually happened* below before doing anything.
 > **Prerequisite that is not yours:** the owner answers the `TBC` cells in `13_security.md` §5.3.1.
 > You can do steps 1–4 without them; step 6 needs them.

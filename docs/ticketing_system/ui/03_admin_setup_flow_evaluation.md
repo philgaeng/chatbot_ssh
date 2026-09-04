@@ -1,6 +1,7 @@
 # OC-06 — Admin-setup UX/UI evaluation (org → officers → workflow → projects)
 
 **Status:** Published July 2026 · OC-06 deliverable · Evaluates the **as-built** admin Settings surface (pre-OC-01..05).
+**Last updated:** 2026-07-10 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 > **Note (2026-07 rename):** this eval probed the pre-rename system, so it names `country_admin` in its persona/permission records. That tier has since been **retired → `org_admin`** (subtree-scoped) — see [doc 11 §2](../11_roles_and_permissions.md). Those references are left as the factual record of what was tested; read `country_admin` as today's `org_admin`.
 **Method:** Code-grounded (every finding carries `file:line`) + **live runtime probing** of the running dev stack (bypass API :5002 was down by misconfiguration; probed the healthy auth build :5003 with header-injected personas via `GET /users/me/admin-context`, and the seeded DB on :5433). No browser screenshots were taken — runtime API/DB probing was substituted, which yields stronger, more actionable evidence for the permission and orphaned-state questions than screenshots would. Where a claim was checked live it is marked **[live]**.
 **Scope:** the four setup journeys as one flow — Organizations, Officers, Workflows & roles, Projects & packages — across `channels/ticketing-ui/app/settings/page.tsx` (main tabs `org_officers`, `workflows_roles`, `projects`, `platform`).

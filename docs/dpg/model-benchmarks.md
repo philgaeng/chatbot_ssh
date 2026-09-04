@@ -1,5 +1,8 @@
 # Model benchmarks — what this system scores
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
 > grievance set. **Measurements dated 2026-08-20 / 08-21**; where a finding has since been acted on,
 > it says so and carries its own date. ⛔ **The classification measurements are now stale** — see the

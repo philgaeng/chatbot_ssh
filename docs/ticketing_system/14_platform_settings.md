@@ -1,6 +1,7 @@
 # Platform settings (locations, reports, types, system JSON)
 
 **Status:** Product reference (June 2026). **Access:** `super_admin` only for this entire main tab — see [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.  
+**Last updated:** 2026-08-05 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **UI:** Settings → **Settings** (platform tab)  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [18_geography_and_locations.md](18_geography_and_locations.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
 
@@ -9,7 +10,6 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 ---
 
 > **⚠ Reinstated 2026-08-04 — [`DECISION-author-defined-slots.md`](../sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([DECISION-organization-membership](../sprints/2026-07_org_chart_positions/DECISION-organization-membership.md), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
-
 
 ## 1. Sub-tabs and access
 

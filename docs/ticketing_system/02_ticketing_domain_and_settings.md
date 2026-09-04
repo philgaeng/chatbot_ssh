@@ -1,5 +1,8 @@
 # Ticketing System – Domain Model (as-built, July 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 Full schema DDL → `04_ticketing_schema.md`. API contracts → `03_ticketing_api_integration.md`.
 
 ---

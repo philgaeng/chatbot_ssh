@@ -1,5 +1,8 @@
 # 17 — Manual browser sweep (clears the pending-human debt)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-22 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **One session, ~60–75 min.** Clears the browser-only checks carried since Tier 1:
 > **D-17 · D-24 · D-33 · D-49 · D-56** (Tier 3) and the inherited **HR-07 · H2-02 · H2-06 · H2-08**.
 > Everything else in these tickets is already automated and green in CI — this is the part a

@@ -1,5 +1,8 @@
 # PII egress inventory — every path by which grievance text leaves the agency's control
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **Ticket:** [DPG-30](../sprints/2026-08-llm/04-pii-redaction-spec.md#dpg-30) · **Written:** 2026-08-27
 > · **Branch:** `dpg/sprint3-pii`
 >

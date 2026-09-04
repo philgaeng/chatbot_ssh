@@ -1,6 +1,7 @@
 # Documentation lifecycle
 
-**Status:** authoritative (2026-08-03). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
+**Status:** authoritative (2026-09-04). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
+**Last updated:** 2026-09-04 — §6.1 gained an enforcement point (it had none for a month, and was obeyed only in this folder); §6.8 answers the commit-hash question.
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../sprints/README.md`](../sprints/README.md) (the deferral-logging rule).
 
 ---
@@ -179,7 +180,32 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 ## 1. …
 ```
 
-**Rule 6.1 — Status header on every doc**, with a date. A doc with no date is untrustworthy by construction.
+**Rule 6.1 — Status header on every doc**, with a date. A doc with no date is untrustworthy by construction. Two fields, because they answer different questions:
+
+```markdown
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 — <one line: what changed, or what was verified>
+```
+
+*Enforced by* [`tests/repo/test_doc_headers.py`](../../tests/repo/test_doc_headers.py) → `scripts/ops/doc_headers.py --check`. **Fix a gap with `--stamp`; never by hand across the tree.**
+
+> ### ⚠ This rule was unenforced for a month, and the measurement is the argument
+>
+> Written 2026-08-03. Measured 2026-09-04, before the test existed:
+>
+> | | |
+> |---|---|
+> | Live specs with **no** header at all | **40 of 80** |
+> | Docs dated at least as recently as their last commit | **3 of 98** |
+> | `docs/engineering/` compliance | **7 of 7** |
+>
+> ⭐ **Obeyed in the folder the rule lives in, and essentially nowhere else** — Rule 5.2 demonstrated
+> against the document that states it. The 81 backfilled headers carry
+> `⚠ backfilled from git … not re-verified against the code`, and their date is the file's **last
+> commit date, not the backfill date**: stamping 81 documents "reviewed today" would have been 81
+> claims nobody made (Rule 4.1). **Clearing that marker is a real review**, per Rule 4.2.
+
+**Rule 6.1a — A commit that changes a spec's body must touch its header in the same commit.** Enforced, forward-only from 2026-09-04. *Why:* the alternative — checking that the header date is newer than the file's last commit — sounds equivalent and is a trap; it would have failed **95 of 98** documents on arrival, and a permanently red gate teaches people to walk past gates (D-26; and the `make help` deploy banner retracted 2026-09-03).
 
 **Rule 6.2 — A "Code entry points" table** on any spec that describes implemented behaviour. Someone will need to check whether it's still true; make that cheap. ([`ui/README.md`](../ticketing_system/ui/README.md) does this well.)
 
@@ -190,6 +216,26 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 **Rule 6.5 — Naming:** live specs `NN_snake_case.md` with a stable number (numbers are addresses — never renumber a shipped doc); sprint folders `YYYY-MM_slug/`; follow-ups `followups/kebab-slug.md`; decisions `DECISION-<slug>.md`; designs `DESIGN-<slug>.md`.
 
 **Rule 6.6 — Links are relative and CI-checked.** The `docs/` link job fails the build on a broken relative link (archive excluded). Moving a file means fixing its inbound links in the same commit.
+
+**Rule 6.8 — A doc never carries the commit hash it describes. Derive it.**
+
+The natural header field is *"which commit does this spec describe"* — and it **cannot be written**, because the hash does not exist until after the content is committed. Every workaround costs more than the gap:
+
+| Workaround | Why it is worse than the gap |
+|---|---|
+| Post-commit hook amends the file with the hash | Rewrites published history; breaks any branch or clone that already has the commit |
+| The *next* commit writes the previous one's hash | Permanently one commit stale — and wrong at exactly the moment someone trusts it |
+| A generated manifest of doc → hash, committed | Same staleness, plus a second file to drift, plus merge conflicts on every doc change |
+
+So the header carries **only what git cannot infer** — tier, scope, and the date a human last reviewed the content — and the hash is derived on demand, where it is exact and free:
+
+```bash
+python scripts/ops/doc_headers.py --provenance    # every live spec → commit, date, subject
+git log -1 --format='%h %ad %s' -- docs/services/02_grievance_service.md
+git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why it changed, with which code
+```
+
+*Why this is not a compromise:* §3a already establishes that **the branch is the version**. A spec statement is true relative to its branch, and `git show v1.2.0:<doc>` recovers any past state exactly. A hash in the header would be a worse copy of something git already stores perfectly. **Pinned** by `test_the_header_carries_no_commit_hash`, so a future well-meaning edit cannot quietly add a `Commit:` field.
 
 **Rule 6.7 — Write for the human first.** These docs are read by a person deciding whether to trust the system, and by an agent deciding what to build. Tables over paragraphs, imperatives over description, examples over abstraction. If a sentence needs a second read, rewrite it.
 
@@ -220,6 +266,7 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 ## 9. Definition of done — documentation
 
 - [ ] The live spec matches what the code now does
+- [ ] **Every spec the change touches has its `Last updated:` bumped in the same commit** (§6.1a) — `python scripts/ops/doc_headers.py --check` green
 - [ ] Unverified behaviour carries an honesty marker (§4)
 - [ ] Every new rule has its reason, and its enforcement point or an admission that it has none
 - [ ] Every deferral logged in `followups/` + `TODO.md`, **same commit** ([`../sprints/README.md`](../sprints/README.md))

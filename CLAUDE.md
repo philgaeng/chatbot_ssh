@@ -14,6 +14,23 @@
 
 `PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `docs/engineering/` tells you **how to build it** (craft rules, per layer). `DOCKER.md` tells you how to run it. This file has the locked **architecture** — the decisions the craft rules follow from. Where a craft rule and this file disagree on a locked decision, this file wins; on _how_ to implement it, `docs/engineering/` wins.
 
+## 📝 SPECS ARE UPDATED BEFORE THE COMMIT, NOT AFTER (non-negotiable)
+
+**The spec edit rides the same commit as the code that makes it true.** Not the next commit, not the end of the sprint, not "when we do a docs pass" — there is no docs pass, and a spec that describes something the code stopped doing is worse than no spec, because it is *trusted*.
+
+Before every commit:
+
+```bash
+python scripts/ops/doc_headers.py --check   # every live spec dated; header bumped where the body changed
+```
+
+1. **Change the code → change the spec.** Find the specs your change makes wrong (`docs/README.md` is the map) and fix them in the same commit. `docs/engineering/06_documentation_lifecycle.md` §3 has the promotion rule; §4 the honesty markers for behaviour that is merged but unverified.
+2. **Bump `**Last updated:**` on every spec you touch** — enforced by [`tests/repo/test_doc_headers.py`](tests/repo/test_doc_headers.py), forward-only from 2026-09-04. You cannot edit a spec's body and leave its date claiming an older review.
+3. **Never put a commit hash in a doc** — it does not exist yet when you write it. Derive it: `python scripts/ops/doc_headers.py --provenance`. The reasoning, and why every workaround is worse, is §6.8.
+4. **Deferred anything? Log it same-commit** in `followups/` **and** `docs/TODO.md`.
+
+⚠ **Why this is a rule and not an aspiration.** Rule 6.1 ("dated Status header on every doc") existed unenforced from 2026-08-03. Measured 2026-09-04: **40 of 80 live specs had no header at all**, and it was honoured **7 of 7** in `docs/engineering/` — the folder the rule lives in — and almost nowhere else. The same month, `GET /api/grievance/{id}` was documented in *this file* as decrypting server-side for months before it did, and an entire client-side decryption workaround grew inside ticketing because agents believed the line. **A rule with no enforcement point is a preference; the enforcement point is what makes it true.**
+
 ## 🐳 BUILD & RUN ONLY WITH DOCKER (non-negotiable)
 
 **Always build and run this stack with Docker Compose — never on the host.** Every service (chatbot, orchestrator, backend, ticketing_api, celery, ops, db, redis, keycloak, grm_ui) is built and started through the Compose stacks — `make wsl-up` / `docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml build|up` (see `docs/deployment/DOCKER.md`). **Do not** `pip install`, `npm run build`, `uvicorn …`, `redis-server`, or run migrations/seeds natively to build or serve. Native runs cause port/version/schema drift (e.g. a stray host `redis-server` on :6379, a mismatched host Python, an unmigrated DB). Host CLIs are for **reading/inspection only**; anything that builds an image, starts a service, or mutates the DB goes through Docker.

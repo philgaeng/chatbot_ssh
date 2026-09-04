@@ -186,25 +186,40 @@ def _parse_token_error(resp: httpx.Response) -> tuple[str, str]:
         return "", resp.text[:200]
 
 
+def _refresh_token_client(refresh_token: str) -> str | None:
+    """The `azp` a refresh token was issued to, or None if it cannot be read.
+
+    ⚠ **Unverified decode, deliberately.** We are not trusting this claim for authorisation —
+    Keycloak still validates the token. It only selects which credentials to present, and a
+    wrong guess costs a failed revoke, not a granted one.
+    """
+    try:
+        return str(jwt.get_unverified_claims(refresh_token).get("azp") or "") or None
+    except (JWTError, Exception):  # noqa: B014 - jose raises several unrelated types
+        return None
+
+
 def logout_with_refresh_token(refresh_token: str) -> None:
-    """Revoke a refresh token issued to the confidential `ticketing-api` client.
+    """Revoke a refresh token, choosing credentials by the client that was issued it.
 
-    ⭐ **Why this exists on the server at all.** The browser cannot do it. `ticketing-api` is a
-    confidential client, so Keycloak's logout endpoint demands a `client_secret` — and a secret a
-    public SPA can reach is not a secret. The mirror image of `login_with_password`: the password
-    grant runs here for the same reason, and the revoke has to live where the credential already is.
+    ⭐ **This is the server's job because only the server knows which clients are confidential.**
+    `ticketing-api` needs a `client_secret`; `ticketing-ui` is public and must NOT be sent one.
+    The browser cannot tell them apart, and two attempts to let it try both failed:
 
-    ⚠ **The defect this closes was invisible for as long as it existed.** The UI posted the revoke
-    directly with `client_id` alone; Keycloak rejected every one with `invalid_client_credentials`,
-    and the browser discarded the result (`void fetch`, "best-effort"). It surfaced only once realm
-    event logging was switched on, in the first real logout it recorded.
+    1. Posting straight to Keycloak with `client_id` alone — correct for the public client,
+       rejected with `invalid_client_credentials` for the confidential one.
+    2. Routing on `azp != NEXT_PUBLIC_OIDC_CLIENT_ID` — which assumed that variable names the
+       *public* client. On the staging deployment it is `ticketing-api`, the confidential one,
+       so the test compared a value against itself and never fired.
 
-    **Impact it closes, stated narrowly:** after an ordinary logout the front-channel call ends the
-    session anyway, so this is redundant. It is load-bearing on the *stale session* path, which skips
-    the front channel by design — there, this is the only thing that ends the session, and a failure
-    left a live refresh token behind.
+    Both were invisible from the browser, which discards the result by design; both were found
+    in the Keycloak realm event log.
 
-    Raises `AuthLoginError` so the caller can decide; sign-out must never be blocked by it.
+    **Impact, stated narrowly:** after an ordinary logout the front-channel call ends the session
+    anyway, so this is redundant. It is load-bearing on the *stale session* path, which skips the
+    front channel by design — there this is the only thing that ends the session.
+
+    Raises `AuthLoginError` so the caller can log it; sign-out must never be blocked by it.
     """
     if not keycloak_configured():
         raise AuthLoginError("auth_unavailable", "Authentication is not configured.", 503)
@@ -212,15 +227,19 @@ def logout_with_refresh_token(refresh_token: str) -> None:
         raise AuthLoginError("invalid_token", "A refresh token is required.", 422)
 
     settings = get_settings()
-    logout_url = f"{_keycloak_realm_base()}/protocol/openid-connect/logout"
+    confidential_client = settings.keycloak_client_id
+    issued_to = _refresh_token_client(refresh_token) or confidential_client
+
+    data: dict[str, str] = {"client_id": issued_to, "refresh_token": refresh_token}
+    if issued_to == confidential_client:
+        # ⚠ Only the confidential client takes a secret. Sending one for a PUBLIC client is
+        # itself rejected, so this cannot be "just always send it".
+        data["client_secret"] = _api_client_secret()
+
     try:
         resp = httpx.post(
-            logout_url,
-            data={
-                "client_id": settings.keycloak_client_id,
-                "client_secret": _api_client_secret(),
-                "refresh_token": refresh_token,
-            },
+            f"{_keycloak_realm_base()}/protocol/openid-connect/logout",
+            data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=10.0,
         )
@@ -228,14 +247,16 @@ def logout_with_refresh_token(refresh_token: str) -> None:
         logger.warning("Keycloak logout request failed: %s", exc)
         raise AuthLoginError("auth_unavailable", "Sign-out service is unavailable.", 503) from exc
 
-    # 204 is success. Keycloak answers 400 for a token that is already invalid or expired, which is
-    # the desired end state — treat it as done rather than as an error the UI has to interpret.
+    # 204 is success. Keycloak answers 400 for a token that is already invalid or expired, which
+    # is the desired end state — treat it as done rather than as an error the UI must interpret.
     if resp.status_code in (200, 204, 400):
         return
 
     err, desc = _parse_token_error(resp)
-    # ⚠ Never log the token. The id is in the caller's own request context.
-    logger.warning("Keycloak logout rejected (%s): %s", resp.status_code, err or desc)
+    # ⚠ Never log the token. The grievance/user id is in the caller's own request context.
+    logger.warning(
+        "Keycloak logout rejected (%s) for client %s: %s", resp.status_code, issued_to, err or desc
+    )
     raise AuthLoginError("logout_failed", "Could not sign out on the server.", 502)
 
 

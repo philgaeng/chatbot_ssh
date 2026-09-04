@@ -1,5 +1,8 @@
 # Ticketing System – As-Built Status (July 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > This document replaces the original v1 implementation plan. It records what has actually been built.
 > For open/planned work → `docs/sprints/archive/claude-tickets/TODO.md`.
 > For full build log → `docs/sprints/archive/claude-tickets/PROGRESS.md`.

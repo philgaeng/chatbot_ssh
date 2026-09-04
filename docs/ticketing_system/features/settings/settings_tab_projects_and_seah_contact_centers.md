@@ -1,5 +1,8 @@
 # Settings tab (Ticketing / management): Projects + SEAH contact centers
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## Purpose
 
 This document is the **product + engineering contract** for a **Settings** area in the **Ticketing / management** application (separate from the chatbot UI, but sharing the same Postgres database). It covers:

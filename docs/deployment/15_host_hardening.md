@@ -1,6 +1,7 @@
 # Host Hardening Runbook
 
 **Status:** Operational runbook (manual, prod host). Companion to [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 12 and [`13_security.md`](13_security.md).
+**Last updated:** 2026-08-19 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 Single Ubuntu host, Docker Compose, public on `grm-chatbot.dor.gov.np`. These are host-OS controls that sit underneath the container hardening.
 

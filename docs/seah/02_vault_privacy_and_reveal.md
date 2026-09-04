@@ -1,6 +1,7 @@
 # 02 — Vault, Privacy, and Reveal Model (as-built)
 
 **Status:** As-built, July 2026 — verified against code on `integration/seah-claude`.
+**Last updated:** 2026-07-15 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Sources consolidated:** `docs/sprints/archive/Refactor specs/May5_seah/05_vault_and_summary_operating_model.md`, `06_vault_reveal_audit_and_ui_controls.md`, `07_phase2_decision_questions.md`; `docs/sprints/archive/claude-tickets/seah-privacy-worktree-handoff.md`.
 Policy baseline lives in [../deployment/09_privacy.md](../deployment/09_privacy.md) (data domains, access-policy model, LLM summary safety, retention); this doc is the **detailed SEAH-facing data model and its implementation status** — it does not restate 09's policy text. Intake behavior is in [01_seah_intake_flow.md](01_seah_intake_flow.md).
 

@@ -1,6 +1,7 @@
 # 01 — SEAH Intake Flow (as-built)
 
 **Status:** As-built, July 2026 — verified against code on `integration/seah-claude`.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Sources consolidated:** `docs/sprints/archive/Refactor specs/April20_seah/00_seah_sensitive_flow_spec.md`, `01_seah_route_and_slots.md`, `04_seah_otp_and_validation.md`, `07_seah_focal_point_flow.md`, `08_seah_outro_and_project_catalog.md`; `docs/sprints/archive/Refactor specs/May5_seah/04_action_ask_commons_flow_profiles.md`, `09_updated_seah_workflow.md`; `docs/sprints/archive/Refactor specs/March 5/14_sensible_content_detection_and_flow..md`.
 Where those specs conflict with code, this doc describes **code**. Items not implemented are marked **Planned**.
 

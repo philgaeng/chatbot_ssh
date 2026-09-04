@@ -1,5 +1,8 @@
 # Handover — rewriting the DPG compliance pack from scratch
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > ## ✅ Done, 2026-08-24. Read this before acting on anything below.
 >
 > ⚠ **And the pack has moved on since.** Sprints 2 and 3 closed on 2026-08-27 and 2026-09-03, and all

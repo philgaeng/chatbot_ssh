@@ -1,6 +1,7 @@
 # Security Features — Platform Overview (June 2026)
 
 **Status:** As-built reference for implemented controls and locked policies.  
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Related:** [09_privacy.md](09_privacy.md), [11_llm_pipeline_policy.md](11_llm_pipeline_policy.md), [../ticketing_system/06_messaging_rules_whatsapp_sms.md](../ticketing_system/06_messaging_rules_whatsapp_sms.md), [../services/05_messaging_service.md](../services/05_messaging_service.md), [../ticketing_system/00_ticketing_decisions.md](../ticketing_system/00_ticketing_decisions.md)
 
 This document is the **single index of security features** across chatbot, backend, and GRM ticketing.

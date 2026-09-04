@@ -1,5 +1,8 @@
 # GSheet Monitoring Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-07-07 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **RETIRED (CL-02, July 2026).** The Google Sheets monitoring channel
 > (`channels/monitoring-gsheet/`) and its backend (`GET /gsheet-get-grievances`,
 > `backend/api/routers/gsheet.py`, `backend/api/gsheet_monitoring_api.py`, the

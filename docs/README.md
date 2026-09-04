@@ -1,9 +1,39 @@
 # Documentation Index
 
+**Status:** index — the map of the tree, not a spec in itself.
+**Last updated:** 2026-09-04 — every live spec now carries a dated header (§ *How to read a header*), enforced by a test.
+
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
 > **`docs/<domain>/` says _what_ we build. [`engineering/`](engineering/) says _how_.** Start there before writing code.
 > Reviews of spec completeness and codebase quality live in [`reviews/`](reviews/).
+
+---
+
+## How to read a header
+
+Every live spec opens with two lines. They answer different questions, and neither is decoration:
+
+```markdown
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 — what changed, or what was verified
+```
+
+| Line | Means | Set by |
+|---|---|---|
+| `Status:` | Which **tier** it is, so you know its authority ([lifecycle §1](engineering/06_documentation_lifecycle.md)) | the author |
+| `Last updated:` | When the content was last **reviewed against the code** — not when the file was last touched | the author, bumped in the same commit as the change |
+| `⚠ backfilled from git …` | ⚠ **The date is this file's last commit, and nobody has re-verified the content since.** 81 documents carry this after the 2026-09-04 sweep. It is an honest placeholder, not a status — **clearing it is a real review** | `doc_headers.py --stamp`; cleared by a human |
+
+**Which commit does a spec describe?** The header deliberately does not say — a hash cannot be written into the content it describes, because it does not exist yet. Derive it instead:
+
+```bash
+python scripts/ops/doc_headers.py --provenance          # every live spec → commit, date, subject
+python scripts/ops/doc_headers.py --check               # what CI enforces
+git log --oneline -- docs/services/02_grievance_service.md
+```
+
+The full reasoning, and why each workaround is worse than the gap, is [lifecycle §6.8](engineering/06_documentation_lifecycle.md). **Specs are updated in the same commit as the code** — see [`CLAUDE.md`](../CLAUDE.md) § *Specs are updated before the commit*, enforced by [`tests/repo/test_doc_headers.py`](../tests/repo/test_doc_headers.py).
 
 ## Structure
 

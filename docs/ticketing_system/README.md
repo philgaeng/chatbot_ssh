@@ -1,5 +1,8 @@
 # GRM Ticketing System – Documentation Index
 
+**Status:** index — the map of this folder, not a spec in itself.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > Last updated: July 2026 (workflow slots as-built, actions v1, geography + classification specs promoted). Reflects as-built state.
 
 ---

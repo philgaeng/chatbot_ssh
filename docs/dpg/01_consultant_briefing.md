@@ -1,5 +1,8 @@
 # Nepal GRM platform — DPG briefing
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **What this is.** A **pre-read**, for the twenty minutes before a meeting: what the platform is,
 > where it stands against the nine indicators, and what we need a decision or an opinion on.
 > **As of 2026-09-03.**

@@ -1,5 +1,8 @@
 # Ticketing — agent runbooks
 
+**Status:** index — the map of this folder, not a spec in itself.
+**Last updated:** 2026-06-12 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 Copy **one** file into a new Cursor agent session. Each runbook is self-contained.
 
 | Runbook | Spec | Scope |

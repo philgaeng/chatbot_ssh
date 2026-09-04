@@ -7,7 +7,6 @@
 
 ## 1. Compute
 
-
 | Item             | Recommendation                         |
 | ---------------- | -------------------------------------- |
 | **Servers**      | 1× application server (Docker Compose) |

@@ -1,5 +1,8 @@
 # Grievance Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-06-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Scope
 
 Shared grievance retrieval and status management API used by chatbot, ticketing, and monitoring integrations.

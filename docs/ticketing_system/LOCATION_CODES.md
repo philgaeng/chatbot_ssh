@@ -1,6 +1,7 @@
 # GRM canonical location codes (Nepal)
 
 **Status (June 2026):** Implemented. Canonical codes seeded via Alembic migration `q9r7s1u3`. Used in `ticketing.locations`, `ticketing.package_locations`, officer scopes, QR scan flow.  
+**Last updated:** 2026-06-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), QR scan flow (`docs/deployment/08_commit_strategy.md`).
 
 ---

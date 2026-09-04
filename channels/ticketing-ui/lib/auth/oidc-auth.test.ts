@@ -81,14 +81,14 @@ describe("refreshTokens single-flight (H2-01)", () => {
   });
 });
 
-describe("signOut revoke routing (F-19-adjacent: the confidential-client logout bug)", () => {
-  // The defect: this always posted to Keycloak with `client_id` alone. Correct for the PUBLIC
-  // `ticketing-ui` client; impossible for the CONFIDENTIAL `ticketing-api`, which needs a
-  // client_secret a browser must never hold — so every password-login revoke was rejected with
-  // invalid_client_credentials, and the browser discarded the result by design. Found in the
-  // Keycloak event log minutes after that log was first switched on.
+describe("signOut revoke: the browser must not decide how to authenticate it", () => {
+  // Two earlier versions failed here, both invisibly. The first posted straight to Keycloak
+  // with client_id alone — valid only for a PUBLIC client. The second routed on
+  // `azp !== clientId`, assuming clientId names the public client; on this deployment
+  // NEXT_PUBLIC_OIDC_CLIENT_ID is `ticketing-api`, the CONFIDENTIAL one, so the comparison
+  // was a value against itself and never fired. Both were found in the realm event log.
 
-  function armSignOut(refreshPayload: Record<string, unknown>, idPayload?: Record<string, unknown>) {
+  function armSignOut(refreshPayload: Record<string, unknown>) {
     const calls: string[] = [];
     vi.stubGlobal("fetch", (url: string) => {
       calls.push(String(url));
@@ -101,46 +101,43 @@ describe("signOut revoke routing (F-19-adjacent: the confidential-client logout 
       location: { origin: "https://grm.test", href: "", replace: () => {} },
     });
     ls.setItem("grm_refresh_token", jwt(refreshPayload));
-    if (idPayload) ls.setItem("grm_id_token", jwt(idPayload));
     return calls;
   }
 
-  it("password login (azp=ticketing-api) revokes via the API, not Keycloak", async () => {
-    const calls = armSignOut({ azp: "ticketing-api" });
+  it.each([
+    ["ticketing-api (confidential)", "ticketing-api"],
+    ["ticketing-ui (public)", "ticketing-ui"],
+  ])("%s → always the server endpoint, never Keycloak directly", async (_label, azp) => {
+    const calls = armSignOut({ azp });
     const { OIDCAuthClient } = await import("./oidc-auth");
     const { OIDC_ISSUER, OIDC_CLIENT_ID } = await import("./runtime-config");
     new OIDCAuthClient(OIDC_ISSUER, OIDC_CLIENT_ID, "https://grm.test/auth/callback").signOut();
+
     expect(calls.some((u) => u.includes("/api/v1/auth/logout"))).toBe(true);
     expect(calls.some((u) => u.includes("/protocol/openid-connect/logout"))).toBe(false);
   });
 
-  it("PKCE login (azp=ticketing-ui) still revokes directly against Keycloak", async () => {
-    // Guards the over-correction: routing everything through the API would break the public
-    // path, whose token ticketing-api's credentials cannot revoke either.
-    const calls = armSignOut({ azp: "ticketing-ui" });
+  it("⭐ regression: routes to the server even when azp EQUALS the configured client id", async () => {
+    // This is the exact shape the previous fix could not see. NEXT_PUBLIC_OIDC_CLIENT_ID is
+    // "ticketing-api" here, matching the token's azp — the old `azp !== clientId` test was
+    // false and the revoke went to Keycloak and 401'd.
+    vi.stubEnv("NEXT_PUBLIC_OIDC_CLIENT_ID", "ticketing-api");
+    vi.resetModules();
+    const calls = armSignOut({ azp: "ticketing-api" });
     const { OIDCAuthClient } = await import("./oidc-auth");
     const { OIDC_ISSUER, OIDC_CLIENT_ID } = await import("./runtime-config");
+    expect(OIDC_CLIENT_ID).toBe("ticketing-api"); // the precondition that broke the last fix
     new OIDCAuthClient(OIDC_ISSUER, OIDC_CLIENT_ID, "https://grm.test/auth/callback").signOut();
-    expect(calls.some((u) => u.includes("/protocol/openid-connect/logout"))).toBe(true);
-    expect(calls.some((u) => u.includes("/api/v1/auth/logout"))).toBe(false);
-  });
 
-  it("routes on the REFRESH token's azp when the id_token is missing", async () => {
-    // ⭐ The case that matters most and is easiest to get wrong. On the sessionStale path the
-    // id_token is routinely absent, so an id_token-derived azp is undefined exactly when this
-    // revoke is the only thing ending the session.
-    const calls = armSignOut({ azp: "ticketing-api" }); // no id_token stored
-    const { OIDCAuthClient } = await import("./oidc-auth");
-    const { OIDC_ISSUER, OIDC_CLIENT_ID } = await import("./runtime-config");
-    new OIDCAuthClient(OIDC_ISSUER, OIDC_CLIENT_ID, "https://grm.test/auth/callback").signOut();
     expect(calls.some((u) => u.includes("/api/v1/auth/logout"))).toBe(true);
+    expect(calls.some((u) => u.includes("/protocol/openid-connect/logout"))).toBe(false);
   });
 
-  it("never puts the refresh token in the URL", async () => {
+  it("still revokes when there is no id_token at all (the stale-session path)", async () => {
     const calls = armSignOut({ azp: "ticketing-api" });
     const { OIDCAuthClient } = await import("./oidc-auth");
     const { OIDC_ISSUER, OIDC_CLIENT_ID } = await import("./runtime-config");
     new OIDCAuthClient(OIDC_ISSUER, OIDC_CLIENT_ID, "https://grm.test/auth/callback").signOut();
-    for (const u of calls) expect(u).not.toContain("azp");
+    expect(calls.some((u) => u.includes("/api/v1/auth/logout"))).toBe(true);
   });
 });

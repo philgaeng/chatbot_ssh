@@ -1,5 +1,8 @@
 # Voice Grievance Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-20 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **RETIRED (CL-02, July 2026).** The accessible voice channel (`channels/accessible/`)
 > and its exclusive backend — the `voice_grievance.py` router
 > (`/accessible-file-upload`, `/submit-grievance`, `/grievance-status/{id}`) and the

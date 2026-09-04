@@ -1,6 +1,7 @@
 # Backend services — Orchestrator + Backend API
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/04_backend.md`](archive/04_backend.md). Flask and the Django Helpdesk option are gone; both entry points are FastAPI.
+**Last updated:** 2026-08-24 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Two entry points
 

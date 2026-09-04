@@ -1,6 +1,7 @@
 # Key & Secret Lifecycle
 
 **Status:** Operational policy. Companion to [`13_security.md`](13_security.md) and [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 10, and the backup procedure in [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) §9.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 This is a self-hosted stack — there is no managed secret manager. Secrets are encrypted at rest with
 **SOPS + age** in `secrets.enc.env` (committed) and decrypted into `env.local` (gitignored, 0600,

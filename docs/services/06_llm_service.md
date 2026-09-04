@@ -1,5 +1,8 @@
 # LLM Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-08-18 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Scope
 
 Shared LLM utility/service layer used by async task pipelines and chatbot workflows.

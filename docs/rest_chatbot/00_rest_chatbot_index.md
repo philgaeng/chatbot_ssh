@@ -1,5 +1,8 @@
 # REST Chatbot Production Documentation
 
+**Status:** index — the map of this folder, not a spec in itself.
+**Last updated:** 2026-06-18 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 This folder is the production documentation set for chatbot-specific behavior.
 
 Scope of `docs/rest_chatbot`:

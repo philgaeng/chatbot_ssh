@@ -1,6 +1,7 @@
 # 03 — SEAH Decision Log (condensed)
 
 **Status:** As-built, July 2026 — statuses verified against code on `integration/seah-claude`.
+**Last updated:** 2026-07-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Sources consolidated:** `docs/sprints/archive/Refactor specs/April20_seah/00_seah_sensitive_flow_spec.md` (stakeholder Q&A A1–K42), `01_seah_route_and_slots.md` (pressure-test answers), `07_seah_focal_point_flow.md`, `08_seah_outro_and_project_catalog.md` (Part A/B); `docs/sprints/archive/Refactor specs/May5_seah/07_phase2_decision_questions.md` (Q1–Q17), `09_updated_seah_workflow.md`; `docs/sprints/archive/Refactor specs/March 5/14_sensible_content_detection_and_flow..md`.
 
 Format: **Decision — rationale — status.** Statuses: ✅ Implemented · 🔁 Superseded (by a later decision) · 🕐 Planned (decided, not built) · ❓ Open/TBD.

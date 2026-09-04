@@ -1,4 +1,8 @@
 # LLM Pipeline Policy
+
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## How the GRM ticketing system queries LLMs, and what PII guarantees apply
 
 > **Audience:** anyone touching the chatbot intake flow, the ticketing findings pipeline,

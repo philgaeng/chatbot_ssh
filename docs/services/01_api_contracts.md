@@ -1,5 +1,8 @@
 # API Contracts Matrix
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-06-02 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 Production API contract reference across shared backend services.
 
 ## Endpoints

@@ -1,6 +1,7 @@
 # Setup — Docker-era runbook
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/02_setup.md`](archive/02_setup.md). The legacy systemd / virtualenv / `rasa train` path is gone; everything runs via Docker Compose (see [`01_architecture.md`](01_architecture.md) for the service map, [`DOCKER.md`](DOCKER.md) for day-to-day container commands).
+**Last updated:** 2026-08-24 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Prerequisites
 

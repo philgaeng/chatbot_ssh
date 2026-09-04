@@ -1,5 +1,8 @@
 # DPG compliance status — Nepal GRM platform
 
+**Status:** evidence pack — cited by the DPG assessment.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > **What this is.** An indicator-by-indicator self-assessment against the
 > [DPG Standard](https://www.digitalpublicgoods.net/standard), for ADB's Digital Public Goods
 > consultant. Each indicator states **what we have**, **what is missing**, **what we propose**, and
