@@ -1,6 +1,7 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
+**Last updated:** 2026-09-04 — the deferral rule points at [`../SPINE.md`](../SPINE.md), the retired `TODO.md`'s successor.
 **Applies to:** `tests/` (Python, pytest) and `channels/ticketing-ui/**/*.test.ts` (Vitest).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
@@ -179,4 +180,4 @@ DB credentials for host tests come from compose, never `env.local` — `tests/ti
 - [ ] New architectural rule: pinning test, or an explicit note that there is none
 - [ ] Every new test mutation-checked, and the mutation recorded in `tests/mutations/` (§5a) — not only in the commit message
 - [ ] CI green with **nothing** deselected, downgraded, or suppressed
-- [ ] Any deferral logged in `followups/` + `TODO.md`, same commit
+- [ ] Any deferral logged in `followups/` + `SPINE.md`, same commit

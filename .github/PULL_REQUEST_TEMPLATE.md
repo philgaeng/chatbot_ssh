@@ -34,8 +34,8 @@
 - [ ] Tests written **in this PR**, at the right level ([`docs/engineering/04_testing.md`](../docs/engineering/04_testing.md))
 - [ ] CI green with nothing deselected
 - [ ] No documentation claim I have not verified; `⚠ Not built` where the code does not do it yet
-- [ ] Live spec, [`docs/PROGRESS.md`](../docs/PROGRESS.md) and [`docs/TODO.md`](../docs/TODO.md) updated as required
-- [ ] Any deferral logged in `docs/sprints/<sprint>/followups/` **and** `docs/TODO.md`, in this PR
+- [ ] Live spec, [`docs/PROGRESS.md`](../docs/PROGRESS.md) and [`docs/SPINE.md`](../docs/SPINE.md) updated as required
+- [ ] Any deferral logged in `docs/sprints/<sprint>/followups/` **and** `docs/SPINE.md`, in this PR
 - [ ] New source files carry an SPDX header (`scripts/ops/add_spdx_headers.py`)
 - [ ] No real complainant data, contact details, or credentials in the diff, the fixtures, or this description
 

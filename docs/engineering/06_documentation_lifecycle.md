@@ -1,7 +1,7 @@
 # Documentation lifecycle
 
 **Status:** authoritative (2026-09-04). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
@@ -109,7 +109,7 @@ Because reconciliation happened per pull request, sprint close is an **audit, no
 - [ ] Nothing durable is stranded in the sprint folder → the "Where the durable content lives now" table is complete
 - [ ] Every `⏳ Changing` pointer the sprint raised has been removed or resolved
 - [ ] Every honesty marker is still accurate (things get verified without anyone clearing the marker)
-- [ ] Every deviation in the sprint tracker is either fixed, or recorded in the live spec as a `⚠ Deviates` marker, or logged in `followups/` + `TODO.md`
+- [ ] Every deviation in the sprint tracker is either fixed, or recorded in the live spec as a `⚠ Deviates` marker, or logged in `followups/` + `SPINE.md`
 - [ ] Originals moved to `archive/` with forwarding lines
 
 **Rule 3c.1 — If the audit finds a large gap, that is a signal about the process, not just a chore.** It means edits were not riding their PRs. Fix the habit, not only the document.
@@ -267,7 +267,7 @@ git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why
 - [ ] **Every spec the change touches has its `Last updated:` bumped in the same commit** (§6.1a) — `python scripts/ops/doc_headers.py --check` green
 - [ ] Unverified behaviour carries an honesty marker (§4)
 - [ ] Every new rule has its reason, and its enforcement point or an admission that it has none
-- [ ] Every deferral logged in `followups/` + `TODO.md`, **same commit**
+- [ ] Every deferral logged in `followups/` + `SPINE.md`, **same commit**
 - [ ] `PROGRESS.md` updated
 - [ ] Relative links resolve (CI link job)
 - [ ] If a doc moved: forwarding line added, inbound links fixed

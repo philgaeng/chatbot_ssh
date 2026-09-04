@@ -4,7 +4,7 @@
 
 > **This file is updated at every commit.**
 > Read it before any code decision. It tells you current state, deviations from spec, and what's next.
-> For open gaps and future features → **`docs/TODO.md`**
+> For what is next → **[`docs/SPINE.md`](SPINE.md)**. For the retired backlog → `docs/TODO.md`.
 > Last updated: 2026-09-03 — **Sprints 2 and 3 deployed to AWS staging** (three `make aws-deploy` runs; PII redaction, the OTP window and the D-64 SEAH fix are live and were exercised in-container). The deploy also carried `ops` to a server for the first time and it ran **blind for five hours** — see below. Earlier: 2026-08-21 — **secrets migrated to SOPS + age (local)**; the migration surfaced a hardcoded DB password that outranks it (see below). Earlier: 2026-08-18 — **DPG Sprint 0 complete** (licensing, dependency audit, privacy assessment, project hygiene, README truth). Tracker: [`sprints/2026-08-llm/PROGRESS.md`](sprints/2026-08-llm/PROGRESS.md). Earlier: 2026-08-04 — author-defined slots finished (project types are the template; go-live A3/A5 → B1). Earlier: 2026-07-04 moved from `docs/sprints/claude-tickets/` to `docs/`; stale Cognito-era rows cleaned (auth is Keycloak as-built, see `docs/deployment/16_auth_keycloak.md`)
 
 ---
@@ -99,10 +99,10 @@
 **Restore / revert roles batch:** `git revert 578ef24` (UI), then `git revert c60d8ee` (backend). After reverting the backend commit, roll back DB with Alembic if needed: `alembic downgrade o5p7q9r1` then step before `n4p6r8t0` per your head revision (see `DOCKER.md`).
 
 ### In progress / next
-- ✅ **SLA overdue episodes (§14)** — migration `x9y1z3a5`, writers in escalation/tickets, backfill script
-- ✅ **Reports Summary tab (§12–§13)** — `GET /api/v1/reports/summary` + UI tab
-- 🔲 **Visual test + polish** — click through all demo scenarios in browser (http://localhost:3002 auth / :3001 bypass)
-- 🔲 **Staging deploy** — Docker deploy to grm.stage.facets-ai.com
+
+> **→ [`SPINE.md`](SPINE.md).** This section was deleted on 2026-09-04 (OM-02, [Q-04](sprints/2026-09_operating_model/QUESTIONS.md)) because it contradicted this file's own header: the header reported staging deployed on 2026-09-03 while this list still showed the staging deploy outstanding.
+>
+> **This file answers *how did we get here*. The register answers *what is next*.** Keeping both answers in one file is what let them disagree.
 
 ### Active containers
 | Container | Port | How to start |

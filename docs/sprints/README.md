@@ -7,7 +7,7 @@
 Whenever a sprint **defers** work rather than doing it — downgrading a lint rule to `warn`, suppressing/`# noqa`-ing a warning, scoping a finding out of a ticket, quarantining a test (`-m "not integration"`), or leaving a `TODO`/`INTEGRATION POINT` — it **must** be recorded in two places, in the same commit that creates the deferral:
 
 1. A tracked follow-up doc under the sprint: `sprints/<sprint>/followups/<slug>.md` (measured inventory + definition of done + endgame). Exemplar: [`2026-07_hardening/followups/portal-lint-cleanup.md`](2026-07_hardening/followups/portal-lint-cleanup.md).
-2. A one-line pointer row in [`../TODO.md`](../TODO.md) under **🔵 TECH DEBT**, linking that follow-up.
+2. A one-line row in [`../SPINE.md`](../SPINE.md) § *Backlog* with `kind: debt`, linking that follow-up. *(Until 2026-09-04 this was a `TODO.md` row; that file is retired and its debt rows are the register's backlog. Follow-ups that cite `TODO.md` are historically accurate and are not rewritten.)*
 
 A downgrade/suppression/scope-cut that is **not** logged this way is treated as a defect, not a deferral — the whole point is that debt stays visible. These follow-ups accumulate into the TECH DEBT backlog so that, once the main Tier-2/Tier-3 refactors have landed, a dedicated **clean-up sprint** can be launched against a complete, measured list rather than rediscovered by grep.
 

@@ -1,10 +1,11 @@
 # Engineering standards — index
 
 **Status:** authoritative (2026-08-03). This folder is the **single source for _how_ we build**.
+**Last updated:** 2026-09-04 — `07_work_items.md` added; the reading order and rule 8 now point at [`../SPINE.md`](../SPINE.md) rather than the retired `TODO.md`.
 **Relationship to the rest of the tree:** `docs/<domain>/` says **what** we build (product specs, as-built behaviour). This folder says **how** — the rules any change must satisfy regardless of feature. [`CLAUDE.md`](../../CLAUDE.md) holds the **locked architecture decisions** (schema ownership, service boundaries, PII rules); this folder holds the **craft rules** that follow from them.
 **Audience:** a human engineer joining the project, and every AI agent that touches the codebase. Written to be read start-to-finish in about 40 minutes.
 
-> **The reading order for any code change:** [`../PROGRESS.md`](../PROGRESS.md) (what exists) → [`../TODO.md`](../TODO.md) (what's next) → **the standard for the layer you're touching** (below) → the domain spec for the feature.
+> **The reading order for any code change:** [`../PROGRESS.md`](../PROGRESS.md) (what exists) → [`../SPINE.md`](../SPINE.md) (what's next) → **the standard for the layer you're touching** (below) → the domain spec for the feature.
 
 ---
 
@@ -18,6 +19,7 @@
 | [04](04_testing.md) | **Testing** — the pyramid, markers, fixtures, pinning tests, what CI runs, definition of done | any test, and any change that needs one (all of them) |
 | [05](05_frontend.md) | **Frontend** — Next.js App Router, data access, state, errors, i18n, accessibility | any `channels/ticketing-ui/` |
 | [06](06_documentation_lifecycle.md) | **Documentation lifecycle** — live specs vs reviews vs sprints vs archive, and **when a sprint spec is promoted** | any doc, and the end of every ticket |
+| [07](07_work_items.md) | **Work items** — how work is born, classified and gated: five kinds, a four-question triage test, nine gates, six derived profiles, definition of ready | any new piece of work, before it starts |
 
 Layer-specific standards that live elsewhere because they were written first and are heavily cross-linked:
 
@@ -42,7 +44,7 @@ If you read nothing else, these are the rules that get violated most and cost mo
 5. **Authorization is a dependency, not an `if`.** It is declared on the route, and it is tested. → [03](03_api_layer.md#4-authorization)
 6. **No complainant PII in `ticketing.*`**, ever, in any form — column, cache, or log. Ticketing cannot decrypt and must not learn how. → [`CLAUDE.md`](../../CLAUDE.md) data rules, pinned by `tests/ticketing/test_pii_boundary.py`
 7. **A rule without its reason decays into cargo cult.** When you write, amend, or move a rule, move its *why* with it. → [06](06_documentation_lifecycle.md#5-how-to-write-a-rule)
-8. **Never silence a test or a lint.** A deferral that is not logged in `sprints/<sprint>/followups/` **and** `TODO.md` in the same commit is a defect, not a deferral.
+8. **Never silence a test or a lint.** A deferral that is not logged in `sprints/<sprint>/followups/` **and** a `SPINE.md` row in the same commit is a defect, not a deferral.
 9. **Never write a doc claim you have not verified.** If the code doesn't do it yet, the spec says `⚠ Not built`. → [06](06_documentation_lifecycle.md#4-honesty-markers)
 10. **Every user-facing string** goes through the copy guide and the canonical vocabulary. → [`ui/05`](../ticketing_system/ui/05_ui_copy_style.md)
 
@@ -56,7 +58,7 @@ A ticket is done when **all** of these are true. This list is the shared definit
 - [ ] Migrations, if any, in the right stream and replayable from empty — [01](01_database.md)
 - [ ] Tests written at the right level, and CI is green **without** deselecting anything — [04](04_testing.md)
 - [ ] The **live spec** reflects the new behaviour, with an honest verification marker — [06](06_documentation_lifecycle.md)
-- [ ] Every deferral logged in `followups/` + `TODO.md`, same commit
+- [ ] Every deferral logged in `followups/` + `SPINE.md`, same commit
 - [ ] `PROGRESS.md` updated
 
 ---

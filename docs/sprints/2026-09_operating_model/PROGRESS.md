@@ -2,8 +2,8 @@
 
 **Audience:** internal — excluded from the public repository (lifecycle §10.4).
 
-> **Status: OM-01 landed; the rest not started.**
-> ⚠ **Q-01…Q-07 unanswered** — they block OM-02 and OM-03. OM-04, OM-05 and OM-06 can start today.
+> **Status: OM-01 and OM-02 landed.** ✅ **Q-01…Q-07 answered 2026-09-04** — everything is unblocked.
+> **OM-03 is now the one that matters**: without it the register is unvalidated and every rule in `07` is a preference.
 > Tracker skeleton — fill as work lands, not at the end.
 > Sprint: [`README.md`](README.md) · Why: [`DESIGN-operating-model.md`](DESIGN-operating-model.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 
@@ -12,8 +12,8 @@
 | Ticket | Stream | State | Verification | Branch | Notes |
 |---|---|---|---|---|---|
 | OM-01 standard | — | ✅ done | `implemented` — *the standard is not in force; §11 is the gap list* | `dev/operating-model` | Landed with the sprint's first commit |
-| OM-02 register | A | ⬜ proposed | — | — | ⛔ Q-01…Q-04 |
-| OM-03 test | A | ⬜ proposed | — | — | ⛔ after OM-02; **not optional** |
+| OM-02 register | A | ✅ done | `implemented` | `dev/operating-model` | [`SPINE.md`](../../SPINE.md) · 64 rows absorbed from `TODO.md` · `PROGRESS.md` § *In progress / next* deleted · 07 §1.2/§5 reconciled |
+| OM-03 test | A | ⬜ **ready** | — | — | ⭐ **Next, and not optional** — the register is unvalidated until it exists |
 | OM-04 intake gate | B | ⬜ ready | — | — | ✅ can start |
 | OM-05 product + roadmap | B | ⬜ ready | — | — | ✅ can start (Q-09 reco is safe) |
 | OM-06 amendments | B | ⬜ ready | — | — | ✅ can start |

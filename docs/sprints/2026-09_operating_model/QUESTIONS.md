@@ -6,8 +6,8 @@
 > carries **my recommendation**, and several carry a fact I verified so you are not answering blind.
 > **Write your answer on the `> **Answer:**` line** — "follow reco" is a complete answer where you agree.
 >
-> **Q-01…Q-04 block OM-02** (the register). **Q-05…Q-07 block OM-03** (its test). **Q-08…Q-10 change
-> scope but block nothing.** OM-01 (the standard) is already landed and needs no answer here.
+> ✅ **ALL ANSWERED 2026-09-04.** Q-01…Q-07 answered by the owner — **OM-02 and OM-03 are unblocked.**
+> Q-08…Q-10 were left blank and are proceeding on their recommendations, marked as such inline.
 
 ---
 
@@ -25,7 +25,7 @@
 **Recommendation:** **one file.** Merge conflicts on a register are *correct behaviour* — two agents
 claiming the same ID should collide loudly, and rows are one line each so the conflict is trivial.
 
-> **Answer:**
+> **Answer:**one file
 
 ### Q-02 · Do we adopt a tracker, and when?
 
@@ -65,7 +65,7 @@ April, a stale "must fix before demo (May 10)" section, and stale active/queued 
 into, and `sprints/README.md` promises a future clean-up sprint against *"a complete, measured list"*.
 They must land in the register as `kind: debt`, not be dropped.
 
-> **Answer:**
+> **Answer:**absorb
 
 ### Q-04 · Does `docs/PROGRESS.md` survive, and in what form?
 
@@ -77,7 +77,7 @@ the one that contradicts the file's own header (DESIGN §1.1).
 deviations record; **"In progress / next" is deleted** and replaced by a pointer to the register. One
 file answers "what is next"; a different file answers "how did we get here".
 
-> **Answer:**
+> **Answer:**follow reco
 
 ---
 
@@ -92,7 +92,7 @@ file answers "what is next"; a different file answers "how did we get here".
 classification is cheap and revisable, so a wrong initial guess costs a re-label. Requiring a separate
 triage step before anything can be filed is how items stop being filed.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-06 · Are `done` items kept in the register or removed?
 
@@ -100,7 +100,7 @@ triage step before anything can be filed is how items stop being filed.
 file. Removing immediately loses the ability to answer "what shipped this month" without git
 archaeology; keeping forever grows the file unbounded and slows every read.
 
-> **Answer:**
+> **Answer:**move to archive
 
 ### Q-07 · How is a `GRM-###` ID allocated when two agents work in parallel?
 
@@ -108,7 +108,7 @@ archaeology; keeping forever grows the file unbounded and slows every read.
 double-claim as a merge conflict. ⚠ The alternative (a counter file, or a script) adds machinery to
 prevent a conflict that is one line to resolve and that we *want* to be visible.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ---
 
@@ -124,7 +124,7 @@ tension: §1.2 says small work is *"a register row and a PR"*, while §5 gives a
 read, and rule 6.1's whole claim is that every row is actionable. A chore is a PR and nothing else.
 Whichever way this is answered, **07 §1.2 and §5 must be made to agree** — that edit is part of OM-02.
 
-> **Answer:**
+> **Answer:** ⚠ **No answer given 2026-09-04. Proceeding on the recommendation above** — it is reversible and blocks nothing. Say the word and it flips.
 
 ### Q-09 · What horizon does `docs/ROADMAP.md` use?
 
@@ -135,7 +135,7 @@ Whichever way this is answered, **07 §1.2 and §5 must be made to agree** — t
 field that makes a `DECISIONS.md` entry re-evaluable). ⚠ If an external commitment needs dates, that is
 a different document with a different audience — do not make the internal roadmap carry it.
 
-> **Answer:**
+> **Answer:** ⚠ **No answer given 2026-09-04. Proceeding on the recommendation above** — it is reversible and blocks nothing. Say the word and it flips.
 
 ### Q-10 · Does this sprint govern itself?
 
@@ -143,4 +143,4 @@ a different document with a different audience — do not make the internal road
 day one, and land in the register as OM-02's first rows. If the model is awkward on the sprint that
 invented it, that is the cheapest possible moment to find out.
 
-> **Answer:**
+> **Answer:** ⚠ **No answer given 2026-09-04. Proceeding on the recommendation above** — it is reversible and blocks nothing. Say the word and it flips.

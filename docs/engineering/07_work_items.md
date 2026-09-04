@@ -1,7 +1,7 @@
 # Work items — intake, classification, and gates
 
 **Status:** authoritative (2026-09-04) — ⚠ **adopted, not yet in force.** §11 lists exactly which rules the repository does not satisfy yet, and the sprint that closes each one. Nothing here supersedes an existing standard; it decides **which of them apply to a given piece of work, and when that is decided.**
-**Last updated:** 2026-09-04 — created; `G-RELEASE` gains the version-tag requirement, and §11 row 8 closes: the repository is private as of 2026-09-04, so the tracker is now available (D-009/D-010).
+**Last updated:** 2026-09-04 — §1.2/§5 reconciled (a chore gets no register row, Q-08); §11 rows 1 and 7 close with `SPINE.md`. Earlier: `G-RELEASE` gains the version-tag requirement; §11 row 8 closes on D-009/D-010.
 **Audience:** public.
 **Reads with:** [`00_engineering_index.md`](00_engineering_index.md) (the ten rules and the shared definition of done) · [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) (tiers, promotion, honesty markers) · [`../sprints/README.md`](../sprints/README.md) (the standing deferral rule).
 
@@ -25,10 +25,10 @@ Those are two axes and they must not be collapsed. Ceremony attached to the *lab
 | Level | Grain | Home |
 |---|---|---|
 | **Roadmap** | outcomes, quarters | `docs/ROADMAP.md` ⚠ *not built* |
-| **Lane** | a sprint (a themed batch sharing one design and one questions register), **or** the standing lane | `docs/sprints/<sprint>/`, or no folder at all |
+| **Lane** | a sprint (a themed batch sharing one design and one questions register), **or** the standing lane | `docs/sprints/<sprint>/`, or no folder at all — every lane's items appear in [`SPINE.md`](../SPINE.md) |
 | **Item** | one unit of merge — one PR, one observable outcome, one gate profile | a row in the register; a spec file only if its profile requires one |
 
-**Rule 1.2 — Not everything gets a sprint.** A sprint is for work that shares a design and a set of questions. A bug, a chore, or a small deviation goes in the **standing lane**: a register row and a PR, with no folder, no design note and no questions register. *Why: before this rule, small work had two options — justify a sprint folder, or be invisible. Both are wrong, and the second is what actually happened.*
+**Rule 1.2 — Not everything gets a sprint.** A sprint is for work that shares a design and a set of questions. A bug or a small deviation goes in the **standing lane**: a register row and a PR, with no folder, no design note and no questions register. ⭐ **A chore gets no row at all** — a PR and a one-line rationale ([Q-08](../sprints/2026-09_operating_model/QUESTIONS.md)): a register that fills with dependency bumps stops being read, and rule 6.1's whole claim is that every row is actionable. *Why: before this rule, small work had two options — justify a sprint folder, or be invisible. Both are wrong, and the second is what actually happened.*
 
 **Rule 1.3 — A sprint is a view over items, not a second registry.** Sprint folders hold the detail; the register holds every open item across all lanes. *Why: five separate registries is the condition this standard exists to end (§11).*
 
@@ -101,7 +101,7 @@ Presets produced by §4. A preset is what people actually use; the derivation is
 | **Schema / migration** | **DATA** · SPEC · TEST · RELEASE | migration in the owning stream · replay-from-empty evidence · spec edit · rollback note | S–M |
 | **Bug** | **TEST** · VERIFY · RELEASE | reproduction · failing test first · fix · **no spec edit** (see 2.3) | S |
 | **Deviation** | PRODUCT *(the fork only)* · **SPEC** · TEST (+ DATA / SENSITIVE / CONTRACT as they apply) | which spec + section · which side moves and why · a [`../DECISIONS.md`](../DECISIONS.md) entry if it is a real fork | S–M |
-| **Chore** | TEST | a one-line rationale in the commit | XS |
+| **Chore** | TEST | a one-line rationale in the commit — **and no register row** (§1.2) | XS |
 
 Read **Bug** against **Deviation**: a bug carries no spec gate because the spec was right; a deviation is almost nothing but a spec gate because the spec was wrong. The four-question test tells you which one you are in, and everything else follows.
 
@@ -153,7 +153,7 @@ Read **Bug** against **Deviation**: a bug carries no spec gate because the spec 
 |---|---|
 | Inbox — raw reports, reviewer feedback, half-formed ideas, duplicates | tracker |
 | Conversation — "is this real?", "did you mean X?" | tracker |
-| **Register** — every *ready* item: id · kind · profile · scheduling state · verification level · size · lane · owner | **repo** — `docs/SPINE.md` ⚠ *not built* |
+| **Register** — every *ready* item: id · kind · profile · scheduling state · verification level · size · lane · owner | **repo** — [`docs/SPINE.md`](../SPINE.md) ✅ |
 | **Item spec** — only where the profile requires one | **repo** — sprint folder, or `docs/items/` |
 | **Roadmap** | **repo** — `docs/ROADMAP.md` ⚠ *not built* |
 
@@ -177,12 +177,12 @@ At sprint close, the existing audit ([`06`](06_documentation_lifecycle.md) §3c)
 
 | # | Not yet true | Closed by |
 |---|---|---|
-| 1 | **There is no register.** `docs/SPINE.md` does not exist. Open work lives in `docs/TODO.md`, per-sprint trackers and `docs/sprints/README.md` — which disagree with each other (see the sprint's `DESIGN`). | OM-02 |
+| 1 | ✅ **Closed 2026-09-04.** [`docs/SPINE.md`](../SPINE.md) exists; `TODO.md` is retired behind a forwarding stub and its 64 open rows are the register's backlog. ⚠ **Nothing validates it yet** — see row 3. | OM-02 |
 | 2 | **There is no roadmap.** `docs/ROADMAP.md` does not exist, and no document defines the MVP or what "launched" means. | OM-05 |
 | 3 | **Nothing validates any of this.** `tests/repo/test_spine.py` does not exist, so every rule above is currently a preference. | OM-03 |
 | 4 | **The sensitive-path checklist is still evaluated at merge only** (`.github/PULL_REQUEST_TEMPLATE.md`), contrary to rule 4.3. | OM-04 |
 | 5 | **The design gate (G-DESIGN) is not written down** in [`05_frontend.md`](05_frontend.md); it has been followed once, by instinct, for the settings redesign. | OM-06 |
 | 6 | **The verification ladder is not in [`06`](06_documentation_lifecycle.md) §4**, which today carries document honesty markers only — not item states. | OM-06 |
-| 7 | **Five intake vocabularies still coexist** and share no identifier: the issue templates (`bug`/`enhancement` + Area), the PR sensitive-path list, sprint ticket IDs, the deviations/`followups`/TODO debt trail, and the triage vocabulary proposed by the review-feedback-loop sprint. | OM-02, OM-07 |
+| 7 | 🟡 **Partly closed 2026-09-04** — the deferral trail and the sprint trackers now resolve to one register. **Three vocabularies still coexist** and share no identifier: the issue templates (`bug`/`enhancement` + Area), the PR sensitive-path list, sprint ticket IDs, the deviations/`followups`/TODO debt trail, and the triage vocabulary proposed by the review-feedback-loop sprint. | OM-02, OM-07 |
 | 8 | **The tracker is decided and now available, but not wired.** [D-010](../DECISIONS.md) is ✅ **done** — the repository went private 2026-09-04 — so **GitHub Issues + Projects** is usable. Nothing is generated from it yet, and rule 9.3's pinning test does not exist. | OM-07 |
-| 9 | **The standard binds new items only.** The ~40 open rows in `docs/TODO.md` are classified as they are scheduled, not in a big-bang pass. *This is a deliberate scope decision, not an oversight.* | — |
+| 9 | **The standard binds new items only.** The 64 rows absorbed from `TODO.md` into [`SPINE.md`](../SPINE.md) § *Backlog* carry an id and a home, **not a classification** — kind, profile and state are confirmed when each is scheduled ([Q-05](../sprints/2026-09_operating_model/QUESTIONS.md)). *A deliberate scope decision, not an oversight.* | — |

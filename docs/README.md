@@ -2,7 +2,7 @@
 
 **Status:** index — the map of the tree, not a spec in itself.
 **Audience:** public — published with the open-source repository.
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-04 — `SPINE.md` added as the register; `TODO.md` retired behind it (OM-02). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
@@ -47,7 +47,8 @@ The full reasoning, and why each workaround is worse than the gap, is [lifecycle
 | | [`dpg/`](dpg/) | Digital Public Good qualification: compliance status + evidence pack | 🌍 public |
 | | [`DECISIONS.md`](DECISIONS.md) | Forks taken: chosen, rejected, what would change the answer | 🌍 public |
 | | [`_starter_kit/`](_starter_kit/) | Portable skeleton of the standards, for reuse on a new project | 🌍 public |
-| | `PROGRESS.md`, `TODO.md` | Operational build log and open gaps — logs, not specs (§1.3) | 🔒 internal |
+| | `SPINE.md` | **The register — what is next.** One row per item; governed by [`engineering/07_work_items.md`](engineering/07_work_items.md) | 🔒 internal |
+| | `PROGRESS.md`, `TODO.md` | Build log, and the retired backlog — logs, not specs (§1.3) | 🔒 internal |
 | | `reviews/` | Devil's-advocate reviews — dated opinions, adversarial scoring | 🔒 internal |
 | | `sprints/` | One folder per sprint; originals under `sprints/archive/` | 🔒 internal |
 
@@ -64,7 +65,8 @@ publishing it. **A folder's audience is a default; a document may override it**,
 | Document | Description |
 |---|---|
 | [`PROGRESS.md`](PROGRESS.md) | Current build state, demo DB, deviations, commit log |
-| [`TODO.md`](TODO.md) | Open gaps, post-demo backlog, tech debt |
+| [`SPINE.md`](SPINE.md) | **The register** — every open item with its kind, profile, state and verification level |
+| [`TODO.md`](TODO.md) | ⚠ **Retired 2026-09-04** — a forwarding stub. Full file: [`sprints/archive/TODO-2026-09-04.md`](sprints/archive/TODO-2026-09-04.md) |
 | [`ARCHIVING_AND_RETENTION.md`](ARCHIVING_AND_RETENTION.md) | Resolved-case archiving schedule, `archiving_policy` settings, attachment tiering |
 | [`models/01_seah_detection_benchmark.md`](models/01_seah_detection_benchmark.md) | **How a model change on the SEAH path is tested** — where the examples come from (authored by the Nepal team, never real cases), how many are needed, and why the set screens rather than ranks. ⚠ The dataset itself is deliberately **not** in this repository |
 

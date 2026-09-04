@@ -23,7 +23,7 @@ body:
           required: true
         - label: I have redacted all real complainant data, contact details and credentials
           required: true
-        - label: I checked `docs/TODO.md` and the current sprint tracker; this is not already known
+        - label: I checked `docs/SPINE.md` and the current sprint tracker; this is not already known
           required: false
 
   - type: textarea
