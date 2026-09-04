@@ -3,6 +3,8 @@
 """Public auth endpoints (login + password reset). No JWT required."""
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -12,10 +14,13 @@ from ticketing.services.auth_login import (
     INVITE_SETUP_LINK_GENERIC,
     AuthLoginError,
     login_with_password,
+    logout_with_refresh_token,
     request_invite_setup_link,
     request_password_reset,
     reset_password_with_token,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -31,6 +36,10 @@ class LoginResponse(BaseModel):
     refresh_token: str | None = None
     expires_in: int
     token_type: str = "Bearer"
+
+
+class LogoutRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=10, max_length=8192)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -126,3 +135,28 @@ def auth_reset_password(body: ResetPasswordRequest, db: Session = Depends(get_db
     if sync_officer_onboarding_status(db, email):
         db.commit()
     return MessageResponse(message="Your password has been updated. You can sign in now.")
+
+
+@router.post(
+    "/auth/logout",
+    response_model=MessageResponse,
+    summary="Revoke a refresh token issued to the confidential API client",
+)
+def auth_logout(body: LogoutRequest) -> MessageResponse:
+    """End the Keycloak session for a password-login token.
+
+    ⚠ **Deliberately not JWT-gated.** The refresh token *is* the credential, and the access token is
+    routinely gone by the time a user signs out — requiring a valid one would make this fail in the
+    stale-session case that is the only case it is needed for.
+
+    ⚠ **Always answers 200.** A sign-out that reports failure invites a UI that keeps the user signed
+    in, which is the wrong direction to fail: the client clears its storage regardless, so a server
+    error must not turn "revoke failed" into "still logged in here". The failure is logged and shows
+    up as a `LOGOUT_ERROR` in the realm event log, which is where it belongs.
+    """
+    try:
+        logout_with_refresh_token(body.refresh_token)
+    except AuthLoginError as exc:
+        logger.warning("auth_logout: revoke did not complete (%s)", exc.code)
+        return MessageResponse(message="Signed out.")
+    return MessageResponse(message="Signed out.")

@@ -81,9 +81,45 @@ async function doRefresh(): Promise<string | null> {
  * Back-channel logout: invalidate the refresh token (and its Keycloak session)
  * server-side. `keepalive` so it survives the imminent front-channel navigation.
  * Best-effort — a failed revoke must not block sign-out.
+ *
+ * ⚠ **Which endpoint depends on which client issued the token, and getting this wrong is
+ * silent.** Until 2026-09-03 this always posted to Keycloak with `client_id` alone:
+ *
+ * - **PKCE login** (`azp = ticketing-ui`) — a *public* client, so `client_id` alone is
+ *   accepted. This path always worked.
+ * - **Password login** (`azp = ticketing-api`) — a *confidential* client. Keycloak demands a
+ *   `client_secret`, which a browser must never hold, so every revoke on this path was
+ *   rejected with `invalid_client_credentials`. It goes through the API instead, which is
+ *   where the secret already lives for the matching password grant.
+ *
+ * ⭐ **Nothing surfaced the bug for as long as it existed**: the result is discarded, by design,
+ * so there is no symptom in the browser. It was found in the Keycloak realm event log within
+ * minutes of that log being switched on — see `docs/dpg/00_compliance_status.md` §8.
  */
-function revokeRefreshToken(issuer: string, clientId: string, refreshToken: string): void {
+function revokeRefreshToken(
+  issuer: string,
+  clientId: string,
+  refreshToken: string,
+  azp: string | undefined,
+): void {
   try {
+    // ⚠ Prefer the REFRESH TOKEN's own `azp` over the id_token's. On the `sessionStale` path —
+    // the one case where this revoke is the only thing ending the session — the id_token is
+    // routinely missing or expired, so an id_token-derived `azp` is `undefined` exactly when it
+    // matters most, and we would fall back to the public-client call that cannot work.
+    const tokenAzp = decodeJwt(refreshToken)?.azp;
+    const issuedTo = (typeof tokenAzp === "string" ? tokenAzp : undefined) ?? azp;
+
+    if (issuedTo && issuedTo !== clientId) {
+      // Confidential client: only the server can authenticate this revoke.
+      void fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        keepalive: true,
+      });
+      return;
+    }
     void fetch(`${issuer}/protocol/openid-connect/logout`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -219,7 +255,7 @@ export class OIDCAuthClient {
     // Revoke the refresh token server-side before we leave. Matters most on the
     // sessionStale path below, which skips the front-channel logout entirely and
     // would otherwise leave a live refresh token behind.
-    if (refreshToken) revokeRefreshToken(this.issuer, this.clientId, refreshToken);
+    if (refreshToken) revokeRefreshToken(this.issuer, this.clientId, refreshToken, azp);
 
     clearAuthStorage();
 

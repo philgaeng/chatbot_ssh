@@ -186,6 +186,59 @@ def _parse_token_error(resp: httpx.Response) -> tuple[str, str]:
         return "", resp.text[:200]
 
 
+def logout_with_refresh_token(refresh_token: str) -> None:
+    """Revoke a refresh token issued to the confidential `ticketing-api` client.
+
+    ⭐ **Why this exists on the server at all.** The browser cannot do it. `ticketing-api` is a
+    confidential client, so Keycloak's logout endpoint demands a `client_secret` — and a secret a
+    public SPA can reach is not a secret. The mirror image of `login_with_password`: the password
+    grant runs here for the same reason, and the revoke has to live where the credential already is.
+
+    ⚠ **The defect this closes was invisible for as long as it existed.** The UI posted the revoke
+    directly with `client_id` alone; Keycloak rejected every one with `invalid_client_credentials`,
+    and the browser discarded the result (`void fetch`, "best-effort"). It surfaced only once realm
+    event logging was switched on, in the first real logout it recorded.
+
+    **Impact it closes, stated narrowly:** after an ordinary logout the front-channel call ends the
+    session anyway, so this is redundant. It is load-bearing on the *stale session* path, which skips
+    the front channel by design — there, this is the only thing that ends the session, and a failure
+    left a live refresh token behind.
+
+    Raises `AuthLoginError` so the caller can decide; sign-out must never be blocked by it.
+    """
+    if not keycloak_configured():
+        raise AuthLoginError("auth_unavailable", "Authentication is not configured.", 503)
+    if not refresh_token or not refresh_token.strip():
+        raise AuthLoginError("invalid_token", "A refresh token is required.", 422)
+
+    settings = get_settings()
+    logout_url = f"{_keycloak_realm_base()}/protocol/openid-connect/logout"
+    try:
+        resp = httpx.post(
+            logout_url,
+            data={
+                "client_id": settings.keycloak_client_id,
+                "client_secret": _api_client_secret(),
+                "refresh_token": refresh_token,
+            },
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=10.0,
+        )
+    except httpx.HTTPError as exc:
+        logger.warning("Keycloak logout request failed: %s", exc)
+        raise AuthLoginError("auth_unavailable", "Sign-out service is unavailable.", 503) from exc
+
+    # 204 is success. Keycloak answers 400 for a token that is already invalid or expired, which is
+    # the desired end state — treat it as done rather than as an error the UI has to interpret.
+    if resp.status_code in (200, 204, 400):
+        return
+
+    err, desc = _parse_token_error(resp)
+    # ⚠ Never log the token. The id is in the caller's own request context.
+    logger.warning("Keycloak logout rejected (%s): %s", resp.status_code, err or desc)
+    raise AuthLoginError("logout_failed", "Could not sign out on the server.", 502)
+
+
 def login_with_password(email: str, password: str) -> dict[str, Any]:
     """Resource-owner password grant via confidential ticketing-api client."""
     if not keycloak_configured():
