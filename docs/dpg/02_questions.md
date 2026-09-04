@@ -1,7 +1,7 @@
 # Questions for the DPG consultant
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-03 · derived from `00_compliance_status.md`; regenerate rather than edit
 
 > ⚠ **Generated file — do not edit.** These questions live under the indicator they belong to
 > in [`00_compliance_status.md`](00_compliance_status.md), next to the evidence behind them.

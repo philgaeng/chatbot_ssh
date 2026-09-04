@@ -273,3 +273,53 @@ git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why
 - [ ] `PROGRESS.md` updated
 - [ ] Relative links resolve (CI link job)
 - [ ] If a doc moved: forwarding line added, inbound links fixed
+- [ ] **No tier-1/1b doc links into `sprints/` or `reviews/`** (§10.1) — reason folded in, pointer dropped
+- [ ] **A real fork taken? An entry in [`../DECISIONS.md`](../DECISIONS.md)** (§10.3), not a sprint citation in the spec
+- [ ] **No host IP, instance id, incident narrative, secret or staff name in a tier-1 doc** (§10.5)
+
+---
+
+## 10. Audience — which documents are public
+
+The repository is being split: a **private working repo** carrying every tier, and a **public repo**
+carrying tier 1 + 1b plus the root open-source files. That makes *"who is this written for"* a property
+every document has to carry, and it settles a question the tier model left open.
+
+**The principle, in one line:** *a live spec describes the system at time T, and needs no reference to
+how it got there.*
+
+**Rule 10.1 — A tier-1 or tier-1b document must not link into tier 2 or tier 3** (`docs/reviews/`,
+`docs/sprints/`). *Why:* a reader who must open a sprint folder to understand a rule is being asked to
+reconstruct the project's history in order to read its present — and after the split that link is a 404
+for everyone outside the team. **Enforcement:** a pinning test in
+[`tests/repo/test_doc_headers.py`](../../tests/repo/test_doc_headers.py), reusing the existing
+`SPEC_DIRS` list in [`scripts/ops/doc_headers.py`](../../scripts/ops/doc_headers.py) — **do not define a
+second list**; a hand-maintained mirror of a rule is how this repo has been bitten before (see the
+boundary-policy note in [`CLAUDE.md`](../../CLAUDE.md)).
+
+**Rule 10.2 — Removing a citation is a *fold*, not a delete.** The reason moves into the spec body in
+the same commit — this is §5.1 applied at the boundary. *Why:* a spec that loses a pointer and gains
+nothing has been **damaged, not cleaned**; it becomes a rule with no reason, which §5.1 exists to
+prevent. If the reason is too long to fold, it was a decision → 10.3.
+
+**Rule 10.3 — Provenance lives in the decision log, not in the spec.** [`docs/DECISIONS.md`](../DECISIONS.md)
+carries one dated entry per real fork: what was chosen, what was rejected, and what would change the
+answer (§5.3's content, in a public-safe form). *Why:* the spec answers *"what is true?"*; the decision
+log answers *"why not the alternative?"*; the sprint folder — internal — keeps the working detail. ⚠ It
+is **not** a changelog of every edit: git already does that better, and §3a.1 already forbids version
+numbers in specs.
+
+**Rule 10.4 — Every `docs/` folder README declares its audience**, `public` or `internal`, in its
+status header. Default: tier 1 and 1b are public; tier 2, tier 3, archive and the operational logs
+(`PROGRESS.md`, `TODO.md`) are internal.
+
+**Rule 10.5 — Internal-only content never enters a tier-1 doc:** host IPs and instance ids, incident
+narratives, credential or secret material, named staff, and adversarial scoring. *Why:* these are what
+make a document unpublishable, and finding them at publish time means rewriting a spec under time
+pressure. ⚠ **Corollary — pruning folders does not remove this class.** The staging IP is in the
+`Makefile`, an nginx conf, a script and a tracked `.claude/settings.local.json`; the instance id is in
+`TODO.md`. A publish filter that only looks at `docs/` gives false confidence.
+
+**Rule 10.6 — The public copy is generated, never hand-maintained.** A script plus an explicit prune
+list, run from the private repo. *Why:* two hand-maintained trees diverge — that is not a prediction,
+it is the same failure as every other mirror in this repo's history.

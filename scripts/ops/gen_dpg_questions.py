@@ -74,10 +74,27 @@ def extract(text: str) -> list[tuple[str, str, list[str]]]:
     return out
 
 
-def render(questions: list[tuple[str, str, list[str]]]) -> str:
+def source_as_of(text: str) -> str:
+    """The `As of YYYY-MM-DD` date from the assessment.
+
+    ⚠ **Derived, not generated at run time.** Stamping today's date would make this file change
+    on every regeneration and turn the drift test into noise. The questions are exactly as fresh
+    as the assessment they are extracted from, so that is the honest date to carry.
+    """
+    match = re.search(r"\*\*As of (\d{4}-\d{2}-\d{2})\*\*", text)
+    return match.group(1) if match else "unknown"
+
+
+def render(questions: list[tuple[str, str, list[str]]], as_of: str = "unknown") -> str:
     blocking = sum(1 for _, _, lines in questions if "🔴" in lines[0])
     parts = [
         "# Questions for the DPG consultant",
+        "",
+        # The status block every document in docs/dpg/ carries. It is emitted HERE rather than
+        # hand-added to the output, because a header patched into a generated file is stripped by
+        # the next regeneration — which is exactly what happened on 2026-09-04.
+        "**Status:** evidence pack — cited by the DPG assessment.",
+        f"**Last updated:** {as_of} · derived from `00_compliance_status.md`; regenerate rather than edit",
         "",
         "> ⚠ **Generated file — do not edit.** These questions live under the indicator they belong to",
         "> in [`00_compliance_status.md`](00_compliance_status.md), next to the evidence behind them.",
@@ -115,11 +132,12 @@ def render(questions: list[tuple[str, str, list[str]]]) -> str:
 
 
 def main() -> int:
-    questions = extract(SOURCE.read_text(encoding="utf-8"))
+    source = SOURCE.read_text(encoding="utf-8")
+    questions = extract(source)
     if not questions:
         raise SystemExit(f"{SOURCE.name}: no questions found — the extraction pattern has drifted.")
 
-    rendered = render(questions)
+    rendered = render(questions, as_of=source_as_of(source))
     check = "--check" in sys.argv
 
     if check:

@@ -8,7 +8,7 @@
 | --------------------------------------- | --------------------------------------------------------------------------- |
 | **→ `docs/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
 | **→ `docs/TODO.md`**     | Open gaps, next features, tech debt                                         |
-| **→ `docs/engineering/00_engineering_index.md`** | **HOW we build** — DB, service layer, API, tests, frontend, doc lifecycle. Binding on every change. |
+| **→ `docs/engineering/00_engineering_index.md`** | **HOW we build** — DB, service layer, API, tests, frontend, doc lifecycle, **and which docs are public** (`06` §10 — a live spec never cites a sprint). Binding on every change. |
 | **→ `docs/deployment/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
 | **→ `docs/README.md`**   | Index of the full spec tree (services, ticketing, chatbot, SEAH, deployment) |
 
