@@ -230,7 +230,7 @@ endef
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
 	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
-	release-check release-tag \
+	release-check release-tag hooks \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
@@ -369,6 +369,15 @@ aws-deploy-full:
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on staging.
 aws-deploy-ops:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_OPS,$(REMOTE_DIR_RUNNING),aws-deploy-ops)'
+
+# ── Git hooks ─────────────────────────────────────────────────────────────────
+# Hooks live in .githooks/ (committed, reviewable) rather than .git/hooks (per-clone,
+# invisible, unversioned). One command per clone points git at them.
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "hooks enabled: core.hooksPath = .githooks"
+	@echo "  pre-commit  a spec edit and its date ride the same commit (doc_headers.py --check-staged)"
+	@echo "  bypass:     git commit --no-verify   (loudly, and say why in the message)"
 
 # ── Release gate (D-009 · docs/deployment/20_release_and_versioning.md) ───────
 # A version is cut when, and only when, a build is deployed to production. The tag

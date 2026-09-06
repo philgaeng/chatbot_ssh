@@ -1,7 +1,7 @@
 # Setup — Docker-era runbook
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/02_setup.md`](archive/02_setup.md). The legacy systemd / virtualenv / `rasa train` path is gone; everything runs via Docker Compose (see [`01_architecture.md`](01_architecture.md) for the service map, [`DOCKER.md`](DOCKER.md) for day-to-day container commands).
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-06 — §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Prerequisites
 
@@ -100,6 +100,28 @@ Idempotent: creates the `grm` realm, clients, mappers, realm SMTP, demo officers
 make wsl-seed        # ticketing.seed.mock_tickets --reset (idempotent)
 ```
 
+### Repairing a drifted database WITHOUT resetting it
+
+⚠ **`--reset` is not idempotent in the sense that matters here: it wipes and re-seeds**, taking the
+projects, organizations and officers with it. On a development database carrying local setup you want
+to keep, that is too high a price for a green test run.
+
+```bash
+docker exec nepal_chatbot-backend-1 python -m ticketing.seed.ensure_officer_coverage          # report
+docker exec nepal_chatbot-backend-1 python -m ticketing.seed.ensure_officer_coverage --apply  # write
+```
+
+Fills **officer-staffing gaps only**, by inserting `ticketing.officer_scopes` rows and nothing else —
+no updates, no deletes, no Keycloak calls, and no invented officers (identity lives in Keycloak; a
+user created here is one nobody can log in as). Dry-run by default, idempotent, and it **asks the
+go-live checks whether a gap exists** rather than carrying its own copy of the rule.
+
+*The symptom it fixes:* `Ticket intake blocked: Add a Level 1 officer (wf:…:LEVEL_1_SITE:actor) for
+these packages: 01, 02, …` — and, downstream of it, every `tests/ticketing` integration test failing
+at once. **The cause is usually a level that declares `staff_per_package`**: a project-wide officer
+scope deliberately does *not* satisfy it ([`../ticketing_system/`](../ticketing_system/) · `project_go_live.py` C1), so
+each active package needs its own row. Measured 2026-09-06 on a drifted dev DB: 20 test failures, all
+from five missing rows.
 ## 5. Migration make targets (reference)
 
 | Target | Runs |

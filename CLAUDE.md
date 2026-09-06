@@ -21,8 +21,15 @@
 Before every commit:
 
 ```bash
+make hooks                                  # ONCE PER CLONE — installs the pre-commit check
 python scripts/ops/doc_headers.py --check   # every live spec dated; header bumped where the body changed
 ```
+
+**`make hooks` is the one that matters.** It points git at [`.githooks/`](.githooks/), whose
+`pre-commit` runs the same rule against the **staged** tree. Without it you still get told — but only
+*after* the commit lands, when bumping the header would have to ride a later commit, which is the very
+thing rule 1 below forbids. ⚠ Measured 2026-09-06: that is not hypothetical, it happened to the agent
+that wrote the finding. Bypass with `git commit --no-verify`, and say why in the message.
 
 1. **Change the code → change the spec.** Find the specs your change makes wrong (`docs/README.md` is the map) and fix them in the same commit. `docs/engineering/06_documentation_lifecycle.md` §3 has the promotion rule; §4 the honesty markers for behaviour that is merged but unverified.
 2. **Bump `**Last updated:**` on every spec you touch** — enforced by [`tests/repo/test_doc_headers.py`](tests/repo/test_doc_headers.py), forward-only from 2026-09-04. You cannot edit a spec's body and leave its date claiming an older review.

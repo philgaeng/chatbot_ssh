@@ -85,5 +85,5 @@ shipped a gate that ran on nobody's machine.
 | [`PROGRESS.md`](PROGRESS.md) | Tracker — status, deviations, measurements |
 | `01`–`08` | The ticket specs |
 
-**Source material:** `resources/01`–`03` — the three assessments of 2026-09-04 that produced this sprint.
+**Source material:** `resources/01`–`03` — the three assessments of 2026-09-04 that produced this sprint. ⚠ **Not committed** ([A-5](PROGRESS.md), 2026-09-06): local paths, not repository paths.
 They are the reasoning; this folder is the plan.
