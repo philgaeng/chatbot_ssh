@@ -97,6 +97,70 @@ SEAH_PROVIDERS_IMPORT_SCRIPT = scripts/database/import_seah_service_providers_xl
 SEAH_PROVIDERS_CSV = scripts/database/seeds/seah_service_providers_kl_road.csv
 SEAH_PROVIDERS_SEED_CMD = python $(SEAH_PROVIDERS_IMPORT_SCRIPT) --from-csv --csv $(SEAH_PROVIDERS_CSV)
 
+# ── How a deploy gets its images: pull, or build on the box (QA-02 scope 3) ───────────────
+#
+# `DEPLOY_BUILD=1` builds on the host, which is what every deploy did until QA-02 and what
+# **production still does**. `DEPLOY_BUILD=0` pulls images CI already built.
+#
+# ⚠ **The default is 1 — build — and that is deliberate.** All four deploy macros are shared
+# between the `aws-*` and `prod-*` targets, so a default of 0 would silently convert production
+# to pulling from a registry nobody has confirmed it can reach: `curl -sI https://ghcr.io/v2/`
+# has never been run from the DOR box (Q-05), and it is VPN-only, so the failure would land in a
+# maintenance window with no quick way back. The `aws-*` targets opt **in** to pulling; prod
+# opts in the day someone answers that question.
+#
+# Escape hatches, both directions, and both are real:
+#   make aws-deploy DEPLOY_BUILD=1        # registry unreachable — fall back to building
+#   make prod-deploy DEPLOY_BUILD=0       # ⚠ only once Q-05 is answered for the DOR host
+DEPLOY_BUILD ?= 1
+
+# Which images a pulling deploy asks for. Empty means `local`, which exists only on a dev box —
+# so a pulling deploy demands an explicit tag rather than failing later with a registry 404.
+IMAGE_TAG ?=
+UI_IMAGE_TAG ?=
+IMAGE_REGISTRY ?=
+
+# Exported into every remote command so the compose files on the host resolve the same tags.
+# `${VAR:-default}` in compose treats empty as unset, so passing these through blank is safe.
+REMOTE_IMAGE_ENV = IMAGE_TAG=$(IMAGE_TAG) UI_IMAGE_TAG=$(UI_IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+
+# $(1)=services, $(2)=deploy label. The one place the pull/build choice is made.
+define REMOTE_ACQUIRE_IMAGES
+if [ "$(DEPLOY_BUILD)" = "1" ]; then \
+	echo "$(2): DEPLOY_BUILD=1 — building on the host (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
+	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(1),$(2)); \
+else \
+	if [ -z "$(IMAGE_TAG)" ] || [ "$(IMAGE_TAG)" = "local" ]; then \
+		echo "ERROR: $(2) is a pulling deploy (DEPLOY_BUILD=0) but IMAGE_TAG is '$(IMAGE_TAG)'."; \
+		echo "  Pass the commit to deploy:  make $(2) IMAGE_TAG=<short-sha>"; \
+		echo "  That is also the rollback:  make $(2) IMAGE_TAG=<an-older-sha>"; \
+		echo "  To build on the box instead: make $(2) DEPLOY_BUILD=1"; \
+		exit 1; \
+	fi; \
+	echo "$(2): pulling images at IMAGE_TAG=$(IMAGE_TAG)" && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) pull $(1); \
+fi
+endef
+
+# $(1)=services, $(2)=label. What is ACTUALLY running, after `up -d`, per service.
+#
+# ⚠ **This exists because a pulling deploy can succeed while changing nothing.** If IMAGE_TAG is
+# not bumped, `up -d` is a no-op and the deploy prints OK having deployed the previous build —
+# the same class of failure as the 2026-09-04 OK line that verified two ports and nothing else.
+# A digest is the only answer to "is the running container the commit I asked for", and it is
+# cheap enough to print on every deploy.
+define REMOTE_REPORT_DIGESTS
+echo "$(2): running images —" && \
+for svc in $(1); do \
+	cid="$$($(REMOTE_COMPOSE) ps -q $$svc 2>/dev/null | head -1)"; \
+	if [ -n "$$cid" ]; then \
+		img="$$(docker inspect --format '{{.Config.Image}}' $$cid 2>/dev/null)"; \
+		dig="$$(docker inspect --format '{{index .Image}}' $$cid 2>/dev/null | cut -c1-19)"; \
+		printf '  %-18s %s  %s\n' "$$svc" "$$img" "$$dig"; \
+	fi; \
+done
+endef
+
 # $(1)=space-separated service names, $(2)=deploy label — one image at a time (no parallel build).
 define REMOTE_BUILD_SERVICES_SEQUENTIAL
 for svc in $(1); do \
@@ -122,10 +186,10 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "$(3): rebuilding $(2) (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
-	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(2),$(3)) && \
+	$(call REMOTE_ACQUIRE_IMAGES,$(2),$(3)) && \
 	echo "$(3): starting $(2)" && \
-	$(REMOTE_COMPOSE) up -d $(2) && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(2) && \
+	$(call REMOTE_REPORT_DIGESTS,$(2),$(3)) && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
@@ -142,12 +206,11 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "$(2): building ops" && \
-	$(REMOTE_COMPOSE) build --pull ops && \
+	$(call REMOTE_ACQUIRE_IMAGES,ops,$(2)) && \
 	echo "$(2): ops migration (ops.* schema + ops_app role)" && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head && \
 	echo "$(2): starting ops" && \
-	$(REMOTE_COMPOSE) up -d ops && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d ops && \
 	$(REMOTE_COMPOSE) ps ops
 endef
 
@@ -188,9 +251,9 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git reset --hard origin/$(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
-	echo "$(3): rebuilding $(2) (sequential)" && \
-	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL,$(filter-out nginx,$(2)),$(3)) && \
-	$(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
+	$(call REMOTE_ACQUIRE_IMAGES,$(filter-out nginx,$(2)),$(3)) && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
+	$(call REMOTE_REPORT_DIGESTS,$(filter-out nginx,$(2)),$(3)) && \
 	$(REMOTE_COMPOSE) up -d --force-recreate nginx && \
 	ui_auth_port="$$(docker compose --env-file env.local \
 	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
@@ -207,13 +270,9 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "full deploy: building all compose services sequentially" && \
-	for svc in $$($(REMOTE_COMPOSE) config --services); do \
-		echo "full deploy: build $$svc" && \
-		$(REMOTE_COMPOSE) build --pull "$$svc" || exit 1; \
-	done && \
+	$(call REMOTE_ACQUIRE_IMAGES,$$($(REMOTE_COMPOSE) config --services),full deploy) && \
 	echo "full deploy: starting stack" && \
-	$(REMOTE_COMPOSE) up -d && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
@@ -353,20 +412,29 @@ aws-up:
 	$(COMPOSE_AWS_AUTH) up -d --build
 
 # Remote deploy: pull integration/stage, migrations, rebuild selected services (default GRM UI/API + messaging backend).
+# ── Staging pulls; production still builds (QA-02 scope 3) ───────────────────────────────
+# These four opt IN to pulling CI-built images. `prod-*` deliberately does not: nobody has run
+# `curl -sI https://ghcr.io/v2/` from the VPN-only DOR host yet (Q-05), so converting it would
+# be a change nobody has tested landing in a maintenance window. Override per invocation —
+# `make aws-deploy DEPLOY_BUILD=1` falls back to building if the registry is unreachable.
+aws-deploy: DEPLOY_BUILD = 0
 aws-deploy:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
 
 # Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
+aws-deploy-light: DEPLOY_BUILD = 0
 aws-deploy-light:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_LIGHT,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_LIGHT_SERVICES),aws-deploy-light)'
 
 # Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
+aws-deploy-full: DEPLOY_BUILD = 0
 aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on staging.
+aws-deploy-ops: DEPLOY_BUILD = 0
 aws-deploy-ops:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_OPS,$(REMOTE_DIR_RUNNING),aws-deploy-ops)'
 
