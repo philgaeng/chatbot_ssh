@@ -19,9 +19,33 @@ This ticket does not fix the cause (that is QA-02). It makes the failure mode su
 1. **Swap on the staging host.** A 4 GB swapfile, `vm.swappiness` left at default, persisted in
    `/etc/fstab` so it survives reboot. Delivered as an **idempotent script** — `scripts/ops/add_swap.sh`
    — not a one-off shell session, so prod and any future host get the same treatment.
-2. **Cap the Next build heap.** `NODE_OPTIONS=--max-old-space-size=<MB>` in the **builder stage** of
+2. **Cap the Next build heap.** ~~`NODE_OPTIONS=--max-old-space-size=<MB>` in the **builder stage** of
    `channels/ticketing-ui/Dockerfile`, exposed as a build ARG so it is tunable per host. The point is
-   that the build **fails loudly at its own limit instead of taking the host down with it.**
+   that the build **fails loudly at its own limit instead of taking the host down with it.**~~
+
+   > ⚠ **CORRECTED 2026-09-06, before implementation — as specified this cannot do what it says.**
+   > **Next deletes `--max-old-space-size` from every static-generation worker, deliberately:**
+   > `node_modules/next/dist/lib/worker.js:73-76` does `delete nodeOptions['max-old-space-size']`
+   > when `isolatedMemory` is set, and `dist/build/index.js:350` sets it for the static pool with the
+   > comment *"remove --max-old-space-size flag as it can cause memory issues."* So the cap binds
+   > **only the top-level build process**.
+   >
+   > **And that is not where the memory is.** Measured 2026-09-06 (WSL dev box, 22 cores, sampling
+   > every 250 ms): peak **single** process **866 MB**, peak **aggregate 4549 MB across 36
+   > processes**. ⭐ **A per-process cap over a many-process build bounds nothing that was ever the
+   > problem.**
+   >
+   > **What does bound it:** `experimental.cpus` in `next.config.ts` sizes the static worker pool
+   > (`getNumberOfWorkers`, `dist/build/index.js:309`) — cap the pool and you cap the total.
+   > **Recommendation:** set `experimental.cpus` for the build, keep the heap cap as a secondary
+   > guard on the main process (866 MB measured, so 1536 has real headroom), and **measure on
+   > staging** — 22 cores here is not a proxy for 2 vCPU there.
+   >
+   > ⚠ **Also carry over from QA-04a:** add `ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` to the builder
+   > while you are in that stage — as **future-proofing against an unpin**, not for the reason
+   > QA-04 gave. Verified at `@playwright/test@1.63.0`: no package in the chain has an install
+   > script, and a builder-stage `npm ci` downloads no browsers (+18.4 MB on a 726 MB tree).
+
    ⭐ **Delete the dead `deps` stage while you are in there** (`Dockerfile:5-8`). It runs
    `npm ci --omit=dev` and **nothing ever does `COPY --from=deps`** — the runner copies only from
    `builder`. So every UI build runs `npm ci` twice, on a host with 3825 MB and no swap, and half of it
@@ -52,6 +76,11 @@ applied to staging only here.
 ⚠ **`1536` is a starting value, not a measured one.** Measure the real peak (`/usr/bin/time -v npm run
 build`, or `docker stats` during a build) and set the default just above it. Too low turns every deploy
 into a failed build; the whole point is that it fails *before* the host does.
+
+> ✅ **Measured 2026-09-06 — and `/usr/bin/time -v` alone would have misled you.** Its "maximum
+> resident set size" reports the largest **single** process (866 MB here), not the sum. Sampling
+> `ps` every 250 ms through the build gives the number that matters: **4549 MB across 36
+> processes**. Use the sampling method, and take it on the host the cap is meant to protect.
 
 ## Acceptance
 
