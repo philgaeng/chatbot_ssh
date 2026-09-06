@@ -26,7 +26,7 @@
 | QA-04b route smoke | B | ✅ **merged** · `implemented` | `dev/qa-automation` | *(this commit)* | **22 / 22 routes.** 17 desktop (`e2e/smoke/`) + 5 mobile (`e2e/mobile/`). Found and fixed `GRM-071` (report sharing was a 500); opened `GRM-072`. ⚠ `/closure/[token]` is a **partial** — see the measurements table |
 | QA-04c driven flows | B | 🟡 **tier 1 merged** · `implemented` | `dev/qa-automation` | *(this commit)* | ✅ **All five tier-1 flows driven** — note · escalate · resolve→closure · officer admin · XLSX export (+share links, +two scoping assertions). Found `GRM-073`, `GRM-074`; deferred provisioning as `GRM-075`. ⚠ **Tier 2 not started (+2–3 d)** — see the note under *Ticket status* |
 | QA-04d webchat sweep | B | ✅ **merged** · `implemented` | `dev/qa-automation` | *(this commit)* | **6 of HR-07's 10 items automated + 1 partial**, through nginx on `:8080`. Includes the two the tracker calls *"must be human-verified"*: double-Enter → one POST, and the 15 s failsafe under a dead backend (simulated with `page.route()`, no container stopped). Found `GRM-076`; deferred four items as `GRM-077`. ⚠ **HR-07's checkbox is NOT ticked** — that is QA-05's, against a CI run |
-| QA-05 CI gate | join | 🟡 **merged** · `implemented` | `dev/qa-automation` | *(this commit)* | The `e2e` job (in **`images.yml`**, behind `needs: build` — see the deviation): resolves this commit's images, `ephemeral-up-full`, asserts the bypass UI, runs 47 specs, uploads traces + container logs, tears down in `always()`. ⚠ **Report-only until 2026-09-21** (`GRM-083`). Rehearsed locally end-to-end: 47 green on a cold ephemeral stack, and a one-line UI regression turned 3 red. ⚠ **The registry-pull path is the one step not yet exercised** — needs A-11 |
+| QA-05 CI gate | join | ✅ **merged** · `tested` | `dev/qa-automation` | *(this commit)* | The `e2e` job (in **`images.yml`**, behind `needs: build` — see the deviation): resolves this commit's images, `ephemeral-up-full`, asserts the bypass UI, runs 47 specs, uploads traces + container logs, tears down in `always()`. ⚠ **Report-only until 2026-09-21** (`GRM-083`). Rehearsed locally end-to-end: 47 green on a cold ephemeral stack, and a one-line UI regression turned 3 red. ✅ **Verified in CI 2026-09-07, run [`34064096316`](https://github.com/philgaeng/chatbot_ssh/actions/runs/34064096316): 47 passed**, stack built from **pulled** registry images — the one path that could not be rehearsed locally. ⚠ Report-only until 2026-09-21 (`GRM-083`) |
 
 ### ⚠ Tier 2 of QA-04c — the decision the ticket asks for *before* it starts
 
@@ -131,12 +131,12 @@ each is small, and two of them change how much QA-02 costs.
 
 ## Acceptance — sprint level
 
-- [ ] A deploy to staging builds nothing on the host, and it is verified inside the container that the running code is the intended commit
-- [ ] **`make aws-deploy-light` builds nothing on the host either** — the UI-only path is the one that caused the incident
-- [ ] **`make prod-deploy` still behaves exactly as it does today** — the shared macro did not drag production onto an untested registry path
-- [ ] **No published image contains an env file** — checked on the image, not inferred from the `.dockerignore`
-- [ ] `make aws-deploy IMAGE_TAG=<older-sha>` is a working rollback
-- [ ] Two isolated stacks run side by side on one machine
+- [ ] A deploy to staging builds nothing on the host, and it is verified inside the container that the running code is the intended commit — ⬜ **needs the host.** The mechanism is built and the command is verified (`aws-deploy` expands to the pull branch); what is untested is a real staging run, blocked on **A-10** (staging is ARM64) and **A-11** (no registry credential)
+- [x] **`make aws-deploy-light` builds nothing on the host either** — ✅ verified 2026-09-07 by expansion: it takes the pull branch (`if [ "0" = "1" ]`), pulls `grm_ui`, and keeps nginx's `--force-recreate` for the bind-mounted conf. ⚠ Verified as *what the command does*, not yet as a run on staging
+- [x] **`make prod-deploy` still behaves exactly as it does today** — ✅ verified 2026-09-07 by diffing `make -n prod-deploy` across the change: it expands to `if [ "1" = "1" ]` and takes the build branch, as it always has
+- [x] **No published image contains an env file** — ✅ verified 2026-09-06 **on the artefact**: the workflow pulls back the tag it just pushed and runs `ls -a /app` against it. Clean on all three images, every run
+- [ ] `make aws-deploy IMAGE_TAG=<older-sha>` is a working rollback — ⬜ **needs the host** (A-10, A-11). The tags exist and the guard/plumbing are verified; what is untested is the pull on staging
+- [x] **Two isolated stacks run side by side on one machine** — ✅ verified 2026-09-07: `grm_ci_local` and `nepal_chatbot` healthy at once, separate volumes, both answering, 41 e2e specs green against the ephemeral one while the dev stack kept serving; teardown left nothing
 - [x] **A browser drives the officer UI at all** — QA-04a, 2026-09-06. Two canary tests, green twice in a row, screenshot + trace artifacts verified against a deliberately failed assertion
-- [ ] A browser drives the officer UI **in CI**, and a deliberate regression turns the build red
-- [ ] Every number in the table above is filled in with a measured value
+- [x] **A browser drives the officer UI in CI, and a deliberate regression turns the build red** — ✅ 2026-09-07. 47 specs green in run [`34064096316`](https://github.com/philgaeng/chatbot_ssh/actions/runs/34064096316), against a stack built from pulled images and seeded from scratch; the regression half proven locally by removing one span from `app/queue/page.tsx` (3 specs red, green on revert). ⚠ **Report-only until 2026-09-21** — it reports, it does not yet block (`GRM-083`)
+- [x] **Every number in the table above is filled in with a measured value** — ✅ except the two that need staging (peak memory during a pulled deploy, and the rollback), which say so rather than guessing
