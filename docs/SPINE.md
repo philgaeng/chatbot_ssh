@@ -2,8 +2,10 @@
 
 **Status:** authoritative (2026-09-04). **The single answer to "what is next."** If another document
 appears to answer it too, that document is wrong — say so and fix it.
-**Last updated:** 2026-09-04 — created (OM-02). Seeded from `sprints/README.md`, the four live sprint
-trackers, and the open rows of `TODO.md`, which is now retired behind a forwarding note.
+**Last updated:** 2026-09-06 — the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
+deploy, `GRM-014` reframed and downgraded, `GRM-067` + `GRM-068` opened. Created 2026-09-04 (OM-02), seeded from
+`sprints/README.md`, the four live sprint trackers, and the open rows of `TODO.md`, which is now
+retired behind a forwarding note.
 **Audience:** internal — excluded from the public repository (lifecycle §10.4).
 **Governed by:** [`engineering/07_work_items.md`](engineering/07_work_items.md) — kinds, the four-question
 triage test, the nine gates, the six profiles, definition of ready, and the two state fields.
@@ -31,7 +33,7 @@ number, and let git surface a double-claim as a merge conflict, which is the beh
 **Historical prefixes are never renumbered** (§8.2): `OM-`, `QA-`, `HR-`, `DPG-`, `T3-`, `H2-`, `SH-`,
 `TP-`, `CL-` keep their identity and are cited across the tree.
 
-⚠ **`GRM-067` is the next free id.** (`GRM-065` and `GRM-066` were opened 2026-09-04.)
+⚠ **`GRM-069` is the next free id.** (`GRM-067` and `GRM-068` were opened 2026-09-06 — the port measurement and the full-suite run it triggered.)
 
 ---
 
@@ -44,17 +46,25 @@ Full list, including the low-severity ones: § *Backlog → Carrying `+SENSITIVE
 
 | Id | Severity | Item | State | Note |
 |---|---|---|---|---|
-| `GRM-065` | 🔴 **high** | **The orchestrator's port is published on every deployed host, and the only control left is a firewall nobody has checked** | `ready` | ⚠ **Neither `GRM-013` nor `GRM-014` says this alone — it is their product.** Verified 2026-09-04: [`docker-compose.grm.yml:120-122`](../docker-compose.grm.yml) publishes `"8000:8000"` with **no `127.0.0.1:` bind prefix**, its own comment saying *"expose 8000 for local testing"*; and **every deploy stack includes `grm.yml`** — `COMPOSE_AWS` and the prod path both use `-f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml`, with neither overlay overriding `ports`. **First action is a measurement, not a fix:** `curl` `:8000` from outside the DOR host |
-| `GRM-014` | 🔴 **high** | Orchestrator `:8000` has no auth | `ready` | `backend/orchestrator/main.py:102`. The half of `GRM-065` that a firewall cannot fix |
-| `GRM-013` | 🔴 **high** | DOR prod firewall for `:5001` is **unverified** | `ready` | Minutes to check, and it is the other half of `GRM-065` |
+| `GRM-065` | 🔴 **high** | **The orchestrator's port was published on every deployed host — and on staging it was reachable** | `merged` · `implemented` | ✅ **MEASURED AND FIXED 2026-09-06.** Measured 2026-09-06 from outside both hosts (egress `146.70.252.25`, read-only: no `POST` sent): DOR prod filtered on 8000/5001/5002/5433/3001/18080; **AWS staging ANSWERED on `:8000`** — the orchestrator's uvicorn direct, `/docs` rendering the interactive Swagger UI and `/openapi.json` returning `securitySchemes: NONE`. Not an unconfigured firewall: 5001/5002 were filtered on the same host, so the security group was configured and 8000 explicitly allowed. **Two fixes:** the staging SG rule was removed by the owner (re-probed closed ×3, `/message` still routing 200/405 through nginx), and [`docker-compose.grm.yml`](../docker-compose.grm.yml) now binds `127.0.0.1:` on 8000 and 5001. Nothing needed the published port — nginx reaches both by Docker service name. ⚠ **`implemented`, not `deployed`:** the compose change is true on neither host until the next deploy |
+| `GRM-014` | 🟠 **med** *(was 🔴 high)* | **The public complainant endpoint's only possible controls are edge-side — and staging had none** | `ready` · `implemented` | ⭐ **REFRAMED 2026-09-06, and the old title asked for something that would break the chatbot.** `POST /message` is publicly reachable on **both** hosts through nginx on 443 (confirmed: `GET /message` → 405, routed, no session created) and **must be** — the complainant webchat calls it unauthenticated, by design. So "add auth to the orchestrator" is not implementable; the controls are rate limiting, CORS and session-id unguessability. Prod carried `limit_req`/`limit_conn` on `/message`; **staging carried none, plus `Access-Control-Allow-Origin: *`**, so any page could drive a complainant session from a visitor's browser at unlimited rate. Ported prod's zones + limits into [`webchat_rest_compose_aws.conf`](../deployment/nginx/webchat_rest_compose_aws.conf) and restricted CORS to the staging origin (`nginx -t` clean). **Left open:** session-id unguessability is unmeasured, and `backend/orchestrator/main.py:102` still declares no security scheme |
+| `GRM-013` | ✅ **closed** | DOR prod firewall for `:5001` is **unverified** | `done` · `verified` | ✅ **ANSWERED 2026-09-06 — the firewall holds.** Measured 2026-09-06 from outside both hosts (egress `146.70.252.25`, read-only: no `POST` sent): 5001 filtered on DOR prod, as were 8000/5002/5433/3001/18080, with 443/80 answering from the same probe so the path was live. ⚠ **One vantage only** — a source-IP allowlist would look identical from here; this observes reachability, not the ruleset. See § *Done* |
 | `GRM-001` | 🔴 **high** | `next@16.2.6` ships nine advisories in the officer portal | `ready` | Middleware/proxy bypass in App Router · SSRF in Server Actions · SSRF in rewrites · unauthenticated disclosure of internal Server Function endpoints. **Ships.** ⭐ Chore-shaped, `+SENSITIVE` by blast radius (§4.2) |
+| `GRM-067` | 🟠 **med** | **Staging's nginx has drifted from prod's hardened conf, and nobody diffed them** | `ready` | ⭐ **Found 2026-09-06 while fixing `GRM-014` — by diffing the two confs, which is the check that was missing.** Beyond the rate limiting now ported: staging carries a **server-wide `add_header Access-Control-Allow-Origin * always`** ([`webchat_rest_compose_aws.conf:370`](../deployment/nginx/webchat_rest_compose_aws.conf)) that prod does not, and lacks prod's security-header block entirely — `server_tokens off`, HSTS, `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`. **Deliberately not fixed in the same commit:** removing a server-wide CORS header can break an embed silently, and the approved change was the rate limiting. Needs a look at what actually embeds the staging webchat first |
 | `GRM-008` | 🔴 high | A routine `make aws-deploy` took staging off the network for ~40 min | `ready` | **Owned by [QA-01](sprints/2026-09_qa_automation/01-QA-01-deploy-safety.md)** — not loose |
 | `GRM-006` `GRM-007` `GRM-009` `GRM-010` | 🟠 med ×4 | ops selfcheck on deploy · `AWS_DEPLOY_SERVICES` omits the orchestrator · `ops` password fallback should be fatal · Keycloak event storage on DOR prod | `proposed` | Backlog |
 | `GRM-002` `GRM-003` `GRM-004` `GRM-011` | 🟡🔵 low ×4 | See the backlog table | `proposed` | Backlog |
 
-⚠ **Four `🔴 high` findings are `ready` and unassigned.** Three of them (`GRM-065`, `GRM-014`,
-`GRM-013`) are one connected question about the production host, and the first action on all three is
-**a measurement, not a fix.**
+⚠ **The measurement was run 2026-09-06, and it moved every one of the three.** `GRM-013` closed
+(prod's firewall holds), `GRM-065` was confirmed *on staging only* and is fixed pending deploy, and
+`GRM-014` turned out to be **mis-specified** — it asked for auth on an endpoint that must stay public,
+so it was reframed and dropped to 🟠 med. **One 🔴 high remains `ready` and unassigned: `GRM-001`**
+(the `next@16.2.6` bump — recommended paired with `HR-07`, whose browser sweep is what verifies it).
+
+⭐ **The lesson worth keeping.** Two of the three rows were wrong in *opposite* directions, and no
+amount of reading the compose file would have told you which: prod was safer than the register
+claimed, staging was worse, and the endpoint the register wanted to authenticate is public by
+design. **The five minutes were the work.**
 
 ---
 
@@ -85,9 +95,10 @@ Items someone could pick up today. Sprint tickets keep their own IDs and link to
 | [QA-03](sprints/2026-09_qa_automation/03-QA-03-stack-isolation.md) — `COMPOSE_PROJECT_NAME` + ports | feature | chore | `blocked` | S | qa *(not approved)* | **Blocker:** QA-02 |
 | [QA-04](sprints/2026-09_qa_automation/04-QA-04-browser-harness.md) — Playwright harness + coverage | feature | chore+TEST | `ready` | L | qa *(not approved)* | ⚠ 04c needs a flow inventory that does not exist |
 | [QA-05](sprints/2026-09_qa_automation/05-QA-05-ci-gate-and-coverage.md) — run it in CI | feature | chore+TEST | `blocked` | M | qa *(not approved)* | **Blockers:** QA-02, QA-03, QA-04; and its own Q-16 |
-| `GRM-065` — the orchestrator port is published on every deployed host | deviation | chore+SENSITIVE | `ready` | S | standing | 🔴 **First action is a measurement:** `curl` `:8000` from outside the DOR host. The fork is which side moves — close the port, or document the exposure and rely on the firewall |
-| `GRM-014` — orchestrator `:8000` has no auth | deviation | backend-feature+SENSITIVE | `ready` | M | standing | 🔴 The half of `GRM-065` a firewall cannot fix. `backend/orchestrator/main.py:102` |
-| `GRM-013` — DOR prod firewall for `:5001` unverified | chore | chore+SENSITIVE | `ready` | XS | standing | 🔴 Minutes. ⭐ **A chore with a register row** — §1.2, because `+SENSITIVE` is never waived (§4.2) |
+| `GRM-065` — the orchestrator port was published on every deployed host | deviation | chore+SENSITIVE | `merged` | S | standing | ✅ Measured + fixed 2026-09-06 — staging `:8000` was open, SG rule pulled, `127.0.0.1:` bound in compose. ⚠ **Stays open until a deploy makes the compose change true on both hosts.** Detail in § *Open security findings* |
+| `GRM-014` — the public complainant endpoint has only edge-side controls | deviation | backend-feature+SENSITIVE | `ready` | S *(was M)* | standing | ⭐ **Reframed 2026-09-06** — the old title ("add auth to the orchestrator") is not implementable: the webchat calls `/message` unauthenticated by design. Rate limiting + CORS ported to staging; **what remains is session-id unguessability**, which is unmeasured |
+| `GRM-067` — staging nginx has drifted from prod's hardened conf | debt | chore+SENSITIVE | `ready` | S | standing | 🟠 Server-wide `Access-Control-Allow-Origin *` that prod does not carry, and none of prod's security headers (HSTS · `nosniff` · `X-Frame-Options` · `Referrer-Policy` · `server_tokens off`). ⚠ **Check what embeds the staging webchat before pulling the CORS header** |
+| `GRM-068` — the doc-header gate is red on 11 commits, and it can only see a violation *after* the commit lands | bug | chore+TEST | `ready` | S | standing | ⭐ **Found 2026-09-06 running the full `tests/repo` suite; pre-existing (red at `14be2a98` with my tree stashed).** All 11 are 2026-09-04 commits that changed a spec body without bumping its header — **including `14be2a98` itself**, the commit that shipped the register's own enforcement point. ⚠ **The design gap is the finding, not the 11 rows:** `test_no_commit_changes_a_spec_body_without_touching_its_header` reads *committed history*, so the violating commit is invisible while it is being written and is discovered by the next session — which can then only fix it in a *later* commit, the very thing rule §3 forbids. A `pre-commit` or a staged-tree check is the shape that would actually hold |
 | `GRM-066` — `dpg/02_questions.md` has drifted from the source it is generated from | bug | chore+TEST | `ready` | XS | standing | Found 2026-09-04 while running the full `tests/repo` suite for OM-03. `test_dpg_questions_generated` is **red at the session's starting commit** with `docs/dpg/` untouched — so it is pre-existing, not caused by this sprint. ⭐ **It is a bug, not debt:** the generator's own pinning test says the two must agree, and they do not. Fix is `python scripts/ops/gen_dpg_questions.py`, then read the diff before committing — the drift is the finding |
 | `GRM-001` — bump `next` off 16.2.6 | chore | chore+SENSITIVE | `ready` | S | standing | 🔴 Nine advisories, ships. Chore-shaped, Opus-and-boundary-tests by blast radius |
 | **HR-05** — prove a red build blocks | bug | chore+TEST | `ready` | XS | hardening | ⭐ **Five minutes.** The ruleset is active; nobody has watched it refuse a merge ([17](deployment/17_manual_browser_sweep.md)) |
@@ -162,7 +173,7 @@ done in their own text; those resolve as they are picked up.
 | `GRM-047` | debt | — | Utterance `file_name` derived from module name (~200 sites) — move a class to another file and its copy silently breaks | `backend/actions/base_classes/base_mixins.py:63` |
 | `GRM-048` | debt | — | `backend/actions/forms/form_story_main_route_step.py` is **entirely dead code** (79 lines, `ValidateMenuForm` + `ValidateFormStoryStep`, zero importers) | `backend/actions/forms/form_story_main_route_step.py` |
 | `GRM-049` | debt | — | The grievance API has **no rate limiting** — `§6`'s "loggable, authorizable, **rate-limitable** at one place" chokepoint argument is now 2/3 true, not 3/3 | `backend/api/routers/grievance.py` |
-| `GRM-050` | debt | — | `5001:5001` binds the backend API to **all host interfaces** on deployed hosts — a dev convenience applied verbatim in staging | `docker-compose.grm.yml:112-117` |
+| `GRM-050` | debt | — | ✅ **FIXED 2026-09-06 (with `GRM-065`, same one-line class of defect)** — `5001:5001` bound the backend API to **all host interfaces** on deployed hosts; now `127.0.0.1:5001:5001`. ⚠ 5001 was measured **filtered** on both hosts, so this was latent, not exposed. Pending deploy | `docker-compose.grm.yml:112-117` |
 | `GRM-051` | debt | — | Voice-chunk upload sessions live in a **process-local dict** (+ local `.part` file) — the chunked protocol is stateful across requests, so every chunk must hit the same process | `backend/services/file_server_core.py:29-31`, `docker-compose.yml:48` |
 | `GRM-052` | debt | — | Portal ESLint debt: 143 warnings, 0 errors (HR-05 downgraded 5 rule families to `warn` to reserve the CI error channel) | `channels/ticketing-ui/` |
 | `GRM-053` | debt | — | Settings tabs have **no render smoke tests** — the portal has no DOM test harness at all | `channels/ticketing-ui/vitest.config.ts`, `package.json` |
@@ -187,6 +198,7 @@ done in their own text; those resolve as they are picked up.
 | [OM-01](sprints/2026-09_operating_model/01-OM-01-work-item-standard.md) — the work-item standard | feature | 2026-09-04 | `implemented` — ⚠ the standard is adopted, **not in force**; its §11 is the gap list |
 | **A-3 / HR-05 (settings half)** — branch protection | chore | 2026-09-04 | `verified` — ruleset active on `main` + `integration/*`, read back through the API. ⚠ The **proof** half is `GRM-`-less and sits in the register above |
 | **D-010** — the working repository is private | chore | 2026-09-04 | `verified` — `gh repo view` → `PRIVATE` |
+| `GRM-013` — DOR prod firewall for `:5001` | chore | 2026-09-06 | `verified` — 5001 filtered from outside the host (egress `146.70.252.25`), with 443/80 answering on the same probe. ⚠ **One vantage**: this observes reachability, not the ruleset — a source-IP allowlist is indistinguishable from here |
 | `GRM-005` — the ops monitor was blind and the report had never worked | debt | 2026-08-24 | `deployed` — ⚠ absorbed from `TODO.md` already marked ✅ FIXED; **not re-verified in this pass** |
 
 *Closed items move to `sprints/archive/` at quarter end (Q-06).*

@@ -112,14 +112,23 @@ services:
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
   # The ticketing_api service also overrides BACKEND_GRIEVANCE_BASE_URL to use the
   # Docker service name (http://backend:5001) rather than localhost.
+  #
+  # ⚠ The 127.0.0.1: prefix is load-bearing, not style (GRM-065). Every deploy stack
+  # includes this file — COMPOSE_AWS and the prod path both — and neither overlay
+  # overrides `ports`, so a bare "5001:5001" publishes a dev convenience on the public
+  # interface of staging AND production. Measured 2026-09-06 from outside both hosts:
+  # DOR prod filtered 8000/5001/5002, but AWS staging answered on :8000 with the
+  # orchestrator's uvicorn, /docs and /openapi.json — reachable by anyone.
+  # Nothing needs the published port: nginx reaches these services by Docker service
+  # name over the internal network (deployment/nginx/webchat_rest_compose_*.conf).
   backend:
     ports:
-      - "5001:5001"
+      - "127.0.0.1:5001:5001"
 
-  # ── Orchestrator port override (same pattern — expose 8000 for local testing) ──
+  # ── Orchestrator port override (same pattern — loopback only; see GRM-065 above) ──
   orchestrator:
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
 
   # ── Ticketing API (FastAPI, port 5002) — the single consolidated API ──────────
   # Auth mode is env-driven (APP_ENV / AUTH_MODE), not a duplicate service:
