@@ -125,26 +125,62 @@ export const GRIEVANCES = {
 } as const;
 
 /**
- * ⚠ **Not seeded, and QA-04b owns the fix.** Three parameterised routes take a token that
- * `mock_tickets.py` never creates:
+ * ⚠ **Three parameterised routes take a token the seed never creates.** QA-04b resolved them
+ * differently, and the difference is worth knowing before you copy either approach:
  *
- *   - `/closure/[token]`      — `ticketing.ticket_resolved_summaries.closure_public_token`,
- *                               which exists only after a resolve **and** a closure-summary
- *                               generation (an LLM call — do not drive it from a smoke test)
- *   - `/reports/view/[token]` and `/reports/public/[token]`
- *                             — `ticketing/services/report_shares.py`; nothing in the seed calls it
+ * | Route | How it is covered |
+ * |---|---|
+ * | `/reports/view/[token]`, `/reports/public/[token]` | **Real token**, made by {@link createReportShare}. Full stack, no stub |
+ * | `/closure/[token]` | **Invalid token against the real API** (the "link is invalid" state), plus a **stubbed** happy path — see `e2e/smoke/closure.spec.ts` for why |
  *
- * A report share is a plain API call and should be created by a fixture here. A closure row
- * should be inserted (or its summary stubbed) rather than paying for a model on every run.
- * **If a route cannot be made deterministic and free, skip it with a named reason and record
- * the gap in the sprint's `PROGRESS.md` "Routes covered / 22" row** — a suite that quietly
- * omits three routes while reporting 22 is the failure this sprint exists to stop.
+ * ⭐ Making the report tokens real required fixing a bug rather than writing a fixture:
+ * `POST /api/v1/reports/share` returned **HTTP 500** on any database where nobody had shared
+ * a report before (`GRM-071`, fixed 2026-09-06). It is worth saying out loud that *needing a
+ * route to work in order to test it* is what found a defect two sprints of manual sweeps had
+ * not — the endpoint had no test at all, only a row in `route_snapshot.txt`.
  */
-export const UNSEEDED_TOKEN_ROUTES = [
-  "/closure/[token]",
-  "/reports/view/[token]",
-  "/reports/public/[token]",
-] as const;
+
+/** Internal + public tokens for one freshly created report share. */
+export interface ReportShareTokens {
+  readonly internalToken: string;
+  readonly publicToken: string;
+}
+
+/**
+ * Create a report share and return both tokens.
+ *
+ * ⚠ **This writes to the database** — unlike everything else in this file, which only reads.
+ * It is bounded: `create_report_share` keeps the newest 50 and drops the rest, so repeated
+ * suite runs cannot grow the `report_share_links` settings row without limit. Nothing else
+ * prunes it, so do not raise that cap without re-reading this.
+ */
+export async function createReportShare(
+  as: SeededOfficer = OFFICERS.admin,
+): Promise<ReportShareTokens> {
+  const url = `${BASE_URL}/api/v1/reports/share`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      cookie: `grm_bypass_user=${bypassCookieValue(as)}`,
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ name: "e2e smoke share", report_kind: "overview" }),
+    signal: AbortSignal.timeout(30_000),
+  });
+
+  if (!res.ok) {
+    throw new Error(
+      `could not create a report share: POST ${url} returned HTTP ${res.status}.\n` +
+        `  The two /reports/*/[token] routes cannot be smoked without one.\n` +
+        `  ⚠ A 500 here is most likely GRM-071 returning — sharing used to fail on any database\n` +
+        `  where nobody had shared before (ticketing/services/report_shares.py wrote the wrong\n` +
+        `  column name). If it is back, the fix and its tests are in tests/ticketing/test_report_shares.py.`,
+    );
+  }
+
+  const body = (await res.json()) as { internal_token: string; public_token: string };
+  return { internalToken: body.internal_token, publicToken: body.public_token };
+}
 
 /**
  * Resolve a seeded `grievance_id` to the `ticket_id` this seed run generated.

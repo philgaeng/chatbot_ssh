@@ -1,7 +1,7 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Last updated:** 2026-09-06 — §6a: the end-to-end level exists (QA-04a), and the suite-shape table names it.
+**Last updated:** 2026-09-06 — §6a gains rules 6a.9 and 6a.10 (what counts as a crash; stub third parties), from writing the route smoke suite.
 **Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
@@ -198,6 +198,21 @@ a second isolated stack, not a second worker on this one.
 **Rule 6a.8 — Screenshots are captured, not gated.** v1 uploads artifacts; there is no
 `toHaveScreenshot` baseline. Pixel diffing across platforms and font stacks is a later *decision*, not a
 deferred obligation — do not leave a TODO implying baselines are owed.
+
+**Rule 6a.9 — A failed `fetch` the application handles is not a crash.** The browser logs every
+non-2xx subresource as a console error, whether the page ignored it or rendered a careful empty
+state from it. Three routes do this *on their correct path* — an invalid closure link and an
+invalid report link both render "this link is invalid" **from** a 404. So the gate is: an uncaught
+exception, a `console.error` from application code, or the error boundary; a handled resource
+failure is **recorded as an artifact, not failed on**. Gating on raw console errors makes the
+suite permanently red; ignoring them entirely makes it blind. → `e2e/fixtures/smoke.ts`
+
+**Rule 6a.10 — Stub a third party; never depend on one.** A page that loads an image, a font or a
+script from outside this system must have that request intercepted in its spec. Otherwise the suite
+fails when a CI runner has no egress, sends this system's data to someone else once per run, and
+reports a third party's downtime as our regression. ⚠ **If you discover such a dependency while
+writing a spec, the stub is the test's fix and the dependency is a finding** — file it. That is how
+`GRM-072` was found.
 
 ⚠ **The suite is type-checked and linted by CI today, and executed by nothing.** `tsconfig.json`
 includes `**/*.ts` and `ui-checks` lints the whole directory, so a spec that does not compile already

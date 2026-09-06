@@ -120,20 +120,38 @@ A flaky e2e suite is worse than none — it trains everyone to ignore a red buil
 > a fresh `uuid4()` per seed run and must be resolved at runtime. Both rules live in
 > `e2e/fixtures/seed.ts`; the demo-side consequence is `GRM-070`.
 
-## QA-04b — officer-UI route smoke (fan-out, ~1 d)
+## QA-04b — officer-UI route smoke (fan-out, ~1 d) — ✅ **done 2026-09-06, 22 / 22**
+
+> **28 specs, ~15 s, green twice in a row.** 17 desktop routes in `e2e/smoke/`, 5 mobile in
+> `e2e/mobile/`. Every route asserts *content*, not just HTTP 200 — a Next route returns 200 while
+> its client component throws, so a status-only smoke suite reports green on a blank page.
+> ⚠ **One partial, named:** `/closure/[token]`'s happy path runs against a stubbed API response;
+> its invalid-token state runs against the real one. Reason and cost in
+> [`PROGRESS.md`](PROGRESS.md) under *"Parameterised routes skipped, and why"*.
+> ⭐ **It found two defects and fixed one.** `POST /api/v1/reports/share` was HTTP 500 on any
+> database where nobody had shared a report before (`GRM-071` — fixed, 5 tests, 2 mutation records);
+> `/qr-codes` sends every package's intake token to `api.qrserver.com` (`GRM-072` — filed, stubbed
+> in the spec, not fixed in passing). **Needing the feature to work in order to test it is what
+> found the 500** that two sprints of manual sweeps had not.
 
 All **22** `page.tsx` routes, loaded as an appropriately-roled seeded officer: assert no 5xx, no
 uncaught console error, no Next error boundary, and capture a screenshot per route. Routes requiring
 admin get an admin cookie; the rest an officer cookie.
 
+> ⚠ **"No uncaught console error" needed a definition before it could be code.** The browser logs
+> every non-2xx subresource as a console error, and three routes produce one **on their correct
+> path**. The gate is: an uncaught exception, a `console.error` from application code, or the error
+> boundary — with handled resource failures *recorded* as an artifact rather than failed on. See
+> `e2e/fixtures/smoke.ts` and [`04_testing.md`](../../engineering/04_testing.md) §6a rule 6a.9.
+
 **Five routes are parameterised, and three of the five have no seeded value to use.** This is the part
 of 04b that is not an hour's work, so budget it before starting:
 
-| Route | Where the parameter comes from |
-|---|---|
-| `/tickets/[id]`, `/m/tickets/[id]` | ✅ seeded — `mock_tickets` ids, via `e2e/fixtures/seed.ts` |
-| `/closure/[token]` | ⚠ **not seeded.** The token is `ticket_resolved_summaries.closure_public_token`, and `mock_tickets.py` creates no such row. It exists only after a ticket is resolved *and* a closure summary is generated — which runs the LLM builder (`ticketing/services/resolved_summary_builder.py`, `ticketing/tasks/llm.py`) |
-| `/reports/view/[token]`, `/reports/public/[token]` | ⚠ **not seeded.** Tokens come from `ticketing/services/report_shares.py`; nothing in the seed calls it |
+| Route | Where the parameter comes from | ✅ How it was covered |
+|---|---|---|
+| `/tickets/[id]`, `/m/tickets/[id]` | ✅ seeded — `mock_tickets` ids, via `e2e/fixtures/seed.ts` | `resolveTicketId()` at run time — `ticket_id` is a fresh `uuid4()` per seed, so it is never hardcoded |
+| `/closure/[token]` | ⚠ **not seeded.** The token is `ticket_resolved_summaries.closure_public_token`, and `mock_tickets.py` creates no such row. It exists only after a ticket is resolved *and* a closure summary is generated — which runs the LLM builder (`ticketing/services/resolved_summary_builder.py`, `ticketing/tasks/llm.py`) | ⚠ **Partial.** Invalid token → real API, real 404, real "link is invalid" state. Happy path → `page.route()` stub. **Direct insert was not available**: `tasks/llm.py` **retries rather than degrades** without a model (`if not llm_out: raise self.retry(...)`), so no free path writes the row, and giving a Playwright process a database driver for one page is a worse coupling |
+| `/reports/view/[token]`, `/reports/public/[token]` | ⚠ **not seeded.** Tokens come from `ticketing/services/report_shares.py`; nothing in the seed calls it | ✅ **Real tokens**, via `createReportShare()`. ⭐ This is what found `GRM-071`: the endpoint returned **500** on any database where nobody had shared before |
 
 ⭐ **The fix is a fixture, not a hardcoded token, and not an LLM call in a smoke test.** Have
 `e2e/fixtures/seed.ts` create what it needs through the API — a report share is a plain call; a closure
@@ -143,10 +161,18 @@ spec file** and record the gap in `PROGRESS.md`'s "Routes covered / 22" row. A s
 quietly excludes three routes while reporting 22 is the failure this sprint exists to stop.
 
 ⚠ **Three of the 22 are auth routes whose bypass-build behaviour is not "the page renders".**
-`/login` takes an `AUTH_BYPASS` branch (`app/login/page.tsx:123`); `/auth/callback` finds no OAuth
-params and redirects to `/login?error=…`; `/login/reset-password` is a Keycloak flow. **Assert the
+`/login` takes an `AUTH_BYPASS` branch (`app/login/page.tsx:123`); ~~`/auth/callback` finds no OAuth
+params and redirects to `/login?error=…`~~; `/login/reset-password` is a Keycloak flow. **Assert the
 redirect, not the render** — otherwise the specs encode a bug report as a requirement, the same trap
 QA-04d is warned about below.
+
+> ⚠ **CORRECTED 2026-09-06 — that describes the Keycloak build.** On the **bypass** build this suite
+> runs against, `AuthProvider` starts `isAuthenticated` `true` unconditionally, so `/auth/callback`'s
+> first effect wins and it lands on **`/queue`**; `/login` does the same, from `app/login/page.tsx:45`.
+> Measured. `e2e/smoke/redirects.spec.ts` asserts the bypass behaviour and names the Keycloak branch
+> so nobody "fixes" it later — that branch belongs to the login smoke test deferred to its own job
+> (Q-07). ⭐ **Same root cause as the readiness race QA-04a shipped and fixed:** the transient render
+> before the redirect is what both mistakes trusted.
 
 ## QA-04c — the driven flows (fan-out)
 
