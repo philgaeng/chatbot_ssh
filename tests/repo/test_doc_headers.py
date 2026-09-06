@@ -143,6 +143,19 @@ def test_the_pre_commit_hook_exists_and_calls_the_staged_check(dh):
 
     The hook lives in a committed `.githooks/` so it is reviewable and travels with a clone;
     `make hooks` points git at it. This pins the two halves to each other.
+
+    ⭐ PROVEN TO FAIL 2026-09-06, by hand, because `scripts/ops/run_mutations.py` cannot express
+    this one: it mutates file *content* via find/replace and restores with `git checkout --`,
+    while the defect here is a git INDEX MODE. Two commands, ten seconds:
+
+        git update-index --chmod=-x .githooks/pre-commit
+        pytest tests/repo/test_doc_headers.py::test_the_pre_commit_hook_exists_and_calls_the_staged_check
+        git update-index --chmod=+x .githooks/pre-commit      # restore
+
+    Worth re-running after any change to this test, because the ORIGINAL version of it PASSED in
+    that exact state: the file stays `-rwxr-xr-x` on disk while git records 100644, so a
+    working-tree check sees nothing wrong. That is what shipped, and CI caught it, not the test
+    author.
     """
     hook = REPO_ROOT / ".githooks" / "pre-commit"
     assert hook.exists(), "the pre-commit hook named by the standard must exist"
