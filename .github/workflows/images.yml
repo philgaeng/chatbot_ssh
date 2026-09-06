@@ -1,0 +1,185 @@
+name: Images
+
+# QA-02 — build the stack's images once, here, so no deploy host ever builds one again.
+#
+# On 2026-09-04 a routine `make aws-deploy` ran `docker compose build` on a t4g.medium
+# (3825 MB, no swap, 14 containers) and took staging off the network for 41 minutes. The
+# incident's own logged remedy, second of three, was "stop building on the box and pull a
+# CI-built image (the actual fix)". This is that.
+#
+# Eleven services, two images: ten build the root Dockerfile, grm_ui builds its own.
+#
+# ⚠ **The UI is published TWICE for the same commit.** NEXT_PUBLIC_AUTH_MODE is inlined by
+# the compiler, so the auth mode is a property of the image, not of the runtime:
+#   ui:<sha>          AUTH_MODE=keycloak — the deployable one
+#   ui:<sha>-bypass   AUTH_MODE=bypass   — test only; NO login, identity comes from a cookie
+# `scripts/ci/check_no_bypass_image.sh` (run by ui-checks) refuses a -bypass reference in any
+# compose file describing a real environment. Do not remove one without the other.
+
+on:
+  # ⚠ **Deliberately the same trigger set as ci.yml, plus pull_request** — Q-16, answered (a).
+  # The e2e job (QA-05) pulls IMAGE_TAG=<this commit's sha>. If this workflow did not build for
+  # the branch under test, no such tag would exist and that job would fail for a reason having
+  # nothing to do with the change — including on this sprint's own PRs. A narrow trigger here
+  # would be a fresh instance of the defect ci.yml's own header documents: a gate that does not
+  # run on the branches people actually work on.
+  pull_request:
+  push:
+    branches:
+      - main
+      - "integration/**"
+      - "dev/**"
+      - "dpg/**"
+
+# One build per ref. A superseded push has nothing worth finishing, and these are the most
+# expensive jobs in the pipeline.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository }}
+
+  # ⭐ **The architecture dial, deliberately one variable in one place (A-1 / A-10).**
+  #
+  # Staging is a t4g.medium — ARM64. The DOR production host's `uname -m` is still UNVERIFIED:
+  # the owner expects x86_64 and would move staging to match, but has not been able to reach the
+  # box to confirm. Until someone runs `uname -m` there, multi-arch is the only value that works
+  # on both, and it is chosen for that reason and no other.
+  #
+  # **When the answer arrives this is a one-line change**, which is the whole point of it being
+  # a variable: `linux/amd64` alone halves every build, removes the QEMU/buildx manifest work,
+  # and makes the `ubuntu-24.04-arm` runner question (Q-03/A-4) moot, because a standard
+  # ubuntu-latest runner is amd64 and builds it natively.
+  #
+  # ⚠ Cost, measured 2026-09-06 on the real images: app 0.39 GB compressed, ui 0.06 GB. So
+  # ~0.45 GB per commit single-arch, ~0.9 GB multi-arch — before layer sharing, which takes the
+  # *incremental* cost per commit down to the layers that actually changed. See the note on
+  # retention in PROGRESS.md: GHCR does not prune old versions on its own.
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            context: .
+            dockerfile: Dockerfile
+            suffix: ""
+            build_args: ""
+          - name: ui
+            context: ./channels/ticketing-ui
+            dockerfile: Dockerfile
+            suffix: ""
+            build_args: |
+              NEXT_PUBLIC_AUTH_MODE=keycloak
+          - name: ui
+            context: ./channels/ticketing-ui
+            dockerfile: Dockerfile
+            suffix: "-bypass"
+            build_args: |
+              NEXT_PUBLIC_AUTH_MODE=bypass
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⚠ **The build context must not contain an env file.** The root Dockerfile is
+      # `COPY . /app`, and until 2026-09-06 the .dockerignore excluded no env file at all — so
+      # any build on a host holding env.local baked 9 secrets into a layer. That was survivable
+      # only while images were never pushed; this workflow pushes them.
+      #
+      # ⭐ This check on its own would be theatre and it is worth saying why: CI's checkout never
+      # has an env.local, so it can only ever pass. The real control is the .dockerignore, fixed
+      # first and verified on the built image below. This is the second control, and it earns
+      # its place only against a future workflow that starts writing an env file before building.
+      - name: The build context carries no env file
+        run: |
+          found="$(find . -maxdepth 2 \( -name 'env.local' -o -name '.env' -o -name '.env.local' \) \
+                    -not -path './node_modules/*' -print)"
+          if [ -n "$found" ]; then
+            echo "ERROR: an env file is present in the build context:"; echo "$found"
+            echo "The root Dockerfile is COPY . /app — this would bake it into a published image,"
+            echo "and a published image cannot be unpublished. See Q-18."
+            exit 1
+          fi
+          echo "OK: no env file in the build context"
+
+      # QEMU is needed whenever a target architecture is not the runner's own. Keyed on "is
+      # amd64 the only target", not on "is there a comma" — PLATFORMS=linux/arm64 alone has no
+      # comma and needs QEMU most of all, and the verification step below runs the image.
+      - uses: docker/setup-qemu-action@v3
+        if: env.PLATFORMS != 'linux/amd64'
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # The workflow's own token. No new secret is needed to PUSH — a host that PULLS a
+          # private package does need one, which is a separate question (A-11).
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
+        id: tags
+        run: |
+          # ⚠ Truncate the full sha rather than `git rev-parse --short`. On a pull_request the
+          # checkout is the merge commit, so the PR head object may not even be present locally
+          # — and `--short` picks a length based on repository ambiguity, so the two sides could
+          # legitimately disagree on how many characters a tag has. A fixed 7 is deterministic
+          # and computable by anything that knows the sha, which is what QA-05 needs.
+          full="${{ github.event.pull_request.head.sha || github.sha }}"
+          sha="$(echo "$full" | cut -c1-7)"
+          branch="$(echo "${{ github.head_ref || github.ref_name }}" | tr '/' '-')"
+          image="${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}"
+          {
+            echo "sha=$sha"
+            echo "tags=${image}:${sha}${{ matrix.suffix }},${image}:${branch}${{ matrix.suffix }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: ${{ matrix.build_args }}
+          # Without a cache the Python image reruns pip install every time, and multi-arch pays
+          # that twice. The cache is not an optimisation here, it is what makes the trigger set
+          # above affordable.
+          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}
+
+      # ⭐ Verified on the artefact, not inferred from the .dockerignore — the acceptance
+      # criterion says so in those words, and the two are not the same claim.
+      - name: The published image contains no env file
+        run: |
+          img="${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}:${{ steps.tags.outputs.sha }}${{ matrix.suffix }}"
+          echo "inspecting $img"
+          found="$(docker run --rm --entrypoint sh "$img" -c \
+            'ls -a /app 2>/dev/null | grep -E "^\.env$|^\.env\.local$|^env\.local$" || true')"
+          if [ -n "$found" ]; then
+            echo "ERROR: the PUBLISHED image contains an env file: $found"
+            echo "Rotate every secret in it — a published image cannot be unpublished."
+            exit 1
+          fi
+          echo "OK: no env file in the published image"
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${{ matrix.name }}${{ matrix.suffix }}"
+            echo "- tags: \`${{ steps.tags.outputs.tags }}\`"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- platforms: \`${{ env.PLATFORMS }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
