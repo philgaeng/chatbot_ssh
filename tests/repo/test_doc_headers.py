@@ -65,14 +65,34 @@ def test_every_live_spec_carries_a_dated_status_header(dh):
 
 
 def test_no_header_claims_a_date_in_the_future(dh):
-    """A future date is either a typo or an aspiration; both make the header worthless."""
+    """A future date is either a typo or an aspiration; both make the header worthless.
+
+    ⚠ **One day of tolerance, and it is a timezone fix, not a loosening.** This compares against
+    the *runner's* date, which on GitHub is UTC — while this project is written from Kathmandu
+    (UTC+5:45) and Manila (UTC+8). Every evening there, "today" is already tomorrow in UTC, so a
+    correctly-dated header failed this test: measured 2026-09-07, four `docs/deployment/` headers
+    dated the 7th were rejected by a runner still on the 6th at 16:30 UTC.
+
+    ⭐ **The tempting fix is the damaging one.** Faced with a red build, the quick move is to
+    back-date the header to satisfy the runner — which writes a date the author knows is wrong
+    into the exact field this file exists to keep honest. Tolerating the skew instead keeps the
+    check meaningful: a typo (`2027-`), or a review claimed for next month, is still caught,
+    because no timezone is more than 14 hours from UTC.
+    """
     import datetime as dt
 
-    today = dt.date.today().isoformat()
+    # UTC explicitly, so the bound does not silently depend on where the test runs.
+    limit = (dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=1)).isoformat()
     bad = [
-        f"{dh.rel(f)} says {d}" for f in dh.spec_files() if (d := dh.header_of(f)[0]) and d > today
+        f"{dh.rel(f)} says {d}" for f in dh.spec_files() if (d := dh.header_of(f)[0]) and d > limit
     ]
-    assert not bad, "header dates in the future:\n  " + "\n  ".join(bad)
+    assert not bad, (
+        f"header dates more than a day past today (UTC): the limit is {limit}.\n  "
+        + "\n  ".join(bad)
+        + "\n\nA day of slack is deliberate — authors east of UTC are legitimately a date ahead. "
+        "If one of these is a typo, fix the date; do NOT back-date a correct header to appease "
+        "the check."
+    )
 
 
 def test_no_commit_changes_a_spec_body_without_touching_its_header(dh):

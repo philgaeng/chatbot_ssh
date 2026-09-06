@@ -274,7 +274,14 @@ def check_staged() -> int:
 
 
 def check() -> int:
+    # ⚠ Same one-day tolerance as tests/repo/test_doc_headers.py, and for the same reason: this
+    # runs both on an author's machine and on a UTC CI runner, and this project is written from
+    # UTC+5:45 and UTC+8. Without it a correctly-dated header is "the future" every evening, and
+    # the tempting fix — back-dating to appease the check — corrupts the field being checked.
+    # A typo (`2027-`) or a review claimed for next month is still caught: nowhere is more than
+    # 14 hours from UTC.
     today = dt.date.today().isoformat()
+    future_limit = (dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=1)).isoformat()
     missing: list[str] = []
     future: list[str] = []
     unstamped: list[tuple[str, str]] = []
@@ -288,8 +295,8 @@ def check() -> int:
         if date is None:
             missing.append(rel(f))
             continue
-        if date > today:
-            future.append(f"{rel(f)} (header says {date}, today is {today})")
+        if date > future_limit:
+            future.append(f"{rel(f)} (header says {date}, today is {today} — more than a day ahead)")
         if why is None:
             unstamped.extend(commits_touching_body_without_header(f))
 
