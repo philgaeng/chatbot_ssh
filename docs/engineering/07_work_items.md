@@ -1,7 +1,7 @@
 # Work items — intake, classification, and gates
 
-**Status:** authoritative (2026-09-04) — ⚠ **adopted, not yet in force.** §11 lists exactly which rules the repository does not satisfy yet, and the sprint that closes each one. Nothing here supersedes an existing standard; it decides **which of them apply to a given piece of work, and when that is decided.**
-**Last updated:** 2026-09-04 — sprint citations removed (lifecycle §10.1 — this is a public spec); §1.2/§5 reconciled (a chore gets no register row, Q-08); §11 rows 1 and 7 close with `SPINE.md`. Earlier: `G-RELEASE` gains the version-tag requirement; §11 row 8 closes on D-009/D-010.
+**Status:** authoritative (2026-09-06) — ⚠ **adopted, partly in force.** §11 rows 1, 3, 4 and 7 are closed; **rows 2, 5, 6 and 8 are not**, so this standard still describes more than the repository does. §11 lists exactly which, and what closes each. Nothing here supersedes an existing standard; it decides **which of them apply to a given piece of work, and when that is decided.**
+**Last updated:** 2026-09-06 — §11 rows 3 and 4 close: the register test runs in CI (ten checks), and the sensitive-path question moved to intake — rule 4.3 is in force, with an empty profile on a `ready` row now a test failure. Earlier: sprint citations removed (lifecycle §10.1 — this is a public spec); §1.2/§5 reconciled (a chore gets no register row, Q-08); §11 rows 1 and 7 close with `SPINE.md`. Earlier: `G-RELEASE` gains the version-tag requirement; §11 row 8 closes on D-009/D-010.
 **Audience:** public.
 **Reads with:** [`00_engineering_index.md`](00_engineering_index.md) (the ten rules and the shared definition of done) · [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) (tiers, promotion, honesty markers) · the standing deferral rule (the standing deferral rule).
 
@@ -88,7 +88,7 @@ Is it deployed?                             → G-RELEASE
 
 **Rule 4.2 — ⭐ G-SENSITIVE is never waived by kind or by size.** A one-line change is not a chore if it touches that list. *Why: this is the whole point of deriving from blast radius. Every exception ever granted here has been granted on the basis of diff size, which is not correlated with risk.*
 
-**Rule 4.3 — The sensitive-path question is answered at intake, not at merge.** The PR template keeps its checklist as a **confirmation**; it stops being the first time anyone asks. *Why: at PR time the answer changes nothing — the design is written, the model was already chosen, the tests already exist or do not.*
+**Rule 4.3 — The sensitive-path question is answered at intake, not at merge.** ✅ **In force 2026-09-06** — the PR template keeps its checklist as a **confirmation** and names the item and profile it confirms; it is no longer the first time anyone asks. *Why: at PR time the answer changes nothing — the design is written, the model was already chosen, the tests already exist or do not.*
 
 ## 5. The six profiles
 
@@ -179,8 +179,8 @@ At sprint close, the existing audit ([`06`](06_documentation_lifecycle.md) §3c)
 |---|---|---|
 | 1 | ✅ **Closed 2026-09-04.** [`docs/SPINE.md`](../SPINE.md) exists; `TODO.md` is retired behind a forwarding stub and its 64 open rows are the register's backlog. ⚠ **Nothing validates it yet** — see row 3. | OM-02 |
 | 2 | **There is no roadmap.** `docs/ROADMAP.md` does not exist, and no document defines the MVP or what "launched" means. | OM-05 |
-| 3 | **Nothing validates any of this.** `tests/repo/test_spine.py` does not exist, so every rule above is currently a preference. | OM-03 |
-| 4 | **The sensitive-path checklist is still evaluated at merge only** (`.github/PULL_REQUEST_TEMPLATE.md`), contrary to rule 4.3. | OM-04 |
+| 3 | ✅ **Closed 2026-09-04.** `tests/repo/test_spine.py` exists and runs in CI — **ten checks, each proven to fail** on the defect it exists for: duplicate ids · a stale allocator line · an unknown kind · a `blocked` row with no blocker · two `current` items in one lane · a `done` row with no verification · a security view citing an item the register does not hold · dead `followups/` links · **a `ready` row with no profile** (added 2026-09-06 with row 4). ⚠ It checks that the register is *well-formed*, never whether the plan is good — a checker that judged content would be wrong often enough to get muted. | OM-03 |
+| 4 | ✅ **Closed 2026-09-06.** The six derivation questions are asked at intake on the item form; the PR template now **confirms** the profile rather than deciding it, and names the item and profile it is confirming. `+SENSITIVE` ⇒ Opus is stated mechanically in `AGENTS.md`, not left to judgment at the keyboard. **Enforced, not merely written:** a `ready` or `current` register row with an empty profile fails `tests/repo/test_spine.py`. | OM-04 |
 | 5 | **The design gate (G-DESIGN) is not written down** in [`05_frontend.md`](05_frontend.md); it has been followed once, by instinct, for the settings redesign. | OM-06 |
 | 6 | **The verification ladder is not in [`06`](06_documentation_lifecycle.md) §4**, which today carries document honesty markers only — not item states. | OM-06 |
 | 7 | 🟡 **Partly closed 2026-09-04** — the deferral trail and the sprint trackers now resolve to one register. **Three vocabularies still coexist** and share no identifier: the issue templates (`bug`/`enhancement` + Area), the PR sensitive-path list, sprint ticket IDs, the deviations/`followups`/TODO debt trail, and the triage vocabulary proposed by the review-feedback-loop sprint. | OM-02, OM-07 |

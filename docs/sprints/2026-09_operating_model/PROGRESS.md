@@ -4,7 +4,8 @@
 
 > **Status: OM-01, OM-02 and OM-03 landed — Stream A is closed.** ✅ **Q-01…Q-07 answered 2026-09-04.**
 > **The register is validated**: `tests/repo/test_spine.py` runs nine checks in CI, each proven to fail.
-> **OM-04 is `current`**; OM-05, OM-06 and OM-09 are ready and independent alongside it; **OM-07 unblocked** 2026-09-06.
+> **OM-04 landed 2026-09-06** — rule 4.3 is in force and `07` §11 row 4 is closed.
+> **OM-05, OM-06 and OM-09 are ready and independent** (Stream B, no ordering); **OM-07 unblocked** 2026-09-06.
 > Tracker skeleton — fill as work lands, not at the end.
 > Sprint: [`README.md`](README.md) · Why: [`DESIGN-operating-model.md`](DESIGN-operating-model.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 
@@ -15,7 +16,7 @@
 | OM-01 standard | — | ✅ done | `implemented` — *the standard is not in force; §11 is the gap list* | `dev/operating-model` | Landed with the sprint's first commit |
 | OM-02 register | A | ✅ done | `implemented` | `dev/operating-model` | [`SPINE.md`](../../SPINE.md) · 64 rows absorbed from `TODO.md` · `PROGRESS.md` § *In progress / next* deleted · 07 §1.2/§5 reconciled |
 | OM-03 test | A | ✅ done | `tested` | `dev/operating-model` | `tests/repo/test_spine.py` — **9 checks, each proven to fail on the defect it exists for** by a mutation sweep. ⚠ The sweep caught **two holes review had not**: `startswith` let a `chore+SENSITIVE` profile satisfy the *kind* check, and every non-`GRM` row (`OM-*`, `QA-*`, `HR-*`) was invisible to every field check. It also caught a **substantive miss** — four rows described as "promoted to the Register" existed only in the security view |
-| OM-04 intake gate | B | 🔵 **current** | `planned` | `dev/operating-model` | Picked up 2026-09-06 |
+| OM-04 intake gate | B | ✅ done | `tested` | `dev/operating-model` | [`docs/items/TEMPLATE.md`](../../items/TEMPLATE.md) — six derivation questions at intake · PR template **confirms** a profile instead of asking · `+SENSITIVE` ⇒ Opus mechanical in `AGENTS.md` · **check 10 in `test_spine.py`**: a `ready`/`current` row with no profile fails, proven two ways (blank cell, `—` placeholder) |
 | OM-05 product + roadmap | B | ⬜ ready | — | — | ✅ can start (Q-09 reco is safe) |
 | OM-06 amendments | B | ⬜ ready | — | — | ✅ can start |
 | OM-07 tracker | join | ⬜ ready | — | — | ✅ **Unblocked 2026-09-06** — OM-02 is done, which was its only blocker. Q-02 answered, repo private 2026-09-04 |
@@ -44,7 +45,7 @@
 | `TODO.md` size before / after | The 133 KB file is the symptom; the number is the evidence it moved | — |
 | Files that claim to answer "what is next", before / after | Target is **1**. It is 7 today | — |
 | §11 rows closed / 9 | The sprint's actual definition of done | 0 / 9 |
-| Checks in `test_spine.py`, and one proven failure each | A check nobody proved can fail is decoration | — |
+| Checks in `test_spine.py`, and one proven failure each | A check nobody proved can fail is decoration | **10 / 10** |
 
 ## Deviations log
 
@@ -57,8 +58,8 @@
 
 - [ ] **Exactly one file answers "what is next"**, and every file that used to points at it
 - [ ] **`07_work_items.md` §11 is empty** — or every remaining row names the ticket that will close it and why it was not this sprint
-- [ ] `tests/repo/test_spine.py` is green, and has been **proven to go red** on a malformed register
-- [ ] The sensitive-path question is answered at intake; the PR template confirms rather than asks
+- [x] `tests/repo/test_spine.py` is green, and has been **proven to go red** on a malformed register
+- [x] The sensitive-path question is answered at intake; the PR template confirms rather than asks
 - [ ] `PRODUCT.md` answers "what is this and what is in release 1" without assembly
 - [ ] The four amendments live in the standards that own their concerns — **nothing duplicated into `07`**
 - [ ] `_starter_kit/` carries the generic model, with every rule's *why* intact

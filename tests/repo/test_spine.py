@@ -183,6 +183,43 @@ def test_at_most_one_current_per_lane(spine):
     assert not over, f"lanes with more than one `current` item: {over}"
 
 
+def test_ready_rows_carry_a_profile(spine):
+    """07 §6 + OM-04 — an item cannot reach `ready` without a profile.
+
+    The profile is what selects the model, the reviewer, the tests and the gates (§4.3), and it is
+    derived at intake from six questions — `docs/items/TEMPLATE.md` §3. A `ready` row with an empty
+    profile cell is an item nobody has sized the blast radius of, sitting in the list of things
+    somebody could pick up today. **`+SENSITIVE` is never waived by kind or by size (§4.2)**, so the
+    one row this is most likely to catch is exactly the one it most matters for.
+
+    ⚠ Column-indexed, not pattern-matched. `chore` is both a kind and a profile, and `bug` and
+    `deviation` are both — so a substring search passes a row that has a kind and no profile at all.
+    The header row is the only unambiguous way to tell the two columns apart.
+    """
+    bad = []
+    profile_idx: int | None = None
+    for line in spine.split("\n"):
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            profile_idx = None          # a table ends at the first non-table line
+            continue
+        cells = [c.strip() for c in stripped.strip("|").split("|")]
+        lowered = [c.lower() for c in cells]
+        if "profile" in lowered:        # header row — remember where the column is
+            profile_idx = lowered.index("profile")
+            continue
+        if profile_idx is None or set(stripped) <= set("|-: "):
+            continue
+        if not any(c in ("`ready`", "`current`") or c.startswith(("`ready`", "`current`")) for c in cells):
+            continue
+        if profile_idx >= len(cells) or cells[profile_idx] in ("", "—", "-", "–", "TBD", "?"):
+            bad.append(cells[0][:60])
+    assert not bad, (
+        "`ready`/`current` rows with no profile — the profile is what selects the model, the "
+        f"reviewer, the tests and the gates (07 §4.3): {bad}"
+    )
+
+
 def test_the_register_declares_its_own_governing_standard(spine):
     """A register that does not say which rules it follows cannot be checked against them."""
     assert "07_work_items.md" in spine, "the register must name the standard that governs it"

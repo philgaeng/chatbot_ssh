@@ -2,7 +2,7 @@
 
 **Status:** authoritative (2026-09-04). **The single answer to "what is next."** If another document
 appears to answer it too, that document is wrong — say so and fix it.
-**Last updated:** 2026-09-06 — OM-02 + OM-03 closed, OM-04 is `current`, OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
+**Last updated:** 2026-09-06 — OM-02, OM-03 and OM-04 closed (the register test now has ten checks, and a `ready` row without a profile is one of them), OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
 deploy, `GRM-014` reframed and downgraded, `GRM-067` + `GRM-068` opened. Created 2026-09-04 (OM-02), seeded from
 `sprints/README.md`, the four live sprint trackers, and the open rows of `TODO.md`, which is now
 retired behind a forwarding note.
@@ -72,7 +72,7 @@ design. **The five minutes were the work.**
 
 | Lane | Item | Kind | Profile | State | Verification |
 |---|---|---|---|---|---|
-| operating-model | **[OM-04](sprints/2026-09_operating_model/04-OM-04-sensitive-path-at-intake.md)** — sensitive-path question at intake | feature | chore+SPEC | `current` | `planned` |
+| *(operating-model)* | — | | | | *OM-04 closed 2026-09-06. **OM-05, OM-06 and OM-09 are ready and independent** — Stream B, no ordering between them* |
 | *(all others)* | — | | | | *no lane has a second `current`* |
 
 ---
@@ -196,6 +196,7 @@ done in their own text; those resolve as they are picked up.
 | [OM-01](sprints/2026-09_operating_model/01-OM-01-work-item-standard.md) — the work-item standard | feature | 2026-09-04 | `implemented` — ⚠ the standard is adopted, **not in force**; its §11 is the gap list |
 | **A-3 / HR-05 (settings half)** — branch protection | chore | 2026-09-04 | `verified` — ruleset active on `main` + `integration/*`, read back through the API. ⚠ The **proof** half is `GRM-`-less and sits in the register above |
 | **D-010** — the working repository is private | chore | 2026-09-04 | `verified` — `gh repo view` → `PRIVATE` |
+| [OM-04](sprints/2026-09_operating_model/04-OM-04-sensitive-path-at-intake.md) — sensitive-path question at intake | feature | 2026-09-06 | `tested` — the six derivation questions moved to [`items/TEMPLATE.md`](items/TEMPLATE.md); the PR template confirms a profile instead of deciding one; `+SENSITIVE` ⇒ Opus is mechanical in `AGENTS.md`. **Enforced:** a `ready`/`current` row with an empty profile now fails `test_spine.py` (check 10, proven to fail two ways). Closes `07` §11 row 4 |
 | [OM-03](sprints/2026-09_operating_model/03-OM-03-register-test.md) — `tests/repo/test_spine.py` | feature | 2026-09-06 | `tested` — nine checks, each proven to fail by a mutation sweep, running in CI ([`ci.yml`](../.github/workflows/ci.yml)). §7.2: a chore-profile item is done at `tested` |
 | [OM-02](sprints/2026-09_operating_model/02-OM-02-the-register.md) — the register | feature | 2026-09-06 | `tested` — OM-03 is its TEST gate, and its VERIFY gate was met by use: this session read the register, acted on three of its rows, and wrote five back. ⚠ Closed the day after it was written, by its own author-lineage — a second reader has not audited it |
 | `GRM-013` — DOR prod firewall for `:5001` | chore | 2026-09-06 | `verified` — 5001 filtered from outside the host (egress `146.70.252.25`), with 443/80 answering on the same probe. ⚠ **One vantage**: this observes reachability, not the ruleset — a source-IP allowlist is indistinguishable from here |
