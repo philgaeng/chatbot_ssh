@@ -30,6 +30,18 @@ export const API_BASE_URL = stripTrailingSlash(
 );
 
 /**
+ * The REST webchat — the **complainant** surface, and a different application from the
+ * officer UI (plain JS + socket.io, `channels/REST_webchat/`).
+ *
+ * ⚠ **Reached through nginx, not directly** ([Q-12](../../../docs/sprints/2026-09_qa_automation/QUESTIONS.md)),
+ * because nginx is part of what serves it: it aliases the working-tree files *and* proxies
+ * `/message`, the uploads and the socket. Bypassing it would test a deployment nobody runs.
+ * The trailing slash matters — nginx's `location /rest-webchat/` uses an `alias`.
+ */
+export const WEBCHAT_URL =
+  process.env.E2E_WEBCHAT_URL ?? "http://localhost:8080/rest-webchat/";
+
+/**
  * How long global setup waits for the stack. Generous, because a cold `docker compose up`
  * on a CI runner takes a while — but **bounded**, because a hang is the failure mode that
  * teaches everyone to ignore the suite.

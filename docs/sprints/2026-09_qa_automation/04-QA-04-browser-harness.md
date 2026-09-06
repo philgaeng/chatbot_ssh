@@ -225,7 +225,33 @@ than none, and thirty flows give it thirty chances. And the **order** still matt
 gets reviewed before tier 2 is written, for exactly the reason 04a delivers one canary rather than
 thirty specs against an unreviewed harness.
 
-## QA-04d — the webchat sweep (fan-out, ~1–1.5 d) — ✅ **in scope**
+## QA-04d — the webchat sweep (fan-out, ~1–1.5 d) — ✅ **DONE 2026-09-06: 6 of 10 items + 1 partial**
+
+> **9 specs in `e2e/webchat/`, green twice in a row**, through nginx on `:8080` as
+> [Q-12](QUESTIONS.md#q-12--does-the-e2e-stack-go-through-nginx-or-straight-to-the-ui-container) requires.
+> ✅ **Both items HR-07's tracker calls *"must be human-verified (behavioral)"* are now driven:**
+> a double Enter sends exactly one `POST /message`, and a backend that never answers releases the
+> composer via the 15 s failsafe — **simulated with `page.route()`, no container stopped**, so
+> nothing else in the suite fails for an unrelated reason.
+> Also covered: EN/NE (asserted on the *menu*, not the bilingual greeting), SEAH route entry
+> **including the swap of "Close session" for "Close browser tab"**, status check, session-id
+> persistence + rotation (**not** resumption — HR-07's own caveat), SRI load-cleanliness in a real
+> browser, and a **partial** image-upload item (picker, preview, and the hold-until-a-case notice).
+>
+> ⚠ **Four items are deferred, not done** — the upload itself, the voice note, the map pin and the
+> filed banner. All four need an intake driven to a filed case, which runs the classifier: a paid
+> call per run, plus a real grievance filed per run on a system with no erasure path. Tracked as
+> `GRM-077` with three ways to unblock: [`followups/webchat-items-needing-a-filed-case.md`](followups/webchat-items-needing-a-filed-case.md).
+>
+> ⭐ **And it found something bigger than its own scope.** Blocking egress in a browser showed the
+> webchat **cannot function without three foreign CDNs** — socket.io, leaflet and exifr — while
+> still rendering a page that looks fine. On a firewalled production host that is a silently
+> degraded complainant channel (`GRM-076`). ⚠ **HR-07 pinned those scripts with SRI, which answers
+> tampering and not availability.**
+>
+> ⚠ **HR-07's checkbox is deliberately NOT ticked here.** [QA-05](05-QA-05-ci-gate-and-coverage.md)
+> owns it, *"with the run link as evidence — do not tick it because the tests exist; tick it because
+> they ran and passed"*. They pass locally; no CI job runs them yet.
 
 ⚠ **A different surface** — `channels/REST_webchat/`, plain JS + socket.io served through nginx, not the
 Next app. HR-07's code is merged and in the tree; its **7-item manual sweep was never run** and its
