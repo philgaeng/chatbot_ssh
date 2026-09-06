@@ -1,7 +1,7 @@
 # Work items — intake, classification, and gates
 
 **Status:** authoritative (2026-09-06) — ⚠ **adopted, mostly in force.** §11 rows 1, 3, 4, 5, 6 and 7 are closed; **rows 2 and 8 are not** — there is still no roadmap (OM-05) and the tracker is available but unwired (OM-07). §11 lists exactly which, and what closes each. Nothing here supersedes an existing standard; it decides **which of them apply to a given piece of work, and when that is decided.**
-**Last updated:** 2026-09-06 — §11 rows 5 and 6 close: the design gate is written into `05_frontend.md` §9a and the verification ladder into `06` §4a. Earlier the same day, rows 3 and 4 closed: the register test runs in CI (ten checks), and the sensitive-path question moved to intake — rule 4.3 is in force, with an empty profile on a `ready` row now a test failure. Earlier: sprint citations removed (lifecycle §10.1 — this is a public spec); §1.2/§5 reconciled (a chore gets no register row, Q-08); §11 rows 1 and 7 close with `SPINE.md`. Earlier: `G-RELEASE` gains the version-tag requirement; §11 row 8 closes on D-009/D-010.
+**Last updated:** 2026-09-06 — `G-RELEASE` gains the version-tag gate, now wired rather than planned. Earlier the same day, §11 rows 5 and 6 closed: the design gate is written into `05_frontend.md` §9a and the verification ladder into `06` §4a. Earlier the same day, rows 3 and 4 closed: the register test runs in CI (ten checks), and the sensitive-path question moved to intake — rule 4.3 is in force, with an empty profile on a `ready` row now a test failure. Earlier: sprint citations removed (lifecycle §10.1 — this is a public spec); §1.2/§5 reconciled (a chore gets no register row, Q-08); §11 rows 1 and 7 close with `SPINE.md`. Earlier: `G-RELEASE` gains the version-tag requirement; §11 row 8 closes on D-009/D-010.
 **Audience:** public.
 **Reads with:** [`00_engineering_index.md`](00_engineering_index.md) (the ten rules and the shared definition of done) · [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) (tiers, promotion, honesty markers) · the standing deferral rule (the standing deferral rule).
 
@@ -69,7 +69,7 @@ Those are two axes and they must not be collapsed. Ceremony attached to the *lab
 | **G-SPEC** | any behaviour change | an `Amends:` line naming spec + section; the edit rides the same PR | [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) §3 |
 | **G-TEST** | always | the right level per the pyramid. For a **bug**, a failing regression test written **first** | [`04_testing.md`](04_testing.md) |
 | **G-VERIFY** | user-visible behaviour | E2E / browser evidence, **or** an explicit `⚠ Not verified end-to-end` marker | [`06_documentation_lifecycle.md`](06_documentation_lifecycle.md) §4 |
-| **G-RELEASE** | anything deployed | migration order; rollback note; staging before production; smoke check. **A production deploy cuts a version tag** ([D-009](../DECISIONS.md)) ⚠ *not built — OM-09* | [`../deployment/03_operations.md`](../deployment/03_operations.md) |
+| **G-RELEASE** | anything deployed | migration order; rollback note; staging before production; smoke check. **A production deploy cuts a version tag** ([D-009](../DECISIONS.md)) — ✅ **wired 2026-09-06**: every `prod-deploy*` target refuses without one, and the single bypass (`HOTFIX=1`) prints a banner saying a tag is owed today | [`../deployment/03_operations.md`](../deployment/03_operations.md) · [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) |
 
 ## 4. Deriving the profile
 

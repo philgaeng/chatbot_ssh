@@ -4,7 +4,7 @@
 
 > **Status: OM-01, OM-02 and OM-03 landed — Stream A is closed.** ✅ **Q-01…Q-07 answered 2026-09-04.**
 > **The register is validated**: `tests/repo/test_spine.py` runs nine checks in CI, each proven to fail.
-> **OM-04 and OM-06 landed 2026-09-06.** `07` §11 rows 3, 4, 5 and 6 are closed — the standard is **mostly in force**,
+> **OM-04, OM-06 and OM-09 landed 2026-09-06.** `07` §11 rows 3, 4, 5 and 6 are closed — the standard is **mostly in force**,
 > with only row 2 (no roadmap — OM-05) and row 8 (tracker unwired — OM-07) open.
 > **OM-05, OM-09 ready and independent; OM-07 unblocked.** ⚠ OM-05 needs owner input: what the MVP is, and what "launched" means.
 > Tracker skeleton — fill as work lands, not at the end.
@@ -20,8 +20,8 @@
 | OM-04 intake gate | B | ✅ done | `tested` | `dev/operating-model` | [`docs/items/TEMPLATE.md`](../../items/TEMPLATE.md) — six derivation questions at intake · PR template **confirms** a profile instead of asking · `+SENSITIVE` ⇒ Opus mechanical in `AGENTS.md` · **check 10 in `test_spine.py`**: a `ready`/`current` row with no profile fails, proven two ways (blank cell, `—` placeholder) |
 | OM-05 product + roadmap | B | ⬜ ready | — | — | ✅ can start (Q-09 reco is safe) |
 | OM-06 amendments | B | ✅ done | `tested` | `dev/operating-model` | Four amendments, each in its owner — reference packs + rule 11 (`00`), design gate (`05` §9a), verification ladder (`06` §4a), session close + **verified** tooling inventory (`AGENTS.md`). ⭐ A fifth thing the ticket did not ask for: the inventory, because an agent writing a second checker for a rule that already has one is how a rule gets two homes that disagree. Closes `07` §11 rows 5 and 6 |
-| OM-07 tracker | join | ⬜ ready | — | — | ✅ **Unblocked 2026-09-06** — OM-02 is done, which was its only blocker. Q-02 answered, repo private 2026-09-04 |
-| OM-09 release + versioning | B | ⬜ ready | — | — | ✅ can start — D-009/D-010 decided 2026-09-04 |
+| OM-07 tracker | join | ⛔ blocked | — | — | **Blocker: QA-04** — owner decision 2026-09-06. Not a dependency: OM-02 cleared its real blocker. It is a **sequencing** call, and the reason is in the deviations log |
+| OM-09 release + versioning | B | ✅ done | `implemented` | `dev/operating-model` | `deployment/20_release_and_versioning.md` · `CHANGELOG.md` · [D-011](../../DECISIONS.md) · Makefile gate on all four `prod-deploy*` paths. ⚠ **`implemented`, not `tested`** — a release gate cannot be proven without a release. ⭐ Testing it in a throwaway clone **caught a real defect**: the changelog seed named a branch-archive tag as the "previous release" |
 | OM-08 starter kit | — | ⬜ proposed | — | — | ⛔ last |
 
 ## Open actions that are not tickets
@@ -47,11 +47,13 @@
 | Files that claim to answer "what is next", before / after | Target is **1**. It is 7 today | — |
 | §11 rows closed / 9 | The sprint's actual definition of done | 0 / 9 |
 | Checks in `test_spine.py`, and one proven failure each | A check nobody proved can fail is decoration | **10 / 10** |
+| Tickets closed / 9 | The sprint's own progress | **6 / 9** — OM-01…04, 06, 09. Left: OM-05 (owner input), OM-07 (behind QA-04), OM-08 (behind OM-05) |
 
 ## Deviations log
 
 | Date | Ticket | Deviation / adjacent finding | Action |
 |---|---|---|---|
+| 2026-09-06 | OM-07 | ⭐ **Owner decision: OM-07 goes behind QA-04.** OM-02 had cleared OM-07's only real blocker, so this is **sequencing, not dependency** — and it is recorded because a `blocked` row whose blocker is a preference reads as a dependency to the next agent, which is exactly how an ordering choice becomes invisible received wisdom. **The reason:** OM-07 wires a tracker — plumbing, no external risk — while QA-04 is what makes the verification ladder ([`06`](../../engineering/06_documentation_lifecycle.md) §4a, written the same day) reachable at all. Today that ladder's top rung costs 60–75 minutes of human clicking every time, which is why HR-07 has sat `ready` for weeks and why `GRM-001` has no cheap verification path | OM-07 `blocked`, unblock condition named: QA-04a + QA-04b land. ⚠ Needs the QA sprint approved first — every QA row still reads *(sprint not approved)* |
 | 2026-09-04 | — | ⭐ **Empirical answer to an open unknown: rulesets DO enforce on a private repo owned by a personal account.** The research found GitHub's docs and community reports disagreeing, users reporting a *"won't be enforced until you move to a Team or Enterprise organization"* banner. It did not apply here — `enforcement: active` stuck and read back through the API. **This removes one of the three reasons to move the repo into an organization**; the other two (an eventual DOR handover, and the GHCR image paths QA-02 bakes into the Makefile and compose files) still stand on their own | Recorded so the org decision rests on two real reasons rather than three, one of which was folklore |
 | 2026-09-04 | OM-01 | **Writing the standard surfaced an internal contradiction in itself**: §1.2 says small work is "a register row and a PR" while §5 gives a chore's artifact as a commit line only. Left in deliberately rather than silently picked — it is a real fork about what the register is for | Raised as [Q-08](QUESTIONS.md#q-08--does-a-chore-need-a-register-row-at-all); OM-02 must reconcile §1.2 and §5 whichever way it is answered |
 

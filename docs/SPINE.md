@@ -2,7 +2,7 @@
 
 **Status:** authoritative (2026-09-04). **The single answer to "what is next."** If another document
 appears to answer it too, that document is wrong — say so and fix it.
-**Last updated:** 2026-09-06 — OM-06 closed (`07` §11 rows 5 and 6 with it); OM-02, OM-03 and OM-04 closed (the register test now has ten checks, and a `ready` row without a profile is one of them), OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
+**Last updated:** 2026-09-06 — OM-09 closed at `implemented` (a release gate cannot be proven without a release); OM-07 deliberately re-blocked behind QA-04 (owner sequencing decision); OM-06 closed (`07` §11 rows 5 and 6 with it); OM-02, OM-03 and OM-04 closed (the register test now has ten checks, and a `ready` row without a profile is one of them), OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
 deploy, `GRM-014` reframed and downgraded, `GRM-067` + `GRM-068` opened. Created 2026-09-04 (OM-02), seeded from
 `sprints/README.md`, the four live sprint trackers, and the open rows of `TODO.md`, which is now
 retired behind a forwarding note.
@@ -72,7 +72,7 @@ design. **The five minutes were the work.**
 
 | Lane | Item | Kind | Profile | State | Verification |
 |---|---|---|---|---|---|
-| *(operating-model)* | — | | | | *OM-06 closed 2026-09-06. **OM-05 and OM-09 are ready and independent**; OM-07 unblocked* |
+| *(operating-model)* | — | | | | *OM-09 closed 2026-09-06. **OM-05 is the last one that can start** — and it needs owner input; OM-07 is behind QA-04, OM-08 behind OM-05* |
 | *(all others)* | — | | | | *no lane has a second `current`* |
 
 ---
@@ -84,9 +84,8 @@ Items someone could pick up today. Sprint tickets keep their own IDs and link to
 | Item | Kind | Profile | State | Size | Lane | Notes |
 |---|---|---|---|---|---|---|
 | [OM-05](sprints/2026-09_operating_model/05-OM-05-product-and-roadmap.md) — `PRODUCT.md` + `ROADMAP.md` | feature | chore+SPEC | `ready` | M | operating-model | Mostly assembly |
-| [OM-09](sprints/2026-09_operating_model/09-OM-09-release-and-versioning.md) — release + versioning | feature | chore+SPEC+RELEASE | `ready` | M | operating-model | A tag is cut on production deploy ([D-009](DECISIONS.md)) |
-| [OM-07](sprints/2026-09_operating_model/07-OM-07-intake-and-tracker.md) — unify intake, wire the tracker | feature | backend-feature −DATA | `ready` | M | operating-model | ✅ **Unblocked 2026-09-06** — its only blocker was OM-02, now done. Ungated otherwise — repo is private |
-| [OM-08](sprints/2026-09_operating_model/08-OM-08-starter-kit-extraction.md) — starter-kit extraction | feature | chore+SPEC | `blocked` | S | operating-model | **Blocker:** OM-01…OM-06. Last by design |
+| [OM-07](sprints/2026-09_operating_model/07-OM-07-intake-and-tracker.md) — unify intake, wire the tracker | feature | backend-feature −DATA | `blocked` | M | operating-model | **Blocker: QA-04** (owner decision 2026-09-06 — sequencing, not dependency). OM-02 cleared its original blocker; it was then deliberately put behind the browser harness because **OM-07 is plumbing with no external risk, while QA-04 is what makes the verification ladder ([`06`](engineering/06_documentation_lifecycle.md) §4a) reachable without 75 minutes of human clicking**. ⚠ **Unblock condition:** QA-04a + QA-04b land — which needs the QA sprint approved first |
+| [OM-08](sprints/2026-09_operating_model/08-OM-08-starter-kit-extraction.md) — starter-kit extraction | feature | chore+SPEC | `blocked` | S | operating-model | **Blocker: OM-05 only** — OM-01, OM-02, OM-03, OM-04 and OM-06 all closed 2026-09-06. Last by design |
 | [QA-01](sprints/2026-09_qa_automation/01-QA-01-deploy-safety.md) — stop the next deploy being an outage | feature | backend-feature | `ready` | S | qa *(sprint not approved)* | ½ d · from the 2026-09-04 deploy outage |
 | [QA-02](sprints/2026-09_qa_automation/02-QA-02-ci-built-images.md) — CI-built images | feature | backend-feature+RELEASE | `ready` | L | qa *(not approved)* | ⚠ **Q-01 must be re-decided** — its GHCR premise inverted when the repo went private |
 | [QA-03](sprints/2026-09_qa_automation/03-QA-03-stack-isolation.md) — `COMPOSE_PROJECT_NAME` + ports | feature | chore | `blocked` | S | qa *(not approved)* | **Blocker:** QA-02 |
@@ -162,7 +161,7 @@ done in their own text; those resolve as they are picked up.
 | `GRM-039` | debt | — | 🟠 **27 test files have never run in CI** — 21 sitting directly in `tests/` plus 6 in `tests/shared/`, including SEAH routing, complainant functions, sensitive-content detection and Q… | `.github/workflows/ci.yml:178` |
 | `GRM-040` | debt | — | 🟠 **NEW FEATURE — a SEAH officer cannot explicitly return a cleared case to the standard queue** | `ticketing/engine/ticket_actions.py:561` (no action) · `ticketing/api/routers/tickets/crud.py:523` + `ticketing/services/ticket… |
 | `GRM-041` | debt | — | 🟠 **Two AWS credentials remain in `secrets.enc.env` with no consumer, and the licence audit is stale** | `secrets.enc.env` (`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`) · `docs/dpg/dependency-licenses.md` |
-| `GRM-042` | debt | — | ⏸ **Governance model + release/versioning policy deferred** (DPG indicator 8) | repo root |
+| `GRM-042` | debt | — | 🟡 **HALF CLOSED 2026-09-06 — the release/versioning policy exists** ([`deployment/20_release_and_versioning.md`](deployment/20_release_and_versioning.md), `CHANGELOG.md`, and a deploy gate that refuses an untagged production deploy). ⏸ **The governance model is still deferred** — that half is what DPG indicator 8 still wants | repo root |
 | `GRM-043` | debt | — | 🟡 **Demo officer switcher one-way door — ROOT FIX LANDED 2026-07-16; C4 unblocked. Optional portal hardening remains.** | `ticketing/api/dependencies.py` (`require_admin_or_bypass`) · `ticketing/api/routers/users.py` (roster routes) |
 | `GRM-044` | debt | — | Seed log message still says `PROVINCE_1` | `kl_road_standard.py:319` |
 | `GRM-045` | debt | — | `_scope_candidates` calls `_location_and_ancestors` twice (branches B + C) | `workflow_engine.py` |
@@ -195,6 +194,7 @@ done in their own text; those resolve as they are picked up.
 | [OM-01](sprints/2026-09_operating_model/01-OM-01-work-item-standard.md) — the work-item standard | feature | 2026-09-04 | `implemented` — ⚠ the standard is adopted, **not in force**; its §11 is the gap list |
 | **A-3 / HR-05 (settings half)** — branch protection | chore | 2026-09-04 | `verified` — ruleset active on `main` + `integration/*`, read back through the API. ⚠ The **proof** half is `GRM-`-less and sits in the register above |
 | **D-010** — the working repository is private | chore | 2026-09-04 | `verified` — `gh repo view` → `PRIVATE` |
+| [OM-09](sprints/2026-09_operating_model/09-OM-09-release-and-versioning.md) — release + versioning | feature | 2026-09-06 | `implemented` — ⚠ **deliberately not `tested`.** [`deployment/20_release_and_versioning.md`](deployment/20_release_and_versioning.md) + `CHANGELOG.md` + [D-011](DECISIONS.md) (dated releases, semver rejected with its reason); every `prod-deploy*` target refuses without a tag, with one loud `HOTFIX=1` bypass. The gate, the bypass, the `.N` same-day increment and `git show <tag>:docs/…` were all **run** — the tag mechanics in a throwaway clone, so no release was invented here. What is unproven is a real production deploy under it, which is the one thing that cannot be faked |
 | [OM-06](sprints/2026-09_operating_model/06-OM-06-standard-amendments.md) — four standard amendments | feature | 2026-09-06 | `tested` — each landed in the standard that owns the concern, none duplicated into `07`: reference packs + an 11th rule ([`00`](engineering/00_engineering_index.md)), the design gate ([`05`](engineering/05_frontend.md) §9a), the verification ladder ([`06`](engineering/06_documentation_lifecycle.md) §4a), session close + a verified tooling inventory (`AGENTS.md`). Closes `07` §11 rows 5 and 6 — the standard is now **mostly in force**, with only rows 2 and 8 open |
 | [OM-04](sprints/2026-09_operating_model/04-OM-04-sensitive-path-at-intake.md) — sensitive-path question at intake | feature | 2026-09-06 | `tested` — the six derivation questions moved to [`items/TEMPLATE.md`](items/TEMPLATE.md); the PR template confirms a profile instead of deciding one; `+SENSITIVE` ⇒ Opus is mechanical in `AGENTS.md`. **Enforced:** a `ready`/`current` row with an empty profile now fails `test_spine.py` (check 10, proven to fail two ways). Closes `07` §11 row 4 |
 | [OM-03](sprints/2026-09_operating_model/03-OM-03-register-test.md) — `tests/repo/test_spine.py` | feature | 2026-09-06 | `tested` — nine checks, each proven to fail by a mutation sweep, running in CI ([`ci.yml`](../.github/workflows/ci.yml)). §7.2: a chore-profile item is done at `tested` |

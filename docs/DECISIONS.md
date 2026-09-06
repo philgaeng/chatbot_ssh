@@ -1,7 +1,7 @@
 # Decisions
 
-**Status:** authoritative (2026-09-04). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-04 — D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
+**Status:** authoritative (2026-09-06). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
+**Last updated:** 2026-09-06 — D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -286,3 +286,34 @@ unremovable item is `SMTP_USERNAME`, the git author email on 865 of 1,018 commit
 **What would change the answer:** wanting the engineering process record public on its own merits. That
 does not require this decision to reverse — a curated subset publishes the same way a release does, by
 generation. Going private preserves the option rather than foreclosing it.
+
+## D-011 · Releases are dated, not semantically versioned
+
+**Date:** 2026-09-06 · **Status:** ✅ **decided and implemented** — policy in
+[`deployment/20_release_and_versioning.md`](deployment/20_release_and_versioning.md), gate wired into
+every `prod-deploy*` target. ⚠ **No release cut yet**; the first tag appears at the first production
+deploy after this date.
+
+**Chosen:** `vYYYY.MM.DD`, with `.N` for a second release the same day, cut when — and only when — a
+build is deployed to production.
+
+**Rejected — semver (`major.minor.patch`).** Semver's whole content is a **compatibility promise to an
+integrator**, and this system has none. Nothing consumes the GRM as a library, and the one interface
+anybody calls is the HTTP API, which already carries its own version in the path (`/api/v1/`)
+independent of any release number. So semver's central question — *is this a major?* — has no correct
+answer here. **A decision with no correct answer does not get skipped; it gets made arbitrarily and
+then defended**, and the version number becomes ceremony that costs a debate per release and tells the
+three actual readers nothing they asked for.
+
+Those three readers, and what the date answers directly: DOR change control (*"which version is
+running, and when did it change?"*), a DPG assessor (*"is this a versioned release with a
+changelog?"*), and us during a rollback (*"what was running before this?"*).
+
+**Also rejected — cutting a tag on merge to `main`, or on a schedule.** Both describe an *intention*
+rather than an event. The production deploy is already the moment someone weighed the risk and pressed
+the button; attaching the tag there costs nothing extra and cannot drift from what is actually running.
+
+**What would change the answer:** a second system integrating against this one as a dependency — not
+over HTTP, where `/api/v1/` already carries the contract, but as a library or a shared package. At
+that point a compatibility promise would have a real audience and semver would start earning its
+overhead. A DOR or ADB requirement naming a version format would also settle it, and neither has.

@@ -55,11 +55,11 @@ Generating the public repository (that is the split ticket, in
 
 ## Acceptance
 
-- [ ] A production deploy cannot complete without a tag, and **skipping is loud, not silent**
-- [ ] `git show <tag>:docs/…` returns the spec for that release — verified by running it
-- [ ] The scheme records its rejected alternative (`DECISIONS.md`, or inline with the reason)
-- [ ] `docs/README.md` no longer says the policy is deferred
-- [ ] No tags invented for past releases
+- [x] A production deploy cannot complete without a tag, and **skipping is loud, not silent** — all four `prod-deploy*` targets depend on `release-check`; the one bypass is `HOTFIX=1` and prints a banner saying a tag is owed today. ⚠ **`prod-deploy-ops` is gated too** — it was the obvious hole: an ops-only path still ships code to production
+- [x] `git show <tag>:docs/…` returns the spec for that release — **verified by running it, in a throwaway clone**, because running it here would have required inventing the release the ticket forbids. The mechanism is proven; a real production release is not
+- [x] The scheme records its rejected alternative — both: inline in §2 and as [D-011](../../DECISIONS.md), which also records **what would reverse it** (a second system integrating as a library rather than over `/api/v1/`)
+- [x] `docs/README.md` no longer says the policy is deferred — it names the policy, and keeps the governance-model half honestly deferred
+- [x] No tags invented for past releases — the repository still has exactly its nine branch-archive tags, checked after every test run
 
 ## Risks
 
@@ -67,3 +67,28 @@ Generating the public repository (that is the split ticket, in
   a DPG assessor, or our own rollback — before picking. The answer decides date-based vs semver.
 - **The gate blocks a hotfix.** Say explicitly what an emergency deploy does. "Tag afterwards, same
   day" is a legitimate answer; "skip quietly" is not.
+
+## Done 2026-09-06 — at `implemented`, and why not `tested`
+
+**A release gate cannot be proven without a release.** Everything testable was run: the gate refuses an
+untagged deploy, `HOTFIX=1` bypasses loudly, `make release-tag` cuts `vYYYY.MM.DD`, refuses a second cut
+on the same commit, increments `.N` on the same day, and `git show <tag>:docs/…` returns the spec. The
+tag mechanics ran in a **throwaway clone** so that no release tag was invented here — § *Not in scope*
+forbids exactly that, and the policy's own §2 repeats it.
+
+⭐ **Running it caught a defect that reading it would not have.** The first implementation seeded the
+changelog with `git describe --tags --abbrev=0 HEAD^`, which happily named
+`archive/branches/20260506/feat/seah-sensitive-intake` as the "previous release" — one of the nine
+branch archives the policy explicitly says are not releases. The gate would have shipped telling its
+first user to diff against a branch backup from May. Fixed to filter on the release pattern.
+
+**Two decisions, both recorded with their rejected alternative:**
+
+- **Dated over semver** ([D-011](../../DECISIONS.md)) — semver encodes a compatibility promise to an
+  integrator, and this system has none; `/api/v1/` already carries the only contract anyone calls.
+- **Hand-written changelog over generated** — the audience is DOR change control and a DPG assessor,
+  and this repository's commit subjects are written for the next agent: faithful and unreadable to both.
+
+**What is left, and it is the honest residual:** the first production deploy clears `20_release_and_versioning.md`
+§7 and moves this to `verified in production`. `06` §3a.2 also still warns that no tag exists — that
+warning is correct today and is cleared by the same event.

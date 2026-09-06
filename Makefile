@@ -230,6 +230,7 @@ endef
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
 	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
+	release-check release-tag \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
@@ -369,26 +370,85 @@ aws-deploy-full:
 aws-deploy-ops:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_OPS,$(REMOTE_DIR_RUNNING),aws-deploy-ops)'
 
+# ── Release gate (D-009 · docs/deployment/20_release_and_versioning.md) ───────
+# A version is cut when, and only when, a build is deployed to production. The tag
+# is REQUIRED, not cut by the deploy: a deploy that tags on entry leaves a tag for a
+# release that then failed halfway, and one that tags on success cannot tag a commit
+# if the deploy died. Requiring it first means the tag names a commit somebody chose.
+RELEASE_TAG_RE := ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$
+
+release-check:
+	@tag="$$(git tag --points-at HEAD | grep -E '$(RELEASE_TAG_RE)' | head -1)"; \
+	if [ -n "$$tag" ]; then \
+	  echo "release gate OK — HEAD is $$tag"; \
+	elif [ "$(HOTFIX)" = "1" ]; then \
+	  echo ""; \
+	  echo "  ############################################################"; \
+	  echo "  ##  HOTFIX DEPLOY — NO RELEASE TAG ON HEAD                ##"; \
+	  echo "  ##  A tag is OWED, today. Cut it as soon as the fire is   ##"; \
+	  echo "  ##  out:   make release-tag && git push origin <tag>      ##"; \
+	  echo "  ##  Policy: docs/deployment/20_release_and_versioning.md  ##"; \
+	  echo "  ############################################################"; \
+	  echo ""; \
+	else \
+	  echo ""; \
+	  echo "REFUSING TO DEPLOY: HEAD carries no release tag."; \
+	  echo ""; \
+	  echo "  A version is cut when, and only when, a build is deployed to"; \
+	  echo "  production (D-009). Cut it, then deploy:"; \
+	  echo ""; \
+	  echo "      make release-tag"; \
+	  echo "      make $(MAKECMDGOALS)"; \
+	  echo ""; \
+	  echo "  Genuine emergency? Bypass LOUDLY and tag the same day:"; \
+	  echo ""; \
+	  echo "      make $(MAKECMDGOALS) HOTFIX=1"; \
+	  echo ""; \
+	  echo "  Policy: docs/deployment/20_release_and_versioning.md"; \
+	  echo ""; \
+	  exit 1; \
+	fi
+
+# Cut today's release tag. vYYYY.MM.DD, with .N for a second release the same day.
+release-tag:
+	@existing="$$(git tag --points-at HEAD | grep -E '$(RELEASE_TAG_RE)' | head -1)"; \
+	if [ -n "$$existing" ]; then \
+	  echo "HEAD already carries $$existing — nothing to cut."; exit 1; \
+	fi; \
+	base="v$$(date +%Y.%m.%d)"; tag="$$base"; n=0; \
+	while git rev-parse -q --verify "refs/tags/$$tag" >/dev/null 2>&1; do \
+	  n=$$((n+1)); tag="$$base.$$n"; \
+	done; \
+	git tag -a "$$tag" -m "Release $$tag"; \
+	echo "cut $$tag at $$(git rev-parse --short HEAD)"; \
+	echo "push it:  git push origin $$tag"; \
+	prev="$$(git tag --list --merged HEAD^ | grep -E '$(RELEASE_TAG_RE)' | sort | tail -1)"; \
+	if [ -n "$$prev" ]; then \
+	  echo "changelog: seed with  git log --oneline $$prev..$$tag"; \
+	else \
+	  echo "changelog: first release — seed with  git log --oneline $$tag"; \
+	fi
+
 # ── Production (VPN + password SSH) ───────────────────────────────────────────
 # Requires VPN. No -i key: ssh/scp prompt for PROD_SERVER_USER password.
 ssh-prod:
 	@echo "VPN required. Connecting to $(PROD_SERVER_USER)@$(PROD_HOST) (password prompt)..."
 	$(SSH_PROD)
 
-prod-deploy:
+prod-deploy: release-check
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy)'
 
-prod-deploy-light:
+prod-deploy-light: release-check
 	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_LIGHT,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_LIGHT_SERVICES),prod-deploy-light)'
 
-prod-deploy-full:
+prod-deploy-full: release-check
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on prod.
-prod-deploy-ops:
+prod-deploy-ops: release-check
 	@echo "VPN required. Deploying ops monitor to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_OPS,$(PROD_REMOTE_DIR),prod-deploy-ops)'
 

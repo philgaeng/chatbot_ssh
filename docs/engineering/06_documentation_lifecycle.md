@@ -1,7 +1,7 @@
 # Documentation lifecycle
 
 **Status:** authoritative (2026-09-06). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-06 — §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-06 — §3a.2's release-tag example stops naming `v1.2.0`, a tag that never existed; it now names the scheme in [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) and says plainly that no tag exists yet. Also: §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
@@ -80,9 +80,19 @@ There is no need for a separate spec versioning scheme, because git already prov
 **Rule 3a.2 — Releases are tagged, so any past state is recoverable exactly:**
 
 ```bash
-git show v1.2.0:docs/ticketing_system/12_workflows_configuration.md   # the spec for what shipped in 1.2.0
+git show v2026.09.06:docs/ticketing_system/12_workflows_configuration.md   # the spec for what shipped that day
 git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why it changed, and with which code
 ```
+
+The tag scheme and the gate that cuts it are [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md):
+`vYYYY.MM.DD`, cut when — and only when — a build reaches production.
+
+⚠ **No release tag exists yet.** The first is cut at the first production deploy after 2026-09-06, so
+this command currently has nothing to find. *This is recorded rather than quietly fixed, because until
+2026-09-06 the example named `v1.2.0` — a tag that never existed, in a repository whose only nine tags
+are branch archives. A documented recovery mechanism resting on nothing is worse than an absent one: it
+is trusted, and it fails at the moment somebody needs it.* The mechanism itself is proven — the tag
+gate and `git show <tag>:docs/…` were exercised end-to-end against a throwaway clone.
 
 **Rule 3a.3 — Small, frequent merges bound the drift.** Spec staleness is capped by how long a branch lives. A branch open for two days can be two days stale; one open for six weeks can be six weeks wrong. This is the main practical reason to keep pull requests small.
 

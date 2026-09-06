@@ -2,7 +2,7 @@
 
 **Status:** index — the map of the tree, not a spec in itself.
 **Audience:** public — published with the open-source repository.
-**Last updated:** 2026-09-04 — `SPINE.md` added as the register; `TODO.md` retired behind it (OM-02). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-06 — the release/versioning policy is no longer deferred: `deployment/20_release_and_versioning.md`. Earlier: `SPINE.md` added as the register; `TODO.md` retired behind it (OM-02). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
@@ -201,8 +201,11 @@ The engineering that closes the gaps is specced in the sprint folders — **inte
 **Open-source project hygiene** (indicator 8) lives at the repository root, not under `docs/`:
 [`SECURITY.md`](../SECURITY.md) (private disclosure — this platform holds SEAH reports),
 [`CONTRIBUTING.md`](../CONTRIBUTING.md), [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md), and the
-issue/PR templates under `.github/`. A governance model and a release/versioning policy are
-deliberately deferred, and tracked internally.
+issue/PR templates under `.github/`. **The release and versioning policy is
+[`deployment/20_release_and_versioning.md`](deployment/20_release_and_versioning.md)** — `vYYYY.MM.DD`,
+cut when and only when a build reaches production, enforced by the deploy targets themselves. ⚠ **No
+release has been cut yet**; the first tag appears at the first production deploy after 2026-09-06. A
+governance model remains deliberately deferred, and is tracked internally.
 
 ---
 
