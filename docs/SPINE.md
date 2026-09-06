@@ -2,7 +2,7 @@
 
 **Status:** authoritative (2026-09-04). **The single answer to "what is next."** If another document
 appears to answer it too, that document is wrong — say so and fix it.
-**Last updated:** 2026-09-06 — OM-02, OM-03 and OM-04 closed (the register test now has ten checks, and a `ready` row without a profile is one of them), OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
+**Last updated:** 2026-09-06 — OM-06 is `current`; OM-02, OM-03 and OM-04 closed (the register test now has ten checks, and a `ready` row without a profile is one of them), OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
 deploy, `GRM-014` reframed and downgraded, `GRM-067` + `GRM-068` opened. Created 2026-09-04 (OM-02), seeded from
 `sprints/README.md`, the four live sprint trackers, and the open rows of `TODO.md`, which is now
 retired behind a forwarding note.
@@ -72,7 +72,7 @@ design. **The five minutes were the work.**
 
 | Lane | Item | Kind | Profile | State | Verification |
 |---|---|---|---|---|---|
-| *(operating-model)* | — | | | | *OM-04 closed 2026-09-06. **OM-05, OM-06 and OM-09 are ready and independent** — Stream B, no ordering between them* |
+| operating-model | **[OM-06](sprints/2026-09_operating_model/06-OM-06-standard-amendments.md)** — four standard amendments | feature | chore+SPEC | `current` | `planned` |
 | *(all others)* | — | | | | *no lane has a second `current`* |
 
 ---
@@ -84,7 +84,6 @@ Items someone could pick up today. Sprint tickets keep their own IDs and link to
 | Item | Kind | Profile | State | Size | Lane | Notes |
 |---|---|---|---|---|---|---|
 | [OM-05](sprints/2026-09_operating_model/05-OM-05-product-and-roadmap.md) — `PRODUCT.md` + `ROADMAP.md` | feature | chore+SPEC | `ready` | M | operating-model | Mostly assembly |
-| [OM-06](sprints/2026-09_operating_model/06-OM-06-standard-amendments.md) — four standard amendments | feature | chore+SPEC | `ready` | M | operating-model | Packs · design gate · verification ladder · session close |
 | [OM-09](sprints/2026-09_operating_model/09-OM-09-release-and-versioning.md) — release + versioning | feature | chore+SPEC+RELEASE | `ready` | M | operating-model | A tag is cut on production deploy ([D-009](DECISIONS.md)) |
 | [OM-07](sprints/2026-09_operating_model/07-OM-07-intake-and-tracker.md) — unify intake, wire the tracker | feature | backend-feature −DATA | `ready` | M | operating-model | ✅ **Unblocked 2026-09-06** — its only blocker was OM-02, now done. Ungated otherwise — repo is private |
 | [OM-08](sprints/2026-09_operating_model/08-OM-08-starter-kit-extraction.md) — starter-kit extraction | feature | chore+SPEC | `blocked` | S | operating-model | **Blocker:** OM-01…OM-06. Last by design |
