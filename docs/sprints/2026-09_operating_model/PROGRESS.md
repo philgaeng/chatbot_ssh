@@ -4,8 +4,9 @@
 
 > **Status: OM-01, OM-02 and OM-03 landed — Stream A is closed.** ✅ **Q-01…Q-07 answered 2026-09-04.**
 > **The register is validated**: `tests/repo/test_spine.py` runs nine checks in CI, each proven to fail.
-> **OM-04 landed 2026-09-06** — rule 4.3 is in force and `07` §11 row 4 is closed.
-> **OM-05, OM-06 and OM-09 are ready and independent** (Stream B, no ordering); **OM-07 unblocked** 2026-09-06.
+> **OM-04 and OM-06 landed 2026-09-06.** `07` §11 rows 3, 4, 5 and 6 are closed — the standard is **mostly in force**,
+> with only row 2 (no roadmap — OM-05) and row 8 (tracker unwired — OM-07) open.
+> **OM-05, OM-09 ready and independent; OM-07 unblocked.** ⚠ OM-05 needs owner input: what the MVP is, and what "launched" means.
 > Tracker skeleton — fill as work lands, not at the end.
 > Sprint: [`README.md`](README.md) · Why: [`DESIGN-operating-model.md`](DESIGN-operating-model.md) · Questions: [`QUESTIONS.md`](QUESTIONS.md)
 
@@ -18,7 +19,7 @@
 | OM-03 test | A | ✅ done | `tested` | `dev/operating-model` | `tests/repo/test_spine.py` — **9 checks, each proven to fail on the defect it exists for** by a mutation sweep. ⚠ The sweep caught **two holes review had not**: `startswith` let a `chore+SENSITIVE` profile satisfy the *kind* check, and every non-`GRM` row (`OM-*`, `QA-*`, `HR-*`) was invisible to every field check. It also caught a **substantive miss** — four rows described as "promoted to the Register" existed only in the security view |
 | OM-04 intake gate | B | ✅ done | `tested` | `dev/operating-model` | [`docs/items/TEMPLATE.md`](../../items/TEMPLATE.md) — six derivation questions at intake · PR template **confirms** a profile instead of asking · `+SENSITIVE` ⇒ Opus mechanical in `AGENTS.md` · **check 10 in `test_spine.py`**: a `ready`/`current` row with no profile fails, proven two ways (blank cell, `—` placeholder) |
 | OM-05 product + roadmap | B | ⬜ ready | — | — | ✅ can start (Q-09 reco is safe) |
-| OM-06 amendments | B | 🔵 **current** | `planned` | `dev/operating-model` | Picked up 2026-09-06 — closes `07` §11 rows 5 and 6 |
+| OM-06 amendments | B | ✅ done | `tested` | `dev/operating-model` | Four amendments, each in its owner — reference packs + rule 11 (`00`), design gate (`05` §9a), verification ladder (`06` §4a), session close + **verified** tooling inventory (`AGENTS.md`). ⭐ A fifth thing the ticket did not ask for: the inventory, because an agent writing a second checker for a rule that already has one is how a rule gets two homes that disagree. Closes `07` §11 rows 5 and 6 |
 | OM-07 tracker | join | ⬜ ready | — | — | ✅ **Unblocked 2026-09-06** — OM-02 is done, which was its only blocker. Q-02 answered, repo private 2026-09-04 |
 | OM-09 release + versioning | B | ⬜ ready | — | — | ✅ can start — D-009/D-010 decided 2026-09-04 |
 | OM-08 starter kit | — | ⬜ proposed | — | — | ⛔ last |
@@ -57,7 +58,7 @@
 ## Acceptance — sprint level
 
 - [ ] **Exactly one file answers "what is next"**, and every file that used to points at it
-- [ ] **`07_work_items.md` §11 is empty** — or every remaining row names the ticket that will close it and why it was not this sprint
+- [ ] **`07_work_items.md` §11 is empty** — or every remaining row names the ticket that will close it and why it was not this sprint · *6 of 9 closed; rows 2 (OM-05) and 8 (OM-07) open, row 9 deliberate*
 - [x] `tests/repo/test_spine.py` is green, and has been **proven to go red** on a malformed register
 - [x] The sensitive-path question is answered at intake; the PR template confirms rather than asks
 - [ ] `PRODUCT.md` answers "what is this and what is in release 1" without assembly

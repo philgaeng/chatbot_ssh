@@ -24,8 +24,22 @@ Rewriting the standards. Each amendment is a section, not a revision.
 
 ## Acceptance
 
-- [ ] Each amendment lands in the standard that owns the concern — **no duplication into `07`**
-- [ ] Every touched file's `**Last updated:**` bumped in the same commit (`doc_headers.py --check`)
-- [ ] `00_engineering_index.md` lists `07` in the standards table and the reading order
-- [ ] Reference packs name folders and entry points, not file lists
-- [ ] `07_work_items.md` §11 rows 5 and 6 updated
+- [x] Each amendment lands in the standard that owns the concern — **no duplication into `07`**. `07` gained no new content; its §11 rows 5 and 6 now point at where each landed
+- [x] Every touched file's `**Last updated:**` bumped in the same commit — `doc_headers.py --check` reports the same 11 pre-existing violations as before this ticket, and none of them is one of these commits
+- [x] `00_engineering_index.md` lists `07` in the standards table (already did) **and now in the reading order**, between `SPINE.md` and the layer standard — before you start, not at merge
+- [x] Reference packs name folders and entry points, not file lists — six packs, each a folder + one entry point + the code it governs. ⭐ The **Sensitive path** pack is marked as the one that changes *how* the work is done, not just what you read: entering it means `+SENSITIVE`, which means Opus
+- [x] `07_work_items.md` §11 rows 5 and 6 closed — the standard moved from "partly in force" to "mostly in force"; only rows 2 (OM-05) and 8 (OM-07) remain
+
+## Done 2026-09-06
+
+**A fifth thing was amended that the ticket did not list.** `AGENTS.md` gained the session-close block
+*and* a **"What already exists"** inventory of the twelve enforcement tools already in this repository
+— every row verified to exist before it was written, per rule 9. The inventory is the half that earns
+its keep: the failure it prevents is an agent writing a second checker for a rule that already has one,
+which is how a rule ends up with two homes that disagree.
+
+**What was deliberately not done:** none of the four standards was rewritten (§ *Not in scope*). Each
+amendment is a section added to the standard that already owns the concern.
+
+⚠ **`ui/04_projects_packages_redesign.html` is stale and is now marked stale where it is cited**
+(`05_frontend.md` §9a), rather than only in the register where a frontend agent would not look.

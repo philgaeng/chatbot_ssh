@@ -1,7 +1,7 @@
 # Documentation lifecycle
 
-**Status:** authoritative (2026-09-04). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Status:** authoritative (2026-09-06). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
+**Last updated:** 2026-09-06 — §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
@@ -149,6 +149,45 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 **Rule 4.2 — Clearing a marker is a deliberate edit**, made by whoever did the verification, with the date.
 
 **Rule 4.3 — An implementation-status table beats prose** for a spec that is partly built. `docs/seah/02_vault_privacy_and_reveal.md` is the exemplar — copy its shape.
+
+### 4a. The verification ladder — the same honesty, applied to *items*
+
+Everything above marks a **sentence in a document**. An item — a unit of work — carries the same
+honesty on its own axis, and the two are routinely confused: *"it's done"* means one thing about a
+paragraph and another about a ticket.
+
+**Rule 4a.1 — Every item carries two state fields, never one** ([`07_work_items.md`](07_work_items.md) §7.1).
+`state` says where it sits in the queue (`proposed → ready → current → merged → done`, plus `blocked` /
+`dropped`). **`verification` says how true it is:**
+
+| Level | Means | The honest next question |
+|---|---|---|
+| `planned` | Decided, nothing written | — |
+| `implemented` | Code merged. Nobody has run it against anything real | Has a test seen it? |
+| `tested` | Automated tests cover it and are green in CI | Has it run outside CI? |
+| `applied locally` | It works in the Docker stack on a developer machine | Is it on a server? |
+| `deployed` | It is running on staging or production | Has anyone confirmed it *there*? |
+| `verified in production` | Someone observed the behaviour on the production host, and dated it | — |
+
+**Rule 4a.2 — An item is `done` only when its verification meets what its profile requires** (07 §7.2).
+A chore is done at `tested`. A UI feature is not done at `deployed`. *Why: "done" without a level is
+the claim this whole section exists to prevent — it reads as finished and says nothing about whether
+anybody looked.*
+
+**Rule 4a.3 — The ladder and the markers must agree in the same commit.** They are two views of one
+fact, so a spec line and its item cannot honestly disagree:
+
+| Item verification | The live spec's line reads |
+|---|---|
+| `implemented` | `⚠ Not verified end-to-end` |
+| `tested` | `⚠ Not verified end-to-end` — CI is not a browser and not a server |
+| `applied locally` / `deployed` | `⚠ Not verified end-to-end` until a human or an E2E has driven it |
+| `verified in production` | *(nothing)* — the default, with the date recorded where the verification happened |
+
+⚠ **`deployed` is not `verified`, and the gap between them is where this project has been bitten.**
+Shipping code to a host proves the container started. The register carries closed items whose Done row
+says exactly this — *"deployed and it ran blind"* — and it says it because the field exists to be
+filled in honestly rather than optimistically.
 
 ---
 

@@ -31,3 +31,50 @@ Everything else goes by **difficulty and blast radius, not diff size**:
 - **Haiku** — trivial doc/text edits only; not for feature or fix workstreams. **Never for anything `+SENSITIVE`, whatever its size.**
 
 Each sprint records a per-ticket model recommendation in its `agents/README.md` "Model selection" table, and each runbook header carries a `**Model:**` field. When in doubt on a PII/security/concurrency touchpoint, prefer Opus.
+
+## Closing a session
+
+**End every session with this block.** Six lines, in this order — it is what the next session reads
+first, and it is the difference between resuming and re-deriving.
+
+```
+RESULT     one sentence: what is true now that was not true before
+COMPLETED  the items closed, with their verification level (implemented / tested / deployed / verified)
+LEFT OPEN  what was started and not finished, or found and not fixed — with its register id
+NEXT ITEM  the id and title of what should be picked up, and why that one
+READ FIRST the 2-3 files the next session needs before touching anything
+START WITH the first concrete action, specific enough to run
+```
+
+*Why six lines and not a summary: a summary is written for the person who already has the context and
+is useless to the one who does not. Each line above answers a question the next session would
+otherwise spend its first ten minutes reconstructing — and `LEFT OPEN` is the one that decays fastest,
+because an unfinished thing nobody named becomes an unfinished thing nobody knows about.*
+
+⚠ **A finding that is only in the session summary is lost.** Anything worth the next session's time
+gets a register row in [`docs/SPINE.md`](docs/SPINE.md) in the same commit — the summary points at the
+row, never replaces it.
+
+## What already exists — check before building it
+
+This repository has more enforcement than it looks like. **Before writing a script or a check, look
+here**; adding a second one that does the same job is how a rule ends up with two homes that disagree.
+
+| Tool | Does | Run it |
+|---|---|---|
+| `scripts/ops/doc_headers.py` | Every live spec carries a dated header, and no commit edits a spec body without bumping it. Also derives provenance | `--check` · `--provenance` |
+| `tests/repo/test_spine.py` | The register is well-formed: ids unique, allocator accurate, kinds valid, one `current` per lane, `blocked` rows name a blocker, `done` rows carry a verification level, **`ready` rows carry a profile** | `pytest tests/repo/test_spine.py` |
+| `tests/repo/test_doc_code_refs.py` | Backticked code citations in docs point at files and lines that exist | `pytest tests/repo` |
+| `tests/repo/test_doc_headers.py` | Nine checks on the header rule itself — every live spec dated, no future dates, no commit hash in a header, **rule 10.1** (no tier-1/1b doc links into `sprints/` or `reviews/`) and **rule 10.5** (no internal-only content in a public spec) | `pytest tests/repo` |
+| `tests/ticketing/test_pii_boundary.py` | Ticketing holds no decryption path — the PII boundary cannot be reopened by accident | `pytest tests/ticketing` |
+| `tests/ticketing/test_boundary_policy.py` | The `public.*` table set in `CLAUDE.md` matches what the code actually touches | `pytest tests/ticketing` |
+| `scripts/ops/run_mutations.py` | Re-runs the repository's hand-authored mutation checks: *can this test still go red?* Turns a prose claim into a command, so a test that **stopped** catching its mutation is noticed | `python scripts/ops/run_mutations.py [--module <name>]` |
+| `scripts/ops/security-preflight.sh` | Pre-deploy security sweep | before a deploy |
+| `scripts/ops/restore_drill.sh` | Proves the backup restores, rather than assuming it | on the schedule in the ops docs |
+| `scripts/ops/gen_dpg_questions.py` | Regenerates `dpg/02_questions.md` from `00_compliance_status.md`; pinned by a test | when compliance status changes |
+| `scripts/ops/add_spdx_headers.py` | SPDX header on every new source file | before committing new files |
+| `scripts/ops/npm_audit.sh` | npm advisories into the ops pipeline | scheduled |
+
+⚠ **Not built yet:** the browser/E2E harness (QA-04). Until it lands, *"verified end-to-end"* means a
+human drove it — [`docs/deployment/17_manual_browser_sweep.md`](docs/deployment/17_manual_browser_sweep.md),
+60–75 minutes, and its warning is worth reading first.

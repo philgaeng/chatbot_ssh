@@ -1,11 +1,13 @@
 # Engineering standards — index
 
 **Status:** authoritative (2026-08-03). This folder is the **single source for _how_ we build**.
-**Last updated:** 2026-09-04 — `07_work_items.md` added; the reading order and rule 8 now point at [`../SPINE.md`](../SPINE.md) rather than the retired `TODO.md`.
+**Last updated:** 2026-09-06 — **reference packs** added (a folder and one entry point, never a file list), and an **eleventh rule**: work is classified before it starts. The reading order now passes through [`07_work_items.md`](07_work_items.md). Earlier: `07_work_items.md` added; the reading order and rule 8 point at [`../SPINE.md`](../SPINE.md) rather than the retired `TODO.md`.
 **Relationship to the rest of the tree:** `docs/<domain>/` says **what** we build (product specs, as-built behaviour). This folder says **how** — the rules any change must satisfy regardless of feature. [`CLAUDE.md`](../../CLAUDE.md) holds the **locked architecture decisions** (schema ownership, service boundaries, PII rules); this folder holds the **craft rules** that follow from them.
 **Audience:** a human engineer joining the project, and every AI agent that touches the codebase. Written to be read start-to-finish in about 40 minutes.
 
-> **The reading order for any code change:** [`../PROGRESS.md`](../PROGRESS.md) (what exists) → [`../SPINE.md`](../SPINE.md) (what's next) → **the standard for the layer you're touching** (below) → the domain spec for the feature.
+> **The reading order for any code change:** [`../PROGRESS.md`](../PROGRESS.md) (what exists) → [`../SPINE.md`](../SPINE.md) (what's next) → [`07_work_items.md`](07_work_items.md) (**what kind of work this is, and which gates it fires** — before you start, not at merge) → **the standard for the layer you're touching** (below) → the domain spec for the feature.
+>
+> **Then read the pack for the area you are touching** (below). A pack is *a folder and one entry point* — not a list of files.
 
 ---
 
@@ -33,7 +35,31 @@ Layer-specific standards that live elsewhere because they were written first and
 
 ---
 
-## The ten rules, on one page
+## Reference packs — what to read for a given area
+
+**A pack names a folder and one entry point. It never lists files.** *Why: a file list is wrong the
+week after it is written — files get added, split and renamed, and a stale list quietly sends people
+to the wrong place while looking authoritative. A folder plus an entry point survives a growing tree,
+because keeping the entry point current is already somebody's job.*
+
+Read the pack **in addition to** the layer standard, not instead of it.
+
+| Pack | Read from | Entry point | Governs |
+|---|---|---|---|
+| **Ticketing** | [`../ticketing_system/`](../ticketing_system/) | [`00_ticketing_decisions.md`](../ticketing_system/00_ticketing_decisions.md) | `ticketing/` — schema, workflow engine, queue, resolution |
+| **Officer portal** | [`../ticketing_system/ui/`](../ticketing_system/ui/) | [`01_ui_spec.md`](../ticketing_system/ui/01_ui_spec.md) | `channels/ticketing-ui/` — read with [05](05_frontend.md), [`ui/02`](../ticketing_system/ui/02_design_system.md) and [`ui/05`](../ticketing_system/ui/05_ui_copy_style.md) |
+| **Chatbot intake** | [`../rest_chatbot/`](../rest_chatbot/) | [`00_rest_chatbot_index.md`](../rest_chatbot/00_rest_chatbot_index.md) | `backend/actions/`, `backend/orchestrator/`, `channels/` |
+| **Sensitive path** | [`../seah/`](../seah/) | [`02_vault_privacy_and_reveal.md`](../seah/02_vault_privacy_and_reveal.md) | anything touching PII, SEAH visibility, or the complainant channel — **plus the data rules in [`CLAUDE.md`](../../CLAUDE.md)**. ⭐ Entering this pack means the work is `+SENSITIVE` ([07](07_work_items.md) §4.2) |
+| **Deploy & ops** | [`../deployment/`](../deployment/) | [`DOCKER.md`](../deployment/DOCKER.md) | `docker-compose*.yml`, `Makefile`, `deployment/nginx/`, `ops/` |
+| **Compliance (DPG)** | [`../dpg/`](../dpg/) | [`00_compliance_status.md`](../dpg/00_compliance_status.md) | licensing, model independence, the evidence pack an assessor reads |
+
+⚠ **The Sensitive-path pack is the one that changes how the work is done, not just what you read.**
+If your change lands in it, the profile carries `+SENSITIVE`, which selects Opus and requires the
+boundary tests to be named in the item before the work starts — mechanically, whatever the diff size.
+
+---
+
+## The eleven rules, on one page
 
 If you read nothing else, these are the rules that get violated most and cost most.
 
@@ -47,6 +73,7 @@ If you read nothing else, these are the rules that get violated most and cost mo
 8. **Never silence a test or a lint.** A deferral that is not logged in `sprints/<sprint>/followups/` **and** a `SPINE.md` row in the same commit is a defect, not a deferral.
 9. **Never write a doc claim you have not verified.** If the code doesn't do it yet, the spec says `⚠ Not built`. → [06](06_documentation_lifecycle.md#4-honesty-markers)
 10. **Every user-facing string** goes through the copy guide and the canonical vocabulary. → [`ui/05`](../ticketing_system/ui/05_ui_copy_style.md)
+11. **Work is classified before it starts, not at merge.** Kind and profile are derived at intake from six questions; the **profile** — not judgment at the keyboard — selects the model, the reviewer, the tests and the gates. A `ready` item with no profile is a test failure, not a style point. → [07](07_work_items.md), form: [`../items/TEMPLATE.md`](../items/TEMPLATE.md), pinned by `tests/repo/test_spine.py`
 
 ---
 

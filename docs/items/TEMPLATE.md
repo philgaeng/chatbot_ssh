@@ -1,6 +1,13 @@
 # Item — `GRM-###` <title>
 
-**Audience:** internal — the intake form for the register (lifecycle §10.4).
+**Status:** authoritative (2026-09-06) — the intake form for [`engineering/07_work_items.md`](../engineering/07_work_items.md).
+**Audience:** public (lifecycle §10.4 — tier 1b defaults to public, and this form carries none of §10.5's internal classes).
+
+> ⚠ **`docs/items/` is deliberately outside `SPEC_DIRS`**, so neither this file nor the items filled
+> from it is subject to the dated-header rule. *Why: an item instance is working material with a
+> lifetime of days — the same reasoning that keeps `PROGRESS.md` out of the checker. Forcing a "last
+> reviewed" date on each one would be churn with no reader.* **This template carries a header anyway**,
+> because it is the one file here that is a standard rather than an instance.
 
 > **Copy this file, fill it top to bottom, then paste the *Register line* into
 > [`docs/SPINE.md`](../SPINE.md).** The questions are in this order for a reason: each one's answer
