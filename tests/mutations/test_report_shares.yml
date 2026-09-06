@@ -1,0 +1,39 @@
+# Mutation records for tests/ticketing/test_report_shares.py  (GRM-071, sprint 2026-09_qa_automation)
+#
+# The bug these tests were written for: `POST /api/v1/reports/share` returned HTTP 500 on
+# every deployment where nobody had shared a report before. Both records below were RUN
+# against the current tree, not transcribed from prose.
+# Runner: scripts/ops/run_mutations.py
+
+- id: GRM-071-a-insert-branch-wrong-column
+  target: ticketing/services/report_shares.py
+  find: "        db.add(Settings(key=SETTING_KEY, value=items, updated_by_user_id=updated_by))"
+  replace: "        db.add(Settings(key=SETTING_KEY, value=items, updated_by=updated_by))"
+  tests: tests/ticketing/test_report_shares.py
+  expect: kills
+  min_failures: 5
+  why: >
+    The shipped defect, restored exactly. `Settings` has no `updated_by` column, so the
+    constructor raises TypeError and FastAPI returns 500. It only fires on the INSERT branch —
+    the `report_share_links` settings row does not exist until the first share — so it is
+    invisible on any database where somebody has already shared once, and fatal on a fresh
+    one. That is why it reached production-shaped environments: every developer's stack had
+    passed through the failure once and then looked healthy.
+    All five tests go red because every one of them creates a share.
+
+- id: GRM-071-b-update-branch-silently-discards-the-author
+  target: ticketing/services/report_shares.py
+  find: "        row.updated_by_user_id = updated_by"
+  replace: "        row.updated_by = updated_by"
+  tests: tests/ticketing/test_report_shares.py
+  expect: kills
+  min_failures: 1
+  why: >
+    ⭐ The half of the bug that raises nothing. Assigning an unmapped attribute on a mapped
+    instance is legal Python, so the UPDATE branch "worked" while never recording who changed
+    the row — `updated_by_user_id` stays whatever the insert wrote, forever.
+    ⚠ **This record is why the test looks the way it does.** The first draft of
+    `test_who_created_a_share_is_recorded_on_both_the_first_and_a_later_share` used the same
+    creator for both shares and this mutation SURVIVED: the insert had already written that
+    value, so the column read correctly even with the update discarding it. Making the second
+    share a different officer is the entire difference between a test and a decoration.
