@@ -317,6 +317,14 @@ jobs:
           fi
           echo "OK: bypass UI confirmed (cookie -> $who)"
 
+      # ⚠ **`E2E_TICKETING_API_KEY` is read from the generated env.local, not written here.**
+      # The flow specs create their own tickets through the intake webhook, which needs the
+      # stack's `x-api-key`. On a stack with **no** secret configured any value passes (the
+      # documented dev-bypass branch), which is why this was not needed locally — but
+      # `gen_env_local_ci.sh` *does* set one, so the comparison branch applies and the fixture's
+      # default key gets a 401. Measured 2026-09-07, run 34063762797: 43 passed, 4 failed, all
+      # four the ticket-creating flows. Deriving it from the file the stack actually uses means
+      # the two cannot drift; hard-coding the literal here would be a second copy waiting to.
       - name: Playwright
         if: steps.img.outputs.runnable == 'true'
         working-directory: channels/ticketing-ui
@@ -324,7 +332,12 @@ jobs:
           E2E_BASE_URL: http://localhost:13001
           E2E_API_BASE_URL: http://localhost:15002
           E2E_WEBCHAT_URL: http://localhost:18081/rest-webchat/
-        run: npx playwright test
+        run: |
+          key="$(grep '^TICKETING_SECRET_KEY=' ../../env.local | cut -d= -f2-)"
+          if [ -z "$key" ]; then
+            echo "::warning::TICKETING_SECRET_KEY is empty in env.local — the intake webhook will accept any key (dev-bypass branch)."
+          fi
+          E2E_TICKETING_API_KEY="$key" npx playwright test
 
       # ⚠ `always()`, and container logs matter MOST on the runs where the suite never started.
       # A readiness failure with no logs is the least debuggable thing a pipeline can produce.

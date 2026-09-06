@@ -29,12 +29,17 @@ import { BASE_URL } from "../env";
 /**
  * The intake API key.
  *
- * ⚠ **On a bypass stack the value is not checked** — `verify_api_key` requires the *header* but
- * skips comparison when `TICKETING_SECRET_KEY` is unset, which is the documented dev-bypass
- * branch (HR-01 fail-closed: any other environment refuses to serve without a secret). The
- * suite already asserts it is talking to a bypass stack in global setup, so the default below
- * is honest rather than a guessed credential. Set `E2E_TICKETING_API_KEY` to run against a
- * stack that does have a secret configured.
+ * ⚠ **The value is only ignored when the stack has no secret configured.** `verify_api_key`
+ * requires the *header* always, but skips the comparison when `TICKETING_SECRET_KEY` is unset —
+ * the documented dev-bypass branch (HR-01 fail-closed: any other environment refuses to serve
+ * without a secret). A dev box usually leaves it unset, which is why the default below works
+ * there.
+ *
+ * ⚠ **CI is not that case, and it cost a red run to find out.** `scripts/ci/gen_env_local_ci.sh`
+ * writes a (fake) `TICKETING_SECRET_KEY`, so the comparison branch applies and this default gets
+ * a 401 — measured 2026-09-07, run 34063762797: 43 passed, and the 4 that failed were exactly
+ * the flows that create a ticket. The job now derives `E2E_TICKETING_API_KEY` from the same
+ * `env.local` the stack is built from. **Set it whenever the target stack has a secret.**
  */
 const API_KEY = process.env.E2E_TICKETING_API_KEY ?? "e2e-suite-bypass-stack";
 
