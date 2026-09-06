@@ -46,11 +46,11 @@ and runtime parallelism are different claims; see QA-04d.
 |---|---|---|
 | `channels/ticketing-ui/playwright.config.ts` | **new** — projects (desktop + mobile), `E2E_BASE_URL`, artifacts, `testDir: e2e` | 04a |
 | `channels/ticketing-ui/e2e/global-setup.ts` | **new** — readiness poll, auth-mode assertion | 04a |
-| `channels/ticketing-ui/e2e/fixtures/officer.ts` | **new** — `asOfficer(roleKeys, userId?)` cookie fixture | 04a |
+| `channels/ticketing-ui/e2e/fixtures/officer.ts` | **new** — `asOfficer(officer)` cookie fixture. ⚠ **Signature changed from the sketched `asOfficer(roleKeys, userId?)`** — measured 2026-09-06, the server *discards* caller-supplied role keys (`enrich_user` substitutes DB-effective roles), so a role-keys-first signature lets a spec appear to grant itself a capability, change nothing, and pass for the wrong reason | 04a |
 | `channels/ticketing-ui/e2e/fixtures/seed.ts` | **new** — the single place naming every seeded id the suite relies on | 04a |
 | `channels/ticketing-ui/e2e/queue.spec.ts` | **new** — the canary | 04a |
 | `channels/ticketing-ui/package.json` | **`@playwright/test`** as a pinned devDependency + an `e2e` script | 04a |
-| `channels/ticketing-ui/.dockerignore` | add `e2e/`, `playwright.config.ts`, `test-results/`, `playwright-report/` | 04a |
+| `channels/ticketing-ui/.dockerignore` | add `e2e/`, `playwright.config.ts`, `test-results/`, `playwright-report/` — **and `.env*`**, added in passing as prevention (the image was verified clean first; the mechanism it closes is Next reading `.env.local` during the builder's `COPY . .`). ⚠ Not the same as [Q-18](QUESTIONS.md#q-18--does-the-image-contain-envlocal), which is the **root** context and QA-02's | 04a |
 | `channels/ticketing-ui/e2e/smoke/*.spec.ts` | **new** — 22 routes | 04b |
 | `channels/ticketing-ui/e2e/flows/*.spec.ts` | **new** — tier 1 (five), then tier 2 groups, one file each | 04c |
 | `channels/ticketing-ui/e2e/webchat/*.spec.ts` | **new** — HR-07's items, via nginx | 04d |
@@ -67,14 +67,26 @@ runs a full `npm ci` in the builder stage (`:14`, dev dependencies included) and
 whatever Stream B adds is installed **during the UI image build** — on the 3825 MB host QA-01 exists to
 protect. Three consequences, all cheap if handled up front and confusing if not:
 
-1. **Depend on `@playwright/test`, not `playwright`.** The bare `playwright` package downloads browser
-   binaries in a postinstall — several hundred MB, inside the Docker build.
-2. **Set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` in the builder stage** as a belt-and-braces guard, with a
-   comment saying the image never runs tests.
+1. **Depend on `@playwright/test`, not `playwright`.** ~~The bare `playwright` package downloads browser
+   binaries in a postinstall — several hundred MB, inside the Docker build.~~
+   ⚠ **CORRECTED 2026-09-06 by QA-04a — the reason was false, the recommendation still holds.** All
+   three tarballs were unpacked at the pinned version: **`playwright`, `playwright-core` and
+   `@playwright/test` declare no install script at all.** Browsers arrive only from an explicit
+   `npx playwright install`. Confirmed by running the builder stage's `npm ci` in `node:20-alpine`: no
+   `ms-playwright` cache directory, and **+18.4 MB on a 726 MB `node_modules` (+2.5 %)**. Depend on
+   `@playwright/test` because it *is* the test runner — not because the other one downloads anything.
+2. ~~**Set `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` in the builder stage**~~ ⚠ **DEFERRED TO QA-01 by
+   QA-04a, deliberately.** It guards a hazard measured not to exist at `1.63.0`, and the version is
+   pinned **exactly** (no `^`), so it cannot change without a visible edit. QA-04a therefore did **not**
+   touch the Dockerfile at all. **QA-01: add `ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1` when you
+   restructure that stage**, and write the honest reason — *future-proofing against an unpin* — rather
+   than the postinstall story above, which would become a false comment in a live file.
 3. **Add `e2e/` to `channels/ticketing-ui/.dockerignore`** — today it lists only `node_modules`, `.next`,
    `.git`, `*.log`, `.DS_Store`, `Thumbs.db`, so specs would otherwise be copied into the image.
+   ✅ Done, plus `.env*` — see the `Files` table row.
 
-Coordinate 1 and 2 with Stream A rather than editing the Dockerfile unilaterally — it is QA-01's file.
+~~Coordinate 1 and 2 with Stream A rather than editing the Dockerfile unilaterally — it is QA-01's file.~~
+✅ **Resolved without a Dockerfile edit** (see 1 and 2). The file stays entirely QA-01's.
 
 ## QA-04a — the harness (this is the blocking piece)
 
@@ -89,7 +101,7 @@ harness nobody has reviewed.
 | Global setup | poll `ticketing_api` `/health` and the UI root until ready or a bounded timeout; **fail with a clear message**, never hang |
 | Auth | **bypass build for the whole suite** — no Keycloak container. A Keycloak login smoke test is deferred to its own job, later |
 | Reached via | **direct to `grm_ui:3001`** for the officer UI (the webchat goes through nginx — see QA-04d) |
-| Identity fixture | `asOfficer(roleKeys, userId?)` — sets the `grm_bypass_user` cookie; officer ids come from the seeded roster, not literals invented in the test |
+| Identity fixture | `asOfficer(officer)` — sets the `grm_bypass_user` cookie; officers come from the seeded roster, never literals invented in the test. ⚠ Not `(roleKeys, userId?)` — see the `Files` row |
 | Projects | desktop chromium + **one mobile device** (mobile is in v1, smoke only) |
 | Artifacts | screenshot + trace **on failure**; screenshot on demand for every route in the smoke pass. **No pixel-diff gate in v1** — captures only |
 | Canary spec | load `/queue` as a seeded officer, assert a known seeded ticket is visible, capture a screenshot |
@@ -98,6 +110,15 @@ harness nobody has reviewed.
 **Determinism is the whole game.** The seed must run with `--reset` before a suite, assertions key off
 seeded ids (`GRV-2025-*`), and nothing may depend on wall-clock date or on rows left by a previous run.
 A flaky e2e suite is worse than none — it trains everyone to ignore a red build.
+
+> ⚠ **`--reset` is for a disposable stack only, and one more thing is not deterministic.** On the
+> owner's dev database `mock_tickets --reset` is forbidden ([`KICKOFF.md`](KICKOFF.md) §5) — it takes
+> projects, organizations and officers with it. So a local run works against whatever the seed left,
+> and the suite must tolerate that. It does: assertions key off `grievance_id` and assignee.
+> **What is *not* stable even after a fresh `--reset` is ticket status** — the SLA watchdog rewrites it
+> as the stack ages (measured: `GRV-2025-001` seeded `IN_PROGRESS`, found `ESCALATED`). `ticket_id` is
+> a fresh `uuid4()` per seed run and must be resolved at runtime. Both rules live in
+> `e2e/fixtures/seed.ts`; the demo-side consequence is `GRM-070`.
 
 ## QA-04b — officer-UI route smoke (fan-out, ~1 d)
 
@@ -201,14 +222,20 @@ service set; do not assume `ephemeral-up` gives you the chatbot half unless it w
 deferred obligation; do not leave a TODO implying they are owed. **Any Keycloak login flow** beyond the
 single smoke test, which lands later in its own job. Load or performance testing. Editing CI — that is QA-05, and **Stream B must not touch `ci.yml`**.
 
-## Acceptance (04a)
+## Acceptance (04a) — ✅ **all met 2026-09-06**, each against a run, not a reading
 
-- [ ] `npx playwright test` green against a locally seeded stack, twice in a row, with no shared state between runs
-- [ ] The canary fails informatively when the stack is down (clear readiness error, not a 30 s hang)
-- [ ] `asOfficer()` demonstrably changes what the UI shows (two roles, two different queues)
-- [ ] Screenshots land as artifacts; a trace is produced on a deliberately failed assertion
-- [ ] Playwright added as a **devDependency** with a pinned version; browsers installed via `npx playwright install --with-deps` in a documented step
-- [ ] `docs/engineering/04_testing.md` updated; `PROGRESS.md` deviations logged
+- [x] `npx playwright test` green against a locally seeded stack, twice in a row, with no shared state between runs — 2 passed in 5.3 s, then 3.4 s; and again in 3.6 s against a **freshly rebuilt** `grm_ui` image
+- [x] The canary fails informatively when the stack is down (clear readiness error, not a 30 s hang) — pointed at a dead port: fails in **6 s** with the probe, the last error, and the fix command. The auth-mode branch was exercised separately by pointing `E2E_BASE_URL` at a service that serves no bypass page: *"this suite needs an AUTH_MODE=bypass build"*
+- [x] `asOfficer()` demonstrably changes what the UI shows (two roles, two different queues) — the GRC chair's Actor tab holds `GRV-2025-001`; the site officer's holds `GRV-2025-005` and **not** `GRV-2025-001`
+- [x] Screenshots land as artifacts; a trace is produced on a deliberately failed assertion — `queue-grc-chair.png` (1280×720) on the green run; `trace.zip` + `test-failed-1.png` + `error-context.md` after breaking an assertion on purpose and reverting it
+- [x] Playwright added as a **devDependency** with a pinned version (`"@playwright/test": "1.63.0"` — exact, no `^`); browsers via `npx playwright install --with-deps chromium`, documented in `04_testing.md` §6a and in `playwright.config.ts`'s header
+- [x] `docs/engineering/04_testing.md` updated (§6a, eight rules); `PROGRESS.md` deviations logged (seven rows)
+
+⭐ **Two gates came free and are worth knowing before writing 04b/c/d:** `tsconfig.json` includes
+`**/*.ts` and `ui-checks` runs `npx eslint .` over the whole directory, so **CI already type-checks and
+lints every spec** — a spec that does not compile fails the build today, before QA-05 exists. And
+`vitest`'s `include` (`**/*.test.ts`) was **verified** not to collect `*.spec.ts`: `npm test` still
+reports 12 files / 104 tests.
 
 ## Risks
 

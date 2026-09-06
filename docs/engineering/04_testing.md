@@ -1,8 +1,8 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Last updated:** 2026-09-04 — the deferral rule points at [`../SPINE.md`](../SPINE.md), the retired `TODO.md`'s successor.
-**Applies to:** `tests/` (Python, pytest) and `channels/ticketing-ui/**/*.test.ts` (Vitest).
+**Last updated:** 2026-09-06 — §6a: the end-to-end level exists (QA-04a), and the suite-shape table names it.
+**Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
 ---
@@ -29,7 +29,8 @@ This system takes grievances from people in rural Nepal, some of them SEAH cases
 | **API** | `tests/ticketing/test_authz_matrix_extended.py`, route tests | seeded Postgres | the contract: status codes, authz, response shape |
 | **Pinning / policy** | `test_boundary_policy.py`, `test_pii_boundary.py`, `route_snapshot.txt` | varies | architectural rules that must not erode |
 | **Frontend unit** | `channels/ticketing-ui/lib/*.test.ts` | nothing | hooks, pure helpers, command parsing |
-| **Manual browser sweep** | [`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md) | a human | what we have deliberately **not** automated yet |
+| **End-to-end** | `channels/ticketing-ui/e2e/*.spec.ts` | a **running, seeded stack** | what only a browser can see: a route that renders, a role that changes a queue, a flow that completes |
+| **Manual browser sweep** | [`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md) | a human | what is **still** not automated — shrinking as §6a's coverage lands |
 
 **Rule 2.1 — Test through the service layer, not the router, by default.** The service function is where the logic lives ([02 §1](02_python_services.md#1-the-architecture-named)); testing it needs no `TestClient` and stays valid when the route changes.
 
@@ -142,6 +143,72 @@ python scripts/ops/run_mutations.py --list                # no edits, no test ru
 
 ---
 
+## 6a. End-to-end tests — the browser level
+
+**Landed 2026-09-06 (QA-04a).** Before it there was no browser automation anywhere in this
+repository, and *"verified end-to-end"* meant 60–75 minutes of a human working through
+[`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md).
+
+| | |
+|---|---|
+| Where | `channels/ticketing-ui/e2e/`, config beside it at `channels/ticketing-ui/playwright.config.ts` |
+| Naming | **`*.spec.ts`** — never `*.test.ts` |
+| Needs | a **running, seeded stack**; the suite never starts one |
+| Run | `npm run e2e` (in `channels/ticketing-ui`) |
+| First time | `npx playwright install --with-deps chromium` — no package in the Playwright chain has an install script, so `npm ci` does **not** fetch browsers (verified against 1.63.0, 2026-09-06) |
+
+**Rule 6a.1 — e2e specs are `*.spec.ts`; vitest owns `*.test.ts`.** Vitest's `include` is
+`**/*.test.ts`, so the two never collide. Name an e2e file `*.test.ts` and `npm test` collects a
+Playwright spec, which fails in a way that reads like a broken test rather than a misconfiguration.
+
+**Rule 6a.2 — What belongs here is what the other levels structurally cannot see.** A route that
+renders, a role that changes what a queue shows, a flow that completes across pages. **Not** what a
+unit test can answer — a permission matrix, tile arithmetic, a formatter. Those stay in `lib/*.test.ts`,
+where they run in a second with no stack. An e2e test costs a container stack and a browser; spend it
+only on the thing that needs one.
+
+**Rule 6a.3 — Identity comes from the seeded roster, never from a literal.** `e2e/fixtures/seed.ts`
+names every seeded id the suite relies on, and `asOfficer()` takes one of its officers. ⚠ **Role keys
+are documentation, not control.** Measured 2026-09-06: the server discards the roles a caller sends —
+`enrich_user` replaces them with the officer's DB-effective roles, so `l1-officer@grm.local` presenting
+`super_admin` still sees 6 tickets, not 281. A spec that "grants itself" a capability changes nothing
+and then asserts against a queue that never moved: a test passing for the wrong reason.
+
+**Rule 6a.4 — Never assert on a seeded ticket's status.** ⚠ Measured 2026-09-06: `GRV-2025-001` is
+seeded `IN_PROGRESS` and the dev database holds it `ESCALATED`, its event log naming `system` /
+*"Auto-escalated: SLA exceeded at previous step"*. Seeded status is a function of **how long the stack
+has been up**, not of the seed. Grievance id, assignee and the SEAH flag are stable; status is not.
+This is the browser-level form of Rule 3.3 — assert the property, not the snapshot.
+
+**Rule 6a.5 — Never `waitForTimeout`, never a CSS-class selector.** Use web-first assertions
+(`await expect(locator).toBeVisible()`) and role/label/text selectors. A sleep encodes today's latency
+and a Tailwind class encodes today's design; both go red for reasons that have nothing to do with a
+defect, and **a flaky e2e suite is worse than none — it trains everyone to ignore a red build.**
+
+**Rule 6a.6 — Order a negative assertion after a positive one.** `not.toBeVisible()` passes trivially
+against a list that has not finished loading. Assert what the officer *does* see first; only then
+assert what they must not.
+
+**Rule 6a.7 — One worker, no retries, and both are deliberate.** Every spec shares one database and one
+set of containers, so parallel workers interleave a flow's mutation with another spec's assertion. And
+a retry that turns red green destroys the only signal this level produces. If a spec needs a retry it is
+not deterministic yet — that is a bug in the spec. When wall-clock becomes the constraint, the answer is
+a second isolated stack, not a second worker on this one.
+
+**Rule 6a.8 — Screenshots are captured, not gated.** v1 uploads artifacts; there is no
+`toHaveScreenshot` baseline. Pixel diffing across platforms and font stacks is a later *decision*, not a
+deferred obligation — do not leave a TODO implying baselines are owed.
+
+⚠ **The suite is type-checked and linted by CI today, and executed by nothing.** `tsconfig.json`
+includes `**/*.ts` and `ui-checks` lints the whole directory, so a spec that does not compile already
+fails the build — but **no CI job runs the browser**, because running one needs images built in CI and
+a disposable stack to run them on, and neither exists yet. Until that job lands, a green build says
+nothing about whether these tests pass, and the only honest way to know is to run them locally against
+a seeded stack. This repository has been bitten twice by a gate that silently did not run; the gap is
+written down here rather than assumed away.
+
+---
+
 ## 7. Running them
 
 | Command | Runs |
@@ -150,7 +217,8 @@ python scripts/ops/run_mutations.py --list                # no edits, no test ru
 | `make test-ticketing-host` | same on the host (needs `make dev-grm-deps`, DB on `:5433`, migrations + seed) |
 | `make test-ticketing-unit` | the no-DB subset |
 | `npm test` (in `channels/ticketing-ui`) | Vitest |
-| `npx tsc --noEmit && npx eslint .` | the frontend gates |
+| `npx tsc --noEmit && npx eslint .` | the frontend gates — these cover `e2e/` too |
+| `npm run e2e` (in `channels/ticketing-ui`) | Playwright, against a running seeded stack (§6a) |
 | `python scripts/ops/run_mutations.py` | the mutation records (§5a) — **not** in CI, run deliberately |
 
 DB credentials for host tests come from compose, never `env.local` — `tests/ticketing/_host_env.py` (D-36).
@@ -180,4 +248,5 @@ DB credentials for host tests come from compose, never `env.local` — `tests/ti
 - [ ] New architectural rule: pinning test, or an explicit note that there is none
 - [ ] Every new test mutation-checked, and the mutation recorded in `tests/mutations/` (§5a) — not only in the commit message
 - [ ] CI green with **nothing** deselected, downgraded, or suppressed
+- [ ] A change a browser could see has an e2e spec, or a written reason it does not (§6a)
 - [ ] Any deferral logged in `followups/` + `SPINE.md`, same commit

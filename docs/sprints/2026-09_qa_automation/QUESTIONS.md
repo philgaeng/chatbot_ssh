@@ -260,7 +260,7 @@ that does not run on the branches people actually work on.
 fallback for the rest. A docs-only PR stays free; nothing ever silently tests the wrong image.
 ⚠ Whichever you pick, **it is written down in QA-02** — QA-05 must not improvise it.
 
-> **Answer:**
+> **Answer:**a
 
 ### Q-17 · How does a stack select the bypass UI variant?
 
