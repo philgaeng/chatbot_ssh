@@ -20,13 +20,14 @@
  * step *unlocks*, never that a particular position exists — pinning one would encode this dev
  * box's leftover `test2` / `Test Position` rows, which no fresh environment has.
  */
-import { test, expect } from "../fixtures/officer";
+import { test, expect, expectIdentitySettled } from "../fixtures/officer";
 import { captureScreenshot } from "../fixtures/artifacts";
 import { OFFICERS } from "../fixtures/seed";
 
 /** Settings is a single page with nested button-driven tabs, not routes. */
 async function openOfficerDirectory(page: import("@playwright/test").Page): Promise<void> {
   await page.goto("/settings");
+  await expectIdentitySettled(page, OFFICERS.admin);
   await page.getByRole("button", { name: "Organizations & officers", exact: true }).click();
   await page.getByRole("button", { name: "Officers", exact: true }).click();
   await page.getByRole("button", { name: "Directory", exact: true }).click();
@@ -39,16 +40,19 @@ test("the officer directory lists the seeded roster and its search narrows it", 
   await asOfficer(OFFICERS.admin);
   await openOfficerDirectory(page);
 
-  // A seeded officer everyone has — not a count, which drifts with every invite.
-  await expect(page.getByText(OFFICERS.grcChair.label, { exact: false }).first()).toBeVisible();
-  await expect(page.getByText(OFFICERS.siteL1.label, { exact: false }).first()).toBeVisible();
+  // ⚠ **Keyed on the email, not the display name.** `display_name` is not stable across
+  // environments: a fresh seed derives it from the email (`L1-Officer`) while a long-lived
+  // database carries the real one (`Site Officer L1`) — `GRM-081`. The email is the officer's
+  // identity everywhere, and it is what the directory searches anyway.
+  await expect(page.getByText(OFFICERS.grcChair.userId, { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(OFFICERS.siteL1.userId, { exact: false }).first()).toBeVisible();
 
-  await page.getByPlaceholder("Search name, email, or position…").fill(OFFICERS.grcChair.label);
+  await page.getByPlaceholder("Search name, email, or position…").fill(OFFICERS.grcChair.userId);
 
-  await expect(page.getByText(OFFICERS.grcChair.label, { exact: false }).first()).toBeVisible();
+  await expect(page.getByText(OFFICERS.grcChair.userId, { exact: false }).first()).toBeVisible();
   // The point of a search box is what it removes. Asserted after a positive, so it cannot
   // pass against a list that simply has not rendered.
-  await expect(page.getByText(OFFICERS.siteL1.label, { exact: false })).toBeHidden();
+  await expect(page.getByText(OFFICERS.siteL1.userId, { exact: false })).toBeHidden();
 
   await captureScreenshot(page, testInfo, "flow-officer-directory-search");
 });
@@ -59,6 +63,7 @@ test("the invite form unlocks its position step only after an office is chosen",
 }, testInfo) => {
   await asOfficer(OFFICERS.admin);
   await page.goto("/settings");
+  await expectIdentitySettled(page, OFFICERS.admin);
   await page.getByRole("button", { name: "Organizations & officers", exact: true }).click();
   await page.getByRole("button", { name: "Officers", exact: true }).click();
   await page.getByRole("button", { name: "Invite", exact: true }).click();
@@ -80,6 +85,10 @@ test("the invite form unlocks its position step only after an office is chosen",
 test("a non-admin cannot reach settings at all", async ({ page, asOfficer }) => {
   await asOfficer(OFFICERS.siteL1);
   await page.goto("/settings");
+
+  // ⚠ Must wait for the identity to settle first — see expectIdentitySettled. Without it this
+  // races the roster load and passes only on a warm machine.
+  await expectIdentitySettled(page, OFFICERS.siteL1);
 
   await expect(page.getByText("Settings are only accessible to administrators.")).toBeVisible();
   await expect(page.getByRole("button", { name: "Organizations & officers" })).toBeHidden();

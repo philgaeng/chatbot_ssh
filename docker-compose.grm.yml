@@ -123,12 +123,12 @@ services:
   # name over the internal network (deployment/nginx/webchat_rest_compose_*.conf).
   backend:
     ports:
-      - "127.0.0.1:5001:5001"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-5001}:5001"
 
   # ── Orchestrator port override (same pattern — loopback only; see GRM-065 above) ──
   orchestrator:
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:${ORCHESTRATOR_HOST_PORT:-8000}:8000"
 
   # ── Ticketing API (FastAPI, port 5002) — the single consolidated API ──────────
   # Auth mode is env-driven (APP_ENV / AUTH_MODE), not a duplicate service:
@@ -175,7 +175,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
     ports:
-      - "5002:5002"
+      - "${TICKETING_API_HOST_PORT:-5002}:5002"
     depends_on:
       db:
         condition: service_healthy
@@ -346,7 +346,7 @@ services:
       # Server-side proxy target — uses Docker service name (not localhost)
       TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
     ports:
-      - "3001:3001"
+      - "${GRM_UI_HOST_PORT:-3001}:3001"
     depends_on:
       - ticketing_api
     restart: unless-stopped

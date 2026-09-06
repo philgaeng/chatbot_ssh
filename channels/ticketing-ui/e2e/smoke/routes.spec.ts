@@ -15,7 +15,7 @@
  * ⚠ **Three routes assert a redirect rather than a render**, and one of them is not what QA-04b
  * predicted. See `redirects.spec.ts`.
  */
-import { test, expect } from "../fixtures/officer";
+import { test, expect, expectIdentitySettled } from "../fixtures/officer";
 import { captureScreenshot } from "../fixtures/artifacts";
 import { expectNoCrash, watchForProblems } from "../fixtures/smoke";
 import {
@@ -145,6 +145,11 @@ test("/settings is gated, and the gate renders rather than crashing", async ({
   const problems = watchForProblems(page);
 
   await page.goto("/settings");
+
+  // ⚠ Wait for the identity to resolve first. A bypass build renders as `super_admin` until
+  // the roster loads, which takes ~10 s on a cold stack — so without this the assertion below
+  // races that window and passes only on a warm machine (GRM-080).
+  await expectIdentitySettled(page);
 
   // The 22-route count is about pages loading. This one line is about the page loading
   // *differently* for someone who may not administer anything — the same class of check the

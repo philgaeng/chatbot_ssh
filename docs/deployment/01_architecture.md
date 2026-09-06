@@ -1,7 +1,7 @@
 # Architecture — Nepal Chatbot + GRM Ticketing
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/01_architecture.md`](archive/01_architecture.md).
-**Last updated:** 2026-09-06 — §1: the image model (eleven services, two images), the UI's two variants per commit, and why staging pulls while production still builds.
+**Last updated:** 2026-09-07 — §1: the image model, the UI's two variants per commit, why staging pulls while production still builds, and that the host ports are defaults rather than fixtures (QA-03).
 
 The whole stack is **Docker Compose only** — no systemd services, no standalone Rasa server, no Flask. One repo, one image for all Python services, plus a Next.js image for the officer UI and stock images for Postgres/Redis/nginx/Keycloak.
 
@@ -33,6 +33,14 @@ All Celery workers share one app: `backend.task_queue.celery_app`.
 | `grm_celery_beat` | — | GRM periodic scheduler (SLA watchdog, sync, heartbeat, archiving) |
 | `ops` | — | Platform monitor (`python -m ops.scheduler`, APScheduler, broker-independent). Spec: [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) |
 | `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | Keycloak 26 OIDC provider (the only profile-gated service); state in `keycloak` schema of `app_db`. See [`16_auth_keycloak.md`](16_auth_keycloak.md) |
+
+⚠ **Every host port in the table above is a *default*, not a fixture** (QA-03). Each is
+`${VAR:-<the number shown>}` in the compose file, so an unset variable gives exactly the port
+listed — and setting one moves the stack without touching anything else. That is what lets a
+second, fully isolated stack run beside the first on one machine (`make ephemeral-up`), which is
+how the end-to-end suite gets a database it can reset without touching a developer's.
+⚠ The exception is `docker-compose.aws.yml`'s `80`/`443`: deliberately literal, because they are
+a public host's real ports and TLS certificates are issued against them.
 
 The old demo-vs-auth split (`ticketing_api_auth`:5003 / `grm_ui_auth`:3002) is **gone** (CL-03): one `ticketing_api` (:5002) and one `grm_ui` (:3001), their auth behaviour driven by `AUTH_MODE` + `KEYCLOAK_ISSUER`.
 

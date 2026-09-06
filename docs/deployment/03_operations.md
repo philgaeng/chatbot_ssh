@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-06 — §6a: deploying a tagged build and rolling back (QA-02); the `tail` warning in §7.
+**Last updated:** 2026-09-07 — §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -170,6 +170,32 @@ aws-deploy: running images —
 bumped, `up -d` is a no-op and the deploy reports OK having redeployed the previous build. The
 digest is the only thing that distinguishes those two outcomes, and *"deployed" is not "has
 run"* is a lesson this project has already paid for once.
+
+## 6b. Running a second stack on one machine
+
+Two stacks coexist if they differ in **project name** (which names the containers, network and
+volumes) and in **published ports**. `make ephemeral-up` does both:
+
+```bash
+make ephemeral-up        # isolated + seeded: ui :13001, api :15002, webchat :18081
+make ephemeral-up-full   # the same plus the chatbot half (orchestrator, backend, celery, nginx)
+make ephemeral-down      # containers, network AND volumes — nothing survives
+```
+
+Verified 2026-09-07: both stacks healthy at once, `grm_ci_local_*` and `nepal_chatbot_*` volumes
+side by side, and the officer-UI e2e suite green against the ephemeral one while the dev stack
+kept serving.
+
+⚠ **Do not set `COMPOSE_PROJECT_NAME` on an existing stack.** Compose derives it from the
+directory and the volumes are named after it, so a rename makes compose look for
+`<newname>_postgres_data`, fail to find it, and create an **empty** one — the database still on
+disk, silently detached. The real environments therefore keep deriving their name; only the
+ephemeral stack sets one, because it has no data to lose.
+
+⚠ **The ephemeral stack needs the repository, not just the images.** `nginx` is
+`image: nginx:stable` and is never built: it bind-mounts `channels/REST_webchat`,
+`channels/shared` and its `.conf` from the checkout, so the webchat is served from the working
+tree. This is the one place where "pull, don't build" does not describe what happens.
 
 ## 7. Common procedures
 

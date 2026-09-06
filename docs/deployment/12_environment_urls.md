@@ -1,6 +1,6 @@
 # Deployment URLs and paths (dev / stage / prod)
 
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-07 — host ports are defaults, not fixtures (QA-03); container-internal ports unchanged.
 
 This repo’s edge routing is defined in Nginx samples under [`deployment/nginx/`](../../deployment/nginx/). Values **differ by machine** (WSL paths vs EC2 `ubuntu` home, TLS termination, etc.). To avoid drift, maintain a **single manifest** and derive or update Nginx from it.
 
@@ -42,6 +42,11 @@ To avoid local TLS breakage and make intent explicit, Compose nginx configs are 
 Compose files:
 
 - `docker-compose.yml` defaults to **WSL/local** behavior and maps host `8080` → container `80`.
+- ⚠ **Every *host* port in this file is a default, not a fixture** (QA-03, 2026-09-07). They are
+  `${VAR:-<the number shown>}` in the compose files, so an unset variable gives exactly what is
+  written here — and a second stack can be moved off them without editing anything
+  (`make ephemeral-up`). **Container-internal ports are unaffected**: services reach each other
+  by service name (`grm_ui:3001`, `ticketing_api:5002`) and those never move.
 - `docker-compose.aws.yml` is an override for AWS TLS deployment (host `80`/`443`).
 - `docker-compose.prod.yml` is the DOR-prod overlay on top of aws + grm.
 

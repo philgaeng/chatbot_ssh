@@ -1,7 +1,7 @@
 # Setup — Docker-era runbook
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/02_setup.md`](archive/02_setup.md). The legacy systemd / virtualenv / `rasa train` path is gone; everything runs via Docker Compose (see [`01_architecture.md`](01_architecture.md) for the service map, [`DOCKER.md`](DOCKER.md) for day-to-day container commands).
-**Last updated:** 2026-09-06 — §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-07 — host ports are defaults and `make ephemeral-up` runs an isolated second stack (QA-03). Earlier: §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Prerequisites
 
@@ -77,6 +77,11 @@ make seed_seah_providers                  # SEAH support centres (public.seah_se
 | `make wsl-up` | Everything: chatbot + GRM single stack (dev bypass) |
 | `make wsl-auth` | Add Keycloak :18080 (`--profile auth`); for real OIDC set `AUTH_MODE=keycloak` + `KEYCLOAK_ISSUER` in `env.local` and rebuild — same UI :3001 / `ticketing_api` :5002 |
 | `make wsl-down` | Stop all (base + GRM + auth profile) |
+
+⚠ **The host ports below are defaults.** Since QA-03 each is `${VAR:-<number>}`, so an unset
+variable gives exactly the port shown — and `make ephemeral-up` runs a second, fully isolated,
+seeded stack beside your own (ui :13001, api :15002, webchat :18081) without touching it.
+`make ephemeral-down` takes its volumes with it. See [`03_operations.md`](03_operations.md) §6b.
 
 Auth mode is a config flag (`AUTH_MODE`), not a duplicate service — dev bypass and real Keycloak use the **same** `grm_ui` (:3001) + `ticketing_api` (:5002). Raw compose equivalents (what the Makefile wraps):
 

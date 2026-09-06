@@ -71,6 +71,36 @@ export async function asOfficer(
   ]);
 }
 
+/**
+ * Wait until the UI has resolved a real identity, before asserting anything role-dependent.
+ *
+ * ⚠ **A bypass build renders as `super_admin` until the roster loads.** `AuthProvider` seeds its
+ * state with `fallbackBypassToken()`, whose `custom:grm_roles` is `super_admin`
+ * (`app/providers/AuthProvider.tsx:191`), and replaces it only once `listOfficerRoster()`
+ * resolves. Measured 2026-09-07: that call takes **~10 s on a freshly seeded database** and
+ * 0.2 s on a warm one (`GRM-080`), so the window is seconds wide exactly where it matters — a
+ * cold CI stack. `l1-officer@grm.local` was served the **full Settings page** there, and the
+ * correct "only accessible to administrators" panel on the warm box. The spec asserting that
+ * gate had been passing for the wrong reason: racing the roster and winning, on one machine.
+ *
+ * ⚠ **Do not wait for the officer's display name.** It is not stable across environments —
+ * a fresh seed derives it from the email (`L1-Officer`) while a long-lived database has the
+ * real one (`Site Officer L1`), because `mock_tickets` never applies
+ * `DemoOfficerSpec.first_name/last_name` (`GRM-081`). Waiting for "not Loading…" is the same
+ * signal and survives both.
+ */
+export async function expectIdentitySettled(
+  page: import("@playwright/test").Page,
+  _officer?: SeededOfficer,
+): Promise<void> {
+  const switcher = page.getByRole("button", { name: /demo/i });
+  await expect(switcher).toBeVisible({ timeout: 45_000 });
+  await expect(
+    switcher,
+    "the roster never loaded — the UI may still be the super_admin fallback (GRM-080)",
+  ).not.toContainText("Loading", { timeout: 45_000 });
+}
+
 interface OfficerFixtures {
   /** Become a seeded officer for the rest of this test. See {@link asOfficer}. */
   asOfficer: (officer: SeededOfficer) => Promise<void>;
