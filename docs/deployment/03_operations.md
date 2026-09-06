@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-06 — §6a: deploying a tagged build and rolling back (QA-02); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -127,13 +127,64 @@ Notes:
 | Ops check history | Postgres: `ops.system_health_checks` (queryable), plus daily ops email |
 | Keycloak | `docker compose --profile auth logs keycloak` |
 
+## 6a. Deploying a specific build, and rolling back
+
+**Staging pulls images that CI already built; production still builds on the box.** Both go
+through the same Makefile macros, and which one happens is `DEPLOY_BUILD` — `0` pulls, `1`
+builds. The `aws-*` targets set `0`; everything else defaults to `1`.
+
+```bash
+make aws-deploy IMAGE_TAG=<short-sha>        # deploy that commit's images
+make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ that is the rollback — no rebuild
+make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on the box instead
+```
+
+⭐ **The rollback is the capability worth knowing about.** Before images were tagged, going back
+a version meant rebuilding an older commit *on the deploy host* — the operation that took
+staging off the network for 41 minutes on 2026-09-04. Now it is a pull of an image that already
+exists, and it takes as long as the download.
+
+**`IMAGE_TAG` is a 7-character short sha**, the same one the build workflow tags with. Find one
+with `git rev-parse --short HEAD` on the commit you want, or read it off the Images run.
+
+⚠ **A deploy with no `IMAGE_TAG` is refused, on purpose.** The default resolves to `local`,
+which exists only on a developer's machine, so a pulling deploy without a tag would fail
+partway through with a registry 404 that reads like an outage. It stops before starting and
+says what to pass instead.
+
+⚠ **Production is deliberately unchanged.** `prod-deploy` still builds on the host, because
+nobody has yet run `curl -sI https://ghcr.io/v2/` from the VPN-only DOR box to confirm it can
+reach the registry at all. Converting it before that answer would put an untested path in a
+maintenance window. When the answer arrives, `make prod-deploy DEPLOY_BUILD=0` is the switch —
+and it needs a registry credential on that host first.
+
+**Every deploy prints what is actually running**, per service, after `up -d`:
+
+```
+aws-deploy: running images —
+  ticketing_api      ghcr.io/philgaeng/chatbot_ssh/app:a1b2c3d   sha256:9f2e1c4a8b...
+  grm_ui             ghcr.io/philgaeng/chatbot_ssh/ui:a1b2c3d    sha256:3d7b0e5f2c...
+```
+
+⚠ **Read it.** A pulling deploy can succeed while changing nothing: if `IMAGE_TAG` was not
+bumped, `up -d` is a no-op and the deploy reports OK having redeployed the previous build. The
+digest is the only thing that distinguishes those two outcomes, and *"deployed" is not "has
+run"* is a lesson this project has already paid for once.
+
 ## 7. Common procedures
 
 ```bash
-# Deploy update (staging/prod: prefer make aws-deploy / prod-deploy — they wrap this)
+# Deploy update (staging/prod: prefer make aws-deploy / prod-deploy — they wrap this; §6a)
 git pull --ff-only origin main
 make migrate_all
 docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d --build
+
+# ⚠ Never pipe a deploy through `tail`, `head` or `less`.
+#   make aws-deploy | tail -20     # DON'T
+# Those buffer until the pipe closes, so a deploy that is stalling looks identical to one that
+# is working — which is what left the operator blind for 41 minutes on 2026-09-04. Let it print,
+# or capture with `tee` (which passes output through as it arrives):
+#   make aws-deploy 2>&1 | tee deploy.log
 
 # Recreate nginx after editing deployment/nginx/*.conf
 make wsl-nginx
