@@ -1,7 +1,7 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Last updated:** 2026-09-07 — §6a: the suite now runs in CI (QA-05) — how to run it locally the same way, and how to read a failed run's artifacts. Earlier: rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
+**Last updated:** 2026-09-07 — §6a: the suite now runs in CI (QA-05), from `images.yml` behind `needs: build` rather than from `ci.yml`, which raced the build and skipped every run; plus how to run it locally the same way and how to read a failed run's artifacts. Earlier: rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
 **Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
@@ -228,7 +228,8 @@ the state that proves it — `expect.poll(() => getTicket(id).status_code).toBe(
 
 ### Running it in CI
 
-The `e2e` job in `.github/workflows/ci.yml` pulls the images CI published for **that commit**, brings
+The `e2e` job in `.github/workflows/images.yml` — behind `needs: build`, so this commit's images
+are guaranteed to exist before it starts — pulls them, brings
 up an isolated seeded stack (`make ephemeral-up-full`), and runs the whole suite against it. Locally
 the same thing, minus the registry:
 
