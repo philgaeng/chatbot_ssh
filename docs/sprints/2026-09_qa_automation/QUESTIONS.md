@@ -55,6 +55,18 @@ discovering it during a production deploy.
 
 > **Answer (prod `uname -m` = ?):** multi arch
 
+> ⭐ **REVISED 2026-09-06 by the owner, before `images.yml` was written:** *"it is more likely
+> that the opposite is true, in which case I can easily move stage to amd64"* — the expectation
+> is that DOR prod is **x86_64**, and that staging (currently a t4g.medium, ARM64) moves to match.
+> **If both hosts land on amd64, build a single architecture.** That is not merely cheaper, it is
+> *simpler*: no `buildx` manifest list, no QEMU, and [Q-03](#q-03--how-do-we-build-arm64-images-in-ci)
+> stops mattering entirely, because a standard `ubuntu-latest` runner is amd64 and builds it natively.
+> ⚠ **Multi-arch was chosen as the safe default under uncertainty, not on its merits** — so a
+> better guess is a good enough reason to revisit it. What is still open is **sequencing**, not
+> architecture: staging is ARM64 *today* and cannot run an amd64-only image until it moves.
+> Tracked as A-10 in [`PROGRESS.md`](PROGRESS.md). ⭐ Note the e2e story is unaffected either way —
+> QA-05 runs on an amd64 GitHub runner.
+
 ### Q-03 · How do we build arm64 images in CI?
 
 GitHub-hosted **arm64 runners are free for public repositories** (`ubuntu-24.04-arm`), which would make
