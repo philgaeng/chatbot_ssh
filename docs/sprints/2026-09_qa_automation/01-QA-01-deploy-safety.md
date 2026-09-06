@@ -22,6 +22,12 @@ This ticket does not fix the cause (that is QA-02). It makes the failure mode su
 2. **Cap the Next build heap.** `NODE_OPTIONS=--max-old-space-size=<MB>` in the **builder stage** of
    `channels/ticketing-ui/Dockerfile`, exposed as a build ARG so it is tunable per host. The point is
    that the build **fails loudly at its own limit instead of taking the host down with it.**
+   ⭐ **Delete the dead `deps` stage while you are in there** (`Dockerfile:5-8`). It runs
+   `npm ci --omit=dev` and **nothing ever does `COPY --from=deps`** — the runner copies only from
+   `builder`. So every UI build runs `npm ci` twice, on a host with 3825 MB and no swap, and half of it
+   is thrown away. It is a deletion rather than an optimisation, and it belongs here rather than in
+   QA-02 because it **changes the number this ticket is supposed to measure**: a peak taken without
+   removing it is a peak for a build that does redundant work.
 3. **Make a stalled deploy visible.** `aws-deploy` currently prints nothing until it exits, so a
    40-minute stall is indistinguishable from a 4-minute one — and on the incident its `OK` line never
    printed at all. Echo a **timestamped line before each phase** in `REMOTE_DEPLOY_CORE` and pass
@@ -29,16 +35,16 @@ This ticket does not fix the cause (that is QA-02). It makes the failure mode su
 
 ## Not in scope
 
-Moving the build off the box (QA-02). Any change to what gets deployed. Prod host changes — see
-[Q-15](QUESTIONS.md#q-15--who-runs-the-dor-prod-side-of-qa-02-and-when); this ticket's script should be
-*runnable* on prod but is applied to staging only here.
+Moving the build off the box (QA-02). Any change to what gets deployed. **Prod host changes** — the
+whole sprint is staging-only by decision; this ticket's script should be *runnable* on prod but is
+applied to staging only here.
 
 ## Files
 
 | File | Change |
 |---|---|
 | `scripts/ops/add_swap.sh` | **new** — idempotent: exit 0 if swap already active; else `fallocate`/`mkswap`/`swapon` + `fstab` line |
-| `channels/ticketing-ui/Dockerfile` | `ARG NODE_BUILD_HEAP_MB=1536` + `ENV NODE_OPTIONS=--max-old-space-size=$NODE_BUILD_HEAP_MB` in the **builder** stage only (never the runner) |
+| `channels/ticketing-ui/Dockerfile` | `ARG NODE_BUILD_HEAP_MB=1536` + `ENV NODE_OPTIONS=--max-old-space-size=$NODE_BUILD_HEAP_MB` in the **builder** stage only (never the runner); **delete the unreferenced `deps` stage** (lines 5–8) |
 | `Makefile` | `REMOTE_DEPLOY_CORE` / `REMOTE_BUILD_SERVICES_SEQUENTIAL`: timestamped phase echoes, `--progress=plain` |
 | `docs/deployment/15_host_hardening.md` | Swap section: why (the incident), how (the script), how to verify |
 | `docs/deployment/03_operations.md` | Deploy runbook: **do not pipe `aws-deploy` through `tail`** — it buffers until the pipe closes, which is what left the operator blind for 41 minutes |
@@ -52,6 +58,7 @@ into a failed build; the whole point is that it fails *before* the host does.
 - [ ] `scripts/ops/add_swap.sh` run twice in a row on staging — second run is a no-op, exit 0
 - [ ] `free -m` on staging shows **4096 MB swap**; `swapon --show` non-empty; survives a reboot (`/etc/fstab` verified)
 - [ ] A normal `make aws-deploy` completes with the heap cap in place
+- [ ] The `deps` stage is gone and the image still builds and runs; build time recorded before/after in `PROGRESS.md`
 - [ ] With the cap set deliberately low (e.g. `256`), the **build fails with a clear OOM error and the
       host stays reachable over SSH throughout** — this is the test that actually proves the ticket
 - [ ] `aws-deploy` prints a timestamped line per phase; a stall is visibly a stall

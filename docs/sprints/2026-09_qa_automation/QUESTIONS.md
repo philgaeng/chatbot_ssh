@@ -14,7 +14,7 @@
 
 ### Q-01 · Which registry?
 
-**Verified:** the repo is **public** (`gh repo view` → `visibility: PUBLIC`), so GHCR is free and
+**Verified:** ⚠ **this was true when written and is not any more — the repo went `PRIVATE` on 2026-09-04 ([D-010](../../DECISIONS.md)); read the amendment under the answer below.** As written: the repo is **public** (`gh repo view` → `visibility: PUBLIC`), so GHCR is free and
 authenticates with the workflow's own `GITHUB_TOKEN` — no new secret. ECR would put images in the same
 AWS account as the staging host (no cross-network pull) but needs AWS credentials added to CI.
 
@@ -25,7 +25,19 @@ secrets, and the UI image bakes `NEXT_PUBLIC_*` build args (see Q-04), so those 
 **Recommendation:** **GHCR** (`ghcr.io/philgaeng/chatbot_ssh/{app,ui}`), packages left public,
 with a CI check that no `.env`/`env.local` is present in the build context.
 
-> **Answer:**
+> **Answer:** follow reco
+
+> ⚠ **AMENDED 2026-09-04 — the verified premise above has inverted; re-decide before QA-02 starts.**
+> [D-010](../../DECISIONS.md) made the working repository **private** — done 2026-09-04, verified
+> `gh repo view` → `PRIVATE`. The reasoning in this question
+> rests on it being public (*"the repo is **public**, so GHCR is free"*, and *"packages default to
+> public"*). Neither holds now: private repository → **private packages**, metered for storage and for
+> egress to anything outside GitHub Actions — and the staging host pulling an image **is** outside.
+> Two consequences: the "leave packages public" recommendation no longer means what it said, and image
+> size × pull frequency becomes a cost question.
+> ⭐ **[Q-16](#q-16--which-commits-get-an-image) is now also the cost dial** — building on every
+> `dev/**` push versus only `integration/**` + `main` is the difference between staying inside the free
+> tier and paying overage. Settle the two together.
 
 ### Q-02 · What CPU architecture(s) must the images support?
 
@@ -41,7 +53,7 @@ This is the single biggest driver of QA-02's cost:
 If the answer cannot be obtained quickly, build **multi-arch** — the extra CI minutes are cheaper than
 discovering it during a production deploy.
 
-> **Answer (prod `uname -m` = ?):**
+> **Answer (prod `uname -m` = ?):** multi arch
 
 ### Q-03 · How do we build arm64 images in CI?
 
@@ -53,7 +65,7 @@ slow part) or a self-hosted ARM runner (another box to own).
 **Recommendation:** try `runs-on: ubuntu-24.04-arm` first; fall back to `docker/setup-qemu-action` only
 if that label is unavailable.
 
-> **Answer:**
+> **Answer:** follow reco
 
 ### Q-04 · The UI image bakes its auth mode — do we publish two variants?
 
@@ -67,7 +79,7 @@ staging and production need the Keycloak variant.
 compose file used for staging or production**. Note the runtime already fails closed — production can
 never honour `AUTH_MODE=bypass` (HR-01) — so this guard is defence in depth, not the only control.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-05 · Can the **production** host pull from the registry?
 
@@ -79,7 +91,7 @@ current build-on-box flow until this is known.
 **Recommendation:** scope QA-02 to **staging only**, and open a follow-up for production once someone
 can run `curl -sI https://ghcr.io/v2/` from the DOR box.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ---
 
@@ -95,7 +107,7 @@ needs its own node setup).
 `npx playwright test` working with no path gymnastics and leaves `vitest` (node-env, `**/*.test.ts`)
 untouched — note the config's `include` would otherwise collide, so e2e specs use `*.spec.ts`.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-07 · What auth mode does the suite run against?
 
@@ -107,7 +119,7 @@ redirects**, which removes the single heaviest service from the CI stack.
 **Recommendation:** **bypass build for the whole suite**, plus **one** Keycloak login smoke test added
 later (its own job, real realm), so the login path is not entirely untested.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-08 · Screenshots: artifacts only, or pixel-diffed baselines?
 
@@ -119,7 +131,7 @@ taken inside the same container image.
 a short list of stable pages, generated inside the official Playwright image. The immediate win is that
 a human — or the review-feedback triage agent — can *see* the page; the gate can come second.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-09 · How much of the officer UI does v1 cover?
 
@@ -132,7 +144,7 @@ are what reviewers actually exercise: (1) queue → open ticket → add internal
 (3) resolve + closure summary; (4) settings → create/edit an officer; (5) reports → generate an XLSX.
 **Tell me if a different five matter more** — you know what the reviewers break.
 
-> **Answer (which flows):**
+> **Answer (which flows):**lets do all the flows
 
 ### Q-10 · Is the mobile surface in v1?
 
@@ -143,7 +155,7 @@ of thing that breaks silently.
 **Recommendation:** **yes — mobile smoke only** (`/m/queue`, `/m/tickets`, `/m/tasks`, one ticket
 detail), no driven flows in v1.
 
-> **Answer:**
+> **Answer:**yes
 
 ---
 
@@ -162,7 +174,7 @@ entry, session-id persistence + `/clear_session` rotation.
 **Recommendation:** **yes, as QA-04d** — it is the same harness pointed at a second surface, and it
 retires a real open item. But it is **additional scope, roughly +1–1.5 d**, not a freebie.
 
-> **Answer:**
+> **Answer:**Yes we need it
 
 ### Q-12 · Does the e2e stack go through nginx, or straight to the UI container?
 
@@ -172,20 +184,25 @@ proxy/routing regressions — which is how the webchat is actually served.
 **Recommendation:** **direct for the officer UI; through nginx for the webchat** (QA-04d), because
 nginx is part of what serves it.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-13 · Report-only or required check?
 
-**Verified via the GitHub API:** `main` has **no branch protection at all** (`Branch not protected`,
-HTTP 404) — so today *no* check is required on any branch, and the HR-05 item asking for this is still
-open.
+**Verified via the GitHub API:** `main` had **no branch protection at all** (`Branch not protected`,
+HTTP 404) — so no check was required on any branch, and the HR-05 item asking for this was still open.
+
+> ✅ **RESOLVED 2026-09-04.** A repository ruleset (`Main`) is **active** on `refs/heads/main` and
+> `refs/heads/integration/*` — all five CI jobs required, PR required at 0 approvals, deletions and
+> force-pushes blocked, no bypass actors. Verified through the API. **The recommendation below is now
+> half-done**: the existing checks are required; the e2e job is the only context left to add when its
+> report-only period expires.
 
 **Recommendation:** land e2e as **report-only for ~2 weeks**, then enable branch protection on `main`
 and `integration/**` requiring `backend-tests`, `ui-checks`, `docs-links` **and** the new e2e job.
 ⭐ Enabling protection for the *existing three* is a ten-minute job worth doing **now**, independent of
 this sprint.
 
-> **Answer:**
+> **Answer:**follow reco
 
 ### Q-14 · Do we want an always-on test environment, or is ephemeral-per-PR enough?
 
@@ -196,7 +213,7 @@ exactly that reason (T2 self-hosting, *"no run-cost owner"*).
 **Recommendation:** **ephemeral only.** Revisit if the review-feedback sprint's agent phase actually
 lands and wants a durable sandbox.
 
-> **Answer:**
+> **Answer:** follow reco
 
 ### Q-15 · Who runs the DOR-prod side of QA-02, and when?
 
@@ -206,4 +223,94 @@ access and a maintenance window, and per Q-05 may need a different image path en
 **Recommendation:** **staging in this sprint; production as a separately scheduled follow-up** with its
 own runbook entry, so the sprint is not blocked on VPN availability.
 
+> **Answer:**i HAVE ACCESS to prod but access is intermittent
+
+---
+
+## Second pass — seams between tickets (2026-09-04)
+
+> **Why these exist, and why they are different from Q-01…Q-15.** The first fifteen were asked of the
+> *sprint*. These four came out of checking each finished ticket **against the tree**, and they all live
+> in the space *between* two tickets that are each correct on their own — the gap you only see by asking
+> what QA-05 receives from QA-02.
+>
+> **Q-17, Q-18 and Q-19 are corrections of fact, not preferences** — they are already folded into the
+> tickets, because leaving them would mean shipping something known to be wrong. Read them, but there
+> is nothing to decide unless you disagree.
+> **[Q-16](#q-16--which-commits-get-an-image) is a genuine fork and needs your call.**
+
+### Q-16 · Which commits get an image?
+
+QA-02 proposed building images on push to `main` and `integration/**`. QA-05 pulls
+`IMAGE_TAG=<this commit's sha>`. **Those cannot both hold:** on a pull request — including this sprint's
+own `qa/*` → `dev/qa-automation` PRs — no such tag exists, so the e2e job fails for a reason unrelated
+to the change. `ci.yml` already gates `main`, `integration/**`, `dev/**` and `dpg/**`, so the narrow
+image trigger would also be a fresh instance of the defect recorded in `ci.yml`'s own header: a gate
+that does not run on the branches people actually work on.
+
+- **(a) Build on everything `ci.yml` gates, plus `pull_request`.** Every commit under test has its own
+  image. Costs CI minutes on every PR — and with multi-arch (your Q-02 answer) that is the expensive
+  branch until the prod `uname -m` comes back `aarch64`.
+- **(b) Keep the narrow trigger, give the e2e job a documented fallback** — exact sha → branch tag →
+  PR base sha. Cheap, but the suite then sometimes tests *the base commit's* image against the PR's
+  specs. That is a subtly false green, which is the class of thing this sprint exists to stop.
+
+**Recommendation: (a), narrowed by path** — build on PRs that touch build inputs (`Dockerfile`,
+`channels/ticketing-ui/**`, `requirements*.txt`, `docker-compose*.yml`, the workflows), and use (b)'s
+fallback for the rest. A docs-only PR stays free; nothing ever silently tests the wrong image.
+⚠ Whichever you pick, **it is written down in QA-02** — QA-05 must not improvise it.
+
 > **Answer:**
+
+### Q-17 · How does a stack select the bypass UI variant?
+
+QA-02's tag scheme was one variable, `ui:${IMAGE_TAG:-local}`. QA-05 needs `ui:<sha>-bypass` running
+**beside** `app:<sha>`. One variable cannot name both. Today the variant is chosen by `${AUTH_MODE}` as
+a **build arg** (`docker-compose.grm.yml:318`) — the mechanism that pulling removes.
+
+**Recommendation:** a second variable, `UI_IMAGE_TAG`, defaulting to `IMAGE_TAG`
+(`ui:${UI_IMAGE_TAG:-${IMAGE_TAG:-local}}`). Every existing invocation is unchanged; QA-03's
+`ephemeral-up` and QA-05's job set it and nothing else moves. **Owned by QA-02.**
+
+> **Answer:** *(folded in — a missing mechanism, not a preference; say so if you want it done differently)*
+
+### Q-18 · Does the image contain `env.local`?
+
+**Yes, today.** QA-02 said the build context "is supposed to exclude `env.local` via `.dockerignore` —
+verify that, do not assume it". Verified: **it does not.** The root `.dockerignore` excludes caches,
+`node_modules`, `models`, `uploads` and `deployment/certbot`, and no env file; the root `Dockerfile:25`
+is `COPY . /app`. Any build on a host holding `env.local` — every deploy host, every dev box — bakes the
+decrypted secrets into the image. Survivable only while images are never pushed. **This sprint pushes
+them, to a public package** (your Q-01 answer).
+
+The proposed control was a CI build-context check. Alone it is theatre: CI's checkout has no
+`env.local`, so it can only ever pass, while `DEPLOY_BUILD=1` on a host and every local
+`docker compose build` stay dirty.
+
+**Recommendation:** fix the `.dockerignore` first (`.env*`, `env.local`), keep the CI check as the
+second control, and verify the published image directly (`ls -a /app`). ⚠ A published image cannot be
+unpublished — if a dirty one ships the remedy is secret **rotation**, not deleting the package.
+
+> **Answer:** *(folded in as a fix — this one is not optional)*
+
+### Q-19 · Which migration order is "the documented one"?
+
+QA-02's acceptance and QA-05's scope both said *"the documented order (public → ticketing → ops)"*.
+**Two orders exist in the repo and they disagree:**
+
+| Source | Order |
+|---|---|
+| `ci.yml:206-208` | public → ticketing → ops |
+| `Makefile:129-131` (`REMOTE_DEPLOY_CORE`), `Makefile:419` (`migrate_all`) | **ticketing → public → ops** |
+| [`07_migrations_policy.md`](../../deployment/07_migrations_policy.md) §"May5 SEAH rollout" | ticketing → public (ops not mentioned) |
+
+An agent rewriting `REMOTE_DEPLOY_CORE` to match the ticket's wording would **reorder a live deploy's
+migrations as a side effect of an image change**.
+
+**Recommendation:** **neither ticket touches it.** QA-02 preserves the Makefile's order; QA-05 copies
+`backend-tests`' steps verbatim, since those demonstrably work against the same seed. Whether the
+streams have a real ordering dependency deserves a migrations ticket with evidence — the schema rules
+say the three never share ownership of a table, which suggests both orders are fine, but "suggests" is
+not a basis for changing a deploy. Logged as a follow-up per the standing deferral rule.
+
+> **Answer:** *(folded in — change neither order, log the reconciliation)*
