@@ -1,7 +1,7 @@
 # Documentation lifecycle
 
 **Status:** authoritative (2026-09-06). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-06 — §3a.2's release-tag example stops naming `v1.2.0`, a tag that never existed; it now names the scheme in [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) and says plainly that no tag exists yet. Also: §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-06 — rule **6.1a**: the header bump is now checked before the commit exists (`.githooks/pre-commit` → `--check-staged`), because the history check could only name the violation once the fix had become illegal. Also: §3a.2's release-tag example stops naming `v1.2.0`, a tag that never existed; it now names the scheme in [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) and says plainly that no tag exists yet. Also: §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
@@ -236,6 +236,35 @@ filled in honestly rather than optimistically.
 ```
 
 *Enforced by* [`tests/repo/test_doc_headers.py`](../../tests/repo/test_doc_headers.py) → `scripts/ops/doc_headers.py --check`. **Fix a gap with `--stamp`; never by hand across the tree.**
+
+**Rule 6.1a — The header bump is checked *before* the commit exists, by a hook.**
+
+```bash
+make hooks     # once per clone: points git at .githooks/
+```
+
+[`.githooks/pre-commit`](../../.githooks/pre-commit) runs `doc_headers.py --check-staged` — the same
+rule as `--check`, the same `SPEC_DIRS`, applied to the staged tree.
+
+⭐ **Why a hook and not another test, and this is the whole reason it exists.** `--check` reads
+**committed history**. A violation is therefore invisible while the commit is being written and
+appears only once it has landed — at which point the fix is *illegal*: bumping the header would have
+to ride a **later** commit, which is exactly what §3 forbids. **The check could only ever report a
+rule it had already made impossible to obey.** The hook moves the same rule to the one moment the fix
+costs a single line.
+
+⚠ **Measured, not argued.** On 2026-09-06 the author of that finding reproduced it one commit later —
+edited §3a.2 of this document, missed its header, and learned about it from the checker only after
+committing. Nothing was pushed, so it was fixed by amending; on a pushed commit it could not have been.
+
+**The bypass is `git commit --no-verify`, and it is expected to be loud** — say in the commit message
+why the body edit needed no date change. *Why a bypass at all: a hook that blocks a legitimate commit
+gets deleted, and a deleted hook enforces nothing. The same argument as the release gate's `HOTFIX=1`
+([`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) §5).*
+
+⚠ **A hook is not a gate for anyone who has not run `make hooks`,** and `--no-verify` beats it. A
+CI-side check over each pull request's commit range is the version with teeth, and it is **not built**
+— it is a register row, not a plan of this document's.
 
 > ### ⚠ This rule was unenforced for a month, and the measurement is the argument
 >

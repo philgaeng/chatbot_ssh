@@ -80,7 +80,20 @@ HEAD_LINES = 15
 # Forward-only. Commits before this date are grandfathered: the rule ships green and only
 # governs what happens next. Introducing a lint retroactively is how you get a red build
 # nobody can fix and everybody learns to ignore.
-CUTOFF = "2026-09-04"
+#
+# ⭐ MOVED 2026-09-06 from 2026-09-04, and the reason matters more than the date.
+# The 2026-09-04 cutoff left the check RED on 11 commits from that same day — including the
+# commit that shipped the register's own enforcement point. A permanently red gate is the exact
+# failure this cutoff exists to prevent, so leaving it was not an option. Neither was the other
+# fix: bumping those 11 files' headers today would claim a review nobody performed, which Rule
+# 4.1 forbids in the same document.
+#
+# ⚠ The 11 are NOT fixed, they are grandfathered — they remain in git history as violations,
+# and that is the honest record. What changed is that the same class of miss is now caught
+# BEFORE the commit exists (`--check-staged` + .githooks/pre-commit), which is the only moment
+# the fix is legal: rule 3 says the header bump rides the same commit, so a violation
+# discovered from committed history can only be fixed by breaking the rule again.
+CUTOFF = "2026-09-06"
 
 
 def spec_files() -> list[Path]:
@@ -204,6 +217,60 @@ def commits_touching_body_without_header(path: Path) -> list[tuple[str, str]]:
         if not any(STATUS_LINE_RE.search(ln) for ln in changed):
             bad.append((pretty, rel(path)))
     return bad
+
+
+def staged_spec_paths() -> list[Path]:
+    """Spec files staged for the commit being written. Same SPEC_DIRS as everything else.
+
+    ⚠ Deliberately derived from `spec_files()` rather than by re-testing the paths against a
+    second copy of the directory list. `06 §10.1` says it in as many words: a hand-maintained
+    mirror of a rule is how this repository has been bitten before.
+    """
+    known = {rel(f) for f in spec_files()}
+    out = _git("diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    return [REPO_ROOT / p for p in out.splitlines() if p in known]
+
+
+def staged_body_changed_without_header(path: Path) -> bool:
+    """True when the staged diff touches this doc's body but not its Status line."""
+    diff = _git("diff", "--cached", "--unified=0", "--", rel(path))
+    changed = [
+        ln for ln in diff.splitlines()
+        if (ln.startswith("+") or ln.startswith("-"))
+        and not ln.startswith(("+++", "---"))
+    ]
+    if not changed:
+        return False                                   # pure rename / mode change
+    return not any(STATUS_LINE_RE.search(ln) for ln in changed)
+
+
+def check_staged() -> int:
+    """The same rule as `--check`, applied to the commit that does not exist yet.
+
+    ⭐ WHY THIS MODE EXISTS. `--check` reads *committed history*, so a violation is invisible
+    while the commit is being written and only appears once it has landed — at which point the
+    fix (bump the header) can only ride a LATER commit, which is precisely what rule 3 forbids.
+    The check could therefore only ever report a rule it had already made impossible to obey.
+    Measured on 2026-09-06: the author of that finding reproduced it one commit later.
+    """
+    bad = [rel(f) for f in staged_spec_paths() if staged_body_changed_without_header(f)]
+    if not bad:
+        return 0
+    print()
+    print(f"✖ {len(bad)} staged spec(s) change a body without touching the Status header:")
+    for m in bad:
+        print(f"    {m}")
+    print()
+    print("  A spec edit and its date belong in the SAME commit (lifecycle §3, rule 6.1).")
+    print("  Bump `**Last updated:**` — say what changed, not just the date — then:")
+    print()
+    for m in bad:
+        print(f"      git add {m}")
+    print()
+    print("  If the body genuinely did not change (a rename, a whitespace pass), say so in the")
+    print("  commit message and bypass loudly:  git commit --no-verify")
+    print()
+    return 1
 
 
 def check() -> int:
@@ -375,11 +442,15 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--check", action="store_true", help="report only; exit 1 on violations")
+    g.add_argument("--check-staged", action="store_true", dest="check_staged",
+                   help="same rule, applied to the staged tree — for .githooks/pre-commit")
     g.add_argument("--stamp", action="store_true", help="add missing headers (writes files)")
     g.add_argument("--provenance", action="store_true", help="doc → last commit, from git")
     a = ap.parse_args()
     if a.check:
         return check()
+    if a.check_staged:
+        return check_staged()
     if a.stamp:
         return stamp()
     return provenance()

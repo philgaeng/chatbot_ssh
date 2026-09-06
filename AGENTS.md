@@ -62,7 +62,8 @@ here**; adding a second one that does the same job is how a rule ends up with tw
 
 | Tool | Does | Run it |
 |---|---|---|
-| `scripts/ops/doc_headers.py` | Every live spec carries a dated header, and no commit edits a spec body without bumping it. Also derives provenance | `--check` · `--provenance` |
+| `scripts/ops/doc_headers.py` | Every live spec carries a dated header, and no commit edits a spec body without bumping it. Also derives provenance | `--check` · **`--check-staged`** · `--provenance` |
+| `.githooks/pre-commit` | Runs `--check-staged` before the commit exists — the only moment the fix is one line rather than a rule violation. **Run `make hooks` once per clone** or it is inert | `make hooks` · bypass `git commit --no-verify` |
 | `tests/repo/test_spine.py` | The register is well-formed: ids unique, allocator accurate, kinds valid, one `current` per lane, `blocked` rows name a blocker, `done` rows carry a verification level, **`ready` rows carry a profile** | `pytest tests/repo/test_spine.py` |
 | `tests/repo/test_doc_code_refs.py` | Backticked code citations in docs point at files and lines that exist | `pytest tests/repo` |
 | `tests/repo/test_doc_headers.py` | Nine checks on the header rule itself — every live spec dated, no future dates, no commit hash in a header, **rule 10.1** (no tier-1/1b doc links into `sprints/` or `reviews/`) and **rule 10.5** (no internal-only content in a public spec) | `pytest tests/repo` |

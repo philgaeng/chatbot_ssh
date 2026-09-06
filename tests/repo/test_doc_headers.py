@@ -95,6 +95,68 @@ def test_no_commit_changes_a_spec_body_without_touching_its_header(dh):
     )
 
 
+def test_the_staged_check_refuses_a_body_edit_that_leaves_the_header_alone(dh, monkeypatch):
+    """⭐ The enforcement point the history check structurally cannot be.
+
+    `--check` reads committed history, so it names a violation only after the commit exists —
+    and by then the fix is illegal, because bumping the header would have to ride a LATER
+    commit, which lifecycle §3 forbids. It could only ever report a rule it had already made
+    impossible to obey. `--check-staged` applies the same rule to the commit being written,
+    which is the one moment the fix is free.
+
+    Driven through a synthetic diff rather than a real index: the decision is "does this diff
+    touch the Status line", and that is what deserves the test.
+    """
+    body_only = (
+        "--- a/docs/engineering/04_testing.md\n"
+        "+++ b/docs/engineering/04_testing.md\n"
+        "@@ -40 +40 @@\n"
+        "-markers are declared in pytest.ini\n"
+        "+markers are declared in pyproject.toml\n"
+    )
+    header_too = body_only + (
+        "-**Last updated:** 2026-09-01 — the pyramid\n"
+        "+**Last updated:** 2026-09-06 — markers moved to pyproject\n"
+    )
+    doc = REPO_ROOT / "docs" / "engineering" / "04_testing.md"   # rel() needs an absolute path
+
+    monkeypatch.setattr(dh, "_git", lambda *a: body_only)
+    assert dh.staged_body_changed_without_header(doc) is True, (
+        "a staged body edit with no header bump must be refused — this is the whole rule"
+    )
+
+    monkeypatch.setattr(dh, "_git", lambda *a: header_too)
+    assert dh.staged_body_changed_without_header(doc) is False, (
+        "bumping the Status line in the same commit is exactly what the rule asks for"
+    )
+
+    monkeypatch.setattr(dh, "_git", lambda *a: "")
+    assert dh.staged_body_changed_without_header(doc) is False, (
+        "a pure rename or mode change is not a body edit; failing it would train people to "
+        "--no-verify, which costs more than the case it catches"
+    )
+
+
+def test_the_pre_commit_hook_exists_and_calls_the_staged_check(dh):
+    """A hook that is not wired is a file, not a gate — and `.git/hooks` is not versioned.
+
+    The hook lives in a committed `.githooks/` so it is reviewable and travels with a clone;
+    `make hooks` points git at it. This pins the two halves to each other.
+    """
+    hook = REPO_ROOT / ".githooks" / "pre-commit"
+    assert hook.exists(), "the pre-commit hook named by the standard must exist"
+    assert hook.stat().st_mode & 0o111, f"{hook} is not executable — git will skip it silently"
+    text = hook.read_text()
+    assert "--check-staged" in text, "the hook must invoke the staged check, not --check"
+    assert "doc_headers.py" in text, "the hook must reuse the one checker, not a second copy"
+
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    assert "core.hooksPath .githooks" in makefile, (
+        "a hook nobody can enable in one command does not get enabled"
+    )
+    assert hasattr(dh, "check_staged"), "--check-staged must be a mode on the existing checker"
+
+
 def test_stamping_is_idempotent(dh, tmp_path):
     """A formatter that accretes blank lines or duplicate headers on re-run is not usable in CI.
 
