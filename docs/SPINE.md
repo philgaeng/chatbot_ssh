@@ -2,7 +2,7 @@
 
 **Status:** authoritative (2026-09-04). **The single answer to "what is next."** If another document
 appears to answer it too, that document is wrong — say so and fix it.
-**Last updated:** 2026-09-06 — the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
+**Last updated:** 2026-09-06 — OM-02 + OM-03 closed, OM-04 is `current`, OM-07 unblocked; and the port measurement landed: `GRM-013` closed, `GRM-065` fixed pending
 deploy, `GRM-014` reframed and downgraded, `GRM-067` + `GRM-068` opened. Created 2026-09-04 (OM-02), seeded from
 `sprints/README.md`, the four live sprint trackers, and the open rows of `TODO.md`, which is now
 retired behind a forwarding note.
@@ -72,7 +72,7 @@ design. **The five minutes were the work.**
 
 | Lane | Item | Kind | Profile | State | Verification |
 |---|---|---|---|---|---|
-| operating-model | **OM-02** — the register | feature | backend-feature −DATA/CONTRACT | `current` | `implemented` |
+| operating-model | **[OM-04](sprints/2026-09_operating_model/04-OM-04-sensitive-path-at-intake.md)** — sensitive-path question at intake | feature | chore+SPEC | `current` | `planned` |
 | *(all others)* | — | | | | *no lane has a second `current`* |
 
 ---
@@ -83,12 +83,10 @@ Items someone could pick up today. Sprint tickets keep their own IDs and link to
 
 | Item | Kind | Profile | State | Size | Lane | Notes |
 |---|---|---|---|---|---|---|
-| [OM-03](sprints/2026-09_operating_model/03-OM-03-register-test.md) — `tests/repo/test_spine.py` | feature | chore+TEST | `ready` | S | operating-model | ⭐ **Not optional.** Without it every rule in `07` is a preference |
-| [OM-04](sprints/2026-09_operating_model/04-OM-04-sensitive-path-at-intake.md) — sensitive-path question at intake | feature | chore+SPEC | `ready` | S | operating-model | The PR checklist already exists; it moves |
 | [OM-05](sprints/2026-09_operating_model/05-OM-05-product-and-roadmap.md) — `PRODUCT.md` + `ROADMAP.md` | feature | chore+SPEC | `ready` | M | operating-model | Mostly assembly |
 | [OM-06](sprints/2026-09_operating_model/06-OM-06-standard-amendments.md) — four standard amendments | feature | chore+SPEC | `ready` | M | operating-model | Packs · design gate · verification ladder · session close |
 | [OM-09](sprints/2026-09_operating_model/09-OM-09-release-and-versioning.md) — release + versioning | feature | chore+SPEC+RELEASE | `ready` | M | operating-model | A tag is cut on production deploy ([D-009](DECISIONS.md)) |
-| [OM-07](sprints/2026-09_operating_model/07-OM-07-intake-and-tracker.md) — unify intake, wire the tracker | feature | backend-feature −DATA | `blocked` | M | operating-model | **Blocker:** OM-02. Ungated otherwise — repo is private |
+| [OM-07](sprints/2026-09_operating_model/07-OM-07-intake-and-tracker.md) — unify intake, wire the tracker | feature | backend-feature −DATA | `ready` | M | operating-model | ✅ **Unblocked 2026-09-06** — its only blocker was OM-02, now done. Ungated otherwise — repo is private |
 | [OM-08](sprints/2026-09_operating_model/08-OM-08-starter-kit-extraction.md) — starter-kit extraction | feature | chore+SPEC | `blocked` | S | operating-model | **Blocker:** OM-01…OM-06. Last by design |
 | [QA-01](sprints/2026-09_qa_automation/01-QA-01-deploy-safety.md) — stop the next deploy being an outage | feature | backend-feature | `ready` | S | qa *(sprint not approved)* | ½ d · from the 2026-09-04 deploy outage |
 | [QA-02](sprints/2026-09_qa_automation/02-QA-02-ci-built-images.md) — CI-built images | feature | backend-feature+RELEASE | `ready` | L | qa *(not approved)* | ⚠ **Q-01 must be re-decided** — its GHCR premise inverted when the repo went private |
@@ -198,6 +196,8 @@ done in their own text; those resolve as they are picked up.
 | [OM-01](sprints/2026-09_operating_model/01-OM-01-work-item-standard.md) — the work-item standard | feature | 2026-09-04 | `implemented` — ⚠ the standard is adopted, **not in force**; its §11 is the gap list |
 | **A-3 / HR-05 (settings half)** — branch protection | chore | 2026-09-04 | `verified` — ruleset active on `main` + `integration/*`, read back through the API. ⚠ The **proof** half is `GRM-`-less and sits in the register above |
 | **D-010** — the working repository is private | chore | 2026-09-04 | `verified` — `gh repo view` → `PRIVATE` |
+| [OM-03](sprints/2026-09_operating_model/03-OM-03-register-test.md) — `tests/repo/test_spine.py` | feature | 2026-09-06 | `tested` — nine checks, each proven to fail by a mutation sweep, running in CI ([`ci.yml`](../.github/workflows/ci.yml)). §7.2: a chore-profile item is done at `tested` |
+| [OM-02](sprints/2026-09_operating_model/02-OM-02-the-register.md) — the register | feature | 2026-09-06 | `tested` — OM-03 is its TEST gate, and its VERIFY gate was met by use: this session read the register, acted on three of its rows, and wrote five back. ⚠ Closed the day after it was written, by its own author-lineage — a second reader has not audited it |
 | `GRM-013` — DOR prod firewall for `:5001` | chore | 2026-09-06 | `verified` — 5001 filtered from outside the host (egress `146.70.252.25`), with 443/80 answering on the same probe. ⚠ **One vantage**: this observes reachability, not the ruleset — a source-IP allowlist is indistinguishable from here |
 | `GRM-005` — the ops monitor was blind and the report had never worked | debt | 2026-08-24 | `deployed` — ⚠ absorbed from `TODO.md` already marked ✅ FIXED; **not re-verified in this pass** |
 
@@ -213,7 +213,15 @@ done in their own text; those resolve as they are picked up.
 | `PROGRESS.md` § *In progress / next* | Deleted (Q-04). `PROGRESS.md` keeps the build narrative and the deviations record — it answers *how did we get here*, never *what is next* |
 | `sprints/README.md` status column | Still the map of sprints. Ticket-level status lives here |
 
-⚠ **This file is not yet validated.** `tests/repo/test_spine.py` (OM-03) does not exist, so nothing
-stops a duplicate id, two `current` items in one lane, or a `done` row whose verification level does
-not meet its profile. **Until OM-03 lands, every rule above is a preference** — which is the failure
-this project has measured twice.
+✅ **This file is validated.** [`tests/repo/test_spine.py`](../tests/repo/test_spine.py) (OM-03) landed
+2026-09-04 and runs in CI: nine checks covering duplicate ids, a stale next-free-id, an unknown kind,
+a `blocked` row with no named blocker, two `current` items in one lane, a `done` row with no
+verification level, a security view citing an item the register does not hold, and dead `followups/`
+links. ⚠ **What it deliberately does not check** is whether the plan is any good — that judgement
+would be wrong often enough to get the gate muted, and a muted gate is decoration.
+
+⚠ **This paragraph claimed the opposite until 2026-09-06** — it said the test "does not exist" for two
+days after it shipped, in the file whose entire purpose is to be the one true answer. The commit that
+landed the test edited this file and missed this line. **That is rule §3's failure mode reproducing
+itself inside the fix for rule §3**, and it is why `GRM-068` (the doc-header gate cannot see a
+violation until after the commit lands) is a design gap and not a clerical one.
