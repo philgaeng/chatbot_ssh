@@ -38,8 +38,10 @@ and the working repository goes **private** (D-010). Neither is possible today:
 
 ## Not in scope
 
-Generating the public repository (that is the split ticket, in
-[`../2026-09_public_repo_split/`](../2026-09_public_repo_split/)). Backfilling tags for past releases —
+Generating the public repository — that is the **public-repo-split** sprint, whose folder lives on
+the `dev/qa-automation` branch as of 2026-09-06 and is therefore deliberately *not* linked from here:
+a relative link to a directory that exists on another branch is a broken link, and CI's `docs-links`
+job says so. Backfilling tags for past releases —
 **do not invent history**; the first tag is the first release cut under this policy.
 
 ## Files
