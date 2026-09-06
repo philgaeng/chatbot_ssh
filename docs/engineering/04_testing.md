@@ -1,7 +1,7 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Last updated:** 2026-09-06 — §6a gains rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
+**Last updated:** 2026-09-07 — §6a: the suite now runs in CI (QA-05) — how to run it locally the same way, and how to read a failed run's artifacts. Earlier: rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
 **Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
@@ -226,13 +226,37 @@ and let an ephemeral stack be what throws them away.
 can render an optimistic state for an action that failed. After driving an action, poll the API for
 the state that proves it — `expect.poll(() => getTicket(id).status_code).toBe("ESCALATED")`.
 
-⚠ **The suite is type-checked and linted by CI today, and executed by nothing.** `tsconfig.json`
-includes `**/*.ts` and `ui-checks` lints the whole directory, so a spec that does not compile already
-fails the build — but **no CI job runs the browser**, because running one needs images built in CI and
-a disposable stack to run them on, and neither exists yet. Until that job lands, a green build says
-nothing about whether these tests pass, and the only honest way to know is to run them locally against
-a seeded stack. This repository has been bitten twice by a gate that silently did not run; the gap is
-written down here rather than assumed away.
+### Running it in CI
+
+The `e2e` job in `.github/workflows/ci.yml` pulls the images CI published for **that commit**, brings
+up an isolated seeded stack (`make ephemeral-up-full`), and runs the whole suite against it. Locally
+the same thing, minus the registry:
+
+```bash
+make ephemeral-up-full                       # isolated + seeded, on 13001 / 15002 / 18081
+cd channels/ticketing-ui
+E2E_BASE_URL=http://localhost:13001 \
+E2E_API_BASE_URL=http://localhost:15002 \
+E2E_WEBCHAT_URL=http://localhost:18081/rest-webchat/ npx playwright test
+make ephemeral-down                          # containers, network AND volumes
+```
+
+**Reading a failed CI run.** The job uploads `e2e-artifacts-<run id>` containing:
+
+| | |
+|---|---|
+| `test-results/` | a screenshot and a **trace** per failed test — `npx playwright show-trace <file>` replays the run with a DOM snapshot at every step |
+| `playwright-report/` | the HTML report, including the deliberate per-route screenshots |
+| `stack-logs/` | `docker logs` for every service |
+
+⚠ **Look at `stack-logs/` first when the suite did not start.** The failure you will actually get is
+"the API never came up", not "the button moved", and a readiness failure with no container logs is
+the least debuggable thing a pipeline can produce.
+
+⚠ **The job is report-only until 2026-09-21** (`continue-on-error`), a bedding-in period for the
+flakiest kind of job there is. **The date is the control, not an intention** — this repository has a
+recorded history of gates that decorate rather than gate, so the removal is tracked as `GRM-083`
+rather than left to memory. Until then, a green build does not mean these tests passed; open the job.
 
 ---
 
