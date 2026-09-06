@@ -31,11 +31,21 @@ on:
       - "dev/**"
       - "dpg/**"
 
-# One build per ref. A superseded push has nothing worth finishing, and these are the most
-# expensive jobs in the pipeline.
+# One build at a time per ref, and ⚠ **deliberately NOT cancel-in-progress.**
+#
+# My first version cancelled superseded runs, on the reasoning that these are the most expensive
+# jobs in the pipeline. **That contradicts the decision this workflow exists to serve.** Q-16 was
+# answered `(a)` — build on everything, including pull requests — precisely so that *every commit
+# under test has its own image*. Cancelling breaks that: push X then Y in quick succession and
+# X's images never get built, while `ci.yml` has **no** concurrency group of its own, so X's CI
+# run keeps going. QA-05's e2e job pulls `IMAGE_TAG=<X's sha>`, finds nothing, and fails for a
+# reason having nothing to do with the change — the exact defect Q-16 was answered to prevent.
+#
+# So runs queue instead of cancelling. It costs minutes on a rapid series of pushes; the
+# alternative costs a false red on a gate people are supposed to trust.
 concurrency:
   group: images-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
