@@ -27,6 +27,7 @@ Spec: `docs/engineering/06_documentation_lifecycle.md` §6
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -145,7 +146,22 @@ def test_the_pre_commit_hook_exists_and_calls_the_staged_check(dh):
     """
     hook = REPO_ROOT / ".githooks" / "pre-commit"
     assert hook.exists(), "the pre-commit hook named by the standard must exist"
-    assert hook.stat().st_mode & 0o111, f"{hook} is not executable — git will skip it silently"
+
+    # ⚠ The MODE IN GIT, not the mode on disk — and the difference is not pedantry.
+    # This repository has `core.fileMode = false` (it lives on a WSL mount), so a local
+    # `chmod +x` is invisible to git: the file is executable for the author and 100644 for
+    # everyone who clones it, and git skips a non-executable hook WITHOUT SAYING SO. Checking
+    # the working tree passed locally and failed in CI on 2026-09-06 — the worst split there
+    # is, because the author's machine says the gate works. Fix: git update-index --chmod=+x
+    mode = subprocess.run(
+        ["git", "ls-files", "-s", "--", ".githooks/pre-commit"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split(" ", 1)[0]
+    assert mode == "100755", (
+        f"the hook is mode {mode} in git, not 100755 — git skips a non-executable hook "
+        "silently, so it would be inert for everyone but whoever committed it. "
+        "Fix: git update-index --chmod=+x .githooks/pre-commit"
+    )
     text = hook.read_text()
     assert "--check-staged" in text, "the hook must invoke the staged check, not --check"
     assert "doc_headers.py" in text, "the hook must reuse the one checker, not a second copy"
