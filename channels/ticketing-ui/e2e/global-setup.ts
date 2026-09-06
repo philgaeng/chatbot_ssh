@@ -7,26 +7,35 @@
  *
  *   1. `ticketing_api` `/health` answers `{"status":"ok"}`
  *   2. the officer UI root answers with something below 500
- *   3. the UI is an **`AUTH_MODE=bypass` build**
+ *   3. a `grm_bypass_user` cookie actually becomes an identity
  *
- * ⚠ **Check 3 needs a real browser, and that is not a design preference.** `/login` bails
- * out to client-side rendering (`BAILOUT_TO_CLIENT_SIDE_RENDERING` — `AuthProvider` calls
- * `useSearchParams` inside a Suspense boundary), so the served HTML contains none of the
- * page's text. Measured 2026-09-06: `curl http://localhost:3001/login | grep "Continue to
- * demo queue"` finds nothing on a bypass build. Grepping the HTML would therefore fail
- * *identically* on a bypass build and a Keycloak build — a check that cannot distinguish
- * the two states it exists to distinguish. So we open the page.
+ * ## Why check 3 asks the session endpoint rather than looking at a page
+ *
+ * ⚠ **The first version of this file loaded `/login` and looked for the "Continue to demo
+ * queue" button. That was a race, and it is exactly the flake this suite must not have.**
+ * `app/login/page.tsx:44` redirects whenever `isAuthenticated` — and in a bypass build
+ * `isAuthenticated` starts `true` unconditionally, so **`/login` always leaves for `/queue`**
+ * (measured 2026-09-06: every load ends at `/queue`, cookie or no cookie). The button is real
+ * but transient; the old check passed only by querying it before the effect landed. On a
+ * slower runner it would have failed for no reason at all.
+ *
+ * So check 3 asks the mechanism the suite actually depends on: **does a `grm_bypass_user`
+ * cookie become an officer?** One plain `fetch` of `/api/v1/users/me/session`, through the
+ * Next proxy, with a cookie for a known seeded officer. A 200 whose `user_id` is that officer
+ * proves five things at once — the UI is serving, the proxy forwards, the proxy is in bypass
+ * mode (a Keycloak build ignores the cookie entirely, `app/api/v1/[...path]/route.ts`),
+ * `ticketing_api` accepts internal headers, and the seeded roster is present. No browser, no
+ * paint order, no dependency on a copy string a UI ticket may legitimately reword.
  *
  * **Every failure here must name what to do.** A readiness probe that times out with
  * `Error: timeout` sends the reader to the wrong place; the whole value of this file is
  * that a broken stack is diagnosed in one line of output instead of 30 minutes.
  */
-import { chromium, type FullConfig } from "@playwright/test";
+import type { FullConfig } from "@playwright/test";
 
 import { API_BASE_URL, BASE_URL, READY_TIMEOUT_MS } from "./env";
-
-/** The bypass build's tell — `app/login/page.tsx`'s `if (AUTH_BYPASS)` branch. */
-const BYPASS_BUTTON = "Continue to demo queue";
+import { bypassCookieValue } from "./fixtures/officer";
+import { OFFICERS } from "./fixtures/seed";
 
 const POLL_INTERVAL_MS = 1_000;
 
@@ -57,7 +66,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       "  If the UI runs on a different port here, set E2E_BASE_URL.",
   });
 
-  await assertBypassBuild(deadline);
+  await assertBypassIdentity();
 }
 
 interface Probe {
@@ -90,38 +99,60 @@ async function waitForHttp({ what, url, accept, deadline, fix }: Probe): Promise
 }
 
 /**
- * Assert the UI was built with `AUTH_MODE=bypass`.
+ * Assert that a `grm_bypass_user` cookie resolves to that officer.
  *
  * The auth mode is a **build-time** constant (`NEXT_PUBLIC_AUTH_MODE` is inlined by the
  * compiler — `lib/auth/runtime-config.ts`), so a Keycloak-built image cannot be talked into
- * bypass at runtime and the whole suite would fail on OIDC redirects. Failing here, once,
- * with the reason is worth more than 30 specs each timing out at `/login`.
+ * bypass at runtime and every spec would fail on OIDC redirects or a 401. Failing here, once,
+ * with the reason is worth more than thirty specs each timing out somewhere else.
  */
-async function assertBypassBuild(deadline: number): Promise<void> {
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage();
-    await page.goto(`${BASE_URL}/login`, { waitUntil: "domcontentloaded" });
+async function assertBypassIdentity(): Promise<void> {
+  const who = OFFICERS.grcChair;
+  const url = `${BASE_URL}/api/v1/users/me/session`;
 
-    const remaining = Math.max(5_000, deadline - Date.now());
-    try {
-      await page.getByRole("button", { name: BYPASS_BUTTON }).waitFor({
-        state: "visible",
-        timeout: remaining,
-      });
-    } catch {
-      throw new Error(
-        `this suite needs an AUTH_MODE=bypass build of the officer UI.\n` +
-          `  ${BASE_URL}/login did not render the "${BYPASS_BUTTON}" button, which only a\n` +
-          `  bypass build shows (app/login/page.tsx). A Keycloak build will redirect every\n` +
-          `  spec to OIDC and fail confusingly.\n` +
-          `  Fix: rebuild grm_ui with AUTH_MODE=bypass (env.local), or point E2E_BASE_URL at a\n` +
-          `  bypass stack. In CI this is the \`-bypass\` image variant (QA-02 / Q-04).`,
-      );
-    }
-  } finally {
-    await browser.close();
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { cookie: `grm_bypass_user=${bypassCookieValue(who)}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (err) {
+    throw new Error(
+      `e2e stack not ready: ${url} could not be reached.\n` +
+        `  Last attempt: ${err instanceof Error ? err.message : String(err)}\n` +
+        `  Fix: the UI answered on ${BASE_URL} a moment ago, so this is most likely the\n` +
+        `  proxy's upstream — check TICKETING_API_URL on grm_ui.`,
+    );
   }
+
+  if (!res.ok) {
+    throw new Error(
+      bypassMessage(`${url} returned HTTP ${res.status}, not 200.`),
+    );
+  }
+
+  const session = (await res.json()) as { user_id?: string };
+  if (session.user_id !== who.userId) {
+    throw new Error(
+      bypassMessage(
+        `the grm_bypass_user cookie for ${who.userId} resolved to ` +
+          `${session.user_id ?? "(nothing)"} instead.`,
+      ),
+    );
+  }
+}
+
+function bypassMessage(what: string): string {
+  return (
+    `this suite needs an AUTH_MODE=bypass build of the officer UI.\n` +
+      `  ${what}\n` +
+      `  A bypass build's Next proxy turns the grm_bypass_user cookie into X-Internal-* headers;\n` +
+      `  a Keycloak build ignores the cookie entirely (app/api/v1/[...path]/route.ts), so every\n` +
+      `  spec would run as nobody and fail confusingly.\n` +
+      `  Fix: rebuild grm_ui with AUTH_MODE=bypass (env.local), or point E2E_BASE_URL at a bypass\n` +
+      `  stack. In CI this is the \`-bypass\` image variant (QA-02 / Q-04).\n` +
+      `  ⚠ If the mode is right, check the seed: this asks for ${OFFICERS.grcChair.userId}.`
+  );
 }
 
 function sleep(ms: number): Promise<void> {
