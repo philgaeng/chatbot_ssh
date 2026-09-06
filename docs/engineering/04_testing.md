@@ -1,7 +1,7 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Last updated:** 2026-09-06 — §6a gains rules 6a.9 and 6a.10 (what counts as a crash; stub third parties), from writing the route smoke suite.
+**Last updated:** 2026-09-06 — §6a gains rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
 **Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
@@ -213,6 +213,18 @@ fails when a CI runner has no egress, sends this system's data to someone else o
 reports a third party's downtime as our regression. ⚠ **If you discover such a dependency while
 writing a spec, the stub is the test's fix and the dependency is a finding** — file it. That is how
 `GRM-072` was found.
+
+**Rule 6a.11 — A flow that changes state creates its own subject.** Never escalate, resolve or edit a
+*seeded* record: those actions are irreversible and non-idempotent, so the second run behaves
+differently from the first and the demo scenarios stop meaning what their script says. This is Rule
+3.5 at the browser level. ⚠ **And do not add a cleanup that deletes what the flow created** — this
+system has no erasure path for a grievance **by decision**, because in a complaints system a delete
+button is a suppression button. Prefix instead (`E2E-<timestamp>`), so leftovers are identifiable,
+and let an ephemeral stack be what throws them away.
+
+**Rule 6a.12 — Assert the outcome where the system keeps it, not only where the page shows it.** A UI
+can render an optimistic state for an action that failed. After driving an action, poll the API for
+the state that proves it — `expect.poll(() => getTicket(id).status_code).toBe("ESCALATED")`.
 
 ⚠ **The suite is type-checked and linted by CI today, and executed by nothing.** `tsconfig.json`
 includes `**/*.ts` and `ui-checks` lints the whole directory, so a spec that does not compile already

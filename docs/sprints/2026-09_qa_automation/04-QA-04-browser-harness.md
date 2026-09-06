@@ -181,9 +181,27 @@ QA-04d is warned about below.
 the five are a **floor, not the scope**. That is a real expansion and it is priced below; the five stay
 listed because they are the ones that must work first, not because the rest are optional.
 
-**Tier 1 — the original five. Land these first; they are the harness's proof.**
+**Tier 1 — the original five. Land these first; they are the harness's proof.** ✅ **DONE 2026-09-06.**
 queue → open ticket → internal note · escalate · resolve + closure summary · settings → create/edit an
 officer · reports → generate an XLSX.
+
+> **9 specs in `e2e/flows/`, green twice in a row.** Every state-changing flow acts on a ticket it
+> created (`e2e/fixtures/ticket.ts`), never on a seeded one — escalating a seeded ticket is
+> irreversible and would rewrite a demo scenario.
+>
+> ⭐ **Three findings, and all three came from *driving* rather than reading.**
+> `GRM-073` — escalate and resolve **hard-block** without a photo, on both sides, while `CLAUDE.md`
+> says *"warning encouraged but not blocked"*; no live spec records the real rule.
+> `GRM-074` — on a **freshly seeded** database the officer-invite flow dead-ends: every seeded
+> position type is restricted to a unit type no seeded organisation has.
+> `GRM-075` — officer *provisioning* is deliberately not driven (it would create a real Keycloak
+> account and send mail per run); [followed up](followups/officer-provisioning-not-driven-by-e2e.md).
+>
+> ⚠ **Two adjustments the ticket did not anticipate.** The officer flow is *"create/edit"*, and
+> neither half is driven to completion — provisioning has the side effect above, and editing a
+> seeded officer is a seed mutation. What **is** driven is the directory, its search, the invite
+> cascade and the admin gate. And the XLSX export had to be **filtered** before it would run at all:
+> `report_limits.max_export_rows` is 100 and a busy stack returns HTTP 400.
 
 **Tier 2 — the rest of "all the flows", enumerated so "all" means something.** Derived from the
 actions and settings sections that actually exist in the app; **verify against the tree before

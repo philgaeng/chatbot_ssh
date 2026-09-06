@@ -55,6 +55,7 @@ The May 10, 2026 demo shipped; parts of the locked plan below were superseded du
 | Target `grm.facets-ai.com` (staging on facets) | Production is **`grm-chatbot.dor.gov.np`** (DOR infra); facets is staging | `docs/deployment/12_environment_urls.md` |
 | "Two workflows" (Standard + SEAH) | Multi-stream workflow slots per project (safeguards/hazards/ca/seah) | `docs/ticketing_system/12_workflows_configuration.md` |
 | SEAH intake per April plan | Canonical model: `grievance_parties` + PII vault, legacy SEAH tables dropped | `docs/seah/` |
+| **File attachment on escalate/resolve:** *"warning encouraged but not blocked"* (§ *Officer case view*) | **Hard-blocked, on both sides.** `ticket_actions.py` raises *"At least one image attachment is required before escalating"* / *"…before resolving"*, and the UI refuses to open the form. ⚠ Measured 2026-09-06 by driving the flow in a browser (`GRM-073`) — the line below has been wrong for long enough that no live spec records the real rule | `ticketing/engine/ticket_actions.py` · `channels/ticketing-ui/lib/useTicketThread.ts` — **a live spec still owes this rule a home** |
 
 ---
 
