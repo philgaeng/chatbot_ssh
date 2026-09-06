@@ -52,9 +52,44 @@ ACCEPTED_LOOSE_PINS: dict[str, str] = {
 
 IMAGE_RE = re.compile(r"^\s*image:\s*([^\s#]+)", re.MULTILINE)
 
+# ── First-party images are outside this rule, and the distinction is the whole point ──
+#
+# QA-02 (2026-09-06) gave the eleven built services an `image:` key so they can be published
+# once and pulled, instead of rebuilt on a 3825 MB deploy host. Those references are
+# `${IMAGE_REGISTRY:-…}/app:${IMAGE_TAG:-local}` — a variable, not a version.
+#
+# ⚠ **They are NOT added to ACCEPTED_LOOSE_PINS, deliberately.** That dict's own contract is
+# *"a claim that the image's licence is stable across the range the tag spans"*, and that frame
+# does not apply to an image we build from this repository: there is no upstream that can
+# relicense underneath us, because the upstream is us. Putting them there would file a licence
+# claim where none is needed and dilute what an entry in that dict means.
+#
+# The risk this file exists for — "a floating tag is a licence you did not choose" — is a
+# property of **third-party** images. First-party ones have a different risk (deploying a stale
+# or wrong build), and QA-02 answers that one where it belongs: the deploy prints the resolved
+# digest per service, and `IMAGE_TAG` is a sha in CI.
+FIRST_PARTY_PREFIX = "${IMAGE_REGISTRY"
+
+
+def _is_first_party(image: str) -> bool:
+    """Built from this repository, tagged from our own variables — see the note above."""
+    return image.startswith(FIRST_PARTY_PREFIX)
+
 
 def _images() -> dict[str, list[str]]:
-    """{image reference: [files it appears in]} across every manifest."""
+    """{third-party image reference: [files it appears in]} across every manifest."""
+    found: dict[str, list[str]] = {}
+    for manifest in MANIFESTS:
+        text = (REPO_ROOT / manifest).read_text(encoding="utf-8")
+        for image in IMAGE_RE.findall(text):
+            if _is_first_party(image):
+                continue
+            found.setdefault(image, []).append(manifest)
+    return found
+
+
+def _all_images() -> dict[str, list[str]]:
+    """Every `image:` reference, first-party included — for the tests that check the split."""
     found: dict[str, list[str]] = {}
     for manifest in MANIFESTS:
         text = (REPO_ROOT / manifest).read_text(encoding="utf-8")
@@ -140,3 +175,44 @@ def test_accepted_loose_pins_are_still_in_use():
     live = set(_images())
     stale = [image for image in ACCEPTED_LOOSE_PINS if image not in live]
     assert not stale, f"ACCEPTED_LOOSE_PINS lists image(s) no longer used: {stale}"
+
+
+# ── The first-party exclusion, pinned so it cannot quietly grow ──────────────────────────
+
+def test_both_first_party_images_are_declared():
+    """The split above is only meaningful while the compose files actually use it.
+
+    ⚠ **Asserted as "app AND ui", not as a count.** A count is the weaker test and it does not
+    go red for the change that matters: ten services share the `app` reference, so dropping one
+    `image:` line leaves nine and a `len() >= 2` check passes while a service has quietly gone
+    back to building on the deploy host. Naming both images is what catches it.
+
+    Mutation check: drop the `image:` line from `grm_ui` in docker-compose.grm.yml — this goes
+    red, and the count-based version would not have.
+    """
+    refs = {i for i in _all_images() if _is_first_party(i)}
+    assert any("/app:" in i for i in refs), (
+        "no first-party `app` image — the ten Python services build from one Dockerfile and must "
+        "share one published image, or every deploy host rebuilds it. That rebuild is the "
+        "2026-09-04 outage."
+    )
+    assert any("/ui:" in i for i in refs), (
+        "no first-party `ui` image — the Next.js build is the one that exhausted a 3825 MB host."
+    )
+
+
+def test_the_exclusion_cannot_swallow_a_third_party_image():
+    """The exclusion keys on our own registry variable, not on a hostname or a wildcard.
+
+    Mutation check: change FIRST_PARTY_PREFIX to `"ghcr.io"` and this goes red — because it would
+    then also excuse any third-party image someone pulls from GHCR, which is exactly the licence
+    hole this file exists to close.
+    """
+    assert FIRST_PARTY_PREFIX.startswith("${"), (
+        "the exclusion must key on a compose variable this repo defines, never on a registry "
+        "hostname: anyone can publish to ghcr.io, and a third-party image pulled from there "
+        "carries the same licence risk as one from Docker Hub."
+    )
+    assert not _is_first_party("ghcr.io/someone-else/redis:7")
+    assert not _is_first_party("redis:7")
+    assert _is_first_party("${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}")

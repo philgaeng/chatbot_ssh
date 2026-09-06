@@ -137,6 +137,7 @@ services:
   # Chatbot ticket-intake target (x-api-key webhook) — verify_api_key is independent
   # of the auth mode, so the webhook works in both bypass and keycloak.
   ticketing_api:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -191,6 +192,7 @@ services:
 
   # ── GRM Celery worker (SLA watchdog + grievance sync + notifications) ─────────
   grm_celery:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -230,6 +232,7 @@ services:
 
   # ── GRM Celery Beat (periodic task scheduler) ─────────────────────────────────
   grm_celery_beat:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -269,6 +272,7 @@ services:
   # tables). NO Docker socket — container supervision is the host watchdog's job.
   # Spec: docs/services/11_health_and_monitoring_service.md
   ops:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -320,6 +324,13 @@ services:
   # Rebuild (`--build`) after changing AUTH_MODE/KEYCLOAK_ISSUER. All API calls are
   # proxied server-side (Next.js) to TICKETING_API_URL — browser only uses :3001.
   grm_ui:
+    # ⚠ **Its own tag variable, and it is not decoration** (Q-17). The UI is the one image with
+    # two variants of the *same* commit — `ui:<sha>` (keycloak, deployable) and `ui:<sha>-bypass`
+    # (test only) — because NEXT_PUBLIC_AUTH_MODE is inlined at build time. A single shared
+    # IMAGE_TAG can only ever name one of them, so the e2e stack could not run `ui:<sha>-bypass`
+    # beside `app:<sha>`. Defaulting UI_IMAGE_TAG to IMAGE_TAG leaves every existing invocation
+    # unchanged; the e2e job sets it and nothing else moves.
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/ui:${UI_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
