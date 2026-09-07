@@ -207,9 +207,37 @@ officer · reports → generate an XLSX.
 actions and settings sections that actually exist in the app; **verify against the tree before
 starting** and add anything this list missed, since it will have moved:
 
+> ✅ **DONE 2026-09-07 — and the list below was wrong in three places, which is what
+> *"verify against the tree before starting"* was for.** Measured against
+> `ticketing/engine/ticket_actions.py`'s `ACTION_HANDLERS`:
+> **`ASSIGN` does not exist** (the nearest is `REASSIGNMENT_REQUESTED`, a *request*, TP-12);
+> **`WITHDRAW` is not an officer action** — `WITHDRAW_REQUEST` is a complainant inbound *event
+> intent*, raised from the chatbot side, not from the action panel; and the list **misses
+> `FIELD_REPORT`**, which is a real handler with its own compose card. The real set is
+> `ACKNOWLEDGE · ESCALATE · RESOLVE · NOTE · FIELD_REPORT · REASSIGNMENT_REQUESTED · GRC_CONVENE`.
+>
+> **Delivered: 17 further specs, 64 in total, green twice in a row.**
+> *Queue & search* — tabs, tile filter and its chip, search, `/escalated`.
+> *Settings* — all nine sections open and render (the group's own list named component
+> directories, not what the UI shows; the four top tabs and their sub-tabs are enumerated in the
+> spec).
+> *Ticket actions* — a case walked **L1 → L2 → L3 and convened at the GRC**, covering
+> ACKNOWLEDGE at each level, ESCALATE twice, GRC_CONVENE, and the auto-reassignment between
+> levels that had no coverage at all.
+> *Reports* — both share views, and the public projection asserted to differ from the internal one.
+>
+> ⭐ **It found `GRM-084`: the GRC chair cannot convene a GRC hearing.** The control is gated on
+> a legacy `grc_chair` role key that the cast model no longer issues, so demo scenario 1's
+> headline step works only for the super admin. The escalation chain is correct; the gate is not.
+>
+> ⬜ **Not driven, deliberately:** `FIELD_REPORT` and `REASSIGNMENT_REQUESTED` (each opens its own
+> compose card and deserves its own spec rather than a rushed one at the end of a group), and
+> every settings *edit* — several are one-way on a system with no delete path, so driving them
+> needs the disposable-stack story, which `make ephemeral-up` now provides.
+
 | Group | Flows |
 |---|---|
-| Ticket actions | `ACKNOWLEDGE` · `ASSIGN` / reassign · `GRC_CONVENE` · `WITHDRAW` — the action panel's full set alongside escalate/resolve |
+| Ticket actions | ~~`ACKNOWLEDGE` · `ASSIGN` / reassign · `GRC_CONVENE` · `WITHDRAW`~~ — see the correction above |
 | Queue & search | tab switching (Actor / Supervisor / High Priority / All Tickets), tile filters, search and filter combinations |
 | Settings | officers (`officers-v2`), roles, workflows, projects & packages, org, platform, project types, quarterly-report schedule, go-live panel |
 | Reports | generate · share link (`report_shares`) · public view |

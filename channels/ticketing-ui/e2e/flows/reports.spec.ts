@@ -12,7 +12,7 @@
  */
 import { test, expect } from "../fixtures/officer";
 import { captureScreenshot } from "../fixtures/artifacts";
-import { OFFICERS } from "../fixtures/seed";
+import { createReportShare, OFFICERS } from "../fixtures/seed";
 
 /** XLSX files are ZIP archives; every one starts with the local-file-header magic `PK\x03\x04`. */
 const ZIP_MAGIC = Buffer.from([0x50, 0x4b, 0x03, 0x04]);
@@ -97,4 +97,55 @@ test("reports → create share links and open the public one", async ({
   });
 
   await captureScreenshot(page, testInfo, "flow-reports-share");
+});
+
+test("a shared report opens on both its links — internal and public", async ({
+  page,
+  asOfficer,
+}, testInfo) => {
+  // Made through the API rather than by clicking, so this spec tests the *views* rather than
+  // re-testing the button the previous test already drives.
+  const { internalToken, publicToken } = await createReportShare();
+
+  await asOfficer(OFFICERS.admin);
+
+  await page.goto(`/reports/view/${internalToken}`);
+  await expect(page.getByText("e2e smoke share", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("Something went wrong")).toBeHidden();
+  await captureScreenshot(page, testInfo, "flow-report-internal-view");
+
+  await page.goto(`/reports/public/${publicToken}`);
+  await expect(page.getByText("e2e smoke share", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("Something went wrong")).toBeHidden();
+  await captureScreenshot(page, testInfo, "flow-report-public-view");
+
+  // ⭐ **The two views are not the same report, and that is the point of having two.** The
+  // public one is projected through PUBLIC_REPORT_COLUMNS; the internal one through
+  // ALL_DATA_EXPORT_COLUMNS. A share link handed to a complainant that rendered the internal
+  // projection would be a disclosure, so the columns differing is the security property —
+  // asserted here as "the public view is not simply the internal one".
+  // ⚠ Wait for content before measuring. The first version read `innerText` straight after
+  // `goto` and got 91 characters — the loading state — which made the internal view look
+  // *smaller* than the public one and failed for the opposite of the real reason.
+  const publicText = (await page.locator("body").innerText()).length;
+
+  await page.goto(`/reports/view/${internalToken}`);
+  await expect(page.getByText("e2e smoke share", { exact: false }).first()).toBeVisible();
+  const internalText = (await page.locator("body").innerText()).length;
+  expect(
+    internalText,
+    "the internal view should carry more than the public one — if they match, the public " +
+      "projection may not be applied",
+  ).toBeGreaterThan(publicText);
+});
+
+test("an invalid report token renders an error state rather than crashing", async ({
+  page,
+  asOfficer,
+}) => {
+  await asOfficer(OFFICERS.admin);
+  await page.goto("/reports/public/not-a-real-token");
+
+  await expect(page.getByText("Something went wrong")).toBeHidden();
+  await expect(page.getByText("404", { exact: false }).first()).toBeVisible();
 });
