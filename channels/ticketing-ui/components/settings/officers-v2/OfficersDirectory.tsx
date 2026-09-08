@@ -44,6 +44,7 @@ import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { primary, text as textTokens } from "@/lib/design-tokens";
 import { prettyLocation } from "@/lib/prettyLocation";
+import { officerMatchesSearch } from "@/lib/officerSearch";
 
 const BTN_GHOST =
   "inline-flex items-center gap-1.5 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
@@ -147,20 +148,25 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
     o.role_keys.some((rk) => seahRoleKeys.has(rk)) ||
     (o.scopes ?? []).some((s) => seahRoleKeys.has(s.role_key));
 
+  // GRM-087: the haystack is `lib/officerSearch.ts` — it covers the Office and Project / area
+  // columns, which the table renders and the old three-field search could not find. The lookups
+  // are the same maps `projectAreaCell` already uses, so this adds no fetch.
+  const searchLookups = useMemo(
+    () => ({ orgById, projectByCode, locationLabel: prettyLocation }),
+    [orgById, projectByCode],
+  );
+
   const filteredOfficers = useMemo(() => {
-    const term = q.trim().toLowerCase();
     return roster.filter((o) => {
+      // The track filter runs FIRST and is unchanged: widening the search must not change which
+      // officers the Standard / SEAH filter admits.
       if (trackFilter === "seah" && !officerIsSeah(o)) return false;
       if (trackFilter === "standard" && officerIsSeah(o) && o.role_keys.every((rk) => seahRoleKeys.has(rk)))
         return false;
-      if (!term) return true;
-      const haystack = [o.display_name, o.email ?? "", ...(o.positions ?? [])]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(term);
+      return officerMatchesSearch(o, q, searchLookups);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roster, q, trackFilter, seahRoleKeys]);
+  }, [roster, q, trackFilter, seahRoleKeys, searchLookups]);
 
   // Dual-hat: one row per active position; fall back to a single row for legacy no-position officers.
   const rows: FlatRow[] = useMemo(() => {
@@ -241,7 +247,7 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, email, or position…"
+            placeholder="Search name, email, position, office, project, or area…"
             className="w-full text-sm outline-none"
           />
         </div>
@@ -269,9 +275,30 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
       </p>
 
       {rows.length === 0 ? (
-        <p className={`rounded border border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm ${textTokens.secondary}`}>
-          No officers match{q.trim() ? ` “${q.trim()}”` : ""}.
-        </p>
+        /* Two different empty states, not one (GRM-087, DESIGN §5). "Nothing here" and "nothing
+           matched what you typed" look identical and mean opposite things — and an admin who
+           cannot tell them apart concludes the directory is broken. Widening the search made this
+           worse before it made it better: more fields means more ways to type a term that finds
+           nothing. */
+        <div className={`rounded border border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm ${textTokens.secondary}`}>
+          {roster.length === 0 ? (
+            <p>No officers yet. Use Invite to add the first one.</p>
+          ) : (
+            <>
+              <p>
+                No officers match{q.trim() ? ` “${q.trim()}”` : ""}
+                {trackFilter !== "all" ? ` in ${trackFilter === "seah" ? "SEAH" : "Standard"}` : ""}.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setQ(""); setTrackFilter("all"); }}
+                className={`mt-2 text-sm font-medium ${primary.text} hover:underline`}
+              >
+                Clear search
+              </button>
+            </>
+          )}
+        </div>
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200">
           <table className="w-full min-w-[52rem] text-left text-sm">
