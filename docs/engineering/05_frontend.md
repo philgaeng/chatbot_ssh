@@ -1,7 +1,7 @@
 # Frontend standard — officer portal
 
 **Status:** authoritative (2026-09-06). Rules for **code** in `channels/ticketing-ui/` (Next.js 16 App Router, React 19, TypeScript, Tailwind v4).
-**Last updated:** 2026-09-06 — §9a added: the design gate (G-DESIGN) is written down, having been followed once by instinct and recorded nowhere; plus what the two committed `ui/*.html` mockups bind, and what they do not.
+**Last updated:** 2026-09-07 — §9a gains **rule 9a.4**: once a screen ships, the shipped screen is the wireframe baseline and a mockup of it is retired rather than maintained. The `ui/04` row is marked **superseded** rather than merely stale, closing `GRM-064`. Earlier: §9a added: the design gate (G-DESIGN) is written down, having been followed once by instinct and recorded nowhere; plus what the two committed `ui/*.html` mockups bind, and what they do not.
 **This doc does not cover visuals or wording.** Two standards already own those and win on their subjects:
 
 | Subject | Owner |
@@ -183,12 +183,22 @@ The two live mockups, and what each binds:
 
 | Mockup | Binds | Read with |
 |---|---|---|
-| [`ui/04_projects_packages_redesign.html`](../ticketing_system/ui/04_projects_packages_redesign.html) — *"KL Road · Project setup (redesign)"* | The containment of projects, packages, locations and organizations on the setup screen | [`04_projects_packages_ux_review.md`](../ticketing_system/ui/04_projects_packages_ux_review.md) · ⚠ **stale — see the register**: it still shows Locations and Packages as separate sections, and organizations inside the package card |
+| ~~[`ui/04_projects_packages_redesign.html`](../ticketing_system/ui/04_projects_packages_redesign.html)~~ — *"KL Road · Project setup (redesign)"* | ⚠ **SUPERSEDED 2026-09-07 — binds nothing.** The shipped screen (`Settings → Projects & packages`) is the baseline; the file is kept as the historical record of the redesign decision and carries a banner saying so | [`04_projects_packages_ux_review.md`](../ticketing_system/ui/04_projects_packages_ux_review.md) · closed `GRM-064` |
 | [`ui/06_workflows_step_cast_editor.html`](../ticketing_system/ui/06_workflows_step_cast_editor.html) — *"Workflows — step cast editor"* | The step/cast editing model: which roles a step casts, and how exclusions read | [`01_ui_spec.md`](../ticketing_system/ui/01_ui_spec.md) |
 
 **Rule 9a.3 — A stale mockup is marked stale where it is cited, not silently left to mislead.** *Why:
 a mockup is trusted precisely because it is concrete; a wrong one is therefore more expensive than no
 mockup at all, and it is the artifact least likely to be re-read by whoever changed the design.*
+
+**Rule 9a.4 — Once a screen ships, the shipped screen is the wireframe baseline, and a mockup of it
+is retired rather than maintained.** A change to a live screen states its **delta** against what
+renders today; step 3 produces a new `.html` only for a surface that exists on no shipped screen.
+*Why: a mockup earns its cost when it decides a shape nobody has seen. Redrawing a screen that opens
+in a browser today is transcription — and a transcribed mockup is the artifact most likely to go
+stale again, because nobody re-reads it after the screen moves. Worked example: `ui/04` above went
+stale exactly this way; ✅ **applied 2026-09-07** by the `settings-ui` lane, whose six items bind to
+shipped routes and whose one genuinely new surface — a filter bar over a tree — still owes a
+committed wireframe.*
 
 ---
 
