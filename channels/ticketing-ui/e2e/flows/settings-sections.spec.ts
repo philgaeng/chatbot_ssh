@@ -50,6 +50,34 @@ const SECTIONS: { tab: string; sub?: string; subRole?: "tab"; shows: string; sho
   { tab: "Settings", sub: "Admin access", shows: "dmin", shot: "settings-admin-access" },
 ];
 
+/**
+ * The strip's ORDER, pinned (GRM-085).
+ *
+ * ⚠ Every other spec here selects a tab by accessible name, which is why the 2026-09-07 reorder
+ * broke none of them — and is also why nothing would have noticed the order changing back. Once
+ * an order is a decision it needs one assertion that fails when it moves; without this, the only
+ * record of it is a comment.
+ *
+ * Read with `page.tsx`: the order is outcome-first (Projects leads because it is what the admin
+ * came to do, and because `activeMain` already defaults to it), deliberately the reverse of the
+ * dependency order. Asserted for `admin`, who sees all four; `mainTabs` filters by role and
+ * `.filter()` preserves order, so every other role gets a subsequence of this.
+ */
+test("settings: the main tabs are in outcome-first order", async ({ page, asOfficer }) => {
+  await asOfficer(OFFICERS.admin);
+  await page.goto("/settings");
+  await expectIdentitySettled(page);
+
+  const strip = page.getByTestId("settings-main-tabs");
+  await expect(strip).toBeVisible();
+  await expect(strip.getByRole("button")).toHaveText([
+    "Projects & packages",
+    "Organizations & officers",
+    "Workflows",
+    "Settings",
+  ]);
+});
+
 for (const section of SECTIONS) {
   const name = section.sub ? `${section.tab} → ${section.sub}` : section.tab;
   test(`settings: ${name} opens and renders`, async ({ page, asOfficer }, testInfo) => {

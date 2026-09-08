@@ -47,10 +47,28 @@ type PlatformSub = "locations" | "reports" | "system_config" | "admin_access";
  * asked you to pick a project before it could say anything the console does not say better.
  * Go-live lives on the project, next to the panes that fix it.
  */
+/**
+ * Tab order is OUTCOME-first, not dependency-first (GRM-085, 2026-09-07).
+ *
+ * Projects leads because it is what the admin came to do — and because the page already
+ * landed there: `activeMain` has defaulted to "projects" since the go-live tab was removed,
+ * so until this reorder the strip opened with its active underline in third position.
+ *
+ * It is deliberately the REVERSE of the build order. A project's staffing needs officers, who
+ * need organizations; its levels need workflows. Ordering top nav by that dependency would only
+ * be right if nothing downstream sequenced it — and something does: the project console's rail
+ * walks Identity -> Grievance workflows -> Packages -> Organizations -> Staffing, and the go-live
+ * panel blocks on what is missing. The guided path lives inside the project, which frees the top
+ * strip to be ordered by intent.
+ *
+ * `mainTabs` below filters this array per role, and `.filter()` preserves order, so every role
+ * gets the same sequence — and `mainTabs[0]`, the fallback when the active tab is not permitted,
+ * now agrees with the default instead of contradicting it.
+ */
 const MAIN_TABS: { id: MainTab; label: string }[] = [
+  { id: "projects",          label: "Projects & packages" },
   { id: "org_officers",      label: "Organizations & officers" },
   { id: "workflows_roles",   label: "Workflows" },
-  { id: "projects",          label: "Projects & packages" },
   { id: "platform",          label: "Settings" },
 ];
 
@@ -229,7 +247,10 @@ export default function SettingsPage() {
       </div>
 
       {mainTabs.length > 1 && (
-      <div className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
+      /* testid, not a role: the strip's ARIA roles are inconsistent across the settings sub-strips
+         (buttons here, `tab` on the second strip) and fixing that is its own item. This only makes
+         the ORDER assertable, which GRM-085 turned into a decision. */
+      <div data-testid="settings-main-tabs" className="flex gap-0 border-b border-gray-200 mb-4 overflow-x-auto">
         {mainTabs.map((tab) => (
           <button
             key={tab.id}

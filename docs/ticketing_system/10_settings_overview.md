@@ -1,7 +1,7 @@
 # Settings — overview and documentation index
 
 **Status:** Product reference (June 2026). Admin ladder locked in [11_roles_and_permissions.md](11_roles_and_permissions.md); partial implementation — see §8 there.  
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-07 — `GRM-085`: the main tab order is now **Projects & packages · Organizations & officers · Workflows · Settings**, reordered in the three tables that list it (§1, §2, §8) and given its reason in §2. Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **UI:** `channels/ticketing-ui/app/settings/page.tsx`  
 **Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [03_ticketing_api_integration.md](03_ticketing_api_integration.md)
 
@@ -15,9 +15,9 @@ This document is the **entry point** for all GRM admin configuration. Detailed s
 
 | Area | Question it answers |
 |------|---------------------|
+| **Projects & packages** | How does a specific road/bridge project route tickets, link orgs, and go live? |
 | **Organizations & officers** | Who are the commercial parties and operational officers? |
 | **Workflows & GRM roles** | How do cases escalate and which officer role acts at each level? |
-| **Projects & packages** | How does a specific road/bridge project route tickets, link orgs, and go live? |
 | **Platform** | Where are locations, report schedules, project archetypes, and system JSON keys? |
 
 New tickets use **workflows linked on the project**, resolve context from **package → project + location → location only**, and assign officers whose **OfficerScope** matches (see [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)).
@@ -28,10 +28,19 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 
 | Main tab | Sub-tabs | Spec |
 |----------|----------|------|
+| **Projects & packages** | List → project editor | [13_projects_and_packages.md](13_projects_and_packages.md) |
 | **Organizations & officers** | Organizations · Officers | Orgs: this doc §3; Officers: [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md) |
 | **Workflows** | Workflows · **Project types** | [12_workflows_configuration.md](12_workflows_configuration.md) §6/§6.00 · model in [14 §4](14_platform_settings.md) · [11_roles_and_permissions.md](11_roles_and_permissions.md) |
-| **Projects & packages** | List → project editor | [13_projects_and_packages.md](13_projects_and_packages.md) |
 | **Settings** (platform) | Locations · Quarterly reports · Advanced (JSON) · Admin access | [14_platform_settings.md](14_platform_settings.md) |
+
+> **The order of the strip is a decision, not an accident (2026-09-07, `GRM-085`).** It is
+> **outcome-first**: Projects leads because it is what the admin came to do, and because the page has
+> defaulted to it since the go-live tab was removed — until the reorder, Settings opened with its
+> active underline on the *third* tab. ⚠ **It is deliberately the reverse of the build order** —
+> staffing needs officers, who need organizations; levels need workflows. That is safe here and only
+> here, because the project console sequences those dependencies itself (Identity → Grievance
+> workflows → Packages → Organizations → Staffing) and the go-live panel blocks on what is missing.
+> **If the project console ever stops sequencing setup, this ordering loses its justification.**
 
 **Design rule:** Global directory, geographic reference data, and per-project routing stay in separate tabs. Tab 3 is the single place admins configure *how this project works*.
 
@@ -54,9 +63,9 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 
 | Main tab | `super_admin` | `org_admin` | `project_admin` |
 |----------|---------------|-----------------|-----------------|
+| Projects & packages | ✅ | ✅ | ✅ assigned project(s) |
 | Organizations & officers | ✅ | ✅ country | ✅ scoped |
 | Workflows, roles & permissions | ✅ | ✅ | ✅ (roles catalog read) |
-| Projects & packages | ✅ | ✅ | ✅ assigned project(s) |
 | **Settings** (platform) | ✅ | ❌ | ❌ |
 
 Additional gates:
