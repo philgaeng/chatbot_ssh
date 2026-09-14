@@ -105,3 +105,78 @@ describe("officerMatchesSearch", () => {
     expect(hay.split("np-p1-d-jhapa").length - 1).toBe(1);
   });
 });
+
+// ── GRM-088 ─────────────────────────────────────────────────────────────────
+
+import {
+  officerMatchesFilter,
+  availableOfficerFilterValues,
+  isOfficerFilterActive,
+  officerLocationCodes,
+  EMPTY_OFFICER_FILTER,
+} from "./officerSearch";
+
+const other: SearchableOfficer = {
+  display_name: "ADB Safeguards",
+  email: "adb@grm.local",
+  organization_ids: ["ADB"],
+  project_codes: ["TEST_1"],
+  location_codes: [],
+  scopes: [],
+};
+
+describe("officerMatchesFilter", () => {
+  it("passes everything when nothing is set", () => {
+    expect(officerMatchesFilter(officer, EMPTY_OFFICER_FILTER)).toBe(true);
+    expect(officerMatchesFilter(other, EMPTY_OFFICER_FILTER)).toBe(true);
+  });
+
+  it("narrows by organisation, project and area independently", () => {
+    expect(officerMatchesFilter(officer, { ...EMPTY_OFFICER_FILTER, organizationId: "DOR_JHA" })).toBe(true);
+    expect(officerMatchesFilter(other, { ...EMPTY_OFFICER_FILTER, organizationId: "DOR_JHA" })).toBe(false);
+    expect(officerMatchesFilter(officer, { ...EMPTY_OFFICER_FILTER, projectCode: "KL_ROAD" })).toBe(true);
+    expect(officerMatchesFilter(officer, { ...EMPTY_OFFICER_FILTER, projectCode: "TEST_1" })).toBe(false);
+    expect(officerMatchesFilter(officer, { ...EMPTY_OFFICER_FILTER, locationCode: "NP-P1-D-MORANG" })).toBe(true);
+  });
+
+  it("ANDs the filters — adding a control narrows, never widens", () => {
+    // The surprising direction, and the one a wrong implementation takes.
+    expect(
+      officerMatchesFilter(officer, { organizationId: "DOR_JHA", projectCode: "TEST_1", locationCode: "" }),
+    ).toBe(false);
+    expect(
+      officerMatchesFilter(officer, { organizationId: "DOR_JHA", projectCode: "KL_ROAD", locationCode: "" }),
+    ).toBe(true);
+  });
+
+  it("matches a location held directly OR through a scope — one column on screen, one rule", () => {
+    expect(officerLocationCodes(officer)).toEqual(new Set(["NP-P1-D-MORANG", "NP-P1-D-JHAPA"]));
+    expect(officerMatchesFilter(officer, { ...EMPTY_OFFICER_FILTER, locationCode: "NP-P1-D-JHAPA" })).toBe(true);
+  });
+});
+
+describe("availableOfficerFilterValues", () => {
+  it("offers only values some officer actually holds", () => {
+    // A filter offering an organisation that employs nobody is a control whose only outcome is an
+    // empty table.
+    const v = availableOfficerFilterValues([officer, other]);
+    expect(v.organizationIds).toEqual(["ADB", "DOR_JHA"]);
+    expect(v.projectCodes).toEqual(["KL_ROAD", "TEST_1"]);
+    expect(v.locationCodes).toEqual(["NP-P1-D-JHAPA", "NP-P1-D-MORANG"]);
+  });
+
+  it("copes with an empty roster", () => {
+    expect(availableOfficerFilterValues([])).toEqual({
+      organizationIds: [],
+      projectCodes: [],
+      locationCodes: [],
+    });
+  });
+});
+
+describe("isOfficerFilterActive", () => {
+  it("is false only when every control is unset", () => {
+    expect(isOfficerFilterActive(EMPTY_OFFICER_FILTER)).toBe(false);
+    expect(isOfficerFilterActive({ ...EMPTY_OFFICER_FILTER, projectCode: "KL_ROAD" })).toBe(true);
+  });
+});

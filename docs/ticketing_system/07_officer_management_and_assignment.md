@@ -1,7 +1,7 @@
 # Officer management and ticket assignment
 
 **Status:** As-built reference (updated June 2026).  
-**Last updated:** 2026-09-07 — §5.1 records the as-built officer search (`GRM-087`: name · email · position · office · project · area, client-side, plus its two empty states), and marks the rest of §5.1 as drifted from the screen it describes (`GRM-091`). 
+**Last updated:** 2026-09-07 — §5.1 gains the `GRM-088` filters (Office · Project · Area, ANDed with search and with the track filter, options derived from the roster). Earlier the same day, §5.1 records the as-built officer search (`GRM-087`: name · email · position · office · project · area, client-side, plus its two empty states), and marks the rest of §5.1 as drifted from the screen it describes (`GRM-091`). 
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md) (admin ladder), [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [04_ticketing_schema.md](04_ticketing_schema.md), [LOCATION_CODES.md](LOCATION_CODES.md) (canonical Nepal `location_code` keys), [Escalation_rules.md](Escalation_rules.md), `CLAUDE.md` (roles + workflows)
 
 ---
@@ -189,9 +189,24 @@ renders, plus raw location codes so a code pasted from an email finds its office
 sits the **All / Standard / SEAH** track filter, which composes with search and is unchanged.
 
 **Two empty states, deliberately** (`GRM-087`): *"No officers yet"* when the roster is empty, and
-*"No officers match …"* with a **Clear search** action when a term or track filter excluded
-everything. They look identical and mean opposite things, and an admin who cannot tell them apart
-concludes the directory is broken.
+*"No officers match …"* with a **Clear filters** action when a term or filter excluded everything.
+They look identical and mean opposite things, and an admin who cannot tell them apart concludes the
+directory is broken.
+
+**Filters (`GRM-088`, 2026-09-07).** Three controls beside the search box — **Office**
+(`organization_ids`), **Project** (`project_codes`), **Area** (a location held directly or through
+a scope) — the same three axes the Office and Project / area columns render. They **AND** with each
+other, with the search term, and with the track filter: adding a control narrows, never widens.
+
+- **Options come from the roster**, not from the full organisation or project lists. A filter
+  offering an office that employs nobody is a control whose only possible outcome is an empty table.
+- ⚠ **The Standard / SEAH track filter is deliberately NOT folded in.** It partitions by
+  sensitivity and is gated on whether the admin may see SEAH at all — a permissions question, not a
+  convenience one. It keeps its own control and composes with these.
+- Still **client-side over the full roster**; server-side search and pagination remain unbuilt.
+
+The predicate is [`lib/officerSearch.ts`](../../channels/ticketing-ui/lib/officerSearch.ts), shared
+with search and unit-tested.
 
 > ⚠ **The two paragraphs above are as-built. The rest of §5.1 is not** — measured 2026-09-07 while
 > implementing `GRM-087`. The **Roster columns (v1)** line names Name · Email · Role · Area covered ·

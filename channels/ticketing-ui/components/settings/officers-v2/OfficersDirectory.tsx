@@ -44,7 +44,14 @@ import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { primary, text as textTokens } from "@/lib/design-tokens";
 import { prettyLocation } from "@/lib/prettyLocation";
-import { officerMatchesSearch } from "@/lib/officerSearch";
+import {
+  officerMatchesSearch,
+  officerMatchesFilter,
+  availableOfficerFilterValues,
+  isOfficerFilterActive,
+  EMPTY_OFFICER_FILTER,
+  type OfficerFilterCriteria,
+} from "@/lib/officerSearch";
 
 const BTN_GHOST =
   "inline-flex items-center gap-1.5 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
@@ -68,6 +75,9 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
   const [q, setQ] = useState("");
   const [trackFilter, setTrackFilter] = useState<TrackFilterValue>("all");
+  /** Organisation / project / area (GRM-088). The Standard/SEAH track stays separate: it
+   *  partitions by sensitivity and is permission-gated, which is a different kind of control. */
+  const [filter, setFilter] = useState<OfficerFilterCriteria>(EMPTY_OFFICER_FILTER);
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [manageOfficer, setManageOfficer] = useState<OfficerRosterEntry | null>(null);
@@ -163,10 +173,16 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
       if (trackFilter === "seah" && !officerIsSeah(o)) return false;
       if (trackFilter === "standard" && officerIsSeah(o) && o.role_keys.every((rk) => seahRoleKeys.has(rk)))
         return false;
+      if (!officerMatchesFilter(o, filter)) return false;
       return officerMatchesSearch(o, q, searchLookups);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roster, q, trackFilter, seahRoleKeys, searchLookups]);
+  }, [roster, q, trackFilter, seahRoleKeys, searchLookups, filter]);
+
+  /* Options come from the ROSTER, not from the full org/project lists: a filter offering an
+     organisation that employs nobody is a control whose only outcome is an empty table. */
+  const filterChoices = useMemo(() => availableOfficerFilterValues(roster), [roster]);
+  const anyFilterOn = isOfficerFilterActive(filter) || trackFilter !== "all" || q.trim() !== "";
 
   // Dual-hat: one row per active position; fall back to a single row for legacy no-position officers.
   const rows: FlatRow[] = useMemo(() => {
@@ -269,6 +285,54 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
         ) : null}
       </div>
 
+      {/* GRM-088 — the same three axes the table's Office and Project / area columns show, built
+          on what GRM-086 established for organisations. They AND with the search term and with
+          the track filter: adding a control narrows, never widens. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={filter.organizationId}
+          onChange={(e) => setFilter((f) => ({ ...f, organizationId: e.target.value }))}
+          aria-label="Office"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Office — any</option>
+          {filterChoices.organizationIds.map((id) => (
+            <option key={id} value={id}>{orgById.get(id)?.name ?? id}</option>
+          ))}
+        </select>
+        <select
+          value={filter.projectCode}
+          onChange={(e) => setFilter((f) => ({ ...f, projectCode: e.target.value }))}
+          aria-label="Project"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Project — any</option>
+          {filterChoices.projectCodes.map((c) => (
+            <option key={c} value={c}>{projectByCode.get(c)?.name ?? c}</option>
+          ))}
+        </select>
+        <select
+          value={filter.locationCode}
+          onChange={(e) => setFilter((f) => ({ ...f, locationCode: e.target.value }))}
+          aria-label="Search area"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Area — any</option>
+          {filterChoices.locationCodes.map((c) => (
+            <option key={c} value={c}>{prettyLocation(c)}</option>
+          ))}
+        </select>
+        {anyFilterOn && (
+          <button
+            type="button"
+            onClick={() => { setQ(""); setTrackFilter("all"); setFilter(EMPTY_OFFICER_FILTER); }}
+            className={`text-sm font-medium ${primary.text} hover:underline`}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       <p className={`text-xs ${textTokens.muted}`}>
         Showing {rows.length} {rows.length === 1 ? "position" : "positions"} across{" "}
         {filteredOfficers.length} {filteredOfficers.length === 1 ? "officer" : "officers"}.
@@ -291,10 +355,10 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
               </p>
               <button
                 type="button"
-                onClick={() => { setQ(""); setTrackFilter("all"); }}
+                onClick={() => { setQ(""); setTrackFilter("all"); setFilter(EMPTY_OFFICER_FILTER); }}
                 className={`mt-2 text-sm font-medium ${primary.text} hover:underline`}
               >
-                Clear search
+                Clear filters
               </button>
             </>
           )}
