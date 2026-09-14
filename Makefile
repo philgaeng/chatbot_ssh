@@ -157,11 +157,48 @@ IMAGE_TAG ?=
 UI_IMAGE_TAG ?=
 IMAGE_REGISTRY ?=
 
+# Registry identity for a PULLING deploy (GRM-093 / A-11). Derived from IMAGE_REGISTRY so a
+# different registry needs no second place to edit; the default mirrors docker-compose.grm.yml's.
+REGISTRY_REF   = $(if $(IMAGE_REGISTRY),$(IMAGE_REGISTRY),ghcr.io/philgaeng/chatbot_ssh)
+REGISTRY_HOST  = $(word 1,$(subst /, ,$(REGISTRY_REF)))
+REGISTRY_OWNER = $(word 2,$(subst /, ,$(REGISTRY_REF)))
+
 # Exported into every remote command so the compose files on the host resolve the same tags.
 # `${VAR:-default}` in compose treats empty as unset, so passing these through blank is safe.
 REMOTE_IMAGE_ENV = IMAGE_TAG=$(IMAGE_TAG) UI_IMAGE_TAG=$(UI_IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY)
 
 # $(1)=services, $(2)=deploy label. The one place the pull/build choice is made.
+# ── Registry auth for a pulling deploy (GRM-093 / A-11) ────────────────────────
+# D-010 made the repository private on 2026-09-04, so its GHCR packages are private — and a host
+# that PULLS a private package needs a credential. There was none, and no login step anywhere in
+# this file, so the pulling deploy that `03_operations.md` §6a documents could not actually work:
+# every `compose pull` on the host would end in `denied`.
+#
+# Reads GHCR_READ_TOKEN from env.local — the generated artefact every service already uses, 0600
+# on the host — and authenticates with **--password-stdin**. Never `-p`: a token in argv is
+# readable by every process on the box through `ps`, and lands in shell history.
+#
+# ⚠ **An absent token SKIPS, it does not fail.** `make wsl-up`, any `DEPLOY_BUILD=1` deploy and
+# any host whose registry is public must keep working untouched. Turning a missing optional
+# secret into a failed deploy would be a worse bug than the one this fixes — and `DEPLOY_BUILD=1`
+# is precisely the documented fallback for "the registry is unreachable or uncredentialed".
+#
+# ⚠ **Residue, stated rather than hidden:** a successful login writes a base64 credential into
+# `~/.docker/config.json` on the host, which is not encrypted. That is why A-11 specifies a
+# read-only, repo-scoped token — the blast radius of that file is the whole control.
+define REMOTE_REGISTRY_LOGIN
+GHCR_READ_TOKEN="$$(sed -n 's/^GHCR_READ_TOKEN=//p' env.local 2>/dev/null | head -n1)"; \
+GHCR_USERNAME="$$(sed -n 's/^GHCR_USERNAME=//p' env.local 2>/dev/null | head -n1)"; \
+if [ -n "$$GHCR_READ_TOKEN" ]; then \
+	printf '%s' "$$GHCR_READ_TOKEN" \
+		| docker login $(REGISTRY_HOST) -u "$${GHCR_USERNAME:-$(REGISTRY_OWNER)}" --password-stdin >/dev/null \
+		|| { echo "$(1): ERROR — docker login to $(REGISTRY_HOST) failed. Is GHCR_READ_TOKEN a valid read:packages token? Fallback: make $(1) DEPLOY_BUILD=1"; exit 1; }; \
+	echo "$(1): authenticated to $(REGISTRY_HOST) as $${GHCR_USERNAME:-$(REGISTRY_OWNER)}"; \
+else \
+	echo "$(1): no GHCR_READ_TOKEN in env.local — pulling unauthenticated. Fine for a public registry; a private one answers 'denied' (A-11)"; \
+fi
+endef
+
 define REMOTE_ACQUIRE_IMAGES
 if [ "$(DEPLOY_BUILD)" = "1" ]; then \
 	echo "$(2): DEPLOY_BUILD=1 — building on the host (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
@@ -174,6 +211,7 @@ else \
 		echo "  To build on the box instead: make $(2) DEPLOY_BUILD=1"; \
 		exit 1; \
 	fi; \
+	$(call REMOTE_REGISTRY_LOGIN,$(2)); \
 	echo "$(2): pulling images at IMAGE_TAG=$(IMAGE_TAG)" && \
 	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) pull $(1); \
 fi

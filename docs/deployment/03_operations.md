@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-07 — §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
+**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -152,11 +152,34 @@ which exists only on a developer's machine, so a pulling deploy without a tag wo
 partway through with a registry 404 that reads like an outage. It stops before starting and
 says what to pass instead.
 
+⚠ **A pulling deploy needs a registry credential, and that is not optional any more**
+(`GRM-093` / `A-11`, 2026-09-14). [D-010](../DECISIONS.md) made the repository private on
+2026-09-04, so **its GHCR packages are private**: an unauthenticated `compose pull` answers
+`denied`. The deploy now authenticates before it pulls —
+`REMOTE_REGISTRY_LOGIN` reads **`GHCR_READ_TOKEN`** from `env.local` and runs `docker login`
+with `--password-stdin`, never as an argument.
+
+| | |
+|---|---|
+| **Token absent** | The login is **skipped**, with one line saying so, and the pull proceeds unauthenticated. Correct for a public registry; a private one then says `denied`. This is why `make wsl-up` and every `DEPLOY_BUILD=1` path are unaffected |
+| **Login fails** | The deploy stops there and names the fallback, rather than failing later inside `compose pull` |
+| **`DEPLOY_BUILD=1`** | No registry, no login, no token. The documented answer when the registry is unreachable *or* uncredentialed |
+
+⚠ **Three manual steps remain, and none of them is code.** ① create the token — fine-grained,
+`read:packages`, this repo only; ② add it as `GHCR_READ_TOKEN` — the value via `make secrets-edit`
+**and** the `#@secret` marker in `.env.shared`, **in the same change**, because
+`gen_env_local.sh` fails when the two halves disagree in either direction; ③ run `make env-local`
+**on the host**, since `aws-deploy` deliberately does not. Pinned by
+[`tests/repo/test_registry_login.py`](../../tests/repo/test_registry_login.py).
+
+⚠ **Residue:** a successful login writes a base64 credential to `~/.docker/config.json` on the
+host, unencrypted. The token being read-only and repo-scoped is the control; that file is not.
+
 ⚠ **Production is deliberately unchanged.** `prod-deploy` still builds on the host, because
 nobody has yet run `curl -sI https://ghcr.io/v2/` from the VPN-only DOR box to confirm it can
 reach the registry at all. Converting it before that answer would put an untested path in a
 maintenance window. When the answer arrives, `make prod-deploy DEPLOY_BUILD=0` is the switch —
-and it needs a registry credential on that host first.
+and it needs the same credential on that host first.
 
 **Every deploy prints what is actually running**, per service, after `up -d`:
 
