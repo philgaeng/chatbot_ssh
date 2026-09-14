@@ -187,15 +187,15 @@ REMOTE_IMAGE_ENV = IMAGE_TAG=$(IMAGE_TAG) UI_IMAGE_TAG=$(UI_IMAGE_TAG) IMAGE_REG
 # `~/.docker/config.json` on the host, which is not encrypted. That is why A-11 specifies a
 # read-only, repo-scoped token — the blast radius of that file is the whole control.
 define REMOTE_REGISTRY_LOGIN
-GHCR_READ_TOKEN="$$(sed -n 's/^GHCR_READ_TOKEN=//p' env.local 2>/dev/null | head -n1)"; \
-GHCR_USERNAME="$$(sed -n 's/^GHCR_USERNAME=//p' env.local 2>/dev/null | head -n1)"; \
+GHCR_READ_TOKEN="$$(sed -n "s/^GHCR_READ_TOKEN=//p" env.local 2>/dev/null | head -n1)"; \
+GHCR_USERNAME="$$(sed -n "s/^GHCR_USERNAME=//p" env.local 2>/dev/null | head -n1)"; \
 if [ -n "$$GHCR_READ_TOKEN" ]; then \
-	printf '%s' "$$GHCR_READ_TOKEN" \
+	printf "%s" "$$GHCR_READ_TOKEN" \
 		| docker login $(REGISTRY_HOST) -u "$${GHCR_USERNAME:-$(REGISTRY_OWNER)}" --password-stdin >/dev/null \
 		|| { echo "$(1): ERROR — docker login to $(REGISTRY_HOST) failed. Is GHCR_READ_TOKEN a valid read:packages token? Fallback: make $(1) DEPLOY_BUILD=1"; exit 1; }; \
 	echo "$(1): authenticated to $(REGISTRY_HOST) as $${GHCR_USERNAME:-$(REGISTRY_OWNER)}"; \
 else \
-	echo "$(1): no GHCR_READ_TOKEN in env.local — pulling unauthenticated. Fine for a public registry; a private one answers 'denied' (A-11)"; \
+	echo "$(1): no GHCR_READ_TOKEN in env.local — pulling unauthenticated. Fine for a public registry; a private one answers: denied (A-11)"; \
 fi
 endef
 
@@ -205,7 +205,7 @@ if [ "$(DEPLOY_BUILD)" = "1" ]; then \
 	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(1),$(2)); \
 else \
 	if [ -z "$(IMAGE_TAG)" ] || [ "$(IMAGE_TAG)" = "local" ]; then \
-		echo "ERROR: $(2) is a pulling deploy (DEPLOY_BUILD=0) but IMAGE_TAG is '$(IMAGE_TAG)'."; \
+		echo "ERROR: $(2) is a pulling deploy (DEPLOY_BUILD=0) but IMAGE_TAG is [$(IMAGE_TAG)]."; \
 		echo "  Pass the commit to deploy:  make $(2) IMAGE_TAG=<short-sha>"; \
 		echo "  That is also the rollback:  make $(2) IMAGE_TAG=<an-older-sha>"; \
 		echo "  To build on the box instead: make $(2) DEPLOY_BUILD=1"; \
@@ -229,9 +229,9 @@ echo "$(2): running images —" && \
 for svc in $(1); do \
 	cid="$$($(REMOTE_COMPOSE) ps -q $$svc 2>/dev/null | head -1)"; \
 	if [ -n "$$cid" ]; then \
-		img="$$(docker inspect --format '{{.Config.Image}}' $$cid 2>/dev/null)"; \
-		dig="$$(docker inspect --format '{{index .Image}}' $$cid 2>/dev/null | cut -c1-19)"; \
-		printf '  %-18s %s  %s\n' "$$svc" "$$img" "$$dig"; \
+		img="$$(docker inspect --format "{{.Config.Image}}" $$cid 2>/dev/null)"; \
+		dig="$$(docker inspect --format "{{index .Image}}" $$cid 2>/dev/null | cut -c1-19)"; \
+		printf "  %-18s %s  %s\n" "$$svc" "$$img" "$$dig"; \
 	fi; \
 done
 endef
@@ -273,8 +273,8 @@ endef
 define REMOTE_ASSERT_MIGRATION_IMAGE
 { MIG_IMG="$$($(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) config --images backend 2>/dev/null | grep "/app:" | head -n1)"; \
 if [ -z "$$MIG_IMG" ] || ! docker image inspect "$$MIG_IMG" >/dev/null 2>&1; then \
-	echo "$(1): ERROR — migrations would run image '$$MIG_IMG', which is not on this host."; \
-	echo "  Refusing: compose would silently BUILD it here, and migrate with the checkout's code (GRM-099)."; \
+	echo "$(1): ERROR — migrations would run image [$$MIG_IMG], which is not on this host."; \
+	echo "  Refusing: compose would silently BUILD it here, and migrate with the code in this checkout (GRM-099)."; \
 	exit 1; \
 fi; \
 echo "$(1): migrations will run $$MIG_IMG"; }
