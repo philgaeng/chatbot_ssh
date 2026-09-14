@@ -1,7 +1,7 @@
 # Dependency licence audit
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-15 — regenerated against the images CI built and staging runs (`app`/`ui` at commit `f436f89`): licences, CVEs and image digests in one pass. No licence moved; the CVE picture split — Python improved, the web framework now carries two critical advisories. The nightly licence scan has run for real, and the CVE scan beside it was found writing nothing.
+**Last updated:** 2026-09-15 — regenerated against the exact images CI built and staging runs (identified by registry digest below): licences, CVEs and image digests in one pass. No licence moved; the CVE picture split — Python improved, the web framework now carries two critical advisories. The nightly licence scan has run for real, and the CVE scan beside it was found writing nothing.
 
 > **Regenerated 2026-09-15** — licences, CVEs and image digests in one pass, so this file carries **one
 > date**. **Serves DPG indicator 2** (use of an approved open licence) and, for the container-image set,
@@ -38,13 +38,13 @@
 
 ⭐ **Changed in this run: the scans ran inside the images that ship, not a development build.** Since
 2026-09-06 CI builds and publishes every image, and staging pulls them rather than building on the host.
-This report scanned **exactly those images** — `app` and `ui` at commit `f436f89`, pulled from the
-registry by digest — so there is no longer a gap between "the tree we scanned" and "the tree that runs".
+This report scanned **exactly those images** — `app` and `ui` as deployed to staging on 2026-09-15,
+pulled from the registry by digest — so there is no longer a gap between "the tree we scanned" and "the tree that runs".
 
 | Image scanned | Registry digest |
 |---|---|
-| `app:f436f89` (every Python service) | `sha256:905071205a293943ff8d1271cad92329341cb4bd6181a7e8727994b0efb5a05f` |
-| `ui:f436f89` (the officer portal) | `sha256:0c68bf6fa67ac2e3273a3d1aed854adcb2e3f699ec9a6844a6195eb861c6e319` |
+| `app` (every Python service) | `sha256:905071205a293943ff8d1271cad92329341cb4bd6181a7e8727994b0efb5a05f` |
+| `ui` (the officer portal) | `sha256:0c68bf6fa67ac2e3273a3d1aed854adcb2e3f699ec9a6844a6195eb861c6e319` |
 
 ```bash
 # Python licences — inside the shipped image
@@ -417,7 +417,7 @@ images that ship:
 
 | Set | 2026-09-03 | **2026-09-15** | Notes |
 |---|---|---|---|
-| Python (`pip-audit`, inside `app:f436f89`) | 6 advisories, 5 packages | ✅ **4 advisories, 4 packages** | `ecdsa` ⚠ no fix released · `sanic-cors` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0. `wheel` is gone |
+| Python (`pip-audit`, inside the shipped `app` image) | 6 advisories, 5 packages | ✅ **4 advisories, 4 packages** | `ecdsa` ⚠ no fix released · `sanic-cors` · `python-dotenv` → 1.2.2 · `setuptools` → 83.0.0. `wheel` is gone |
 | npm, production graph (`npm audit --omit=dev`) | 4 high | 🔴 **1 critical · 3 high · 1 moderate** | `next` **critical** (11 advisories) · `postcss` · `nanoid` · `sharp` · `baseline-browser-mapping` |
 
 ### 🔴 The framework row is the one to act on — and part of it is reachable today
