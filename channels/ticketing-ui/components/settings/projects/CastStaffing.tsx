@@ -284,20 +284,45 @@ export function CastStaffing({
   }, [visibleSteps, scopeCast, projectWideCast, isPkg, byRoleFor]);
 
   /**
-   * Which levels are open. Seeded ONCE from the blocker pass, then owned by the admin.
+   * Which levels are open: the blocker-derived default until the admin touches the pane, then
+   * whatever they left it as.
    *
-   * ⭐ Deliberately not derived on every render: staffing the last slot on a level would
-   * otherwise collapse it under the cursor at the exact moment the admin finished it.
+   * ⚠ **This was an effect that seeded `openSteps` once, and it was wrong twice over** — caught
+   * by the e2e suite going flaky, not by any unit test or by review:
+   *
+   *  1. **It raced the admin.** Seeding waited on `blockingByStep`, which waits on three async
+   *     loads. A click landing first set the state non-null, the seed then skipped itself, and
+   *     the level with the actual blocker stayed shut — the one outcome this feature exists to
+   *     prevent.
+   *  2. **It could clobber a deliberate toggle**, in the other order.
+   *
+   * Deriving the default instead removes the window entirely: there is no moment where the
+   * answer is not yet known. The override is captured on ANY interaction — toggling, and also
+   * assigning — which is what keeps staffing the last slot on a level from collapsing it under
+   * the cursor at the moment it was finished.
    */
-  const [openSteps, setOpenSteps] = useState<Set<string> | null>(null);
-  useEffect(() => {
-    if (openSteps !== null || blockingByStep.size === 0) return;
-    setOpenSteps(
+  const defaultOpen = useMemo(
+    () =>
       initiallyOpenSteps(
         [...blockingByStep.entries()].map(([stepId, blockingCount]) => ({ stepId, blockingCount })),
       ),
-    );
-  }, [blockingByStep, openSteps]);
+    [blockingByStep],
+  );
+  const [openOverride, setOpenOverride] = useState<Set<string> | null>(null);
+  const openSteps = openOverride ?? defaultOpen;
+
+  /** Freeze what is open right now, optionally changing it. Called before anything that would
+   *  move `defaultOpen` under the admin. */
+  const commitOpen = useCallback(
+    (mutate?: (s: Set<string>) => void) => {
+      setOpenOverride((prev) => {
+        const next = new Set(prev ?? defaultOpen);
+        mutate?.(next);
+        return next;
+      });
+    },
+    [defaultOpen],
+  );
 
   /** The position the officer holds — the wireframe shows it under the name so an admin can
    *  see WHICH SEAT is doing the work, not just who. Positions come from the roster today;
@@ -347,6 +372,9 @@ export function CastStaffing({
       });
       setAssigning(null);
       setPickerQ("");
+      // Freeze the disclosure BEFORE the cast reloads: filling a level's last required slot
+      // drops it out of `defaultOpen`, which would collapse it the instant it was finished.
+      commitOpen();
       await loadCast();
       onChanged?.();
     } catch (e) {
@@ -418,9 +446,7 @@ export function CastStaffing({
       {visibleSteps.map((step) => {
         const tiers = stepTiers(step);
         const stepBlocking = blockingByStep.get(step.step_id) ?? 0;
-        // Before the seeding effect has run, `openSteps` is null — show everything rather than
-        // flashing a fully collapsed pane, which would look like an empty screen.
-        const isOpen = openSteps === null ? true : openSteps.has(step.step_id);
+        const isOpen = openSteps.has(step.step_id);
         return (
           <div key={step.step_id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
             {showStepHeader && (
@@ -430,11 +456,9 @@ export function CastStaffing({
               <button
                 type="button"
                 onClick={() =>
-                  setOpenSteps((prev) => {
-                    const next = new Set(prev ?? []);
+                  commitOpen((next) => {
                     if (next.has(step.step_id)) next.delete(step.step_id);
                     else next.add(step.step_id);
-                    return next;
                   })
                 }
                 aria-expanded={isOpen}

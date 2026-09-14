@@ -264,6 +264,10 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search name, email, position, office, project, or area…"
+            /* Stable handle for tests and screen readers. The placeholder is COPY and changed
+               with GRM-087; a spec keyed on it broke, which is exactly why a control needs a
+               name that is not its wording. */
+            aria-label="Search officers"
             className="w-full text-sm outline-none"
           />
         </div>

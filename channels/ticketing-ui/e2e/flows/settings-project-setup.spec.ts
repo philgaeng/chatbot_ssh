@@ -3,12 +3,18 @@
 /**
  * Settings → Projects & packages → a project → Organizations (`GRM-089`) and Staffing (`GRM-090`).
  *
- * ⚠⚠ **NEVER RUN. Written 2026-09-07 against a stack that could not be started** — Docker is not
- * reachable in the authoring environment, so this file has been typechecked and nothing more.
- * **Treat a failure here as "the spec is wrong" until someone has watched it pass once.** It is
- * committed rather than withheld because the alternative — landing UI with no spec at all — is
- * what `GRM-085`'s tab reorder showed the cost of: every existing settings spec selected by name,
- * so nothing would have caught the order changing back.
+ * ✅ **Runs, and passes — verified 2026-09-07 against the local stack, 5× clean.**
+ *
+ * ⚠ **It was written blind first, and both of its selectors were wrong.** Recorded because the
+ * failures are the argument for running a spec before trusting it, not against writing one:
+ *
+ *  1. It opened a project with `getByRole("button", { name: /project/i })`, which matches
+ *     **"+ New Project"** first — one assertion away from creating a project per run on a system
+ *     with no delete path.
+ *  2. It matched rail sections with `exact: true`, but those buttons carry a status hint after
+ *     the label ("Staffing" + "Add a Level 1 officer…" + "FIX 2").
+ *
+ * Neither was visible to tsc, which passed on both.
  *
  * ⚠ **It stops short of actually creating an organization, deliberately** — the same shape as
  * `settings-officers.spec.ts` stopping short of provisioning an account (`GRM-075`). Creating one
@@ -24,21 +30,34 @@ import { OFFICERS } from "../fixtures/seed";
 import type { Page } from "@playwright/test";
 
 /**
- * The first project in the list, whichever it is.
+ * Open the first project in the list and select one setup section.
  *
- * ⚠ Deliberately not keyed on a project name. A fresh seed and this dev box disagree about what
+ * ⚠ Deliberately not keyed on a project NAME. A fresh seed and this dev box disagree about what
  * exists (`GRM-081` is the same class of problem for officers), and a spec that pins
- * "South Asia Subregional…" passes on one and fails on the other.
+ * "Kakarbhitta-Laukahi Road" passes on one and fails on the other.
+ *
+ * ⚠⚠ **Two things here were wrong when this file was written blind, and both are recorded rather
+ * than quietly fixed, because they are the cost of writing a spec you cannot run:**
+ *
+ *  1. It opened the project with `getByRole("button", { name: /project/i })` — which matches
+ *     **"+ New Project"** first. The spec was one assertion away from creating a project per run
+ *     on a system with no delete path. A project row is not clickable; it carries an **Edit**
+ *     button, and that is what opens the console.
+ *  2. It selected the rail section with `exact: true`. Rail buttons carry a status hint after the
+ *     label ("Staffing" + "Add a Level 1 officer…" + "FIX 2"), so the accessible name is never
+ *     just the label. Matched on the prefix, scoped to the rail, so a stray "Packages" elsewhere
+ *     on the page cannot win.
  */
 async function openProjectSection(page: Page, section: string): Promise<void> {
   await page.goto("/settings");
   await expectIdentitySettled(page, OFFICERS.admin);
   await page.getByRole("button", { name: "Projects & packages", exact: true }).click();
 
-  const firstProject = page.getByRole("button", { name: /project/i }).first();
-  await firstProject.click();
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
 
-  await page.getByRole("button", { name: section, exact: true }).first().click();
+  const rail = page.getByRole("navigation", { name: "Project setup sections" });
+  await expect(rail).toBeVisible();
+  await rail.getByRole("button", { name: new RegExp(`^${section}`) }).first().click();
 }
 
 test("a project's Organizations pane can create the organization it is about to name", async ({
@@ -80,7 +99,13 @@ test("staffing levels collapse, and an unstaffed one says so in words", async ({
   await openProjectSection(page, "Staffing");
 
   // Each level header is a disclosure button (GRM-090).
-  const levelHeaders = page.locator("button[aria-expanded]");
+  //
+  // ⚠ Scoped to the level headers by their own text, NOT a bare `button[aria-expanded]`. The
+  // first blind version matched any expandable button on the page — the account menu in the
+  // banner has one — so it would have gone green whether or not this feature existed. That is
+  // the failure mode a spec written against a stack you cannot open produces: not a red test, a
+  // vacuous green one.
+  const levelHeaders = page.locator("button[aria-expanded]").filter({ hasText: /^\s*\d+\s*Level/ });
   await expect(levelHeaders.first()).toBeVisible();
 
   await captureScreenshot(page, testInfo, "project-staffing-collapsed");
@@ -96,7 +121,16 @@ test("staffing levels collapse, and an unstaffed one says so in words", async ({
   }
 
   // The disclosure toggles, whichever state it started in.
+  //
+  // ⚠ `expect.poll` on the count first, because the pane's open/closed state is a function of
+  // three async loads. Reading `aria-expanded` the instant the header appears sampled a value
+  // that was still about to change, and made this spec FLAKY — which in a suite configured
+  // `retries: 0` is the worst outcome there is. The implementation bug it exposed (a seeding
+  // effect that raced the admin's own click) is fixed in CastStaffing; this wait is what makes
+  // the assertion read a settled value rather than a transient one.
+  await expect.poll(async () => levelHeaders.count(), { timeout: 10_000 }).toBeGreaterThan(0);
   const first = levelHeaders.first();
+  await expect(first).toHaveAttribute("aria-expanded", /true|false/);
   const before = await first.getAttribute("aria-expanded");
   await first.click();
   await expect(first).toHaveAttribute("aria-expanded", before === "true" ? "false" : "true");

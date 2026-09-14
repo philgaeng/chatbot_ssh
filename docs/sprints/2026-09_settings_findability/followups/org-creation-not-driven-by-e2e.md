@@ -43,5 +43,7 @@ outlives the test. Both are cases where *the test is cheap and the cleanup is no
   into the slot that asked for it**, not merely created — that ordering is the whole point of
   `GRM-089` and is currently unverified by anything.
 - No row survives the run, by whichever mechanism.
-- ⚠ The **"NEVER RUN"** banner at the top of the spec is removed, because by then somebody will
-  have watched it pass.
+- ✅ The **"NEVER RUN"** banner is already gone — the spec was run and passes as of 2026-09-07.
+  What remains open is only the last step: **submitting the form**, and asserting the new
+  organisation is *linked into the slot that asked for it*. That ordering is the whole point of
+  `GRM-089` and is still verified by nothing.

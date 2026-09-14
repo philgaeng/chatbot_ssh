@@ -47,7 +47,10 @@ test("the officer directory lists the seeded roster and its search narrows it", 
   await expect(page.getByText(OFFICERS.grcChair.userId, { exact: false }).first()).toBeVisible();
   await expect(page.getByText(OFFICERS.siteL1.userId, { exact: false }).first()).toBeVisible();
 
-  await page.getByPlaceholder("Search name, email, or position…").fill(OFFICERS.grcChair.userId);
+  // Keyed on the accessible NAME, not the placeholder. GRM-087 widened what the box matches
+  // and reworded the placeholder with it, which broke this line — a control's test handle must
+  // not be its copy.
+  await page.getByLabel("Search officers").fill(OFFICERS.grcChair.userId);
 
   await expect(page.getByText(OFFICERS.grcChair.userId, { exact: false }).first()).toBeVisible();
   // The point of a search box is what it removes. Asserted after a positive, so it cannot
