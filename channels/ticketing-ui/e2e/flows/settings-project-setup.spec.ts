@@ -122,12 +122,17 @@ test("staffing levels collapse, and an unstaffed one says so in words", async ({
 
   // The disclosure toggles, whichever state it started in.
   //
-  // ⚠ `expect.poll` on the count first, because the pane's open/closed state is a function of
-  // three async loads. Reading `aria-expanded` the instant the header appears sampled a value
-  // that was still about to change, and made this spec FLAKY — which in a suite configured
-  // `retries: 0` is the worst outcome there is. The implementation bug it exposed (a seeding
-  // effect that raced the admin's own click) is fixed in CastStaffing; this wait is what makes
-  // the assertion read a settled value rather than a transient one.
+  // ⚠ The pane's open/closed state is a function of three async loads. Reading `aria-expanded` the
+  // instant a header appeared sampled a value still about to change, and made this spec FLAKY —
+  // twice, for two different reasons:
+  //
+  //  1. 2026-09-07 — a seeding effect raced the admin's own click (fixed in CastStaffing).
+  //  2. 2026-09-14 (`GRM-107`) — a level rendered before the ROSTER had loaded, so a slot staffed
+  //     through its named role read as empty: "Needs an officer", open, beside a rail saying 0
+  //     blockers. This spec read "open", the roster landed and closed it, and the click re-opened
+  //     it. The poll this comment used to call the fix waited for the headers to EXIST, which
+  //     proves nothing about whether they had settled. The fix is in the component — nothing is
+  //     drawn until every load has answered — and is pinned by the spec below.
   await expect.poll(async () => levelHeaders.count(), { timeout: 10_000 }).toBeGreaterThan(0);
   const first = levelHeaders.first();
   await expect(first).toHaveAttribute("aria-expanded", /true|false/);
@@ -135,3 +140,53 @@ test("staffing levels collapse, and an unstaffed one says so in words", async ({
   await first.click();
   await expect(first).toHaveAttribute("aria-expanded", before === "true" ? "false" : "true");
 });
+
+test("a staffing level is not drawn until the officers have loaded, so it cannot claim a false blocker", async ({
+  page,
+  asOfficer,
+}) => {
+  // `GRM-107`. With the roster HELD at the network, the steps and the cast answer and the roster does
+  // not — the exact window in which a role-staffed slot used to read as empty and open its level on
+  // "Needs an officer". Deterministic: nothing here depends on how fast any request is.
+  await asOfficer(OFFICERS.admin);
+  await page.goto("/settings");
+  // The identity switcher reads the roster too, so hold it only after that has settled.
+  await expectIdentitySettled(page, OFFICERS.admin);
+
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let rosterHeld = 0;
+  await page.route("**/api/v1/users/roster*", async (route) => {
+    rosterHeld += 1;
+    await held;
+    await route.continue();
+  });
+  // Everything ELSE a level depends on: count it out and back, so "no level drawn" below is asserted
+  // after the steps and cast have answered — not vacuously, before they were ever asked for.
+  let asked = 0;
+  let answered = 0;
+  const isLevelData = (url: string) => /\/api\/v1\/workflows\/[^/?]+$|\/cast\?/.test(url);
+  page.on("request", (r) => void (isLevelData(r.url()) && (asked += 1)));
+  page.on("requestfinished", (r) => void (isLevelData(r.url()) && (answered += 1)));
+  page.on("requestfailed", (r) => void (isLevelData(r.url()) && (answered += 1)));
+
+  await page.getByRole("button", { name: "Projects & packages", exact: true }).click();
+  await page.getByRole("button", { name: "Edit", exact: true }).first().click();
+  const rail = page.getByRole("navigation", { name: "Project setup sections" });
+  await rail.getByRole("button", { name: /^Staffing/ }).first().click();
+
+  await expect.poll(() => rosterHeld, { message: "the staffing pane never asked for the roster" }).toBeGreaterThan(0);
+  await expect
+    .poll(() => asked > 0 && answered === asked, { message: "the steps and cast never finished loading" })
+    .toBe(true);
+
+  const levelHeaders = page.locator("button[aria-expanded]").filter({ hasText: /^\s*\d+\s*Level/ });
+  await expect(levelHeaders, "a level was drawn before the roster answered").toHaveCount(0);
+  await expect(page.getByText(/Needs (an officer|\d+ officers)/)).toHaveCount(0);
+
+  release();
+  await expect(levelHeaders.first()).toBeVisible();
+});
+

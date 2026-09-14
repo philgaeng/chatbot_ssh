@@ -59,3 +59,40 @@ export function initiallyOpenSteps(
 ): Set<string> {
   return new Set(steps.filter((s) => s.blockingCount > 0).map((s) => s.stepId));
 }
+
+/** Which data a staffing pane has finished loading, and for what. */
+export interface StaffingLoads {
+  /** The workflow the loaded steps belong to, or null before they arrive. */
+  stepsFor: string | null;
+  /** The `workflow|package` scope the loaded cast belongs to, or null before it arrives. */
+  castFor: string | null;
+  /** The officer roster has answered, successfully or not. */
+  rosterSettled: boolean;
+}
+
+/** The key a cast load is recorded under: a cast read for one package is not another's. */
+export function castScopeKey(workflowId: string, packageId: string | null): string {
+  return `${workflowId}|${packageId ?? ""}`;
+}
+
+/**
+ * Whether every load a level's state depends on has settled FOR THIS SCOPE (`GRM-107`).
+ *
+ * ⚠ **Until then, "empty" means "not loaded yet", and the pane cannot tell the two apart.** It used
+ * to render as soon as the steps arrived: with the roster still loading, a slot staffed through its
+ * named role read as unstaffed, the level opened saying "Needs an officer" while the go-live rail
+ * beside it said 0 blockers, and then collapsed on its own when the roster landed. The e2e suite
+ * caught it as a flaky spec — its click landed in that window and re-opened the level — but the
+ * false alarm was there for every admin on a slow connection.
+ *
+ * Keyed, not boolean: a load that finished for a different workflow or package says nothing
+ * about this one.
+ */
+export function staffingSettled(loads: StaffingLoads, workflowId: string, packageId: string | null): boolean {
+  return (
+    loads.stepsFor === workflowId &&
+    loads.castFor === castScopeKey(workflowId, packageId) &&
+    loads.rosterSettled
+  );
+}
+

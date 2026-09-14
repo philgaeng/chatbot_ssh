@@ -1,7 +1,7 @@
 # Auth — Keycloak (canonical auth ops doc)
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/AUTH_MIGRATION.md` (the Cognito→Keycloak migration notes). Keycloak is the identity provider **everywhere** (dev auth profile, AWS staging, DOR prod); Cognito is fully retired.
-**Last updated:** 2026-09-14 — §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
+**Last updated:** 2026-09-14 — §1 *Sessions*: **used refresh tokens are now revoked** (`GRM-105`) — a second use is refused and, measured on Keycloak, ends the whole session; renewal is serialised across tabs so an officer's own tabs cannot trip that; the rollout order (UI first, realm policy second) and `--token-policy-only` added. §5: the token-lifespan item updated. Earlier the same day: §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
 
 ## 1. Architecture
 
@@ -66,10 +66,55 @@ endpoint, reading an unverified `azp`, so it accepts only `ticketing-api` and `t
 ⚠ **The security trade this makes, stated plainly.** Before, a stolen refresh token was useless on its
 own — renewing it needed the server's secret. Now `/api/v1/auth/refresh` supplies that secret for
 whoever presents the token, so **a leaked refresh token is a session for up to the SSO maximum (8 h)**.
-That is what an 8-hour session *is*, and it is standard for this pattern — but its usual paired control
-is missing: **the realm does not revoke used refresh tokens** (`revokeRefreshToken` is never set, so
-Keycloak's default, off, applies — measured locally: a spent token was accepted again). Enabling it is
-`GRM-105`, and is not a one-line change: renewal is deduplicated per tab, so two open tabs would race.
+That is what an 8-hour session *is*, and it is standard for this pattern. Its paired control — revoking
+a refresh token once it has been used — was missing until `GRM-105`; see the next section.
+
+### Refresh-token rotation: one use per token (`GRM-105`, 2026-09-14)
+
+The realm sets `revokeRefreshToken: true` and `refreshTokenMaxReuse: 0` (`keycloak_setup.py`,
+`REVOKE_REFRESH_TOKEN` / `REFRESH_TOKEN_MAX_REUSE`). Before this, **a spent refresh token was accepted
+again** — the setup script never set the flag, so every realm ran Keycloak's default, off.
+
+⭐ **What Keycloak does with it — measured on a real Keycloak, not taken from its documentation:**
+
+| Situation | Result |
+|---|---|
+| A spent refresh token is presented again | refused (`Maximum allowed refresh token reuse exceeded`) **and the whole session ends** — the newer token is refused too |
+| Two renewals race with the same token | one succeeds, one is refused — **then the winner's token is refused as well**: every tab is signed out |
+| A thief replays a stolen token after the officer renewed | the session ends for **both** |
+| A thief renews first, then the officer renews | the officer is refused, and the thief's token dies with the session |
+
+The last two rows are the point: **a replayed theft becomes a visible sign-out** instead of a second
+session running quietly beside the real one. The server logs each refused reuse at `WARNING` —
+*"a refresh token was reused … Possible replay of a stolen token, or a renewal race between tabs"* —
+and never logs the token.
+
+⚠ **The second row is why the officer UI serialises renewal across tabs.** Deduplicating inside a tab
+(`refreshPromise`) is not enough once a second use ends the session. Every tab takes the Web Lock
+`grm-token-renewal` before renewing; a tab that waited re-reads storage and, if another tab already
+renewed, uses those tokens instead of spending the old one. A renewal that hangs gives the lock back
+after 15 s. (`oidc-auth.ts` · `withRenewalLock`.)
+
+⚠ **Residual, stated rather than hidden:** browsers without Web Locks — Safari before 15.4, Firefox
+before 96, both 2022 — renew unlocked. There, two tabs renewing within one request's round trip still
+end the session. A `localStorage` lease was considered and rejected: it is itself racy.
+
+⛔ **Rollout order is not optional.** Applying the realm policy to users still running a UI **without**
+the lock turns every two-tab renewal race into a sign-out of every tab. So, per realm:
+
+1. Deploy the UI that carries the lock, and let open tabs pick it up (a reload, or the next sign-in).
+2. Then apply the policy — **only** the policy, never the full setup run on a live realm, which also
+   rewrites demo officers, SMTP, clients and the theme:
+
+   ```bash
+   docker compose … exec -T ticketing_api python -m ticketing.auth.keycloak_setup --token-policy-only
+   ```
+
+3. Verify: `admin/realms/grm` reports `revokeRefreshToken: true`, `refreshTokenMaxReuse: 0`.
+
+**Not done, and logged:** tokens still live in `localStorage`, where any script on the page can read
+them. Moving them to an `HttpOnly` cookie is the stronger control and a much larger change — logged
+in the register as `GRM-109`.
 
 **The issuer, where it is still needed** (the sign-out fallback): `NEXT_PUBLIC_OIDC_ISSUER` if a build
 sets it; otherwise `${window.location.origin}/keycloak/realms/grm`. ⚠ CI-built images never set it
@@ -139,7 +184,7 @@ Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_off
 - [ ] **Webhook secret:** strong `KEYCLOAK_WEBHOOK_SECRET`, matching the event-listener extension config.
 - [ ] **Realm SMTP configured** and invite email tested (`scripts/ops/test-smtp.sh`).
 - [ ] **Redirect URIs:** update in `keycloak_setup.py` for the new domain, re-run `keycloak-setup`.
-- [ ] **Token lifespans:** access 1 h, SSO/refresh 8 h (setup script applies access; verify realm settings). ⛔ **"Refresh-token rotation ON" was stated here and is not true** (corrected 2026-09-14): Keycloak issues a new refresh token on every renewal, but the setup script never sets `revokeRefreshToken`, so a **used token stays valid** until it expires. Enabling revocation is `GRM-105` — it needs cross-tab coordination first, or two open tabs will sign each other out.
+- [ ] **Token lifespans and rotation:** access 1 h, SSO/refresh 8 h, **a refresh token is good for one use** (`revokeRefreshToken: true`, `refreshTokenMaxReuse: 0`, `GRM-105`). Applied by `keycloak_setup --token-policy-only` — ⛔ **only after** the UI with the cross-tab renewal lock is deployed (§1 *Refresh-token rotation*). **Verify on the realm, do not assume:** until 2026-09-14 this line claimed "rotation ON" and the realm had it off.
 - [ ] **Brute-force protection:** enabled by the setup script — verify in realm settings.
 - [ ] ⭐ **Event storage:** applied by the setup script (`setup_realm_event_logging` — login + admin events, 90-day expiration). **Verify, do not assume**, and re-run `make keycloak-setup` on every environment:
       ```bash

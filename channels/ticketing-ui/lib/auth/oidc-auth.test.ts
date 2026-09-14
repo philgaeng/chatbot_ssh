@@ -141,9 +141,8 @@ describe("refresh runs through the server, as the client that issued the session
 
     expect(await refreshTokens()).toBeTruthy();
     expect(calls).toHaveLength(1);
-    // Keycloak issues a NEW refresh token on every refresh, so the newest must be kept. ⚠ Not the
-    // same as "used tokens are revoked": measured 2026-09-14, the realm does NOT revoke them
-    // (revokeRefreshToken is never set) — see GRM-105.
+    // Keycloak issues a NEW refresh token on every refresh, so the newest must be kept — and since
+    // GRM-105 the realm revokes the old one, so keeping a stale token is a sign-out waiting to happen.
     expect(ls.getItem("grm_refresh_token")).toBe("rotated");
   });
 
@@ -154,6 +153,158 @@ describe("refresh runs through the server, as the client that issued the session
 
     expect(await refreshTokens()).toBeNull();
     expect(ls.getItem("grm_refresh_token")).toBe("stale");
+  });
+});
+
+describe("renewal is serialised across tabs (GRM-105)", () => {
+  // ⭐ Why this matters now. The realm revokes a refresh token once used, and — measured on Keycloak
+  // 2026-09-14 — a SECOND use ends the whole session, the fresh token included. Two tabs renewing at
+  // once used to cost one harmless 400; with revocation on it signs the officer out of every tab.
+  //
+  // Each `import` after `vi.resetModules()` is a separate module instance, so each "tab" has its own
+  // single-flight — exactly like two real tabs — while sharing storage and the lock, as tabs do.
+
+  /** A FIFO exclusive lock with the `navigator.locks.request` shape. */
+  function fakeLocks() {
+    let tail: Promise<unknown> = Promise.resolve();
+    const requests: { name: string; mode?: string }[] = [];
+    return {
+      requests,
+      request(name: string, opts: { mode?: string }, fn: () => Promise<unknown>) {
+        requests.push({ name, mode: opts?.mode });
+        const run = tail.then(() => fn());
+        tail = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
+      },
+    };
+  }
+
+  const fresh = () => jwt({ sub: "o@x", email: "o@x", exp: 9999999999 });
+
+  /** The server: rotates r1 → r2 → r3 …, and records every token it was sent. */
+  function rotatingServer(delayMs = 10) {
+    const sent: string[] = [];
+    let n = 1;
+    vi.stubGlobal("fetch", async (_url: string, init?: { body?: string }) => {
+      sent.push(JSON.parse(init?.body ?? "{}").refresh_token);
+      await new Promise((r) => setTimeout(r, delayMs));
+      n += 1;
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: fresh(), id_token: fresh(), refresh_token: `r${n}` }),
+      };
+    });
+    return sent;
+  }
+
+  async function twoTabs() {
+    const tabA = await import("./oidc-auth");
+    vi.resetModules();
+    const tabB = await import("./oidc-auth");
+    return [tabA, tabB];
+  }
+
+  it("⭐ two tabs renewing at once send ONE token to the server — the second uses the first's result", async () => {
+    const locks = fakeLocks();
+    vi.stubGlobal("navigator", { locks });
+    ls.setItem("grm_refresh_token", "r1");
+    const sent = rotatingServer();
+    const [a, b] = await twoTabs();
+
+    const [ra, rb] = await Promise.all([a.refreshTokens(), b.refreshTokens()]);
+
+    expect(sent).toEqual(["r1"]); // never r1 twice: that is the reuse that ends the session
+    expect(ra).toBeTruthy();
+    expect(rb).toBe(ra);
+    expect(ls.getItem("grm_refresh_token")).toBe("r2");
+    expect(locks.requests.every((r) => r.name === "grm-token-renewal" && r.mode === "exclusive")).toBe(true);
+  });
+
+  it("without Web Locks both tabs send the same token — the residual 16_auth_keycloak.md states", async () => {
+    // The control for the test above: it is the lock, not luck in the mock, that prevents the reuse.
+    vi.stubGlobal("navigator", {});
+    ls.setItem("grm_refresh_token", "r1");
+    const sent = rotatingServer();
+    const [a, b] = await twoTabs();
+
+    await Promise.all([a.refreshTokens(), b.refreshTokens()]);
+
+    expect(sent).toEqual(["r1", "r1"]);
+  });
+
+  it("a waiting tab whose rotated access token is ALREADY near expiry renews with the NEW token, never the spent one", async () => {
+    const locks = fakeLocks();
+    vi.stubGlobal("navigator", { locks });
+    ls.setItem("grm_refresh_token", "r1");
+    const sent: string[] = [];
+    let first = true;
+    vi.stubGlobal("fetch", async (_url: string, init?: { body?: string }) => {
+      sent.push(JSON.parse(init?.body ?? "{}").refresh_token);
+      await new Promise((r) => setTimeout(r, 10));
+      // The first renewal hands back an access token that is already inside the 60-second window.
+      const access = first ? jwt({ sub: "o@x", email: "o@x", exp: Math.floor(Date.now() / 1000) + 5 }) : fresh();
+      const rt = first ? "r2" : "r3";
+      first = false;
+      return { ok: true, status: 200, json: async () => ({ access_token: access, id_token: fresh(), refresh_token: rt }) };
+    });
+    const [a, b] = await twoTabs();
+
+    await Promise.all([a.refreshTokens(), b.refreshTokens()]);
+
+    expect(sent).toEqual(["r1", "r2"]);
+    expect(ls.getItem("grm_refresh_token")).toBe("r3");
+  });
+
+  it("a tab that waited while the officer signed out renews nothing", async () => {
+    const locks = fakeLocks();
+    vi.stubGlobal("navigator", { locks });
+    ls.setItem("grm_refresh_token", "r1");
+    const sent: string[] = [];
+    vi.stubGlobal("fetch", async (_url: string, init?: { body?: string }) => {
+      sent.push(JSON.parse(init?.body ?? "{}").refresh_token);
+      await new Promise((r) => setTimeout(r, 10));
+      ls.removeItem("grm_refresh_token"); // sign-out lands in another tab mid-renewal
+      return { ok: false, status: 401, json: async () => ({}) };
+    });
+    const [a, b] = await twoTabs();
+
+    const [ra, rb] = await Promise.all([a.refreshTokens(), b.refreshTokens()]);
+
+    expect(sent).toEqual(["r1"]);
+    expect(ra).toBeNull();
+    expect(rb).toBeNull();
+  });
+
+  it("a renewal that hangs gives the lock back, so other tabs are not frozen behind it", async () => {
+    vi.useFakeTimers();
+    try {
+      const locks = fakeLocks();
+      vi.stubGlobal("navigator", { locks });
+      ls.setItem("grm_refresh_token", "r1");
+      vi.stubGlobal("fetch", (_url: string, init?: { signal?: AbortSignal }) =>
+        new Promise((_resolve, reject) => {
+          init?.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+      );
+      const { refreshTokens } = await import("./oidc-auth");
+
+      const pending = refreshTokens();
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      expect(await pending).toBeNull();
+      // The lock is free again: a fresh request runs rather than queueing forever.
+      let ran = false;
+      await locks.request("grm-token-renewal", { mode: "exclusive" }, async () => {
+        ran = true;
+      });
+      expect(ran).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

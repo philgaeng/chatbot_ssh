@@ -2,7 +2,7 @@
 
 // PKCE-enabled OIDC client for Keycloak (drop-in replacement for CognitoAuthClient).
 
-import { isAccessTokenExpired } from "./session-expired";
+import { isAccessTokenExpired, isAccessTokenExpiringSoon } from "./session-expired";
 import {
   TOKEN_STORAGE,
   clearAuthStorage,
@@ -35,6 +35,31 @@ function randomToken(bytes = 32): string {
 
 let refreshPromise: Promise<string | null> | null = null;
 
+/** The Web Lock every tab of this origin takes before renewing (`GRM-105`). */
+export const RENEWAL_LOCK = "grm-token-renewal";
+
+/** A renewal that hangs must not hold the lock — and every other tab's API calls — forever. */
+const RENEWAL_TIMEOUT_MS = 15_000;
+
+/**
+ * Run `fn` holding the cross-tab renewal lock.
+ *
+ * ⚠ **Why a lock across tabs, not only single-flight within one.** The realm revokes a refresh
+ * token once it has been used, and — measured on Keycloak — a SECOND use ends the whole session,
+ * the new token included. Two open tabs renewing in the same instant would therefore sign the
+ * officer out of every tab. `refreshPromise` dedupes callers inside a tab; this dedupes tabs.
+ *
+ * ⚠ **Without Web Locks** (browsers older than 2022: Safari < 15.4, Firefox < 96) this runs
+ * unlocked. The residual is the race above, which needs two tabs renewing within one request's
+ * round trip; it is stated in `16_auth_keycloak.md` rather than papered over with a
+ * `localStorage` lease, which is itself racy.
+ */
+function withRenewalLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (!locks?.request) return fn();
+  return locks.request(RENEWAL_LOCK, { mode: "exclusive" }, fn) as Promise<T>;
+}
+
 /**
  * Exchange the stored refresh token for a fresh access/id/refresh set, and persist the
  * rotated tokens. Returns the new access token, or `null` when there is no refresh token
@@ -51,6 +76,9 @@ let refreshPromise: Promise<string | null> | null = null;
  * **Single-flight:** concurrent callers (e.g. a burst of 401s) share one
  * in-flight POST. Keycloak rotates the refresh token, so a second grant with the
  * now-spent token would fail; deduping avoids that self-inflicted 400.
+ *
+ * **Across tabs, too (`GRM-105`):** see `withRenewalLock`. Since the realm revokes spent refresh
+ * tokens, a second use is no longer a harmless 400 — it ends the session everywhere.
  */
 export function refreshTokens(): Promise<string | null> {
   if (refreshPromise) return refreshPromise;
@@ -62,25 +90,46 @@ export function refreshTokens(): Promise<string | null> {
 
 async function doRefresh(): Promise<string | null> {
   if (typeof window === "undefined") return null;
-  const refreshToken = localStorage.getItem(TOKEN_STORAGE.REFRESH_TOKEN);
   // ⚠ No issuer check any more: this no longer needs one, and the CI-built image has none
   // (images.yml never passes NEXT_PUBLIC_OIDC_ISSUER). Requiring it is what made the old
   // version bail out before even trying on every deployed build.
-  if (!refreshToken) return null;
-  try {
-    // Same-origin, same shape as revokeRefreshToken: no CORS, no client credentials in the browser.
-    const resp = await fetch("/api/v1/auth/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-    if (!resp.ok) return null;
-    const tokens = (await resp.json()) as AuthTokens;
-    persistAuthTokens(tokens); // stores rotated access/id/refresh + decoded user
-    return tokens.access_token ?? null;
-  } catch {
-    return null;
-  }
+  //
+  // The token this tab set out to renew — read BEFORE waiting for the lock, so that after the wait
+  // we can tell whether another tab renewed in the meantime.
+  const seen = localStorage.getItem(TOKEN_STORAGE.REFRESH_TOKEN);
+  if (!seen) return null;
+
+  return withRenewalLock(async () => {
+    const refreshToken = localStorage.getItem(TOKEN_STORAGE.REFRESH_TOKEN);
+    if (!refreshToken) return null; // signed out while we waited
+
+    // ⭐ Another tab renewed while we waited. Its tokens are already in storage, and posting the
+    // token we started with would be a reuse — which ends the session for every tab. Use theirs.
+    if (refreshToken !== seen) {
+      const access = localStorage.getItem(TOKEN_STORAGE.ACCESS_TOKEN);
+      if (access && !isAccessTokenExpiringSoon(access, 60)) return access;
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), RENEWAL_TIMEOUT_MS);
+    try {
+      // Same-origin, same shape as revokeRefreshToken: no CORS, no client credentials in the browser.
+      const resp = await fetch("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+        signal: controller.signal,
+      });
+      if (!resp.ok) return null;
+      const tokens = (await resp.json()) as AuthTokens;
+      persistAuthTokens(tokens); // stores rotated access/id/refresh + decoded user
+      return tokens.access_token ?? null;
+    } catch {
+      return null; // aborted, offline, or unparseable
+    } finally {
+      clearTimeout(timer);
+    }
+  });
 }
 
 /**

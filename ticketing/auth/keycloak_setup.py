@@ -33,6 +33,16 @@ SSO_SESSION_MAX_LIFESPAN = 28800  # 8h
 ACCESS_TOKEN_LIFESPAN = 3600  # 1h
 ACTION_TOKEN_ADMIN_LIFESPAN = 604800  # 7d — execute-actions / resend-invite links
 
+# Refresh-token rotation (`GRM-105`). A refresh token is good for ONE renewal; presenting it again is
+# refused. ⚠ Measured on Keycloak 2026-09-14: a refused reuse ENDS THE WHOLE SESSION, not just that
+# token — so a stolen token replayed after the officer renewed (or before) signs BOTH out, which is
+# the property we want: a theft becomes visible instead of running alongside the real session.
+# ⚠ The same fact makes two tabs renewing at once end the session for every tab. The officer UI
+# serialises renewal across tabs (`navigator.locks` in `oidc-auth.ts`), and that build MUST be
+# deployed before this policy is applied to a realm — see 16_auth_keycloak.md § Sessions.
+REVOKE_REFRESH_TOKEN = True
+REFRESH_TOKEN_MAX_REUSE = 0
+
 # Security-event retention (seconds). Keycloak stores **no** login or admin events unless the realm
 # asks for it, and both default to off — so nothing was recorded, and a login that happened before
 # this was switched on cannot be recovered. The ops daily report already queried
@@ -166,6 +176,8 @@ def setup_realm(master: KeycloakAdmin) -> None:
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
+            "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
+            "refreshTokenMaxReuse": REFRESH_TOKEN_MAX_REUSE,
             "bruteForceProtected": True,
         })
         logger.info("Created realm '%s'", REALM)
@@ -174,21 +186,31 @@ def setup_realm(master: KeycloakAdmin) -> None:
 
 
 def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
-    """Apply token lifespans, including 7-day officer invite / execute-actions links."""
+    """Apply the realm's token policy: lifespans (incl. 7-day invite links) and refresh-token rotation.
+
+    ⚠ It used to set lifespans only, so a realm created before rotation was added kept Keycloak's
+    default — `revokeRefreshToken` OFF — however often this ran. Updating is what reaches an
+    existing realm; the create payload alone never would.
+    """
     admin.update_realm(
         REALM,
         {
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
+            "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
+            "refreshTokenMaxReuse": REFRESH_TOKEN_MAX_REUSE,
         },
     )
     logger.info(
-        "Realm '%s' token lifespans updated (access=%ss, sso=%ss, admin invite link=%ss)",
+        "Realm '%s' token policy updated (access=%ss, sso=%ss, admin invite link=%ss, "
+        "revoke refresh token=%s, max reuse=%s)",
         REALM,
         ACCESS_TOKEN_LIFESPAN,
         SSO_SESSION_MAX_LIFESPAN,
         ACTION_TOKEN_ADMIN_LIFESPAN,
+        REVOKE_REFRESH_TOKEN,
+        REFRESH_TOKEN_MAX_REUSE,
     )
 
 
@@ -486,14 +508,21 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def main() -> None:
+def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
+    args = sys.argv[1:] if argv is None else argv
     settings = get_settings()
     if not settings.keycloak_admin_url:
         logger.error("KEYCLOAK_ADMIN_URL not configured — cannot connect")
         sys.exit(1)
 
     logger.info("Connecting to Keycloak at %s", settings.keycloak_admin_url)
+    if "--token-policy-only" in args:
+        # ⭐ For a live realm. The full run also refreshes demo officers, SMTP, clients and the
+        # theme — none of which a token-policy change should touch on staging or production.
+        setup_realm_token_lifespans(_realm_admin())
+        logger.info("Token policy applied; nothing else was changed.")
+        return
     master = _master_admin()
     setup_realm(master)
 

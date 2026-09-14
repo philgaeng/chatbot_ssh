@@ -354,7 +354,18 @@ def refresh_with_refresh_token(refresh_token: str) -> dict[str, Any]:
             503,
         )
     if resp.status_code in (400, 401):
-        logger.info("Keycloak refresh: grant rejected for client %s (%s)", issued_to, err or resp.status_code)
+        if "reuse" in (desc or "").lower():
+            # ⚠ `GRM-105`: a refresh token was presented a SECOND time. With revocation on, Keycloak
+            # ends the whole session when that happens — measured, for the rightful holder too — so
+            # this is either two tabs that raced past the browser's renewal lock, or a stolen token
+            # being replayed. Both deserve a line an operator can find; neither logs the token.
+            logger.warning(
+                "Keycloak refresh: a refresh token was reused (client %s) — Keycloak ended the session. "
+                "Possible replay of a stolen token, or a renewal race between tabs.",
+                issued_to,
+            )
+        else:
+            logger.info("Keycloak refresh: grant rejected for client %s (%s)", issued_to, err or resp.status_code)
         raise AuthLoginError("session_expired", "Your session has ended. Please sign in again.", 401)
 
     logger.warning("Keycloak refresh failed (%s) for client %s: %s", resp.status_code, issued_to, err)

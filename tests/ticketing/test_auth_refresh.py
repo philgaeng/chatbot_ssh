@@ -213,6 +213,38 @@ def test_neither_the_token_nor_the_secret_is_ever_logged(keycloak, caplog) -> No
     assert SECRET not in caplog.text
 
 
+def test_a_reused_refresh_token_is_logged_as_a_warning_an_operator_can_find(keycloak, caplog) -> None:
+    """`GRM-105`. With revocation on, a second use of a refresh token ends the whole session — a
+    stolen token replayed, or two tabs that raced past the renewal lock. Either way it is not the
+    ordinary end of a session, and must not be filed at INFO beside it. Still a plain 401 to the
+    browser, and still no token in the log."""
+    token = _jwt({"azp": "ticketing-api", "marker": "do-not-log-me"})
+    _, reply = keycloak
+    reply.update(status=400, payload={"error": "invalid_grant", "error_description": "Maximum allowed refresh token reuse exceeded"})
+    caplog.set_level("DEBUG", logger="ticketing.services.auth_login")
+
+    with pytest.raises(AuthLoginError) as exc:
+        refresh_with_refresh_token(token)
+
+    assert (exc.value.status_code, exc.value.code) == (401, "session_expired")
+    warnings = [r for r in caplog.records if r.levelname == "WARNING" and "reused" in r.getMessage()]
+    assert warnings, "a refused reuse must be logged at WARNING"
+    assert token not in caplog.text and SECRET not in caplog.text
+
+
+def test_an_ordinary_expiry_is_not_reported_as_a_reuse(keycloak, caplog) -> None:
+    """The control for the test above: a session that simply ran out must not cry wolf, or the
+    warning gets ignored the day it matters."""
+    _, reply = keycloak
+    reply.update(status=400, payload={"error": "invalid_grant", "error_description": "Token is not active"})
+    caplog.set_level("DEBUG", logger="ticketing.services.auth_login")
+
+    with pytest.raises(AuthLoginError):
+        refresh_with_refresh_token(_jwt({"azp": "ticketing-api"}))
+
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+
 def test_the_public_client_id_matches_the_realm_setup() -> None:
     """The allowlist names `ticketing-ui` without importing the setup module. Pin that the two
     cannot drift apart — a renamed client would otherwise refuse every refresh as 'foreign'."""
