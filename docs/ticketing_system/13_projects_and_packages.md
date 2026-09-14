@@ -1,6 +1,6 @@
 # Projects and packages
 
-**Status:** Product reference — **last reviewed 2026-09-07** (`GRM-089`: inline organization creation in both Organizations pickers; the as-built component list corrected — it named one component that does not exist and one that nothing imports). Earlier **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
+**Status:** Product reference — **last reviewed 2026-09-07** (`GRM-089`: inline organization creation in both Organizations pickers; the as-built component list corrected — it named one component that does not exist and one that nothing imports. `GRM-090`: §5A.7 — staffing levels collapse, closed unless a required slot is unstaffed, and the picker can invite). Earlier **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
 **UI:** Settings → **Projects & packages**  
 **Code:** `ticketing/api/routers/locations.py` (projects/packages), `ticketing/services/project_go_live.py`, `ticketing/services/project_types.py`  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)
@@ -387,6 +387,40 @@ The **go-live gate follows the same flag** and stops guessing (§7 C1/C5): a per
 officer on **every active package** — a project-wide officer does not answer it, and neither does the
 country L1 fallback, which is an assignment safety net rather than a staffing plan. A project-wide
 level needs one project-wide officer and is never asked about packages.
+
+### 5A.7 Progressive disclosure and inline invite (`GRM-090`, 2026-09-07)
+
+**Levels collapse**, using the same disclosure the Packages section uses — one idiom on one setup
+screen, not two.
+
+⭐ **The default state is the design decision, not a preference.** **A level is closed unless it has
+an unmet required slot.** Collapsing everything would hide precisely what the pane exists to
+surface: on the live KL Road project that is two unstaffed required slots, and the go-live rail's
+*"2 blockers"* would become the only place they are visible. Leaving everything open is the problem
+the collapse is fixing — the blockers sit below a screen of controls that are already satisfied.
+
+- **The count is in words on the header** — *"Needs an officer"* / *"Needs 2 officers"* — never a
+  coloured dot alone ([`ui/05`](ui/05_ui_copy_style.md) rule 6,
+  [`05_frontend`](../engineering/05_frontend.md) rule 8.2).
+- **It stays visible when the level is open**, because the go-live rail is counting the same thing
+  and the two must not disagree.
+- ⚠ **A package scope never counts as blocking**, mirroring the existing `blocking` predicate: a
+  per-package level inherits the project-wide officer unless overridden, so an empty package slot
+  means *"same as project"*, not *"nobody"*. Counting those would open every level on every project
+  and undo the feature.
+- **Open/closed is seeded once, then owned by the admin.** Deriving it on every render would
+  collapse a level under the cursor at the moment its last slot was filled.
+
+The predicate is [`castDisclosure.ts`](../../channels/ticketing-ui/components/settings/projects/castDisclosure.ts),
+pure and unit-tested.
+
+**Inviting an officer without leaving the pane.** The officer picker used to end at *"invite one
+under Organizations & officers"* — a correct instruction that costs the admin their place in a
+seven-section flow. It now offers **"+ Invite a new officer"**, opening `ProjectOfficerModal`
+pre-set to **the slot's own role**, so the invite fills the job that was unstaffed rather than
+offering a catalog. On success the roster and the cast reload behind the still-open picker. The
+control is disabled until the project names an implementing agency, for the same reason assignment
+is: a scope must be written against an organization.
 
 ---
 

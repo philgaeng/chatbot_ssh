@@ -13,6 +13,12 @@
  */
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ChevronRight } from "lucide-react";
+
+import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
+
+import { blockingSlotCount, blockingSummary, initiallyOpenSteps } from "./castDisclosure";
+
 import {
   getWorkflow,
   listOfficerRoster,
@@ -116,6 +122,9 @@ export function CastStaffing({
   const [scopeCast, setScopeCast] = useState<CastScope[]>([]);
   const [roster, setRoster] = useState<OfficerRosterEntry[]>([]);
   const [assigning, setAssigning] = useState<{ stepId: string; tier: string } | null>(null);
+  /** The slot that asked for a brand-new officer (GRM-090). Carries the slot's own role, so the
+   *  invite defaults to the job the admin was trying to fill rather than to a generic list. */
+  const [invitingFor, setInvitingFor] = useState<{ roleKey: string; roleLabel: string } | null>(null);
   const [pickerQ, setPickerQ] = useState("");
   const [pickerOrg, setPickerOrg] = useState<string>(""); // "" = project actors, id = one org, "__all__" = everyone
   const [pickerLocMatch, setPickerLocMatch] = useState(true);
@@ -189,9 +198,14 @@ export function CastStaffing({
     void loadCast();
   }, [loadCast]);
 
+  const loadRoster = useCallback(
+    () => listOfficerRoster().then(setRoster).catch(() => setRoster([])),
+    [],
+  );
+
   useEffect(() => {
-    listOfficerRoster().then(setRoster).catch(() => setRoster([]));
-  }, []);
+    void loadRoster();
+  }, [loadRoster]);
 
   const officerName = useCallback(
     (uid: string) => roster.find((o) => o.user_id === uid)?.display_name || uid,
@@ -242,6 +256,48 @@ export function CastStaffing({
     },
     [scopeCast, projectWideCast, isPkg, roleStaffed],
   );
+
+  /**
+   * How many required slots each level is missing (GRM-090).
+   *
+   * ⚠ This MUST use the same `empty` / `required` / `isPkg` predicate the render uses below, or a
+   * level opens saying it needs an officer and shows none missing. That is why `byRoleFor` is
+   * called here too rather than approximated — a role-staffed slot is not empty.
+   */
+  const blockingByStep = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const step of visibleSteps) {
+      const tiers = stepTiers(step);
+      const states = TIERS.filter((t) => tiers.includes(t.key)).map((t) => {
+        const current = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === t.key);
+        const inherited = isPkg
+          ? projectWideCast.filter((c) => c.step_id === step.step_id && c.tier === t.key)
+          : [];
+        return {
+          required: t.required || (step.required_tiers ?? []).includes(t.key),
+          empty: current.length === 0 && inherited.length === 0 && byRoleFor(step, t).length === 0,
+        };
+      });
+      out.set(step.step_id, blockingSlotCount(states, isPkg));
+    }
+    return out;
+  }, [visibleSteps, scopeCast, projectWideCast, isPkg, byRoleFor]);
+
+  /**
+   * Which levels are open. Seeded ONCE from the blocker pass, then owned by the admin.
+   *
+   * ⭐ Deliberately not derived on every render: staffing the last slot on a level would
+   * otherwise collapse it under the cursor at the exact moment the admin finished it.
+   */
+  const [openSteps, setOpenSteps] = useState<Set<string> | null>(null);
+  useEffect(() => {
+    if (openSteps !== null || blockingByStep.size === 0) return;
+    setOpenSteps(
+      initiallyOpenSteps(
+        [...blockingByStep.entries()].map(([stepId, blockingCount]) => ({ stepId, blockingCount })),
+      ),
+    );
+  }, [blockingByStep, openSteps]);
 
   /** The position the officer holds — the wireframe shows it under the name so an admin can
    *  see WHICH SEAT is doing the work, not just who. Positions come from the roster today;
@@ -326,6 +382,27 @@ export function CastStaffing({
 
   return (
     <div className="space-y-3">
+      {invitingFor && derivedOrg && (
+        <ProjectOfficerModal
+          project={project}
+          organizationId={derivedOrg}
+          organizationName={orgLabel(derivedOrg)}
+          /* One choice, not a catalog: the slot the admin clicked already names the job. Offering
+             the full role list here would invite someone for a job other than the one that is
+             unstaffed, which is the mistake this shortcut exists to prevent. */
+          roleChoices={[{ key: invitingFor.roleKey, label: invitingFor.roleLabel }]}
+          onClose={() => setInvitingFor(null)}
+          onSuccess={() => {
+            setInvitingFor(null);
+            /* The picker stays open behind the modal, so refreshing the roster puts the new
+               officer straight into the list the admin was already looking at. Their scope was
+               written by the modal, so the cast may have changed too. */
+            void loadRoster();
+            void loadCast();
+            onChanged?.();
+          }}
+        />
+      )}
       {error && (
         <p className="rounded border border-red-200 bg-red-50 px-2 py-1 text-xs text-red-600">{error}</p>
       )}
@@ -340,17 +417,49 @@ export function CastStaffing({
       )}
       {visibleSteps.map((step) => {
         const tiers = stepTiers(step);
+        const stepBlocking = blockingByStep.get(step.step_id) ?? 0;
+        // Before the seeding effect has run, `openSteps` is null — show everything rather than
+        // flashing a fully collapsed pane, which would look like an empty screen.
+        const isOpen = openSteps === null ? true : openSteps.has(step.step_id);
         return (
           <div key={step.step_id} className="rounded-lg border border-gray-200 bg-white overflow-hidden">
             {showStepHeader && (
-              <div className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2">
+              /* The disclosure pattern is the one packages already use (`PackageRow`), because the
+                 client asked for it by name and because two disclosure idioms on one setup screen
+                 is one too many. */
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenSteps((prev) => {
+                    const next = new Set(prev ?? []);
+                    if (next.has(step.step_id)) next.delete(step.step_id);
+                    else next.add(step.step_id);
+                    return next;
+                  })
+                }
+                aria-expanded={isOpen}
+                className="flex w-full items-center gap-2.5 border-b border-gray-100 bg-gray-50 px-3 py-2 text-left hover:bg-gray-100"
+              >
+                <ChevronRight
+                  size={14}
+                  className={`shrink-0 transition-transform ${isOpen ? "rotate-90 text-blue-500" : "text-gray-400"}`}
+                  aria-hidden
+                />
                 <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white border border-gray-300 text-[11px] font-bold text-gray-600">
                   {step.step_order}
                 </span>
                 <span className="text-[13.5px] font-semibold text-gray-900">{step.display_name}</span>
-              </div>
+                {/* In WORDS, not a coloured dot (ui/05 rule 6). Shown whether open or closed: the
+                    count is what the go-live rail is counting, and hiding it when the level is
+                    open would make the two disagree. */}
+                {stepBlocking > 0 && (
+                  <span className="ml-auto shrink-0 rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
+                    {blockingSummary(stepBlocking)}
+                  </span>
+                )}
+              </button>
             )}
-            <div className="divide-y divide-gray-100">
+            <div className={`divide-y divide-gray-100 ${showStepHeader && !isOpen ? "hidden" : ""}`}>
               {TIERS.filter((t) => tiers.includes(t.key)).map((t) => {
                 const current = scopeCast.filter((c) => c.step_id === step.step_id && c.tier === t.key);
                 const inherited = isPkg
@@ -514,8 +623,7 @@ export function CastStaffing({
                         <div className="mt-2 max-h-48 overflow-y-auto">
                           {pickerResults.length === 0 && (
                             <p className="px-1 py-1 text-[11px] text-gray-400">
-                              No officers match. Try &ldquo;Everyone&rdquo;, or invite one under
-                              Organizations &amp; officers.
+                              No officers match. Try &ldquo;Everyone&rdquo;, or invite one below.
                             </p>
                           )}
                           {pickerResults.map((o) => (
@@ -541,7 +649,26 @@ export function CastStaffing({
                             </button>
                           ))}
                         </div>
-                        <div className="mt-1 text-right">
+                        <div className="mt-1 flex items-center justify-between">
+                          {/* GRM-090. The picker used to end at "invite one under Organizations &
+                              officers" — a correct instruction that costs the admin their place in
+                              a seven-section setup flow. `roleKey` is the slot's own role, which is
+                              why the invite lands pre-set to the job they were trying to fill.
+                              Disabled without an organization for the same reason `assign` refuses:
+                              a scope has to be written against one. */}
+                          <button
+                            type="button"
+                            disabled={!derivedOrg || !roleKey}
+                            title={
+                              derivedOrg
+                                ? undefined
+                                : "Name the implementing agency first, under Organizations."
+                            }
+                            onClick={() => setInvitingFor({ roleKey: roleKey ?? "", roleLabel: heading })}
+                            className="rounded px-2 py-0.5 text-[11px] font-semibold text-blue-600 hover:underline disabled:text-gray-400 disabled:no-underline"
+                          >
+                            + Invite a new officer
+                          </button>
                           <button
                             type="button"
                             onClick={() => { setAssigning(null); setPickerQ(""); }}
