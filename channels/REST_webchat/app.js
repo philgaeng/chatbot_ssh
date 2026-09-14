@@ -441,11 +441,26 @@ window.markGrievanceFiled = markGrievanceFiled;
 // Send introduction message (async: restSendMessage returns a Promise; must await
 // before setting introductionSent, otherwise refresh/reopen can skip retries while
 // the request is still in flight.)
-async function sendIntroduceMessage() {
+//
+// ⚠ Single-flight (GRM-107). `introductionSent` only turns true when the request COMPLETES, and the
+// launcher can now be tapped before that — so without this a tap during the first request sent a
+// second /introduce, and the complainant got the greeting and language menu twice.
+let introduceInFlight = null;
+
+function sendIntroduceMessage() {
   if (window.introductionSent) {
     console.log("Introduction already sent, skipping...");
-    return;
+    return Promise.resolve();
   }
+  if (!introduceInFlight) {
+    introduceInFlight = doSendIntroduceMessage().finally(() => {
+      introduceInFlight = null;
+    });
+  }
+  return introduceInFlight;
+}
+
+async function doSendIntroduceMessage() {
 
   const { province, district, t } = getUrlParams();
   const flaskSessionId = window.flaskSessionId || window.getSessionId();
@@ -675,14 +690,19 @@ async function initializeChat() {
   chatWidget.style.display = "none";
   setChatLauncherVisible(true);
 
+  // Set up event listeners BEFORE any network wait (GRM-107).
+  //
+  // ⚠ They used to be attached after `await sendIntroduceMessage()`, so the launcher was on screen
+  // and did nothing until the first request came back. The e2e suite caught it as a flaky spec: a
+  // click 60 ms after page load, before the introduce response. On a slow rural connection that
+  // window is seconds, and a complainant who taps and sees nothing is unlikely to tap twice.
+  setupEventListeners();
+
   // Initialize Socket.IO connection for task status updates (classification, etc.)
   setupTaskStatusSocket();
 
   // Send initial introduction message via REST
   await sendIntroduceMessage();
-
-  // Set up event listeners
-  setupEventListeners();
 }
 
 // Set up UI event listeners

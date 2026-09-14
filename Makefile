@@ -811,7 +811,13 @@ EPHEMERAL_WEBCHAT_SERVICES := orchestrator backend celery_default celery_llm ngi
 EPHEMERAL_SERVICES         ?= $(EPHEMERAL_UI_SERVICES)
 
 # One block away from the dev stack's 3001/5002/8080/5433, so both can run at once.
+#
+# ⚠ KEYCLOAK_ADMIN_URL points at a port that REFUSES, on purpose (GRM-107). This stack runs no
+# Keycloak, but compose defaults the URL to http://keycloak:8080, and a lookup of a host that does
+# not exist is not fast: measured, 3.6 s per DNS miss plus a client retry, ~13 s per roster request.
+# The Staffing pane waited on it and a spec went flaky. A refused connection fails in milliseconds.
 EPHEMERAL_ENV = COMPOSE_PROJECT_NAME=$(EPHEMERAL_PROJECT) \
+  KEYCLOAK_ADMIN_URL=http://127.0.0.1:9 \
   GRM_UI_HOST_PORT=$(or $(EPH_UI_PORT),13001) \
   TICKETING_API_HOST_PORT=$(or $(EPH_API_PORT),15002) \
   NGINX_HOST_PORT=$(or $(EPH_NGINX_PORT),18081) \

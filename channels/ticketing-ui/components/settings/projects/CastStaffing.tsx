@@ -17,7 +17,13 @@ import { ChevronRight } from "lucide-react";
 
 import { ProjectOfficerModal } from "@/components/settings/ProjectOfficerModal";
 
-import { blockingSlotCount, blockingSummary, initiallyOpenSteps } from "./castDisclosure";
+import {
+  blockingSlotCount,
+  blockingSummary,
+  castScopeKey,
+  initiallyOpenSteps,
+  staffingSettled,
+} from "./castDisclosure";
 
 import {
   getWorkflow,
@@ -128,7 +134,11 @@ export function CastStaffing({
   const [pickerQ, setPickerQ] = useState("");
   const [pickerOrg, setPickerOrg] = useState<string>(""); // "" = project actors, id = one org, "__all__" = everyone
   const [pickerLocMatch, setPickerLocMatch] = useState(true);
-  const [loading, setLoading] = useState(false);
+  /** What has finished loading, and for which scope (`staffingSettled`, GRM-107). Recorded on
+   *  failure too: a load that errored has answered, and the error banner says so. */
+  const [stepsFor, setStepsFor] = useState<string | null>(null);
+  const [castFor, setCastFor] = useState<string | null>(null);
+  const [rosterSettled, setRosterSettled] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -167,7 +177,8 @@ export function CastStaffing({
           setSteps((wf.steps ?? []).filter((s) => !s.is_deleted).slice().sort((a, b) => a.step_order - b.step_order));
         }
       })
-      .catch(() => alive && setSteps([]));
+      .catch(() => alive && setSteps([]))
+      .finally(() => alive && setStepsFor(resolvedWfId));
     return () => {
       alive = false;
     };
@@ -179,7 +190,6 @@ export function CastStaffing({
       setScopeCast([]);
       return;
     }
-    setLoading(true);
     setError("");
     try {
       const pw = await readCast(project.project_id, { workflow_id: resolvedWfId });
@@ -190,7 +200,7 @@ export function CastStaffing({
     } catch (e) {
       setError(friendlyError(e));
     } finally {
-      setLoading(false);
+      setCastFor(castScopeKey(resolvedWfId, scopePkgId));
     }
   }, [project.project_id, resolvedWfId, isPkg, scopePkgId]);
 
@@ -199,7 +209,11 @@ export function CastStaffing({
   }, [loadCast]);
 
   const loadRoster = useCallback(
-    () => listOfficerRoster().then(setRoster).catch(() => setRoster([])),
+    () =>
+      listOfficerRoster()
+        .then(setRoster)
+        .catch(() => setRoster([]))
+        .finally(() => setRosterSettled(true)),
     [],
   );
 
@@ -405,7 +419,13 @@ export function CastStaffing({
       </p>
     );
   }
-  if (loading && steps.length === 0) return <p className="text-xs text-gray-400">Loading…</p>;
+  // ⚠ Not `loading && steps.length === 0`: that let the levels render once the steps were in and
+  // the cast or roster were not, so a staffed slot read as empty and its level opened on a false
+  // "Needs an officer" (GRM-107). Nothing is drawn until every answer the level depends on is in.
+  // A reload after an assignment does not re-enter this state — `castFor` is already set.
+  if (!staffingSettled({ stepsFor, castFor, rosterSettled }, resolvedWfId, scopePkgId)) {
+    return <p className="text-xs text-gray-400">Loading…</p>;
+  }
   if (steps.length === 0) return <p className="text-sm text-gray-500">This workflow has no steps yet.</p>;
 
   return (
