@@ -1,0 +1,103 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Organizations — search &amp; filters (GRM-086)</title>
+<style>
+  :root{--ink:#1f2937;--mute:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--bg:#f9fafb;--blue:#1d4ed8;--blue-bg:#eff6ff}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--ink);
+       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:860px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px}
+  .sub{color:var(--mute);margin:0 0 20px;font-size:13px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:20px}
+  .bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
+  .search{flex:1 1 260px;min-width:180px;display:flex;align-items:center;gap:7px;
+          border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;background:#fff}
+  .search span{color:var(--faint)}
+  select{border:1px solid #d1d5db;border-radius:6px;padding:7px 8px;background:#fff;font:inherit;color:var(--ink)}
+  .count{font-size:12px;color:var(--mute);margin:0 0 10px}
+  .grp{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+       color:var(--faint);margin:16px 0 6px}
+  ul{list-style:none;margin:0;padding:0}
+  li{padding:5px 0;border-bottom:1px solid #f3f4f6}
+  .nm{font-weight:600}
+  .ty{color:var(--mute);font-size:12px;margin-left:6px;font-weight:400}
+  .hit{background:#fef9c3;border-radius:3px;padding:0 2px}
+  /* Ancestors are CONTEXT, not results: present, readable, visibly not the answer. */
+  .anc>.nm{font-weight:400;color:var(--faint)}
+  .anc .ty{color:#cbd5e1}
+  .d1{padding-left:20px}.d2{padding-left:40px}.d3{padding-left:60px}
+  .empty{border:1px solid var(--line);background:#f9fafb;border-radius:8px;
+         padding:22px;text-align:center;color:var(--mute)}
+  .empty b{display:block;color:var(--ink);margin-bottom:4px}
+  .link{color:var(--blue);font-weight:600;cursor:pointer;text-decoration:none}
+  .note{border-left:3px solid var(--blue);background:var(--blue-bg);padding:10px 14px;
+        border-radius:0 6px 6px 0;margin:18px 0;font-size:13px}
+  .note b{color:var(--blue)}
+  @media(max-width:420px){body{padding:12px}.search{flex-basis:100%}}
+</style>
+<div class="wrap">
+  <h1>Organizations — search &amp; filters</h1>
+  <p class="sub">
+    Wireframe for <code>GRM-086</code>. Binds <b>IA and layout only</b> (<code>05_frontend</code>
+    rule 9a.2) — not colour, not copy, not component structure. Read with
+    <a class="link" href="../../sprints/2026-09_settings_findability/DESIGN-settings-findability.md">DESIGN §2.2</a>.
+  </p>
+
+  <div class="note">
+    <b>The one decision this drawing exists to make.</b> The organization list is a <b>forest</b>,
+    not a table. A filter that returns matches alone flattens it, and a match without the line
+    above it is not an answer — “Division Office” means nothing; “DOR → Provincial Office 1 →
+    Division Office” is the answer. So <b>matches keep their ancestors</b>, and ancestors render
+    as context: present, greyed, not counted.
+  </div>
+
+  <!-- ── State 1: filtered ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="bar">
+      <div class="search"><span>⌕</span><span>jhapa</span></div>
+      <select><option>Type — any</option><option selected>Division office</option></select>
+      <select><option selected>Area — any</option></select>
+    </div>
+    <p class="count">2 organizations match “jhapa”. 3 more shown to place them.</p>
+
+    <p class="grp">Government reporting line</p>
+    <ul>
+      <li class="anc"><span class="nm">Ministry of Infrastructure Development</span><span class="ty">Ministry</span></li>
+      <li class="anc d1"><span class="nm">Department of Roads</span><span class="ty">Department</span></li>
+      <li class="anc d2"><span class="nm">Provincial Office 1</span><span class="ty">Provincial office</span></li>
+      <li class="d3"><span class="nm">Division Road Office, <span class="hit">Jhapa</span></span><span class="ty">Division office</span></li>
+      <li class="d3"><span class="nm">Division Bridge Office, <span class="hit">Jhapa</span></span><span class="ty">Division office</span></li>
+    </ul>
+
+    <p class="grp">Independent organizations</p>
+    <ul><li style="color:var(--faint);border:0">None match.</li></ul>
+  </div>
+
+  <div class="note">
+    <b>Why no “parent organization” filter</b>, though it was asked for. The tree <i>is</i> the
+    parent relationship — the filter duplicates clicking a parent node, and it teaches the admin
+    not to read the structure the screen exists to show. Dropped at intake (Q-02).
+  </div>
+
+  <!-- ── State 2: nothing matched ──────────────────────────────────────── -->
+  <div class="card">
+    <div class="bar">
+      <div class="search"><span>⌕</span><span>kathmandu</span></div>
+      <select><option selected>Type — any</option></select>
+      <select><option selected>Area — any</option></select>
+    </div>
+    <div class="empty">
+      <b>No organizations match “kathmandu”.</b>
+      Try a shorter word, or <span class="link">clear the filters</span>.
+    </div>
+  </div>
+
+  <div class="note">
+    <b>Two empty states, never one.</b> “Nothing here yet” and “nothing matched” look identical and
+    mean opposite things — an admin who cannot tell them apart concludes the screen is broken. The
+    no-match state names the term and offers a way out; the no-data state offers <i>Add an
+    organization</i> instead. Same rule already applied to the officer directory in
+    <code>GRM-087</code>.
+  </div>
+</div>

@@ -44,6 +44,14 @@ import { SeverityBadge } from "@/components/shared/SeverityBadge";
 import { ErrorNotice } from "@/components/shared/ErrorNotice";
 import { primary, text as textTokens } from "@/lib/design-tokens";
 import { prettyLocation } from "@/lib/prettyLocation";
+import {
+  officerMatchesSearch,
+  officerMatchesFilter,
+  availableOfficerFilterValues,
+  isOfficerFilterActive,
+  EMPTY_OFFICER_FILTER,
+  type OfficerFilterCriteria,
+} from "@/lib/officerSearch";
 
 const BTN_GHOST =
   "inline-flex items-center gap-1.5 rounded border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50";
@@ -67,6 +75,9 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
 
   const [q, setQ] = useState("");
   const [trackFilter, setTrackFilter] = useState<TrackFilterValue>("all");
+  /** Organisation / project / area (GRM-088). The Standard/SEAH track stays separate: it
+   *  partitions by sensitivity and is permission-gated, which is a different kind of control. */
+  const [filter, setFilter] = useState<OfficerFilterCriteria>(EMPTY_OFFICER_FILTER);
 
   const [menuFor, setMenuFor] = useState<string | null>(null);
   const [manageOfficer, setManageOfficer] = useState<OfficerRosterEntry | null>(null);
@@ -147,20 +158,31 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
     o.role_keys.some((rk) => seahRoleKeys.has(rk)) ||
     (o.scopes ?? []).some((s) => seahRoleKeys.has(s.role_key));
 
+  // GRM-087: the haystack is `lib/officerSearch.ts` — it covers the Office and Project / area
+  // columns, which the table renders and the old three-field search could not find. The lookups
+  // are the same maps `projectAreaCell` already uses, so this adds no fetch.
+  const searchLookups = useMemo(
+    () => ({ orgById, projectByCode, locationLabel: prettyLocation }),
+    [orgById, projectByCode],
+  );
+
   const filteredOfficers = useMemo(() => {
-    const term = q.trim().toLowerCase();
     return roster.filter((o) => {
+      // The track filter runs FIRST and is unchanged: widening the search must not change which
+      // officers the Standard / SEAH filter admits.
       if (trackFilter === "seah" && !officerIsSeah(o)) return false;
       if (trackFilter === "standard" && officerIsSeah(o) && o.role_keys.every((rk) => seahRoleKeys.has(rk)))
         return false;
-      if (!term) return true;
-      const haystack = [o.display_name, o.email ?? "", ...(o.positions ?? [])]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(term);
+      if (!officerMatchesFilter(o, filter)) return false;
+      return officerMatchesSearch(o, q, searchLookups);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roster, q, trackFilter, seahRoleKeys]);
+  }, [roster, q, trackFilter, seahRoleKeys, searchLookups, filter]);
+
+  /* Options come from the ROSTER, not from the full org/project lists: a filter offering an
+     organisation that employs nobody is a control whose only outcome is an empty table. */
+  const filterChoices = useMemo(() => availableOfficerFilterValues(roster), [roster]);
+  const anyFilterOn = isOfficerFilterActive(filter) || trackFilter !== "all" || q.trim() !== "";
 
   // Dual-hat: one row per active position; fall back to a single row for legacy no-position officers.
   const rows: FlatRow[] = useMemo(() => {
@@ -241,7 +263,11 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search name, email, or position…"
+            placeholder="Search name, email, position, office, project, or area…"
+            /* Stable handle for tests and screen readers. The placeholder is COPY and changed
+               with GRM-087; a spec keyed on it broke, which is exactly why a control needs a
+               name that is not its wording. */
+            aria-label="Search officers"
             className="w-full text-sm outline-none"
           />
         </div>
@@ -263,15 +289,84 @@ export function OfficersDirectory({ canManage }: { canManage: boolean }) {
         ) : null}
       </div>
 
+      {/* GRM-088 — the same three axes the table's Office and Project / area columns show, built
+          on what GRM-086 established for organisations. They AND with the search term and with
+          the track filter: adding a control narrows, never widens. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={filter.organizationId}
+          onChange={(e) => setFilter((f) => ({ ...f, organizationId: e.target.value }))}
+          aria-label="Office"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Office — any</option>
+          {filterChoices.organizationIds.map((id) => (
+            <option key={id} value={id}>{orgById.get(id)?.name ?? id}</option>
+          ))}
+        </select>
+        <select
+          value={filter.projectCode}
+          onChange={(e) => setFilter((f) => ({ ...f, projectCode: e.target.value }))}
+          aria-label="Project"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Project — any</option>
+          {filterChoices.projectCodes.map((c) => (
+            <option key={c} value={c}>{projectByCode.get(c)?.name ?? c}</option>
+          ))}
+        </select>
+        <select
+          value={filter.locationCode}
+          onChange={(e) => setFilter((f) => ({ ...f, locationCode: e.target.value }))}
+          aria-label="Search area"
+          className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm"
+        >
+          <option value="">Area — any</option>
+          {filterChoices.locationCodes.map((c) => (
+            <option key={c} value={c}>{prettyLocation(c)}</option>
+          ))}
+        </select>
+        {anyFilterOn && (
+          <button
+            type="button"
+            onClick={() => { setQ(""); setTrackFilter("all"); setFilter(EMPTY_OFFICER_FILTER); }}
+            className={`text-sm font-medium ${primary.text} hover:underline`}
+          >
+            Clear filters
+          </button>
+        )}
+      </div>
+
       <p className={`text-xs ${textTokens.muted}`}>
         Showing {rows.length} {rows.length === 1 ? "position" : "positions"} across{" "}
         {filteredOfficers.length} {filteredOfficers.length === 1 ? "officer" : "officers"}.
       </p>
 
       {rows.length === 0 ? (
-        <p className={`rounded border border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm ${textTokens.secondary}`}>
-          No officers match{q.trim() ? ` “${q.trim()}”` : ""}.
-        </p>
+        /* Two different empty states, not one (GRM-087, DESIGN §5). "Nothing here" and "nothing
+           matched what you typed" look identical and mean opposite things — and an admin who
+           cannot tell them apart concludes the directory is broken. Widening the search made this
+           worse before it made it better: more fields means more ways to type a term that finds
+           nothing. */
+        <div className={`rounded border border-gray-200 bg-gray-50 px-3 py-6 text-center text-sm ${textTokens.secondary}`}>
+          {roster.length === 0 ? (
+            <p>No officers yet. Use Invite to add the first one.</p>
+          ) : (
+            <>
+              <p>
+                No officers match{q.trim() ? ` “${q.trim()}”` : ""}
+                {trackFilter !== "all" ? ` in ${trackFilter === "seah" ? "SEAH" : "Standard"}` : ""}.
+              </p>
+              <button
+                type="button"
+                onClick={() => { setQ(""); setTrackFilter("all"); setFilter(EMPTY_OFFICER_FILTER); }}
+                className={`mt-2 text-sm font-medium ${primary.text} hover:underline`}
+              >
+                Clear filters
+              </button>
+            </>
+          )}
+        </div>
       ) : (
         <div className="overflow-x-auto rounded border border-gray-200">
           <table className="w-full min-w-[52rem] text-left text-sm">

@@ -1,6 +1,6 @@
 # Projects and packages
 
-**Status:** Product reference — **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
+**Status:** Product reference — **last reviewed 2026-09-07** (`GRM-089`: inline organization creation in both Organizations pickers; the as-built component list corrected — it named one component that does not exist and one that nothing imports. `GRM-090`: §5A.7 — staffing levels collapse, closed unless a required slot is unstaffed, and the picker can invite). Earlier **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
 **UI:** Settings → **Projects & packages**  
 **Code:** `ticketing/api/routers/locations.py` (projects/packages), `ticketing/services/project_go_live.py`, `ticketing/services/project_types.py`  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)
@@ -143,7 +143,32 @@ List columns: name, short code, actor org summary, location count.
 | 6 | **Organizations** | Every slot the type names, filled project-wide, plus the packages that use a different one (§5C.3) |
 | 7 | **Staffing** | Fill each workflow level's cast — position-first (§5A) |
 
-Current as-built components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal` (the redesign replaces the old `ProjectActorAddRow` + actor sections).
+**As-built components — corrected 2026-09-07 (`GRM-089`), measured against the tree rather than
+remembered.** This line previously named `ProjectGoLivePanel`, `ProjectStaffingSection` and
+`ProjectOfficerModal`; **`ProjectStaffingSection` does not exist** and `ProjectOfficerModal` is
+imported by nothing.
+
+| Section | Component |
+|---|---|
+| Overview & go-live | `ProjectGoLivePanel` |
+| Organizations | `ProjectPartnersSection` |
+| Staffing | `ProjectCastSection` → `CastStaffing` (one tab per workflow) |
+| Packages | `PackageRow`, `PackageCreateModal` |
+
+⭐ **`ProjectActorAddRow` is still in the tree and still imported by nothing.** It was taken out of
+the editor by `21176f5c` (2026-08-04) along with the deprecated actor-role table — and it carried the
+**create-an-organization-inline** flow. [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it)
+reinstated the catalog days later, this section was rebuilt for it, and that flow was never carried
+across. `GRM-089` restores it **in `ProjectPartnersSection`** rather than by re-mounting the old
+component, because the pane's shape changed with the model: per-role blocks with a picker in each,
+not one role + org + Add row.
+
+**Naming an organization that does not exist yet (`GRM-089`).** Both pickers — project-wide and the
+per-package override — end with **"+ Create a new organization…"**, which opens the standard
+`OrgCreateModal`. On save the organization is **created, lifted into the picker's list, and linked
+into the slot that asked**, in that order: if the link fails the organization still exists and must
+remain selectable. The new organization's country defaults to the **project's** country. Cancelling
+returns to the picker it was opened from, not to the button before it.
 
 **Staffing & officer assignment** are specified authoritatively in **[§5A](#5a-staffing--position-first-officer-assignment)** (position-first). Coverage gaps show inline per workflow level and in the go-live rail (§7).
 
@@ -362,6 +387,40 @@ The **go-live gate follows the same flag** and stops guessing (§7 C1/C5): a per
 officer on **every active package** — a project-wide officer does not answer it, and neither does the
 country L1 fallback, which is an assignment safety net rather than a staffing plan. A project-wide
 level needs one project-wide officer and is never asked about packages.
+
+### 5A.7 Progressive disclosure and inline invite (`GRM-090`, 2026-09-07)
+
+**Levels collapse**, using the same disclosure the Packages section uses — one idiom on one setup
+screen, not two.
+
+⭐ **The default state is the design decision, not a preference.** **A level is closed unless it has
+an unmet required slot.** Collapsing everything would hide precisely what the pane exists to
+surface: on the live KL Road project that is two unstaffed required slots, and the go-live rail's
+*"2 blockers"* would become the only place they are visible. Leaving everything open is the problem
+the collapse is fixing — the blockers sit below a screen of controls that are already satisfied.
+
+- **The count is in words on the header** — *"Needs an officer"* / *"Needs 2 officers"* — never a
+  coloured dot alone ([`ui/05`](ui/05_ui_copy_style.md) rule 6,
+  [`05_frontend`](../engineering/05_frontend.md) rule 8.2).
+- **It stays visible when the level is open**, because the go-live rail is counting the same thing
+  and the two must not disagree.
+- ⚠ **A package scope never counts as blocking**, mirroring the existing `blocking` predicate: a
+  per-package level inherits the project-wide officer unless overridden, so an empty package slot
+  means *"same as project"*, not *"nobody"*. Counting those would open every level on every project
+  and undo the feature.
+- **Open/closed is seeded once, then owned by the admin.** Deriving it on every render would
+  collapse a level under the cursor at the moment its last slot was filled.
+
+The predicate is [`castDisclosure.ts`](../../channels/ticketing-ui/components/settings/projects/castDisclosure.ts),
+pure and unit-tested.
+
+**Inviting an officer without leaving the pane.** The officer picker used to end at *"invite one
+under Organizations & officers"* — a correct instruction that costs the admin their place in a
+seven-section flow. It now offers **"+ Invite a new officer"**, opening `ProjectOfficerModal`
+pre-set to **the slot's own role**, so the invite fills the job that was unstaffed rather than
+offering a catalog. On success the roster and the cast reload behind the still-open picker. The
+control is disabled until the project names an implementing agency, for the same reason assignment
+is: a scope must be written against an organization.
 
 ---
 
