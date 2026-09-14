@@ -1,6 +1,6 @@
 # Projects and packages
 
-**Status:** Product reference — **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
+**Status:** Product reference — **last reviewed 2026-09-07** (`GRM-089`: inline organization creation in both Organizations pickers; the as-built component list corrected — it named one component that does not exist and one that nothing imports). Earlier **reconciled 2026-07-30**: reflects the participants DECISION (2026-07-10, actor-role catalog → implementing agency + donors + staffing) and the staffing/go-live redesign (2026-07-30)  
 **UI:** Settings → **Projects & packages**  
 **Code:** `ticketing/api/routers/locations.py` (projects/packages), `ticketing/services/project_go_live.py`, `ticketing/services/project_types.py`  
 **Related:** [10_settings_overview.md](10_settings_overview.md), [12_workflows_configuration.md](12_workflows_configuration.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [07_officer_management_and_assignment.md](07_officer_management_and_assignment.md)
@@ -143,7 +143,32 @@ List columns: name, short code, actor org summary, location count.
 | 6 | **Organizations** | Every slot the type names, filled project-wide, plus the packages that use a different one (§5C.3) |
 | 7 | **Staffing** | Fill each workflow level's cast — position-first (§5A) |
 
-Current as-built components: `ProjectGoLivePanel`, `ProjectStaffingSection`, `ProjectOfficerModal` (the redesign replaces the old `ProjectActorAddRow` + actor sections).
+**As-built components — corrected 2026-09-07 (`GRM-089`), measured against the tree rather than
+remembered.** This line previously named `ProjectGoLivePanel`, `ProjectStaffingSection` and
+`ProjectOfficerModal`; **`ProjectStaffingSection` does not exist** and `ProjectOfficerModal` is
+imported by nothing.
+
+| Section | Component |
+|---|---|
+| Overview & go-live | `ProjectGoLivePanel` |
+| Organizations | `ProjectPartnersSection` |
+| Staffing | `ProjectCastSection` → `CastStaffing` (one tab per workflow) |
+| Packages | `PackageRow`, `PackageCreateModal` |
+
+⭐ **`ProjectActorAddRow` is still in the tree and still imported by nothing.** It was taken out of
+the editor by `21176f5c` (2026-08-04) along with the deprecated actor-role table — and it carried the
+**create-an-organization-inline** flow. [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it)
+reinstated the catalog days later, this section was rebuilt for it, and that flow was never carried
+across. `GRM-089` restores it **in `ProjectPartnersSection`** rather than by re-mounting the old
+component, because the pane's shape changed with the model: per-role blocks with a picker in each,
+not one role + org + Add row.
+
+**Naming an organization that does not exist yet (`GRM-089`).** Both pickers — project-wide and the
+per-package override — end with **"+ Create a new organization…"**, which opens the standard
+`OrgCreateModal`. On save the organization is **created, lifted into the picker's list, and linked
+into the slot that asked**, in that order: if the link fails the organization still exists and must
+remain selectable. The new organization's country defaults to the **project's** country. Cancelling
+returns to the picker it was opened from, not to the button before it.
 
 **Staffing & officer assignment** are specified authoritatively in **[§5A](#5a-staffing--position-first-officer-assignment)** (position-first). Coverage gaps show inline per workflow level and in the go-live rail (§7).
 
