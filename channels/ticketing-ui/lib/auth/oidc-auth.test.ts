@@ -81,6 +81,82 @@ describe("refreshTokens single-flight (H2-01)", () => {
   });
 });
 
+describe("refresh runs through the server, as the client that issued the session (GRM-104)", () => {
+  // ⚠ The single-flight tests above mock fetch WITHOUT checking where it posts or as which client,
+  // and they stub an issuer. Both are why they passed for the whole life of the defect: refresh
+  // posted straight to Keycloak as the public `ticketing-ui` client, with no secret, a token that
+  // password sign-in issues to the CONFIDENTIAL `ticketing-api` client. Keycloak refused every
+  // time and every officer was signed out at the hour. These pin the destination and the payload.
+
+  function capture(ok = true) {
+    const calls: { url: string; body: Record<string, unknown> }[] = [];
+    vi.stubGlobal("fetch", async (url: string, init?: { body?: string }) => {
+      calls.push({ url: String(url), body: init?.body ? JSON.parse(init.body) : {} });
+      return {
+        ok,
+        status: ok ? 200 : 401,
+        json: async () =>
+          ok
+            ? {
+                access_token: jwt({ sub: "o@x", email: "o@x", exp: 9999999999 }),
+                id_token: jwt({ sub: "o@x", email: "o@x", exp: 9999999999 }),
+                refresh_token: "rotated",
+              }
+            : { detail: { code: "session_expired" } },
+      };
+    });
+    return calls;
+  }
+
+  it("posts to the same-origin /api/v1/auth/refresh and never to Keycloak", async () => {
+    ls.setItem("grm_refresh_token", "r1");
+    const calls = capture();
+    const { refreshTokens } = await import("./oidc-auth");
+    await refreshTokens();
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe("/api/v1/auth/refresh");
+    expect(calls.some((c) => /openid-connect|realms\//.test(c.url))).toBe(false);
+  });
+
+  it("sends ONLY the refresh token — no client id, no secret, from the browser", async () => {
+    // Choosing the client and holding its secret is the server's job; a browser that sends
+    // client_id is a browser guessing, and guessing is exactly what failed.
+    ls.setItem("grm_refresh_token", "r1");
+    const calls = capture();
+    const { refreshTokens } = await import("./oidc-auth");
+    await refreshTokens();
+
+    expect(Object.keys(calls[0].body)).toEqual(["refresh_token"]);
+    expect(calls[0].body.refresh_token).toBe("r1");
+  });
+
+  it("works in a build with NO Keycloak issuer — the CI-built image", async () => {
+    // ⭐ The case the old tests hid by stubbing NEXT_PUBLIC_OIDC_ISSUER. ui:<sha> images are built
+    // by images.yml, which never passes it; refresh used to bail out on `!OIDC_ISSUER` there.
+    vi.stubEnv("NEXT_PUBLIC_OIDC_ISSUER", "");
+    ls.setItem("grm_refresh_token", "r1");
+    const calls = capture();
+    const { refreshTokens } = await import("./oidc-auth");
+
+    expect(await refreshTokens()).toBeTruthy();
+    expect(calls).toHaveLength(1);
+    // Keycloak issues a NEW refresh token on every refresh, so the newest must be kept. ⚠ Not the
+    // same as "used tokens are revoked": measured 2026-09-14, the realm does NOT revoke them
+    // (revokeRefreshToken is never set) — see GRM-105.
+    expect(ls.getItem("grm_refresh_token")).toBe("rotated");
+  });
+
+  it("a refused refresh returns null and keeps the stored token untouched for sign-out", async () => {
+    ls.setItem("grm_refresh_token", "stale");
+    capture(false);
+    const { refreshTokens } = await import("./oidc-auth");
+
+    expect(await refreshTokens()).toBeNull();
+    expect(ls.getItem("grm_refresh_token")).toBe("stale");
+  });
+});
+
 describe("signOut: checked revoke, same-origin on success, Keycloak as fallback", () => {
   // Option 3. The same-origin redirect is the benefit — no cross-origin hop means no separate
   // app window and no spurious LOGOUT_ERROR against an already-dead session. The front-channel

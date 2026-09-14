@@ -1,7 +1,7 @@
 # Auth — Keycloak (canonical auth ops doc)
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/AUTH_MIGRATION.md` (the Cognito→Keycloak migration notes). Keycloak is the identity provider **everywhere** (dev auth profile, AWS staging, DOR prod); Cognito is fully retired.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-14 — §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
 
 ## 1. Architecture
 
@@ -10,8 +10,8 @@ Keycloak 26 (`quay.io/keycloak/keycloak:26.0.7`) runs as the `keycloak` compose 
 | Piece | Value |
 |---|---|
 | Realm | `grm` |
-| Client `ticketing-ui` | public, PKCE, browser login for the officer UI |
-| Client `ticketing-api` | confidential; JWKS validation target + service account. An audience mapper injects `ticketing-api` into `aud` so the backend's `jwt.decode(audience="ticketing-api")` accepts tokens |
+| Client `ticketing-ui` | public, PKCE. ⚠ **Not how officers sign in** — the browser redirect flow it serves is never started by the UI (corrected 2026-09-14, `GRM-104`). Its only live use is the front-channel sign-out fallback |
+| Client `ticketing-api` | **confidential** — ⭐ **every officer session**: the email + password form signs in against it, and refresh and sign-out run against it **on the server**, where its secret lives. Also the JWKS validation target and service account; an audience mapper injects `ticketing-api` into access tokens |
 | Claim mappers | user attributes → `custom:grm_roles`, `custom:organization_id`, `custom:location_code` (Cognito-compatible names — business logic unchanged); `sub` → `CurrentUser.user_id` |
 | JWT validation | `ticketing/auth/keycloak_jwt.py` — JWKS fetched via Docker DNS, cached 5 min |
 | Setup script | `python -m ticketing.auth.keycloak_setup` (**idempotent**: realm, clients, mappers, token lifespans, realm SMTP, login theme, demo officers). Run via `make keycloak-setup` |
@@ -37,6 +37,45 @@ it up; the admin UI is at `http://localhost:18080` (`admin` / `$KEYCLOAK_ADMIN_P
 The frontend resolves its mode through a single module,
 `channels/ticketing-ui/lib/auth/runtime-config.ts` (reads `NEXT_PUBLIC_AUTH_MODE`, which
 mirrors `AUTH_MODE`).
+
+### Sessions: sign-in, renewal, sign-out — all on the server (`GRM-104`, 2026-09-14)
+
+**One rule: the browser never talks to Keycloak's token endpoint.** Every officer session is issued to
+`ticketing-api`, a confidential client, and only the server holds its secret — so choosing the client
+and supplying the credentials is the server's job at every step.
+
+| Step | Browser calls (same-origin) | Server does |
+|---|---|---|
+| Sign in | `POST /api/v1/auth/login` | password grant as `ticketing-api` + secret |
+| **Renew** | **`POST /api/v1/auth/refresh`** `{refresh_token}` | refresh grant as the client the token was issued to — secret only for `ticketing-api` |
+| Sign out | `POST /api/v1/auth/logout` `{refresh_token}` | revokes as the issuing client; the browser falls back to Keycloak's logout page only if that is unconfirmed |
+
+⛔ **Why renewal moved, and the cost of not knowing this.** Renewal used to run in the browser, posting
+straight to Keycloak as `ticketing-ui` with no secret. For a token issued to `ticketing-api` that can
+never work — **measured against a real Keycloak 2026-09-14:** `HTTP 400 invalid_grant: Invalid refresh
+token. Token client and authorized client don't match`. So every officer was signed out when the
+1-hour access token expired, for as long as password sign-in has existed. Sign-out had made and fixed
+the identical mistake earlier; renewal was never given the same treatment. The server-side renewal was
+then driven against the same Keycloak: new access token, new refresh token, and a second renewal with
+the new one all succeed.
+
+⚠ **Renewal refuses tokens for any other client** before Keycloak is asked. Sign-out forwards whatever
+client a token names, because it only ends sessions; renewal *grants* tokens from an unauthenticated
+endpoint, reading an unverified `azp`, so it accepts only `ticketing-api` and `ticketing-ui`.
+
+⚠ **The security trade this makes, stated plainly.** Before, a stolen refresh token was useless on its
+own — renewing it needed the server's secret. Now `/api/v1/auth/refresh` supplies that secret for
+whoever presents the token, so **a leaked refresh token is a session for up to the SSO maximum (8 h)**.
+That is what an 8-hour session *is*, and it is standard for this pattern — but its usual paired control
+is missing: **the realm does not revoke used refresh tokens** (`revokeRefreshToken` is never set, so
+Keycloak's default, off, applies — measured locally: a spent token was accepted again). Enabling it is
+`GRM-105`, and is not a one-line change: renewal is deduplicated per tab, so two open tabs would race.
+
+**The issuer, where it is still needed** (the sign-out fallback): `NEXT_PUBLIC_OIDC_ISSUER` if a build
+sets it; otherwise `${window.location.origin}/keycloak/realms/grm`. ⚠ CI-built images never set it
+(`images.yml` passes only `NEXT_PUBLIC_AUTH_MODE`), which is why the fallback resolves from the origin.
+Keycloak answers on every host nginx proxies `/keycloak/` for and keeps advertising its pinned issuer,
+so backend validation is unaffected.
 
 ### Hostname patterns (the `iss`-claim trap)
 
@@ -100,7 +139,7 @@ Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_off
 - [ ] **Webhook secret:** strong `KEYCLOAK_WEBHOOK_SECRET`, matching the event-listener extension config.
 - [ ] **Realm SMTP configured** and invite email tested (`scripts/ops/test-smtp.sh`).
 - [ ] **Redirect URIs:** update in `keycloak_setup.py` for the new domain, re-run `keycloak-setup`.
-- [ ] **Token lifespans:** access 1 h, SSO/refresh 8 h (setup script applies access; verify realm settings), refresh-token rotation ON.
+- [ ] **Token lifespans:** access 1 h, SSO/refresh 8 h (setup script applies access; verify realm settings). ⛔ **"Refresh-token rotation ON" was stated here and is not true** (corrected 2026-09-14): Keycloak issues a new refresh token on every renewal, but the setup script never sets `revokeRefreshToken`, so a **used token stays valid** until it expires. Enabling revocation is `GRM-105` — it needs cross-tab coordination first, or two open tabs will sign each other out.
 - [ ] **Brute-force protection:** enabled by the setup script — verify in realm settings.
 - [ ] ⭐ **Event storage:** applied by the setup script (`setup_realm_event_logging` — login + admin events, 90-day expiration). **Verify, do not assume**, and re-run `make keycloak-setup` on every environment:
       ```bash
