@@ -1,7 +1,7 @@
 # Frontend standard — officer portal
 
 **Status:** authoritative (2026-09-06). Rules for **code** in `channels/ticketing-ui/` (Next.js 16 App Router, React 19, TypeScript, Tailwind v4).
-**Last updated:** 2026-09-07 — §9a gains **rule 9a.4**: once a screen ships, the shipped screen is the wireframe baseline and a mockup of it is retired rather than maintained. The `ui/04` row is marked **superseded** rather than merely stale, closing `GRM-064`. Earlier: §9a added: the design gate (G-DESIGN) is written down, having been followed once by instinct and recorded nowhere; plus what the two committed `ui/*.html` mockups bind, and what they do not.
+**Last updated:** 2026-09-07 — `ui/07` added to the §9a table: the filter bar over a forest, the one `settings-ui` surface rule 9a.4 still demanded a wireframe for. Earlier the same day, §9a gains **rule 9a.4**: once a screen ships, the shipped screen is the wireframe baseline and a mockup of it is retired rather than maintained. The `ui/04` row is marked **superseded** rather than merely stale, closing `GRM-064`. Earlier: §9a added: the design gate (G-DESIGN) is written down, having been followed once by instinct and recorded nowhere; plus what the two committed `ui/*.html` mockups bind, and what they do not.
 **This doc does not cover visuals or wording.** Two standards already own those and win on their subjects:
 
 | Subject | Owner |
@@ -179,12 +179,13 @@ steps 2, 3 and 5. It does **not** bind colour values, copy, or component structu
 and the implementation contract respectively. *Why: a mockup read as binding on everything makes the
 design system advisory, which is backwards.*
 
-The two live mockups, and what each binds:
+The live mockups, and what each binds:
 
 | Mockup | Binds | Read with |
 |---|---|---|
 | ~~[`ui/04_projects_packages_redesign.html`](../ticketing_system/ui/04_projects_packages_redesign.html)~~ — *"KL Road · Project setup (redesign)"* | ⚠ **SUPERSEDED 2026-09-07 — binds nothing.** The shipped screen (`Settings → Projects & packages`) is the baseline; the file is kept as the historical record of the redesign decision and carries a banner saying so | [`04_projects_packages_ux_review.md`](../ticketing_system/ui/04_projects_packages_ux_review.md) · closed `GRM-064` |
 | [`ui/06_workflows_step_cast_editor.html`](../ticketing_system/ui/06_workflows_step_cast_editor.html) — *"Workflows — step cast editor"* | The step/cast editing model: which roles a step casts, and how exclusions read | [`01_ui_spec.md`](../ticketing_system/ui/01_ui_spec.md) |
+| [`ui/07_org_directory_filters.html`](../ticketing_system/ui/07_org_directory_filters.html) — *"Organizations — search & filters"* | A filter bar over a **forest**, and the rule that a match keeps its ancestors as context rather than flattening to a list | [`10_settings_overview.md`](../ticketing_system/10_settings_overview.md) §2.1 · built for `GRM-086`, and the one surface in its lane that rule 9a.4 still required a wireframe for |
 
 **Rule 9a.3 — A stale mockup is marked stale where it is cited, not silently left to mislead.** *Why:
 a mockup is trusted precisely because it is concrete; a wrong one is therefore more expensive than no

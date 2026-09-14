@@ -1,7 +1,7 @@
 # Settings — overview and documentation index
 
 **Status:** Product reference (June 2026). Admin ladder locked in [11_roles_and_permissions.md](11_roles_and_permissions.md); partial implementation — see §8 there.  
-**Last updated:** 2026-09-07 — `GRM-085`: the main tab order is now **Projects & packages · Organizations & officers · Workflows · Settings**, reordered in the three tables that list it (§1, §2, §8) and given its reason in §2. Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-07 — §2.1 added: search and filters on the organisation tree (`GRM-086`), including why a match keeps its ancestors and why the server's `q` cannot serve this screen. Earlier the same day, `GRM-085`: the main tab order is now **Projects & packages · Organizations & officers · Workflows · Settings**, reordered in the three tables that list it (§1, §2, §8) and given its reason in §2. Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **UI:** `channels/ticketing-ui/app/settings/page.tsx`  
 **Related:** [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md), [03_ticketing_api_integration.md](03_ticketing_api_integration.md)
 
@@ -41,6 +41,41 @@ New tickets use **workflows linked on the project**, resolve context from **pack
 > here, because the project console sequences those dependencies itself (Identity → Grievance
 > workflows → Packages → Organizations → Staffing) and the go-live panel blocks on what is missing.
 > **If the project console ever stops sequencing setup, this ordering loses its justification.**
+
+### 2.1 Finding an organisation in the tree (`GRM-086`, 2026-09-07)
+
+The organisation surface is a **forest** — the government reporting line plus independent roots —
+and until this item it carried **no search and no filter at all**.
+
+**Search filters in place, and a match keeps its ancestors.** A hit deep in the forest is not an
+answer on its own: *"Division Office"* means nothing, *"DOR → Provincial Office 1 → Division
+Office"* is the answer. Ancestors render as **context** — present, de-emphasised — and are **not
+counted**, so five rows on screen read honestly as *"2 organisations match. 3 more shown to place
+them."*
+
+| Control | Reads | Note |
+|---|---|---|
+| Search | name · Nepali name · id | |
+| **Type** | `unit_type` | ⚠ **Not `org_category`** — category is root-only and inherited, so filtering on it silently drops every child whose column is null. The two groups already express category |
+| **Area** | `territory_location_code` | Options are the codes present on real organisations, not a location hierarchy — so it stays correct outside Nepal. ⚠ A level-grouped picker needs `location_level_defs` and is **not built** |
+
+**No parent-organisation filter**, though it was asked for: the tree *is* the parent relationship,
+so the control duplicates clicking a parent node while training the admin not to read the structure
+the screen exists to show (Q-02).
+
+⭐ **All of it is client-side, and the server's `q` parameter is deliberately unused here.**
+`GET /api/v1/organizations?q=` returns a **flat filtered set**, so an organisation whose parent does
+not match comes back *without its parent* and the forest cannot be rebuilt — a structural limit, not
+a missing feature. `OrgTree` already fetches the whole forest in one call with every filter field on
+each node. The predicate is
+[`orgFilter.ts`](../../channels/ticketing-ui/components/settings/org/orgFilter.ts), pure and
+unit-tested; the wireframe it was built from is
+[`ui/07_org_directory_filters.html`](ui/07_org_directory_filters.html).
+
+**Two empty states**, as on the officer directory: *"No organisation units yet"* offers Add; *"No
+organisations match …"* names the term and offers **Clear the filters**. A filtered tree is forced
+open, and **clearing the filter restores the default expansion** — otherwise the forest is left
+half-collapsed and the filter appears to have broken it.
 
 **Design rule:** Global directory, geographic reference data, and per-project routing stay in separate tabs. Tab 3 is the single place admins configure *how this project works*.
 
