@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
+**Last updated:** 2026-09-14 — §6a: the rollback promise narrowed to "only when no migration landed in between", with the check, what to do instead, and the 5 migrations whose downgrade restores nothing (`GRM-102`); new subsection on how every staging deploy now validates, applies and reloads nginx, and why production still needs a recreate (`GRM-103`). Earlier: §6a: the migration step now runs the deployed image and refuses a missing one (`GRM-099`), and the rollback line is marked as not valid across a migration (`GRM-102`) rather than rewritten, because which side moves is an open fork. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -135,7 +135,7 @@ builds. The `aws-*` targets set `0`; everything else defaults to `1`.
 
 ```bash
 make aws-deploy IMAGE_TAG=<short-sha>        # deploy that commit's images
-make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ that is the rollback — no rebuild
+make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ rollback, no rebuild — ONLY if no migration landed in between (below)
 make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on the box instead
 ```
 
@@ -143,6 +143,54 @@ make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on th
 a version meant rebuilding an older commit *on the deploy host* — the operation that took
 staging off the network for 41 minutes on 2026-09-04. Now it is a pull of an image that already
 exists, and it takes as long as the download.
+
+⛔ **A tag rollback is only a rollback when no migration landed between the two tags** (`GRM-102`,
+narrowed 2026-09-14). Check before you run it:
+
+```bash
+git diff --name-only <older-sha> <current-sha> -- \
+  ticketing/migrations/versions migrations/public/versions ops/migrations/versions
+```
+
+**Empty → the tag rollback above is safe.** **Anything listed → do not run it**, because the deploy
+starts the containers *before* it migrates: the older code comes up against the newer schema at once,
+and then `alembic upgrade head` cannot find the database's revision in the older code and stops. The
+site is left running old code on a new schema. (Before `GRM-099` it was worse — the migration step ran
+the newer checkout's code, found nothing to do, and reported **success** over that mismatch.)
+
+**What to do instead**, in order of preference:
+1. **Roll forward** — fix the problem and deploy a newer tag. Almost always the right answer.
+2. **Downgrade the schema first, deliberately:** take a database backup (`scripts/ops/backup_db.sh`),
+   run `alembic downgrade <the older tag's head>` for each affected stream **using the current image**
+   (the older image does not contain the newer migrations, so it cannot undo them), and only then
+   deploy the older tag. ⚠ **Downgrades have never been exercised here.** 59 of 64 migrations implement
+   one; **5 have an empty `downgrade()`** — all data rewrites (`d6f8a0b2`, `g0h2i4j6`, `q9r7s1u3`,
+   `r4t6v8x0`, `z2b4d6f8`) — and crossing any of them **reports success while restoring nothing**.
+   That is when you restore the backup instead.
+
+*Why the promise was narrowed rather than the deploy taught to downgrade (owner's call, 2026-09-14):
+automated downgrades would be correct only if every downgrade were tested, and a wrong one destroys
+data. A documented limit is honest now; an untested automatic downgrade would be a new way to lose it.*
+
+### nginx on staging: every `aws-deploy` validates, applies and reloads it (`GRM-103`, 2026-09-14)
+
+nginx is not one of the deployed services, and until this change **no deploy ever touched it** — while
+its site config was a single-file bind mount, which `git pull` cannot update in place (git replaces the
+file with a new inode; the mount stays on the old one). So every nginx change was on disk and **not in
+force**, and `nginx -s reload` — and even `nginx -t` — silently read the stale copy. That is how
+`GRM-014`'s rate limiting sat merged for a week doing nothing.
+
+Staging now mounts the `deployment/nginx` **directory** (which follows the rename) and starts through
+`deployment/nginx/bootstrap.sh`. After the services are up, `aws-deploy` and `aws-deploy-full` run:
+
+1. **validate** the new config in a throwaway container — `bootstrap.sh --test`, same image, same mounts,
+   same certificates. ⚠ Never check with `docker exec … nginx -t` on the running container: with a
+   single-file mount that validates the stale copy and passes a config nobody has tested.
+2. **apply** — `up -d --no-deps nginx`, which recreates only if nginx's compose definition changed;
+3. **reload** — picks up content-only changes; a reload that never succeeds fails the deploy.
+
+⚠ **Production is not converted.** `docker-compose.prod.yml` still mounts its site config as a single
+file, so on production an nginx config change still needs a container **recreate**, not a reload.
 
 **`IMAGE_TAG` is a 7-character short sha**, the same one the build workflow tags with. Find one
 with `git rev-parse --short HEAD` on the commit you want, or read it off the Images run.

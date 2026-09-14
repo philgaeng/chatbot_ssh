@@ -2,7 +2,6 @@
 
 // PKCE-enabled OIDC client for Keycloak (drop-in replacement for CognitoAuthClient).
 
-import { OIDC_CLIENT_ID, OIDC_ISSUER } from "./runtime-config";
 import { isAccessTokenExpired } from "./session-expired";
 import {
   TOKEN_STORAGE,
@@ -37,10 +36,17 @@ function randomToken(bytes = 32): string {
 let refreshPromise: Promise<string | null> | null = null;
 
 /**
- * Exchange the stored refresh token for a fresh access/id/refresh set via the
- * Keycloak refresh-token grant, and persist the rotated tokens. Returns the new
- * access token, or `null` when refresh is impossible (no refresh token / not
- * configured) or the grant is rejected — callers then hard-logout.
+ * Exchange the stored refresh token for a fresh access/id/refresh set, and persist the
+ * rotated tokens. Returns the new access token, or `null` when there is no refresh token
+ * or the server refuses it — callers then hard-logout.
+ *
+ * ⭐ **Through the server, never straight to Keycloak (GRM-104).** Officers sign in with the
+ * password form, which issues tokens to `ticketing-api` — a CONFIDENTIAL client whose secret
+ * only the server holds. This used to post to Keycloak from the browser as the public
+ * `ticketing-ui` client with no secret: the wrong client and no credentials, refused every
+ * time, so every officer was signed out when the 1-hour access token expired. It is the same
+ * finding the sign-out path made (see `revokeRefreshToken` below). The browser sends ONLY the
+ * refresh token; the server picks the client and supplies the secret.
  *
  * **Single-flight:** concurrent callers (e.g. a burst of 401s) share one
  * in-flight POST. Keycloak rotates the refresh token, so a second grant with the
@@ -57,16 +63,16 @@ export function refreshTokens(): Promise<string | null> {
 async function doRefresh(): Promise<string | null> {
   if (typeof window === "undefined") return null;
   const refreshToken = localStorage.getItem(TOKEN_STORAGE.REFRESH_TOKEN);
-  if (!refreshToken || !OIDC_ISSUER || !OIDC_CLIENT_ID) return null;
+  // ⚠ No issuer check any more: this no longer needs one, and the CI-built image has none
+  // (images.yml never passes NEXT_PUBLIC_OIDC_ISSUER). Requiring it is what made the old
+  // version bail out before even trying on every deployed build.
+  if (!refreshToken) return null;
   try {
-    const resp = await fetch(`${OIDC_ISSUER}/protocol/openid-connect/token`, {
+    // Same-origin, same shape as revokeRefreshToken: no CORS, no client credentials in the browser.
+    const resp = await fetch("/api/v1/auth/refresh", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type:    "refresh_token",
-        client_id:     OIDC_CLIENT_ID,
-        refresh_token: refreshToken,
-      }).toString(),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
     if (!resp.ok) return null;
     const tokens = (await resp.json()) as AuthTokens;

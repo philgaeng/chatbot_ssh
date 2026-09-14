@@ -120,6 +120,7 @@ POST /api/v1/admin-scopes/{admin_scope_id}/send-invite
 POST /api/v1/auth/forgot-password
 POST /api/v1/auth/login
 POST /api/v1/auth/logout
+POST /api/v1/auth/refresh
 POST /api/v1/auth/request-invite-link
 POST /api/v1/auth/reset-password
 POST /api/v1/locations/import

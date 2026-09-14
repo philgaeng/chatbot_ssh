@@ -15,6 +15,7 @@ from ticketing.services.auth_login import (
     AuthLoginError,
     login_with_password,
     logout_with_refresh_token,
+    refresh_with_refresh_token,
     request_invite_setup_link,
     request_password_reset,
     reset_password_with_token,
@@ -39,6 +40,10 @@ class LoginResponse(BaseModel):
 
 
 class LogoutRequest(BaseModel):
+    refresh_token: str = Field(..., min_length=10, max_length=8192)
+
+
+class RefreshRequest(BaseModel):
     refresh_token: str = Field(..., min_length=10, max_length=8192)
 
 
@@ -92,6 +97,39 @@ def auth_login(body: LoginRequest, db: Session = Depends(get_db)) -> LoginRespon
 
     if sync_officer_onboarding_status(db, body.email):
         db.commit()
+    return LoginResponse(
+        access_token=tokens["access_token"],
+        id_token=tokens.get("id_token"),
+        refresh_token=tokens.get("refresh_token"),
+        expires_in=int(tokens.get("expires_in") or 3600),
+        token_type=tokens.get("token_type") or "Bearer",
+    )
+
+
+@router.post(
+    "/auth/refresh",
+    response_model=LoginResponse,
+    summary="Renew a session using its refresh token",
+)
+def auth_refresh(body: RefreshRequest) -> LoginResponse:
+    """Refresh a password sign-in session on the server, where the confidential client's secret lives.
+
+    ⭐ **Why the browser cannot do this itself** (`GRM-104`): see `refresh_with_refresh_token`.
+
+    ⚠ **Deliberately not JWT-gated** — by definition the access token has expired when this is
+    called; the refresh token is the credential.
+
+    ⚠ **Unlike `/auth/logout`, a failure here MUST fail.** Sign-out always answers 200 because a
+    failure must not keep anyone signed in. Refresh is the opposite: the browser keys off `resp.ok`,
+    and a 200 would leave it holding an expired access token.
+
+    ⚠ **`response_model` is the boundary.** Only the five token fields reach the browser, whatever
+    else Keycloak's reply carries.
+    """
+    try:
+        tokens = refresh_with_refresh_token(body.refresh_token)
+    except AuthLoginError as exc:
+        raise _http_error(exc) from exc
     return LoginResponse(
         access_token=tokens["access_token"],
         id_token=tokens.get("id_token"),
