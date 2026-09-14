@@ -64,8 +64,13 @@ three of which were **red before the fix**.
 
 ## 5. ⚠ What this does NOT do — the manual half of `A-11` is still the owner's
 
-- **The token does not exist yet**, and this change cannot create it: fine-grained PAT,
-  `read:packages`, this repo only.
+- **The token does not exist yet**, and this change cannot create it: a **classic** PAT with
+  `read:packages` and no other scope. ⚠ **Not fine-grained** — verified against GitHub's docs
+  2026-09-14: *"GitHub Packages only supports authentication using a personal access token
+  (classic)."* `A-11` recommends fine-grained and is **wrong**; see `A-11`'s own evidence, a
+  `403: Resource not accessible by personal access token`, which is that limit and was read as
+  something else. ⚠ A classic PAT cannot be scoped to one repo — read-only and no second scope
+  is the whole control.
 - **`#@secret GHCR_READ_TOKEN` is deliberately NOT added to `.env.shared`.** `gen_env_local.sh`
   fails when the two halves disagree *in either direction*, so a marker with no value in
   `secrets.enc.env` would break `make env-local` for everyone until the value landed. **Add both

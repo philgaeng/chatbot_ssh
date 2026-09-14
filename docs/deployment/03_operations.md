@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
+**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -165,15 +165,29 @@ with `--password-stdin`, never as an argument.
 | **Login fails** | The deploy stops there and names the fallback, rather than failing later inside `compose pull` |
 | **`DEPLOY_BUILD=1`** | No registry, no login, no token. The documented answer when the registry is unreachable *or* uncredentialed |
 
-⚠ **Three manual steps remain, and none of them is code.** ① create the token — fine-grained,
-`read:packages`, this repo only; ② add it as `GHCR_READ_TOKEN` — the value via `make secrets-edit`
+⚠ **Three manual steps remain, and none of them is code.** ① create the token — a **classic**
+PAT with `read:packages` **and no other scope**; ② add it as `GHCR_READ_TOKEN` — the value via `make secrets-edit`
 **and** the `#@secret` marker in `.env.shared`, **in the same change**, because
 `gen_env_local.sh` fails when the two halves disagree in either direction; ③ run `make env-local`
 **on the host**, since `aws-deploy` deliberately does not. Pinned by
 [`tests/repo/test_registry_login.py`](../../tests/repo/test_registry_login.py).
 
+> ⚠ **It must be a classic token, and that is not a preference — verified against GitHub's docs
+> 2026-09-14.** *"GitHub Packages only supports authentication using a personal access token
+> (classic)."* A fine-grained token **cannot** read GHCR container packages, which is exactly what
+> `A-11` already had evidence of and did not recognise: the owner's own token returned
+> `403: Resource not accessible by personal access token` when listing packages. `A-11`'s original
+> recommendation said *fine-grained*, and following it would have produced a token that fails at
+> `docker login` for a reason the error message does not explain.
+
+⚠ **And the cost of that, stated plainly: a classic PAT cannot be scoped to one repository.**
+`read:packages` reads every package the account can read. The controls that remain are that it is
+**read-only** and carries **no second scope** — so grant nothing but `read:packages`, and give it
+an expiry. If a per-repo credential is required later, the answer is a GitHub App installation
+token or a machine account, not a differently-shaped PAT.
+
 ⚠ **Residue:** a successful login writes a base64 credential to `~/.docker/config.json` on the
-host, unencrypted. The token being read-only and repo-scoped is the control; that file is not.
+host, unencrypted. Read-only and no-second-scope is the control; that file is not.
 
 ⚠ **Production is deliberately unchanged.** `prod-deploy` still builds on the host, because
 nobody has yet run `curl -sI https://ghcr.io/v2/` from the VPN-only DOR box to confirm it can
