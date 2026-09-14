@@ -18,7 +18,7 @@ succeeds otherwise — so a run either leaves a row behind or deletes one non-de
 depending on what else the suite did first. A suite that adds `E2E Test Org 17` to a dev database
 every run is a suite people stop trusting, and then stop reading.
 
-⭐ **This is the same shape as [`GRM-075`](officer-provisioning-not-driven-by-e2e.md)**, which stops
+⭐ **This is the same shape as [`GRM-075`](../../2026-09_qa_automation/followups/officer-provisioning-not-driven-by-e2e.md)**, which stops
 short of provisioning a Keycloak account for the same reason: the last step has a side effect that
 outlives the test. Both are cases where *the test is cheap and the cleanup is not.*
 
