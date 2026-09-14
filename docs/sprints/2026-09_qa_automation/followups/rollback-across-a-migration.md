@@ -37,8 +37,17 @@ than a silent wrong answer, and it is still not a rollback.
 
 **Recommendation: the spec moves now; the code only with a tested downgrade for every migration.**
 
+## ✅ Resolved 2026-09-14 — the spec moved
+
+The owner chose the narrow fix. [`03_operations.md`](../../../deployment/03_operations.md) §6a now says a tag
+rollback is valid only when no migration landed between the two tags, gives the command to check, and
+describes the two alternatives. Measured while writing it: **59 of 64 migrations implement a downgrade;
+the 5 that do not are all data rewrites**, so crossing one reports success and restores nothing — named
+in the runbook. Automated downgrade was deliberately not built: it would be correct only if every
+downgrade were tested, and none has been.
+
 ## Definition of done
 
-- The fork is decided and recorded.
-- §6a's rollback line no longer over-claims.
+- ✅ The fork is decided and recorded — the spec moves (2026-09-14).
+- ✅ §6a's rollback line no longer over-claims.
 - If the code moves: a rollback across one real migration is driven on a disposable stack.

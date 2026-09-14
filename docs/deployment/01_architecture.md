@@ -1,7 +1,7 @@
 # Architecture — Nepal Chatbot + GRM Ticketing
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/01_architecture.md`](archive/01_architecture.md).
-**Last updated:** 2026-09-07 — §1: the image model, the UI's two variants per commit, why staging pulls while production still builds, and that the host ports are defaults rather than fixtures (QA-03).
+**Last updated:** 2026-09-14 — the AWS compose row describes the directory mount, `bootstrap.sh` and `!override` for ports and volumes (`GRM-103`/`GRM-067`). Earlier: §1: the image model, the UI's two variants per commit, why staging pulls while production still builds, and that the host ports are defaults rather than fixtures (QA-03).
 
 The whole stack is **Docker Compose only** — no systemd services, no standalone Rasa server, no Flask. One repo, one image for all Python services, plus a Next.js image for the officer UI and stock images for Postgres/Redis/nginx/Keycloak.
 
@@ -50,7 +50,7 @@ GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the ch
 
 | File | Adds |
 |---|---|
-| `docker-compose.aws.yml` | nginx on host `80/443`, TLS conf `deployment/nginx/webchat_rest_compose_aws.conf` (`nepal-gms-chatbot.facets-ai.com` + `grm-auth.` subdomain), certbot mounts |
+| `docker-compose.aws.yml` | nginx on host `80/443` **only** (`ports: !override`), TLS conf `deployment/nginx/webchat_rest_compose_aws.conf` (`nepal-gms-chatbot.facets-ai.com` + `grm-auth.` subdomain), certbot mounts. ⚠ Since 2026-09-14 (`GRM-103`/`GRM-067`) the whole `deployment/nginx` **directory** is mounted and `bootstrap.sh` `include`s the conf named by `NGINX_SITE_CONF`, so a `git pull` plus reload applies it; `volumes: !override` stops the WSL conf loading too |
 | `docker-compose.prod.yml` | Nepal DOR prod (`grm-chatbot.dor.gov.np`): TLS conf `webchat_rest_compose_prod.tls.conf`, single-host Keycloak at `/keycloak` path, IPv4-preferred SMTP for Keycloak |
 
 There is no `docker-compose.override.yml` any more (CL-03): dev-ness comes from `env.local` (`APP_ENV=dev AUTH_MODE=bypass`), not an override file. The compose set is `docker-compose.yml` (base) + `docker-compose.grm.yml` (single GRM stack) + `docker-compose.aws.yml` / `docker-compose.prod.yml` (deploy overlays). Deploys bring Keycloak up with `--profile auth`.

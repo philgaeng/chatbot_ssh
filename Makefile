@@ -300,6 +300,33 @@ $(call REMOTE_MIGRATE_ONE,migrations/public/alembic.ini) && \
 $(call REMOTE_MIGRATE_ONE,ops/migrations/alembic.ini)
 endef
 
+# ── Apply the nginx site config on AWS staging (GRM-103) ─────────────────────────────────────
+# $(1)=label. Validate → apply → reload, in that order, every aws deploy.
+#
+# ⚠ Why this exists at all: nginx is NOT in AWS_DEPLOY_SERVICES, so no deploy ever touched it, and
+# its config was a single-file bind mount that `git pull` could not update in place. Every nginx
+# change since the last manual recreate was therefore on disk and NOT in force — measured on
+# staging 2026-09-14, which is how GRM-014's rate limiting sat merged-but-inert for a week.
+#
+#   1. VALIDATE in a throwaway container, with the exact config and mounts the real one will use
+#      (`bootstrap.sh --test`). ⚠ Never `exec nginx -t` in the RUNNING container as the check: with
+#      the old single-file mount it validated the stale copy and passed a config nobody had tested.
+#   2. `up -d --no-deps nginx` — recreates ONLY if nginx's compose definition changed (the first time
+#      this runs, it switches the mount to a directory). A no-op otherwise.
+#   3. RELOAD — applies content-only changes. Retried because a freshly recreated nginx needs a
+#      moment before it accepts a signal; a reload that never succeeds fails the deploy loudly.
+#
+# ⚠ Single quotes are forbidden in here: the whole remote command travels inside '...' over SSH.
+define REMOTE_APPLY_NGINX
+echo "$(1): validating the nginx site config in a throwaway container" && \
+$(REMOTE_COMPOSE) run --rm --no-deps -T nginx "sh /etc/nginx/site/bootstrap.sh --test" && \
+echo "$(1): applying nginx" && \
+$(REMOTE_COMPOSE) up -d --no-deps nginx && \
+{ ok=0; for i in $$(seq 1 30); do $(REMOTE_COMPOSE) exec -T nginx nginx -s reload >/dev/null 2>&1 && { ok=1; break; }; sleep 2; done; \
+  [ "$$ok" = 1 ] || { echo "$(1): ERROR nginx did not accept a reload within 60s"; exit 1; }; } && \
+echo "$(1): nginx config applied"
+endef
+
 define REMOTE_DEPLOY_CORE
 set -e; \
 	cd $(1) && \
@@ -539,7 +566,7 @@ aws-up:
 aws-deploy: DEPLOY_BUILD = 0
 aws-deploy:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
-	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_APPLY_NGINX,aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
 
 # Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
 aws-deploy-light: DEPLOY_BUILD = 0
@@ -550,7 +577,7 @@ aws-deploy-light:
 aws-deploy-full: DEPLOY_BUILD = 0
 aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
-	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
+	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_APPLY_NGINX,aws-deploy-full) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on staging.
 aws-deploy-ops: DEPLOY_BUILD = 0
