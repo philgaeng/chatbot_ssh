@@ -1,6 +1,6 @@
 # T2 — self-hosted vLLM: documented and costed, not deployed
 
-> **Status (2026-09-03): ⚠ documented and costed, not deployed.** T2 is **parked**: nobody owns the
+> **Status (2026-09-15, re-checked; unchanged since 2026-09-03): ⚠ documented and costed, not deployed.** T2 is **parked**: nobody owns the
 > GPU running costs. Not starting is the right call — an excellent system nobody funds to keep running
 > is worse than one not built. **This document exists so that unparking is a procurement decision
 > rather than an engineering one.**
@@ -16,6 +16,13 @@
 >
 > > **T1 is cheaper at every volume this system will ever see. T2 buys one thing, and it is not
 > > savings: it is that grievance text never leaves the country.**
+>
+> ⚠ **Precisely what T2 does and does not keep in-country** (added 2026-09-15). It moves the **model
+> boundary** — grievance text, officer notes, and one day audio. It does **not** touch the paths the
+> complainant's own browser takes abroad: webchat scripts from three CDNs, and map tiles around the
+> location a complainant pins ([`privacy-assessment.md`](privacy-assessment.md) F-23, F-24). A
+> sovereignty argument for T2 should be made for the model boundary and not stretched to the whole
+> platform.
 >
 > That makes it a **policy decision with a stated price** — one a ministry can take — rather than a
 > break-even calculation. The price of sovereignty is roughly the difference between single-digit
@@ -80,7 +87,7 @@ All marked `⚠ not deployed`. Carry into [`13_security.md`](../deployment/13_se
 |---|---|
 | **Private subnet**, reachable only from the application security group | An open inference endpoint is an open door to a machine holding grievance text in memory |
 | **TLS at a reverse proxy** | "Inside the VPC" is not an authentication story |
-| **An API key even on a private network** | Defence in depth. ⚠ The codebase already carries one service bound to `0.0.0.0` *"because the firewall holds"* — **do not add a second** |
+| **An API key even on a private network** | Defence in depth. ⚠ *"The firewall holds"* has already failed once here: an internal service bound to `0.0.0.0` answered from the internet on staging, found by measurement and closed in September 2026. Two internal ports on that host still rely on the cloud firewall alone — **do not add a third** |
 | **Snapshot the instance once configured** | Weights are tens of GB; re-downloading them during an incident is the wrong time to discover the bandwidth |
 | **Monitoring and a restart policy, with a named owner** | ⏸ **The parked item.** Not the hardware — the *person* |
 
@@ -131,9 +138,10 @@ table holds only seed and demo rows. Method: assume each district behaves like t
 77. **Re-run it against real pilot volume before it goes to anyone.**
 
 ⚠ **T1's price is not the only number in the comparison.** Under T1 grievance text — including SEAH
-narratives — leaves Nepal, reaches a provider selected per request unless pinned, and is unredacted
-until redaction ships ([privacy assessment](privacy-assessment.md) F-17). **T2 parked makes T1 the
-steady state rather than a transition**, which promotes redaction from prudent to necessary.
+narratives — leaves Nepal and reaches a provider selected per request unless pinned
+([privacy assessment](privacy-assessment.md) F-17). Since 2026-09-03 it is **pseudonymised** first, at
+87.5% measured recall — narrower, not closed. **T2 parked makes T1 the steady state rather than a
+transition**, which is why redaction had to ship rather than wait.
 
 ⭐ **The cost lever was the prompt, and it has been pulled** — a 70% cut
 ([`model-benchmarks.md`](model-benchmarks.md) §7), which pushed every crossover figure *further* from
