@@ -627,6 +627,7 @@ export function ProjectEditor({
                   orgs={orgs}
                   canEdit={canManageProjectCatalog}
                   onPackagesChanged={(next) => { setPackages(next); refreshGoLive(); }}
+                  onOrganizationCreated={onOrganizationCreated}
                   flash={flash}
                   onUpdated={(updated) => { setP(updated); onUpdated(updated); refreshGoLive(); }}
                 />

@@ -1,6 +1,7 @@
 # Frontend standard — officer portal
 
-**Status:** authoritative (2026-08-03). Rules for **code** in `channels/ticketing-ui/` (Next.js 16 App Router, React 19, TypeScript, Tailwind v4).
+**Status:** authoritative (2026-09-06). Rules for **code** in `channels/ticketing-ui/` (Next.js 16 App Router, React 19, TypeScript, Tailwind v4).
+**Last updated:** 2026-09-07 — `ui/07` added to the §9a table: the filter bar over a forest, the one `settings-ui` surface rule 9a.4 still demanded a wireframe for. Earlier the same day, §9a gains **rule 9a.4**: once a screen ships, the shipped screen is the wireframe baseline and a mockup of it is retired rather than maintained. The `ui/04` row is marked **superseded** rather than merely stale, closing `GRM-064`. Earlier: §9a added: the design gate (G-DESIGN) is written down, having been followed once by instinct and recorded nowhere; plus what the two committed `ui/*.html` mockups bind, and what they do not.
 **This doc does not cover visuals or wording.** Two standards already own those and win on their subjects:
 
 | Subject | Owner |
@@ -147,6 +148,61 @@ channels/ticketing-ui/
 
 ---
 
+## 9a. The design gate (G-DESIGN)
+
+**Fires when a UI surface changes shape** — a new screen, a screen reorganised, or a component whose
+information architecture changes. Not for restyling inside an existing layout.
+
+⚠ **This gate was followed once, correctly, by instinct — the settings redesign — and then existed
+nowhere.** That is the failure mode this section closes: a process that lives only in the memory of
+whoever ran it last is not a gate, and the next person reinvents a worse version of it.
+
+**Six steps, in order. Each one is cheap to redo and expensive to skip.**
+
+| # | Step | Produces | Why it is before the next one |
+|---|---|---|---|
+| 1 | **Brief** | what the screen is for, who uses it, what they are trying to finish | Everything downstream is unfalsifiable without it |
+| 2 | **IA** | the objects on the screen and their containment — what nests inside what | Getting containment wrong is the one mistake a visual pass cannot rescue |
+| 3 | **Wireframe** | layout and hierarchy, no colour, no final copy | Colour arrives early enough to hide a bad hierarchy; keep it out |
+| 4 | **Direction** | the visual pass against [`ui/02`](../ticketing_system/ui/02_design_system.md) — tokens, palette, icons | The design system decides this, not the screen |
+| 5 | **State + responsive contract** | loading · error · empty · dense-data · the 360 px case | These are half the work and they are where "done" screens fail review |
+| 6 | **Implementation contract, frozen** | the props, the API shape, the copy strings | ⭐ **Frozen before build starts.** Unfrozen, the contract drifts during implementation and the spec becomes a description of whatever was easiest |
+
+**Rule 9a.1 — A mockup is a `.html` file committed next to the spec it serves**, in
+[`../ticketing_system/ui/`](../ticketing_system/ui/). *Why: it opens in a browser from a clone, it
+diffs, it survives the tool that produced it, and it cannot 404 the way a hosted preview does. A
+mockup that lives in a chat window or a hosted artifact is gone the moment anyone needs it most.*
+
+**Rule 9a.2 — Say what a mockup binds, and what it does not.** A mockup binds **IA and layout** —
+steps 2, 3 and 5. It does **not** bind colour values, copy, or component structure: those are owned by
+[`ui/02`](../ticketing_system/ui/02_design_system.md), [`ui/05`](../ticketing_system/ui/05_ui_copy_style.md)
+and the implementation contract respectively. *Why: a mockup read as binding on everything makes the
+design system advisory, which is backwards.*
+
+The live mockups, and what each binds:
+
+| Mockup | Binds | Read with |
+|---|---|---|
+| ~~[`ui/04_projects_packages_redesign.html`](../ticketing_system/ui/04_projects_packages_redesign.html)~~ — *"KL Road · Project setup (redesign)"* | ⚠ **SUPERSEDED 2026-09-07 — binds nothing.** The shipped screen (`Settings → Projects & packages`) is the baseline; the file is kept as the historical record of the redesign decision and carries a banner saying so | [`04_projects_packages_ux_review.md`](../ticketing_system/ui/04_projects_packages_ux_review.md) · closed `GRM-064` |
+| [`ui/06_workflows_step_cast_editor.html`](../ticketing_system/ui/06_workflows_step_cast_editor.html) — *"Workflows — step cast editor"* | The step/cast editing model: which roles a step casts, and how exclusions read | [`01_ui_spec.md`](../ticketing_system/ui/01_ui_spec.md) |
+| [`ui/07_org_directory_filters.html`](../ticketing_system/ui/07_org_directory_filters.html) — *"Organizations — search & filters"* | A filter bar over a **forest**, and the rule that a match keeps its ancestors as context rather than flattening to a list | [`10_settings_overview.md`](../ticketing_system/10_settings_overview.md) §2.1 · built for `GRM-086`, and the one surface in its lane that rule 9a.4 still required a wireframe for |
+
+**Rule 9a.3 — A stale mockup is marked stale where it is cited, not silently left to mislead.** *Why:
+a mockup is trusted precisely because it is concrete; a wrong one is therefore more expensive than no
+mockup at all, and it is the artifact least likely to be re-read by whoever changed the design.*
+
+**Rule 9a.4 — Once a screen ships, the shipped screen is the wireframe baseline, and a mockup of it
+is retired rather than maintained.** A change to a live screen states its **delta** against what
+renders today; step 3 produces a new `.html` only for a surface that exists on no shipped screen.
+*Why: a mockup earns its cost when it decides a shape nobody has seen. Redrawing a screen that opens
+in a browser today is transcription — and a transcribed mockup is the artifact most likely to go
+stale again, because nobody re-reads it after the screen moves. Worked example: `ui/04` above went
+stale exactly this way; ✅ **applied 2026-09-07** by the `settings-ui` lane, whose six items bind to
+shipped routes and whose one genuinely new surface — a filter bar over a tree — still owes a
+committed wireframe.*
+
+---
+
 ## 10. Definition of done — a screen
 
 - [ ] `npx tsc --noEmit` clean, `npx eslint .` clean (no new suppressions)
@@ -158,6 +214,7 @@ channels/ticketing-ui/
 - [ ] `lib/api.ts` types match the backend schema, changed in the same commit
 - [ ] Mobile route considered (`lib/mobile-routes.ts`) or explicitly out of scope in the PR
 - [ ] [`ui/01_ui_spec.md`](../ticketing_system/ui/01_ui_spec.md) updated if behaviour changed
+- [ ] If the surface changed **shape**, the design gate (§9a) ran — and its implementation contract was frozen *before* the build, not written afterwards to match it
 
 ---
 

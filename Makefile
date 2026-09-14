@@ -76,6 +76,43 @@ REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
   --profile auth
 
+# ── Stack isolation: project name + host ports (QA-03) ───────────────────────────────────
+#
+# ⚠ **Every default here is EMPTY, and that is the safety property.** Compose treats an empty
+# variable as unset, so the `${VAR:-<literal>}` defaults already in the compose files apply and
+# `env.local` still wins where it sets one — verified: exporting `KEYCLOAK_HOST_PORT=` leaves
+# keycloak on env.local's 18080. Setting nothing changes nothing, which is what lets this land
+# on running hosts without touching them.
+#
+# ⚠ **COMPOSE_PROJECT_NAME especially.** The ticket's scope said to name the environments
+# `grm_wsl` / `grm_aws` / `grm_prod`; its own Risks section said to use whatever name is already
+# derived, "or you will detach staging from its own database". **The Risks section is right and
+# the scope line is dangerous**, and this is not hypothetical: the dev box derives
+# `nepal_chatbot` and owns `nepal_chatbot_postgres_data`. Renaming the project makes compose
+# look for `grm_wsl_postgres_data`, not find it, and create an empty one — the seeded database
+# still on disk, silently detached. So the real environments keep deriving their name from the
+# directory, exactly as they do today, and only the *ephemeral* stack (which has no data to
+# lose) gets an explicit one.
+#
+# ⭐ Directory-derived naming has been providing isolation all along — this machine already
+# carries volumes for four checkouts (`nepal_chatbot_`, `_seah_`, `_claude_`, `_integration_`).
+# What was missing is a *settable* name, so CI can make a throwaway stack on purpose.
+export COMPOSE_PROJECT_NAME ?=
+
+# Published host ports. Empty = the compose file's default = today's literal.
+export GRM_UI_HOST_PORT ?=
+export TICKETING_API_HOST_PORT ?=
+export BACKEND_HOST_PORT ?=
+export ORCHESTRATOR_HOST_PORT ?=
+export NGINX_HOST_PORT ?=
+export POSTGRES_HOST_PORT ?=
+export KEYCLOAK_HOST_PORT ?=
+
+# What the port assertions compare against — the variable if set, else today's literal.
+# Kept beside the variables so the two cannot drift.
+EXPECT_GRM_UI_PORT := $(or $(GRM_UI_HOST_PORT),3001)
+EXPECT_TICKETING_API_PORT := $(or $(TICKETING_API_HOST_PORT),5002)
+
 CHATBOT_SERVICES := db redis orchestrator backend celery_default celery_llm nginx
 # ops = platform monitor (broker-independent APScheduler); ships with the GRM stack.
 # Single stack (CL-03): one ticketing_api (:5002) + one grm_ui (:3001).
@@ -96,6 +133,108 @@ PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui nginx
 SEAH_PROVIDERS_IMPORT_SCRIPT = scripts/database/import_seah_service_providers_xlsx.py
 SEAH_PROVIDERS_CSV = scripts/database/seeds/seah_service_providers_kl_road.csv
 SEAH_PROVIDERS_SEED_CMD = python $(SEAH_PROVIDERS_IMPORT_SCRIPT) --from-csv --csv $(SEAH_PROVIDERS_CSV)
+
+# ── How a deploy gets its images: pull, or build on the box (QA-02 scope 3) ───────────────
+#
+# `DEPLOY_BUILD=1` builds on the host, which is what every deploy did until QA-02 and what
+# **production still does**. `DEPLOY_BUILD=0` pulls images CI already built.
+#
+# ⚠ **The default is 1 — build — and that is deliberate.** All four deploy macros are shared
+# between the `aws-*` and `prod-*` targets, so a default of 0 would silently convert production
+# to pulling from a registry nobody has confirmed it can reach: `curl -sI https://ghcr.io/v2/`
+# has never been run from the DOR box (Q-05), and it is VPN-only, so the failure would land in a
+# maintenance window with no quick way back. The `aws-*` targets opt **in** to pulling; prod
+# opts in the day someone answers that question.
+#
+# Escape hatches, both directions, and both are real:
+#   make aws-deploy DEPLOY_BUILD=1        # registry unreachable — fall back to building
+#   make prod-deploy DEPLOY_BUILD=0       # ⚠ only once Q-05 is answered for the DOR host
+DEPLOY_BUILD ?= 1
+
+# Which images a pulling deploy asks for. Empty means `local`, which exists only on a dev box —
+# so a pulling deploy demands an explicit tag rather than failing later with a registry 404.
+IMAGE_TAG ?=
+UI_IMAGE_TAG ?=
+IMAGE_REGISTRY ?=
+
+# Registry identity for a PULLING deploy (GRM-093 / A-11). Derived from IMAGE_REGISTRY so a
+# different registry needs no second place to edit; the default mirrors docker-compose.grm.yml's.
+REGISTRY_REF   = $(if $(IMAGE_REGISTRY),$(IMAGE_REGISTRY),ghcr.io/philgaeng/chatbot_ssh)
+REGISTRY_HOST  = $(word 1,$(subst /, ,$(REGISTRY_REF)))
+REGISTRY_OWNER = $(word 2,$(subst /, ,$(REGISTRY_REF)))
+
+# Exported into every remote command so the compose files on the host resolve the same tags.
+# `${VAR:-default}` in compose treats empty as unset, so passing these through blank is safe.
+REMOTE_IMAGE_ENV = IMAGE_TAG=$(IMAGE_TAG) UI_IMAGE_TAG=$(UI_IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+
+# $(1)=services, $(2)=deploy label. The one place the pull/build choice is made.
+# ── Registry auth for a pulling deploy (GRM-093 / A-11) ────────────────────────
+# D-010 made the repository private on 2026-09-04, so its GHCR packages are private — and a host
+# that PULLS a private package needs a credential. There was none, and no login step anywhere in
+# this file, so the pulling deploy that `03_operations.md` §6a documents could not actually work:
+# every `compose pull` on the host would end in `denied`.
+#
+# Reads GHCR_READ_TOKEN from env.local — the generated artefact every service already uses, 0600
+# on the host — and authenticates with **--password-stdin**. Never `-p`: a token in argv is
+# readable by every process on the box through `ps`, and lands in shell history.
+#
+# ⚠ **An absent token SKIPS, it does not fail.** `make wsl-up`, any `DEPLOY_BUILD=1` deploy and
+# any host whose registry is public must keep working untouched. Turning a missing optional
+# secret into a failed deploy would be a worse bug than the one this fixes — and `DEPLOY_BUILD=1`
+# is precisely the documented fallback for "the registry is unreachable or uncredentialed".
+#
+# ⚠ **Residue, stated rather than hidden:** a successful login writes a base64 credential into
+# `~/.docker/config.json` on the host, which is not encrypted. That is why A-11 specifies a
+# read-only, repo-scoped token — the blast radius of that file is the whole control.
+define REMOTE_REGISTRY_LOGIN
+GHCR_READ_TOKEN="$$(sed -n 's/^GHCR_READ_TOKEN=//p' env.local 2>/dev/null | head -n1)"; \
+GHCR_USERNAME="$$(sed -n 's/^GHCR_USERNAME=//p' env.local 2>/dev/null | head -n1)"; \
+if [ -n "$$GHCR_READ_TOKEN" ]; then \
+	printf '%s' "$$GHCR_READ_TOKEN" \
+		| docker login $(REGISTRY_HOST) -u "$${GHCR_USERNAME:-$(REGISTRY_OWNER)}" --password-stdin >/dev/null \
+		|| { echo "$(1): ERROR — docker login to $(REGISTRY_HOST) failed. Is GHCR_READ_TOKEN a valid read:packages token? Fallback: make $(1) DEPLOY_BUILD=1"; exit 1; }; \
+	echo "$(1): authenticated to $(REGISTRY_HOST) as $${GHCR_USERNAME:-$(REGISTRY_OWNER)}"; \
+else \
+	echo "$(1): no GHCR_READ_TOKEN in env.local — pulling unauthenticated. Fine for a public registry; a private one answers 'denied' (A-11)"; \
+fi
+endef
+
+define REMOTE_ACQUIRE_IMAGES
+if [ "$(DEPLOY_BUILD)" = "1" ]; then \
+	echo "$(2): DEPLOY_BUILD=1 — building on the host (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
+	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(1),$(2)); \
+else \
+	if [ -z "$(IMAGE_TAG)" ] || [ "$(IMAGE_TAG)" = "local" ]; then \
+		echo "ERROR: $(2) is a pulling deploy (DEPLOY_BUILD=0) but IMAGE_TAG is '$(IMAGE_TAG)'."; \
+		echo "  Pass the commit to deploy:  make $(2) IMAGE_TAG=<short-sha>"; \
+		echo "  That is also the rollback:  make $(2) IMAGE_TAG=<an-older-sha>"; \
+		echo "  To build on the box instead: make $(2) DEPLOY_BUILD=1"; \
+		exit 1; \
+	fi; \
+	$(call REMOTE_REGISTRY_LOGIN,$(2)); \
+	echo "$(2): pulling images at IMAGE_TAG=$(IMAGE_TAG)" && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) pull $(1); \
+fi
+endef
+
+# $(1)=services, $(2)=label. What is ACTUALLY running, after `up -d`, per service.
+#
+# ⚠ **This exists because a pulling deploy can succeed while changing nothing.** If IMAGE_TAG is
+# not bumped, `up -d` is a no-op and the deploy prints OK having deployed the previous build —
+# the same class of failure as the 2026-09-04 OK line that verified two ports and nothing else.
+# A digest is the only answer to "is the running container the commit I asked for", and it is
+# cheap enough to print on every deploy.
+define REMOTE_REPORT_DIGESTS
+echo "$(2): running images —" && \
+for svc in $(1); do \
+	cid="$$($(REMOTE_COMPOSE) ps -q $$svc 2>/dev/null | head -1)"; \
+	if [ -n "$$cid" ]; then \
+		img="$$(docker inspect --format '{{.Config.Image}}' $$cid 2>/dev/null)"; \
+		dig="$$(docker inspect --format '{{index .Image}}' $$cid 2>/dev/null | cut -c1-19)"; \
+		printf '  %-18s %s  %s\n' "$$svc" "$$img" "$$dig"; \
+	fi; \
+done
+endef
 
 # $(1)=space-separated service names, $(2)=deploy label — one image at a time (no parallel build).
 define REMOTE_BUILD_SERVICES_SEQUENTIAL
@@ -122,10 +261,10 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "$(3): rebuilding $(2) (sequential, COMPOSE_PARALLEL_LIMIT=1)" && \
-	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL,$(2),$(3)) && \
+	$(call REMOTE_ACQUIRE_IMAGES,$(2),$(3)) && \
 	echo "$(3): starting $(2)" && \
-	$(REMOTE_COMPOSE) up -d $(2) && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(2) && \
+	$(call REMOTE_REPORT_DIGESTS,$(2),$(3)) && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
@@ -142,12 +281,11 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "$(2): building ops" && \
-	$(REMOTE_COMPOSE) build --pull ops && \
+	$(call REMOTE_ACQUIRE_IMAGES,ops,$(2)) && \
 	echo "$(2): ops migration (ops.* schema + ops_app role)" && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head && \
 	echo "$(2): starting ops" && \
-	$(REMOTE_COMPOSE) up -d ops && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d ops && \
 	$(REMOTE_COMPOSE) ps ops
 endef
 
@@ -158,8 +296,8 @@ ui_port="$$(docker compose --env-file env.local \
 api_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
   -f docker-compose.prod.yml --profile auth port ticketing_api 5002 2>/dev/null || true)" && \
-case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
-case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+case "$$ui_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_port)"; exit 1;; esac; \
+case "$$api_port" in *":$(EXPECT_TICKETING_API_PORT)") ;; *) echo "ERROR: ticketing_api not on host :$(EXPECT_TICKETING_API_PORT) (actual: $$api_port)"; exit 1;; esac; \
 echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
 endef
 
@@ -170,8 +308,8 @@ ui_port="$$(docker compose --env-file env.local \
 api_port="$$(docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
   --profile auth port ticketing_api 5002 2>/dev/null || true)" && \
-case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_port)"; exit 1;; esac; \
-case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on host :5002 (actual: $$api_port)"; exit 1;; esac; \
+case "$$ui_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_port)"; exit 1;; esac; \
+case "$$api_port" in *":$(EXPECT_TICKETING_API_PORT)") ;; *) echo "ERROR: ticketing_api not on host :$(EXPECT_TICKETING_API_PORT) (actual: $$api_port)"; exit 1;; esac; \
 echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
 endef
 
@@ -188,14 +326,14 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git reset --hard origin/$(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
-	echo "$(3): rebuilding $(2) (sequential)" && \
-	$(call REMOTE_BUILD_SERVICES_SEQUENTIAL_NO_PULL,$(filter-out nginx,$(2)),$(3)) && \
-	$(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
+	$(call REMOTE_ACQUIRE_IMAGES,$(filter-out nginx,$(2)),$(3)) && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
+	$(call REMOTE_REPORT_DIGESTS,$(filter-out nginx,$(2)),$(3)) && \
 	$(REMOTE_COMPOSE) up -d --force-recreate nginx && \
 	ui_auth_port="$$(docker compose --env-file env.local \
 	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
 	  --profile auth port grm_ui 3001 2>/dev/null || true)" && \
-	case "$$ui_auth_port" in *":3001") ;; *) echo "ERROR: grm_ui not on host :3001 (actual: $$ui_auth_port)"; exit 1;; esac; \
+	case "$$ui_auth_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_auth_port)"; exit 1;; esac; \
 	echo "$(3) OK: grm_ui=$$ui_auth_port nginx=restarted"
 endef
 
@@ -207,13 +345,9 @@ set -e; \
 	git checkout $(DEPLOY_BRANCH) && \
 	git checkout -- docker-compose.aws.yml .dockerignore && \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
-	echo "full deploy: building all compose services sequentially" && \
-	for svc in $$($(REMOTE_COMPOSE) config --services); do \
-		echo "full deploy: build $$svc" && \
-		$(REMOTE_COMPOSE) build --pull "$$svc" || exit 1; \
-	done && \
+	$(call REMOTE_ACQUIRE_IMAGES,$$($(REMOTE_COMPOSE) config --services),full deploy) && \
 	echo "full deploy: starting stack" && \
-	$(REMOTE_COMPOSE) up -d && \
+	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
 	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
@@ -230,6 +364,7 @@ endef
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
 	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
 	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
+	release-check release-tag hooks \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
@@ -352,22 +487,99 @@ aws-up:
 	$(COMPOSE_AWS_AUTH) up -d --build
 
 # Remote deploy: pull integration/stage, migrations, rebuild selected services (default GRM UI/API + messaging backend).
+# ── Staging pulls; production still builds (QA-02 scope 3) ───────────────────────────────
+# These four opt IN to pulling CI-built images. `prod-*` deliberately does not: nobody has run
+# `curl -sI https://ghcr.io/v2/` from the VPN-only DOR host yet (Q-05), so converting it would
+# be a change nobody has tested landing in a maintenance window. Override per invocation —
+# `make aws-deploy DEPLOY_BUILD=1` falls back to building if the registry is unreachable.
+aws-deploy: DEPLOY_BUILD = 0
 aws-deploy:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
 
 # Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
+aws-deploy-light: DEPLOY_BUILD = 0
 aws-deploy-light:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_LIGHT,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_LIGHT_SERVICES),aws-deploy-light)'
 
 # Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
+aws-deploy-full: DEPLOY_BUILD = 0
 aws-deploy-full:
 	$(SCP_RUNNING) .dockerignore $(RUN_SERVER_USER)@$(REMOTE_HOST_RUNNING):$(REMOTE_DIR_RUNNING)/.dockerignore
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_FULL,$(REMOTE_DIR_RUNNING)) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on staging.
+aws-deploy-ops: DEPLOY_BUILD = 0
 aws-deploy-ops:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_OPS,$(REMOTE_DIR_RUNNING),aws-deploy-ops)'
+
+# ── Git hooks ─────────────────────────────────────────────────────────────────
+# Hooks live in .githooks/ (committed, reviewable) rather than .git/hooks (per-clone,
+# invisible, unversioned). One command per clone points git at them.
+hooks:
+	@git config core.hooksPath .githooks
+	@echo "hooks enabled: core.hooksPath = .githooks"
+	@echo "  pre-commit  a spec edit and its date ride the same commit (doc_headers.py --check-staged)"
+	@echo "  bypass:     git commit --no-verify   (loudly, and say why in the message)"
+
+# ── Release gate (D-009 · docs/deployment/20_release_and_versioning.md) ───────
+# A version is cut when, and only when, a build is deployed to production. The tag
+# is REQUIRED, not cut by the deploy: a deploy that tags on entry leaves a tag for a
+# release that then failed halfway, and one that tags on success cannot tag a commit
+# if the deploy died. Requiring it first means the tag names a commit somebody chose.
+RELEASE_TAG_RE := ^v[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$
+
+release-check:
+	@tag="$$(git tag --points-at HEAD | grep -E '$(RELEASE_TAG_RE)' | head -1)"; \
+	if [ -n "$$tag" ]; then \
+	  echo "release gate OK — HEAD is $$tag"; \
+	elif [ "$(HOTFIX)" = "1" ]; then \
+	  echo ""; \
+	  echo "  ############################################################"; \
+	  echo "  ##  HOTFIX DEPLOY — NO RELEASE TAG ON HEAD                ##"; \
+	  echo "  ##  A tag is OWED, today. Cut it as soon as the fire is   ##"; \
+	  echo "  ##  out:   make release-tag && git push origin <tag>      ##"; \
+	  echo "  ##  Policy: docs/deployment/20_release_and_versioning.md  ##"; \
+	  echo "  ############################################################"; \
+	  echo ""; \
+	else \
+	  echo ""; \
+	  echo "REFUSING TO DEPLOY: HEAD carries no release tag."; \
+	  echo ""; \
+	  echo "  A version is cut when, and only when, a build is deployed to"; \
+	  echo "  production (D-009). Cut it, then deploy:"; \
+	  echo ""; \
+	  echo "      make release-tag"; \
+	  echo "      make $(MAKECMDGOALS)"; \
+	  echo ""; \
+	  echo "  Genuine emergency? Bypass LOUDLY and tag the same day:"; \
+	  echo ""; \
+	  echo "      make $(MAKECMDGOALS) HOTFIX=1"; \
+	  echo ""; \
+	  echo "  Policy: docs/deployment/20_release_and_versioning.md"; \
+	  echo ""; \
+	  exit 1; \
+	fi
+
+# Cut today's release tag. vYYYY.MM.DD, with .N for a second release the same day.
+release-tag:
+	@existing="$$(git tag --points-at HEAD | grep -E '$(RELEASE_TAG_RE)' | head -1)"; \
+	if [ -n "$$existing" ]; then \
+	  echo "HEAD already carries $$existing — nothing to cut."; exit 1; \
+	fi; \
+	base="v$$(date +%Y.%m.%d)"; tag="$$base"; n=0; \
+	while git rev-parse -q --verify "refs/tags/$$tag" >/dev/null 2>&1; do \
+	  n=$$((n+1)); tag="$$base.$$n"; \
+	done; \
+	git tag -a "$$tag" -m "Release $$tag"; \
+	echo "cut $$tag at $$(git rev-parse --short HEAD)"; \
+	echo "push it:  git push origin $$tag"; \
+	prev="$$(git tag --list --merged HEAD^ | grep -E '$(RELEASE_TAG_RE)' | sort | tail -1)"; \
+	if [ -n "$$prev" ]; then \
+	  echo "changelog: seed with  git log --oneline $$prev..$$tag"; \
+	else \
+	  echo "changelog: first release — seed with  git log --oneline $$tag"; \
+	fi
 
 # ── Production (VPN + password SSH) ───────────────────────────────────────────
 # Requires VPN. No -i key: ssh/scp prompt for PROD_SERVER_USER password.
@@ -375,20 +587,20 @@ ssh-prod:
 	@echo "VPN required. Connecting to $(PROD_SERVER_USER)@$(PROD_HOST) (password prompt)..."
 	$(SSH_PROD)
 
-prod-deploy:
+prod-deploy: release-check
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy)'
 
-prod-deploy-light:
+prod-deploy-light: release-check
 	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_LIGHT,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_LIGHT_SERVICES),prod-deploy-light)'
 
-prod-deploy-full:
+prod-deploy-full: release-check
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on prod.
-prod-deploy-ops:
+prod-deploy-ops: release-check
 	@echo "VPN required. Deploying ops monitor to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_OPS,$(PROD_REMOTE_DIR),prod-deploy-ops)'
 
@@ -498,6 +710,79 @@ wsl-seed-locations:
 # command so the location import is never skipped. Run after `make migrate_all`.
 wsl-seed-full: wsl-seed-locations wsl-seed
 
+# ── Ephemeral stack (QA-03 scope 4) — what QA-05's e2e job brings up ─────────────────────
+#
+# A fully isolated stack: its own project name, its own volumes, its own ports. Tearing it
+# down takes the volumes with it, so nothing survives a run.
+#
+# ⭐ **Ports are a fixed alternate block, not random.** The ticket said "random-ish"; the
+# *purpose* is not colliding with a dev stack, and a fixed block achieves that while staying
+# something a human can point a browser at and a test suite can be configured with. Random
+# ports would have to be discovered and passed around, which is machinery in exchange for
+# nothing — a CI runner hosts one stack.
+#
+# ⚠ **The repo must be present, not just the images.** `nginx` is `image: nginx:stable` and is
+# never built: it bind-mounts `./channels/REST_webchat`, `./channels/shared` and its `.conf`
+# from the checkout, so the webchat is served from the working tree. This is the one place
+# where "pull, don't build" does not describe what happens. Free on a CI runner; worth saying.
+#
+#   make ephemeral-up                                  # officer UI only (QA-04b/c)
+#   make ephemeral-up-full                             # + the webchat half (QA-04d)
+#   make ephemeral-up UI_IMAGE_TAG=<sha>-bypass IMAGE_TAG=<sha>   # what QA-05 runs
+#   make ephemeral-down                                # containers AND volumes
+#
+EPHEMERAL_PROJECT ?= grm_ci_$(or $(GITHUB_RUN_ID),local)
+
+# QA-04b/c need the officer UI; QA-04d needs the chatbot half as well. Named explicitly rather
+# than left to a bare `up -d`, so a suite cannot silently depend on a service nobody meant to run.
+EPHEMERAL_UI_SERVICES      := db redis ticketing_api grm_celery grm_celery_beat grm_ui
+EPHEMERAL_WEBCHAT_SERVICES := orchestrator backend celery_default celery_llm nginx
+EPHEMERAL_SERVICES         ?= $(EPHEMERAL_UI_SERVICES)
+
+# One block away from the dev stack's 3001/5002/8080/5433, so both can run at once.
+EPHEMERAL_ENV = COMPOSE_PROJECT_NAME=$(EPHEMERAL_PROJECT) \
+  GRM_UI_HOST_PORT=$(or $(EPH_UI_PORT),13001) \
+  TICKETING_API_HOST_PORT=$(or $(EPH_API_PORT),15002) \
+  NGINX_HOST_PORT=$(or $(EPH_NGINX_PORT),18081) \
+  POSTGRES_HOST_PORT=$(or $(EPH_DB_PORT),15433) \
+  BACKEND_HOST_PORT=$(or $(EPH_BACKEND_PORT),15001) \
+  ORCHESTRATOR_HOST_PORT=$(or $(EPH_ORCH_PORT),18000) \
+  IMAGE_TAG=$(IMAGE_TAG) UI_IMAGE_TAG=$(UI_IMAGE_TAG) IMAGE_REGISTRY=$(IMAGE_REGISTRY)
+
+.PHONY: ephemeral-up ephemeral-up-full ephemeral-down
+
+ephemeral-up:
+	@echo "ephemeral: project=$(EPHEMERAL_PROJECT) services=$(EPHEMERAL_SERVICES)"
+	@echo "ephemeral: ui=http://localhost:$(or $(EPH_UI_PORT),13001) api=http://localhost:$(or $(EPH_API_PORT),15002) webchat=http://localhost:$(or $(EPH_NGINX_PORT),18081)/rest-webchat/"
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) up -d $(EPHEMERAL_SERVICES)
+	@echo "ephemeral: waiting for the database"
+	@until $(EPHEMERAL_ENV) $(COMPOSE_WSL) exec -T db pg_isready -q; do sleep 2; done
+	@echo "ephemeral: migrations (ticketing -> public -> ops, the Makefile's order — see GRM-079)"
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) run --rm --no-deps ticketing_api python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) run --rm --no-deps ticketing_api python -m alembic -c migrations/public/alembic.ini upgrade head
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) run --rm --no-deps ticketing_api python -m alembic -c ops/migrations/alembic.ini upgrade head
+	@echo "ephemeral: seeding (the same two commands backend-tests uses — see ci.yml)"
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) run --rm --no-deps ticketing_api python -m ticketing.seed.import_locations_json \
+	  --country NP \
+	  --en backend/dev-resources/location_dataset/en_cleaned.json \
+	  --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+	  --max-level 3
+	$(EPHEMERAL_ENV) $(COMPOSE_WSL) run --rm --no-deps ticketing_api python -m ticketing.seed.mock_tickets --reset
+	@echo "ephemeral: up"
+
+ephemeral-up-full: EPHEMERAL_SERVICES = $(EPHEMERAL_UI_SERVICES) $(EPHEMERAL_WEBCHAT_SERVICES)
+ephemeral-up-full: ephemeral-up
+
+# ⚠ `-v` is the point: without it the volumes outlive the stack and the next run inherits a
+# database that is neither empty nor freshly seeded — the single most confusing state a test
+# harness can be in.
+ephemeral-down:
+	@echo "ephemeral: tearing down $(EPHEMERAL_PROJECT) — containers, networks AND volumes"
+	-$(EPHEMERAL_ENV) $(COMPOSE_WSL) down -v --remove-orphans
+	@left="$$(docker volume ls -q | grep -c '^$(EPHEMERAL_PROJECT)_' || true)"; \
+	if [ "$$left" != "0" ]; then echo "WARNING: $$left volume(s) still named $(EPHEMERAL_PROJECT)_*"; \
+	else echo "ephemeral: nothing left behind"; fi
+
 # ── Ticketing tests ───────────────────────────────────────────────────────────
 # Container: same image/deps/DB as production stack (preferred).
 test-ticketing:
@@ -517,12 +802,19 @@ dev-grm-deps:
 compose_seed_seah_catalog:
 	$(DOCKER_COMPOSE) run --rm --no-deps backend python scripts/database/migrate_seah_demo_catalog.py
 
+# ⚠ **`--env-file env.local` added 2026-09-07 — without it this target could only ever FAIL.**
+# Every other compose invocation in this file passes it; this one did not, so interpolation died
+# on `POSTGRES_USER is missing a value`, `port` returned nothing, and the check reported
+# "grm_ui not on :3001 (actual: )" on any host that keeps its config in env.local — which is all
+# of them. Verified pre-existing: identical output from the Makefile at HEAD before QA-03
+# touched it. ⭐ A check that cannot pass is the mirror of a check that cannot fail; both are
+# decoration, and this one had been reporting a port problem that was never there.
 check_grm_ports:
 	@set -e; \
-	ui_port="$$(docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port grm_ui 3001 2>/dev/null || true)"; \
-	api_port="$$(docker compose -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port ticketing_api 5002 2>/dev/null || true)"; \
-	case "$$ui_port" in *":3001") ;; *) echo "ERROR: grm_ui not on :3001 (actual: $$ui_port)"; exit 1;; esac; \
-	case "$$api_port" in *":5002") ;; *) echo "ERROR: ticketing_api not on :5002 (actual: $$api_port)"; exit 1;; esac; \
+	ui_port="$$(docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port grm_ui 3001 2>/dev/null || true)"; \
+	api_port="$$(docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml port ticketing_api 5002 2>/dev/null || true)"; \
+	case "$$ui_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on :$(EXPECT_GRM_UI_PORT) (actual: $$ui_port)"; exit 1;; esac; \
+	case "$$api_port" in *":$(EXPECT_TICKETING_API_PORT)") ;; *) echo "ERROR: ticketing_api not on :$(EXPECT_TICKETING_API_PORT) (actual: $$api_port)"; exit 1;; esac; \
 	echo "GRM port check passed: grm_ui=$$ui_port ticketing_api=$$api_port"
 
 # ── Back-compat aliases (old target names) ───────────────────────────────────────

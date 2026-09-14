@@ -139,6 +139,7 @@ export function OrgTreeNode({
   onEdit,
   onAddChild,
   onDelete,
+  contextIds,
 }: {
   node: OrgForestNode;
   canEdit: boolean;
@@ -147,11 +148,15 @@ export function OrgTreeNode({
   onEdit: (org: OrganizationItem) => void;
   onAddChild: (parent: OrganizationItem) => void;
   onDelete: (org: OrganizationItem) => void;
+  /** While a filter is on (GRM-086): ids shown only to locate a match below them. Rendered
+   *  de-emphasised — present and readable, visibly not the answer. Absent when unfiltered. */
+  contextIds?: Set<string>;
 }) {
   const { org, children, depth } = node;
   const hasChildren = children.length > 0;
   const isOpen = expanded.has(org.organization_id);
   const hint = territoryHint(org);
+  const isContext = contextIds?.has(org.organization_id) ?? false;
 
   return (
     <div>
@@ -165,7 +170,13 @@ export function OrgTreeNode({
           <span className="inline-block h-5 w-5 shrink-0" aria-hidden />
         )}
 
-        <span className={`text-sm font-medium ${textTokens.heading}`}>
+        <span
+          className={
+            isContext
+              ? `text-sm font-normal ${textTokens.muted}`
+              : `text-sm font-medium ${textTokens.heading}`
+          }
+        >
           <Bilingual en={org.name} ne={org.display_name_ne} />
         </span>
 
@@ -211,6 +222,7 @@ export function OrgTreeNode({
               onEdit={onEdit}
               onAddChild={onAddChild}
               onDelete={onDelete}
+              contextIds={contextIds}
             />
           ))}
         </div>

@@ -27,6 +27,7 @@ Spec: `docs/engineering/06_documentation_lifecycle.md` §6
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -64,14 +65,34 @@ def test_every_live_spec_carries_a_dated_status_header(dh):
 
 
 def test_no_header_claims_a_date_in_the_future(dh):
-    """A future date is either a typo or an aspiration; both make the header worthless."""
+    """A future date is either a typo or an aspiration; both make the header worthless.
+
+    ⚠ **One day of tolerance, and it is a timezone fix, not a loosening.** This compares against
+    the *runner's* date, which on GitHub is UTC — while this project is written from Kathmandu
+    (UTC+5:45) and Manila (UTC+8). Every evening there, "today" is already tomorrow in UTC, so a
+    correctly-dated header failed this test: measured 2026-09-07, four `docs/deployment/` headers
+    dated the 7th were rejected by a runner still on the 6th at 16:30 UTC.
+
+    ⭐ **The tempting fix is the damaging one.** Faced with a red build, the quick move is to
+    back-date the header to satisfy the runner — which writes a date the author knows is wrong
+    into the exact field this file exists to keep honest. Tolerating the skew instead keeps the
+    check meaningful: a typo (`2027-`), or a review claimed for next month, is still caught,
+    because no timezone is more than 14 hours from UTC.
+    """
     import datetime as dt
 
-    today = dt.date.today().isoformat()
+    # UTC explicitly, so the bound does not silently depend on where the test runs.
+    limit = (dt.datetime.now(dt.timezone.utc).date() + dt.timedelta(days=1)).isoformat()
     bad = [
-        f"{dh.rel(f)} says {d}" for f in dh.spec_files() if (d := dh.header_of(f)[0]) and d > today
+        f"{dh.rel(f)} says {d}" for f in dh.spec_files() if (d := dh.header_of(f)[0]) and d > limit
     ]
-    assert not bad, "header dates in the future:\n  " + "\n  ".join(bad)
+    assert not bad, (
+        f"header dates more than a day past today (UTC): the limit is {limit}.\n  "
+        + "\n  ".join(bad)
+        + "\n\nA day of slack is deliberate — authors east of UTC are legitimately a date ahead. "
+        "If one of these is a typo, fix the date; do NOT back-date a correct header to appease "
+        "the check."
+    )
 
 
 def test_no_commit_changes_a_spec_body_without_touching_its_header(dh):
@@ -93,6 +114,83 @@ def test_no_commit_changes_a_spec_body_without_touching_its_header(dh):
         f"{len(violations)} commit(s) since {dh.CUTOFF} changed a spec's body without bumping "
         "its header:\n  " + "\n  ".join(f"{p}  ←  {c}" for c, p in violations)
     )
+
+
+def test_the_staged_check_refuses_a_body_edit_that_leaves_the_header_alone(dh, monkeypatch):
+    """⭐ The enforcement point the history check structurally cannot be.
+
+    `--check` reads committed history, so it names a violation only after the commit exists —
+    and by then the fix is illegal, because bumping the header would have to ride a LATER
+    commit, which lifecycle §3 forbids. It could only ever report a rule it had already made
+    impossible to obey. `--check-staged` applies the same rule to the commit being written,
+    which is the one moment the fix is free.
+
+    Driven through a synthetic diff rather than a real index: the decision is "does this diff
+    touch the Status line", and that is what deserves the test.
+    """
+    body_only = (
+        "--- a/docs/engineering/04_testing.md\n"
+        "+++ b/docs/engineering/04_testing.md\n"
+        "@@ -40 +40 @@\n"
+        "-markers are declared in pytest.ini\n"
+        "+markers are declared in pyproject.toml\n"
+    )
+    header_too = body_only + (
+        "-**Last updated:** 2026-09-01 — the pyramid\n"
+        "+**Last updated:** 2026-09-06 — markers moved to pyproject\n"
+    )
+    doc = REPO_ROOT / "docs" / "engineering" / "04_testing.md"   # rel() needs an absolute path
+
+    monkeypatch.setattr(dh, "_git", lambda *a: body_only)
+    assert dh.staged_body_changed_without_header(doc) is True, (
+        "a staged body edit with no header bump must be refused — this is the whole rule"
+    )
+
+    monkeypatch.setattr(dh, "_git", lambda *a: header_too)
+    assert dh.staged_body_changed_without_header(doc) is False, (
+        "bumping the Status line in the same commit is exactly what the rule asks for"
+    )
+
+    monkeypatch.setattr(dh, "_git", lambda *a: "")
+    assert dh.staged_body_changed_without_header(doc) is False, (
+        "a pure rename or mode change is not a body edit; failing it would train people to "
+        "--no-verify, which costs more than the case it catches"
+    )
+
+
+def test_the_pre_commit_hook_exists_and_calls_the_staged_check(dh):
+    """A hook that is not wired is a file, not a gate — and `.git/hooks` is not versioned.
+
+    The hook lives in a committed `.githooks/` so it is reviewable and travels with a clone;
+    `make hooks` points git at it. This pins the two halves to each other.
+    """
+    hook = REPO_ROOT / ".githooks" / "pre-commit"
+    assert hook.exists(), "the pre-commit hook named by the standard must exist"
+
+    # ⚠ The MODE IN GIT, not the mode on disk — and the difference is not pedantry.
+    # This repository has `core.fileMode = false` (it lives on a WSL mount), so a local
+    # `chmod +x` is invisible to git: the file is executable for the author and 100644 for
+    # everyone who clones it, and git skips a non-executable hook WITHOUT SAYING SO. Checking
+    # the working tree passed locally and failed in CI on 2026-09-06 — the worst split there
+    # is, because the author's machine says the gate works. Fix: git update-index --chmod=+x
+    mode = subprocess.run(
+        ["git", "ls-files", "-s", "--", ".githooks/pre-commit"],
+        cwd=REPO_ROOT, capture_output=True, text=True, check=True,
+    ).stdout.split(" ", 1)[0]
+    assert mode == "100755", (
+        f"the hook is mode {mode} in git, not 100755 — git skips a non-executable hook "
+        "silently, so it would be inert for everyone but whoever committed it. "
+        "Fix: git update-index --chmod=+x .githooks/pre-commit"
+    )
+    text = hook.read_text()
+    assert "--check-staged" in text, "the hook must invoke the staged check, not --check"
+    assert "doc_headers.py" in text, "the hook must reuse the one checker, not a second copy"
+
+    makefile = (REPO_ROOT / "Makefile").read_text()
+    assert "core.hooksPath .githooks" in makefile, (
+        "a hook nobody can enable in one command does not get enabled"
+    )
+    assert hasattr(dh, "check_staged"), "--check-staged must be a mode on the existing checker"
 
 
 def test_stamping_is_idempotent(dh, tmp_path):

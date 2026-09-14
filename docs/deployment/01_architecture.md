@@ -1,7 +1,7 @@
 # Architecture — Nepal Chatbot + GRM Ticketing
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/01_architecture.md`](archive/01_architecture.md).
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-07 — §1: the image model, the UI's two variants per commit, why staging pulls while production still builds, and that the host ports are defaults rather than fixtures (QA-03).
 
 The whole stack is **Docker Compose only** — no systemd services, no standalone Rasa server, no Flask. One repo, one image for all Python services, plus a Next.js image for the officer UI and stock images for Postgres/Redis/nginx/Keycloak.
 
@@ -34,6 +34,14 @@ All Celery workers share one app: `backend.task_queue.celery_app`.
 | `ops` | — | Platform monitor (`python -m ops.scheduler`, APScheduler, broker-independent). Spec: [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md) |
 | `keycloak` *(profile `auth`)* | 18080 (`KEYCLOAK_HOST_PORT`) | Keycloak 26 OIDC provider (the only profile-gated service); state in `keycloak` schema of `app_db`. See [`16_auth_keycloak.md`](16_auth_keycloak.md) |
 
+⚠ **Every host port in the table above is a *default*, not a fixture** (QA-03). Each is
+`${VAR:-<the number shown>}` in the compose file, so an unset variable gives exactly the port
+listed — and setting one moves the stack without touching anything else. That is what lets a
+second, fully isolated stack run beside the first on one machine (`make ephemeral-up`), which is
+how the end-to-end suite gets a database it can reset without touching a developer's.
+⚠ The exception is `docker-compose.aws.yml`'s `80`/`443`: deliberately literal, because they are
+a public host's real ports and TLS certificates are issued against them.
+
 The old demo-vs-auth split (`ticketing_api_auth`:5003 / `grm_ui_auth`:3002) is **gone** (CL-03): one `ticketing_api` (:5002) and one `grm_ui` (:3001), their auth behaviour driven by `AUTH_MODE` + `KEYCLOAK_ISSUER`.
 
 GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the chatbot Celery app, same Redis broker.
@@ -46,6 +54,43 @@ GRM Celery app: `ticketing.tasks.celery_app.celery_app` — separate from the ch
 | `docker-compose.prod.yml` | Nepal DOR prod (`grm-chatbot.dor.gov.np`): TLS conf `webchat_rest_compose_prod.tls.conf`, single-host Keycloak at `/keycloak` path, IPv4-preferred SMTP for Keycloak |
 
 There is no `docker-compose.override.yml` any more (CL-03): dev-ness comes from `env.local` (`APP_ENV=dev AUTH_MODE=bypass`), not an override file. The compose set is `docker-compose.yml` (base) + `docker-compose.grm.yml` (single GRM stack) + `docker-compose.aws.yml` / `docker-compose.prod.yml` (deploy overlays). Deploys bring Keycloak up with `--profile auth`.
+
+### Images — eleven services, two images
+
+Ten services build the **root `Dockerfile`** and share one image; `grm_ui` builds its own. They
+are named by variable so the same compose files serve a developer's machine, a CI runner and a
+deploy host:
+
+| Image | Services | Reference |
+|---|---|---|
+| `app` | `orchestrator`, `backend`, `db_init`, `celery_file`, `celery_default`, `celery_llm`, `ticketing_api`, `grm_celery`, `grm_celery_beat`, `ops` | `${IMAGE_REGISTRY}/app:${IMAGE_TAG:-local}` |
+| `ui` | `grm_ui` | `${IMAGE_REGISTRY}/ui:${UI_IMAGE_TAG:-${IMAGE_TAG:-local}}` |
+
+`IMAGE_TAG` defaults to `local`, so a plain `docker compose build` on a dev box needs no
+registry and no credentials. CI publishes the commit's short sha.
+
+⚠ **The officer UI has two images per commit, and only one of them has a login.**
+`NEXT_PUBLIC_AUTH_MODE` is inlined by the Next compiler, so the auth mode is a property of the
+**image**, not of the runtime — `ui:<sha>` is the Keycloak build and `ui:<sha>-bypass` reads an
+identity from a cookie for the end-to-end suite. That is why `grm_ui` has its own tag variable:
+one shared `IMAGE_TAG` could not name a bypass UI beside a normal `app`.
+`scripts/ci/check_no_bypass_image.sh` refuses a `-bypass` reference in any compose file
+describing a real environment; the runtime also fails closed (HR-01).
+
+### Where images are built — and why the two hosts differ
+
+**Staging pulls; production still builds on the box.** One switch, `DEPLOY_BUILD`, chosen per
+target: the `aws-*` deploy targets set `0` (pull), everything else defaults to `1` (build).
+
+⚠ **The asymmetry is deliberate, not drift.** Building on the deploy host is what took staging
+off the network for 41 minutes on 2026-09-04 — a Next.js build exhausted a 3825 MB instance with
+no swap. Pulling removes that class of failure. Production has **not** been converted because
+nobody has yet confirmed the VPN-only DOR host can reach the registry at all, and an untested
+deploy path discovered during a maintenance window is worse than a slow one. The switch is
+ready for the day that is answered.
+
+Deploys print the resolved image digest per service after `up -d`, because a pulling deploy that
+was not given a new tag succeeds while changing nothing.
 
 ## 2. Request / data flows
 

@@ -5,3 +5,22 @@ node_modules
 npm-debug.log*
 .DS_Store
 Thumbs.db
+
+# QA-04a — the e2e suite never runs inside the image; keeping it out of the build
+# context stops specs and their artifacts being copied in by the Dockerfile's `COPY . .`.
+e2e
+playwright.config.ts
+test-results
+playwright-report
+
+# Env files never belong in a build context. ⚠ Added in passing by QA-04a, as PREVENTION,
+# not as a fix — verified 2026-09-06 that the published image is clean (`ls -a /app` in the
+# running container shows no env file; the runner stage copies only `public`, `.next/standalone`
+# and `.next/static` out of the builder) and that `.env.local` here holds only NEXT_PUBLIC_*
+# values, which are non-secret by construction. What this closes is the *mechanism*: the builder
+# runs `COPY . .` and Next reads `.env.local` at build time, so any future NEXT_PUBLIC_* read
+# without a matching build ARG would silently bake the building developer's local value into
+# the image. Two such vars already sit in that file unread (NEXT_PUBLIC_API_URL,
+# NEXT_PUBLIC_BACKEND_API_URL). Q-18 mandates the same for the *root* context — that one is
+# QA-02's, and it is a fix there, not prevention.
+.env*

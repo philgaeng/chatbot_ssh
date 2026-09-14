@@ -1,0 +1,23 @@
+#!/bin/sh
+# Pre-commit: a spec edit and its date ride the same commit.
+#
+# WHY A HOOK AND NOT A TEST. `doc_headers.py --check` reads COMMITTED history, so it can only
+# report a violation after the commit exists — and by then the fix is illegal: bumping the
+# header would have to ride a LATER commit, which is exactly what lifecycle §3 forbids. The
+# check could only ever name a rule it had already made impossible to obey. This hook moves
+# the same rule to the one moment the fix is free.
+#
+# Enable it once per clone:   make hooks
+# Bypass it, loudly:          git commit --no-verify   (and say why in the message)
+#
+# Spec: docs/engineering/06_documentation_lifecycle.md §6
+
+root=$(git rev-parse --show-toplevel) || exit 0
+checker="$root/scripts/ops/doc_headers.py"
+
+# A clone without the checker (or without python) must not be unable to commit. A hook that
+# breaks committing gets deleted, and then it enforces nothing at all.
+[ -f "$checker" ] || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
+
+python3 "$checker" --check-staged

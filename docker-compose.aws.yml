@@ -1,6 +1,11 @@
 services:
   nginx:
     ports:
+      # ⚠ **Deliberately literal, unlike the five ports QA-03 parameterised.** These are the
+      # real host's real ports on a public interface: nothing reaches the site except on 80
+      # and 443, and TLS certificates are issued against them. Moving them would not isolate
+      # a second stack, it would take the site off the internet. Running a second stack on
+      # the staging host is ruled out anyway — it has 3825 MB and no swap (DESIGN §3).
       - "80:80"
       - "443:443"
     volumes:

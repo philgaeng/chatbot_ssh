@@ -112,14 +112,23 @@ services:
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
   # The ticketing_api service also overrides BACKEND_GRIEVANCE_BASE_URL to use the
   # Docker service name (http://backend:5001) rather than localhost.
+  #
+  # ⚠ The 127.0.0.1: prefix is load-bearing, not style (GRM-065). Every deploy stack
+  # includes this file — COMPOSE_AWS and the prod path both — and neither overlay
+  # overrides `ports`, so a bare "5001:5001" publishes a dev convenience on the public
+  # interface of staging AND production. Measured 2026-09-06 from outside both hosts:
+  # DOR prod filtered 8000/5001/5002, but AWS staging answered on :8000 with the
+  # orchestrator's uvicorn, /docs and /openapi.json — reachable by anyone.
+  # Nothing needs the published port: nginx reaches these services by Docker service
+  # name over the internal network (deployment/nginx/webchat_rest_compose_*.conf).
   backend:
     ports:
-      - "5001:5001"
+      - "127.0.0.1:${BACKEND_HOST_PORT:-5001}:5001"
 
-  # ── Orchestrator port override (same pattern — expose 8000 for local testing) ──
+  # ── Orchestrator port override (same pattern — loopback only; see GRM-065 above) ──
   orchestrator:
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${ORCHESTRATOR_HOST_PORT:-8000}:8000"
 
   # ── Ticketing API (FastAPI, port 5002) — the single consolidated API ──────────
   # Auth mode is env-driven (APP_ENV / AUTH_MODE), not a duplicate service:
@@ -128,6 +137,7 @@ services:
   # Chatbot ticket-intake target (x-api-key webhook) — verify_api_key is independent
   # of the auth mode, so the webhook works in both bypass and keycloak.
   ticketing_api:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -165,7 +175,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
     ports:
-      - "5002:5002"
+      - "${TICKETING_API_HOST_PORT:-5002}:5002"
     depends_on:
       db:
         condition: service_healthy
@@ -182,6 +192,7 @@ services:
 
   # ── GRM Celery worker (SLA watchdog + grievance sync + notifications) ─────────
   grm_celery:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -221,6 +232,7 @@ services:
 
   # ── GRM Celery Beat (periodic task scheduler) ─────────────────────────────────
   grm_celery_beat:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -260,6 +272,7 @@ services:
   # tables). NO Docker socket — container supervision is the host watchdog's job.
   # Spec: docs/services/11_health_and_monitoring_service.md
   ops:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -311,6 +324,13 @@ services:
   # Rebuild (`--build`) after changing AUTH_MODE/KEYCLOAK_ISSUER. All API calls are
   # proxied server-side (Next.js) to TICKETING_API_URL — browser only uses :3001.
   grm_ui:
+    # ⚠ **Its own tag variable, and it is not decoration** (Q-17). The UI is the one image with
+    # two variants of the *same* commit — `ui:<sha>` (keycloak, deployable) and `ui:<sha>-bypass`
+    # (test only) — because NEXT_PUBLIC_AUTH_MODE is inlined at build time. A single shared
+    # IMAGE_TAG can only ever name one of them, so the e2e stack could not run `ui:<sha>-bypass`
+    # beside `app:<sha>`. Defaulting UI_IMAGE_TAG to IMAGE_TAG leaves every existing invocation
+    # unchanged; the e2e job sets it and nothing else moves.
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/ui:${UI_IMAGE_TAG:-${IMAGE_TAG:-local}}
     build:
       context: ./channels/ticketing-ui
       dockerfile: Dockerfile
@@ -326,7 +346,7 @@ services:
       # Server-side proxy target — uses Docker service name (not localhost)
       TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
     ports:
-      - "3001:3001"
+      - "${GRM_UI_HOST_PORT:-3001}:3001"
     depends_on:
       - ticketing_api
     restart: unless-stopped

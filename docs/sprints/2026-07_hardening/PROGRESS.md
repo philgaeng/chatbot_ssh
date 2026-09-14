@@ -58,7 +58,7 @@
 - [x] ESLint baseline: `eslint.config.mjs` rules-override (dated comment referencing HR-05/spec §2) downgrades `react-hooks/set-state-in-effect` **plus** `react/no-unescaped-entities`, `react-hooks/static-components`, `react-hooks/purity`, `react-hooks/immutability` to `warn`, reserving the error channel for crash-class `react-hooks/rules-of-hooks` (left as error). Verified `npx eslint .` = **exactly 2 errors** (the two `rules-of-hooks` in `app/settings/page.tsx:4599,4612`, HR-06's job) + 135 warnings. See Deviations for the extended-baseline rationale.
 - [ ] Deliberate-failure checks performed (tsc, doc link) and reverted — **not done**: requires pushing to GitHub and observing Actions runs; this agent was instructed not to commit/push (orchestrator's explicit override of the runbook). Pending orchestrator.
 - [x] Runtime < 10 min (~2 min); first green run: https://github.com/philgaeng/chatbot_ssh/actions/runs/28837101159 (all 3 jobs ✓, 2026-07-07). Reached green after CL-01 (canonical schema), the ticketing seed fix, and completing the CI env (Redis service + dummy SMTP). Integration tests quarantined via `-m "not integration"` — see cleanup sprint follow-up. **pending orchestrator** (needs a real push/PR to measure). Locally: `npx tsc --noEmit` ~12s, `npx eslint .` ~seconds, `npm run build` ~19s (no backend env, no `.env.local`), docs-links script ~instant (565 links, 0 broken). Backend job (Postgres + 3 migrations + seed + pytest) not run live locally — see Deviations.
-- [ ] Branch protection requested/enabled (note who/when): — **manual step for repo admin** (`gh` would need admin on `philgaeng/chatbot_ssh`); require `backend-tests`, `ui-checks`, `docs-links` as required checks on PRs to `main` and `integration/**` once the first few runs are green. Not performed by this agent.
+- [x] Branch protection requested/enabled (note who/when): **2026-09-04, repo owner** — a ruleset (`Main`) covering `main` + `integration/*`, five required checks, no bypass actors. **Active and verified through the API on 2026-09-04.** ⚠ The deliberate-failure proof above remains open — the settings landed, nobody has yet watched a red build refuse to merge. Unblocked by the repo going private ([D-010](../../DECISIONS.md)), since protection needs a paid plan on a private repo. Originally: — **manual step for repo admin** (`gh` would need admin on `philgaeng/chatbot_ssh`); require `backend-tests`, `ui-checks`, `docs-links` as required checks on PRs to `main` and `integration/**` once the first few runs are green. Not performed by this agent.
 
 **Notes:**
 - Python pinned to **3.10** in the workflow (matches root `Dockerfile: FROM python:3.10-slim`), **not 3.11** as the spec text guessed — spec itself flagged this as "verify before pinning."
@@ -80,7 +80,31 @@
 - [x] SRI + crossorigin on socket.io + exifr (exact versions): socket.io pinned `4.7.4` (was already), exifr pinned `@7` → **`7.1.3`** (resolved via jsDelivr, `x-jsd-version: 7.1.3`). Both `integrity="sha384-…"` + `crossorigin="anonymous"`. Hashes reproduced identically on re-fetch.
 - [x] `app.js:301` innerHTML → textContent + `createElement("strong")` composition (renders identically to `label` + bold id).
 - [x] Static greps clean: `grep innerHTML app.js modules/*.js` ⇒ only `uiActions.js:212` (`messages.innerHTML = ""`, safe clear); both new CDN `<script>` tags carry `integrity` + `crossorigin`. `node --check app.js` OK.
-- [ ] **Manual regression sweep — PENDING-HUMAN (BLOCKS MERGE).** No browser automation available in this environment; not run live (running stack is the sibling `nepal_chatbot_seah` checkout, out of scope). Each item reasoned against the exact diff (see Deviations `2026-07-05 HR-07` rows) — **all 7 still require a human browser tester before merge.** Record date/tester: —
+- [x] **Regression sweep — AUTOMATED 2026-09-07, 6 of 10 items + 1 partial. ⚠ NOT fully closed: 4 items remain, see below.**
+  ✅ **Ticked against a run, not against the existing tests.** `Images / e2e`, run
+  [`34064096316`](https://github.com/philgaeng/chatbot_ssh/actions/runs/34064096316) — **47 specs passed**,
+  including all 10 webchat specs, against a stack built from CI-published images and seeded from
+  scratch. Specs live in `channels/ticketing-ui/e2e/webchat/`. ⚠ The `e2e` job is **report-only
+  until 2026-09-21** (`GRM-083`), so it does not yet block a merge.
+  - ✅ **Automated and passing:** EN/NE switch (asserted on the *menu*, not the bilingual
+    greeting) · status check · SEAH route entry **including the swap of "Close session" for
+    "Close browser tab"** · send-lock double-Enter → exactly one `POST /message` · send-lock
+    under a dead backend → the 15 s failsafe releases the composer (simulated with
+    `page.route()`, no container stopped) · session-id persistence **and** `/clear_session`
+    rotation — asserting **id stability and rotation, not intake resumption**, per HR-07's own
+    caveat below · SRI load-cleanliness in a real browser.
+  - 🟡 **Partial:** image upload — the picker, the preview and the hold-until-a-case message are
+    driven; the upload itself is not.
+  - ⬜ **Still open, tracked as `GRM-077`:** the upload itself · voice note (also needs an ASR
+    stub — it is a paid model call) · map pin · filed-banner rendering. All four need an intake
+    driven to a **filed case**, which runs the classifier: a paid call per run, on a pipeline
+    that excludes `@live_llm` because it costs money. Reasoning and the cheapest way to close
+    two of them: [`../2026-09_qa_automation/followups/webchat-items-needing-a-filed-case.md`](../2026-09_qa_automation/followups/webchat-items-needing-a-filed-case.md).
+  - ⭐ **And the sweep found something its own items would not have.** `GRM-076`: the webchat
+    hard-depends on three foreign CDNs at runtime (socket.io, leaflet, exifr) and still renders
+    a page that *looks* fine without them — measured by blocking egress. DOR production is
+    firewalled and outbound to those hosts has never been checked.
+  - *Superseded, kept for the record:* **Manual regression sweep — PENDING-HUMAN (BLOCKS MERGE).** No browser automation available in this environment; not run live (running stack is the sibling `nepal_chatbot_seah` checkout, out of scope). Each item reasoned against the exact diff (see Deviations `2026-07-05 HR-07` rows) — **all 7 still require a human browser tester before merge.** Record date/tester: —
   - Code-reasoned + **low-risk (still needs a confirm click)**: EN/NE switch, file upload (image), voice note, map pin, status check — none touched by the diff; only shared surfaces are `getSessionId()` (returns same string, now persisted) and the send button (re-enabled by `refreshComposerSubmitState`, which bails during upload lock).
   - Code-reasoned + **must be human-verified (behavioral)**: (a) send-lock double-Enter → one `POST /message`, composer re-enables after reply AND after a dead-backend 15 s timeout; (b) filed-banner renders id as text/bold with no visual change; (c) SEAH route entry + persistent close controls; (d) fresh-visit persistence — same `rasa_session_id` survives refresh **but** intake restarts by server design (see caveat above), so verify the *id stability + `/clear_session` rotation*, not intake resumption.
 

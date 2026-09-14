@@ -18,7 +18,7 @@ the build steps drifts out of date and then contradicts them, which is worse tha
 | [`CLAUDE.md`](CLAUDE.md) | Locked architecture: schema ownership, service boundaries, the PII rules and *why* each exists |
 | [`docs/deployment/DOCKER.md`](docs/deployment/DOCKER.md) | Build, start, migrate, seed, debug |
 | [`docs/deployment/08_commit_strategy.md`](docs/deployment/08_commit_strategy.md) | Branch names, commit style, PR expectations |
-| [`docs/PROGRESS.md`](docs/PROGRESS.md) → [`docs/TODO.md`](docs/TODO.md) | What exists, and what is already queued |
+| [`docs/PROGRESS.md`](docs/PROGRESS.md) → [`docs/SPINE.md`](docs/SPINE.md) | What exists, and what is already queued |
 | [`docs/README.md`](docs/README.md) | The index of the whole specification tree |
 
 If you are proposing something substantial, **open an issue first**. A design that conflicts with a
@@ -53,7 +53,7 @@ architectural rule is as valuable as the rule.
 If you genuinely must defer something — downgrade a rule, skip a test, scope a finding out — it is
 logged in **two** places in the **same commit**: a follow-up doc under
 `docs/sprints/<sprint>/followups/<slug>.md`, and a pointer row in
-[`docs/TODO.md`](docs/TODO.md) under 🔵 TECH DEBT. An unlogged deferral is treated as a defect, not a
+[`docs/SPINE.md`](docs/SPINE.md) § *Backlog* with `kind: debt`. An unlogged deferral is treated as a defect, not a
 deferral. The rule and its rationale: [`docs/sprints/README.md`](docs/sprints/README.md).
 
 ### 5. Never write a documentation claim you have not verified
@@ -116,7 +116,7 @@ Some areas need more care than a normal review, and it is fair to say so up fron
 2. Build and run in Docker; run the tests in the container.
 3. Commit in small logical units, with intention-revealing messages
    (`feat: …`, `fix: …`, `chore: …`, `docs: …`).
-4. Update the live spec, `docs/PROGRESS.md`, and `docs/TODO.md` as the change requires — this is part
+4. Update the live spec, `docs/PROGRESS.md`, and `docs/SPINE.md` as the change requires — this is part
    of the definition of done, not an optional extra.
 5. Open a pull request describing **what** changed, **why**, **how you tested it** (commands and
    results, not "tested locally"), and the **risks or rollback** if relevant.
@@ -149,5 +149,5 @@ Participation is governed by [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
 The current programme of work is the DPG compliance and LLM-independence sprint plan:
 [`docs/sprints/2026-08-llm/README.md`](docs/sprints/2026-08-llm/README.md), with per-ticket status in
 its [`PROGRESS.md`](docs/sprints/2026-08-llm/PROGRESS.md). Longer-range items and tracked technical
-debt are in [`docs/TODO.md`](docs/TODO.md). Completed work is summarised in
+debt are in [`docs/SPINE.md`](docs/SPINE.md). Completed work is summarised in
 [`docs/sprints/README.md`](docs/sprints/README.md).

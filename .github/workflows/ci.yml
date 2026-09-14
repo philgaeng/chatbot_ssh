@@ -13,6 +13,11 @@ name: CI
 #   dpg-platform-independence — DPG-24: the LLM paths, live, against the OPEN configuration.
 #                    ⚠ NOT a required status check, deliberately — see its header.
 #
+# ⚠ **The sixth gate lives in `images.yml`, not here** — `e2e` needs this commit's images to
+# exist before it can pull them, and `needs:` in that workflow is the only way to express that.
+# Putting it here raced the build and skipped (measured 2026-09-07, run 34063394930). It is a
+# required-check context like any other; the workflow it sits in does not change that.
+#
 # ⚠ This comment said "three" and named three of four until 2026-08-20; `webchat-checks` had been
 # added without it. A header that undercounts its own jobs is how a gate goes unnoticed.
 #
@@ -318,6 +323,16 @@ jobs:
       # well under the ~5 min budget in spec §1 — safe to keep in CI.
       - name: Build
         run: npm run build
+
+      # QA-02 scope 4. The UI bakes its auth mode at build time, so one commit makes two
+      # images and only one of them has a login. This refuses a `-bypass` reference in any
+      # compose file that describes a real environment. Defence in depth — HR-01 already makes
+      # production fail closed on AUTH_MODE=bypass — but a test-only image reaching a real
+      # environment is worth two checks, and this one fails in CI rather than at 3am.
+      # Lives in ui-checks because it is a property of the UI image; costs milliseconds.
+      - name: No bypass UI image in a deployable stack
+        working-directory: .
+        run: bash scripts/ci/check_no_bypass_image.sh
 
   webchat-checks:
     # T3-03 (2026-08 tier3-structural sprint) — docs/sprints/archive/2026-08_tier3_structural/

@@ -1,7 +1,7 @@
 # Documentation lifecycle
 
-**Status:** authoritative (2026-09-04). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Status:** authoritative (2026-09-06). What each kind of document is for, which one wins when two disagree, and **when a sprint spec is promoted into the live specification.**
+**Last updated:** 2026-09-06 — rule **6.1a**: the header bump is now checked before the commit exists (`.githooks/pre-commit` → `--check-staged`), because the history check could only name the violation once the fix had become illegal. Also: §3a.2's release-tag example stops naming `v1.2.0`, a tag that never existed; it now names the scheme in [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) and says plainly that no tag exists yet. Also: §4a added: the verification ladder for *items*, beside the honesty markers for *documents*, with the crosswalk that keeps a spec line and its item from disagreeing. Earlier: 2026-09-04 — deferral rows move from the retired `TODO.md` to [`../SPINE.md`](../SPINE.md). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 **Reads with:** [`../README.md`](../README.md) (the map of the tree) and [`../DECISIONS.md`](../DECISIONS.md) (the public record of forks taken).
 
 ---
@@ -80,9 +80,19 @@ There is no need for a separate spec versioning scheme, because git already prov
 **Rule 3a.2 — Releases are tagged, so any past state is recoverable exactly:**
 
 ```bash
-git show v1.2.0:docs/ticketing_system/12_workflows_configuration.md   # the spec for what shipped in 1.2.0
+git show v2026.09.06:docs/ticketing_system/12_workflows_configuration.md   # the spec for what shipped that day
 git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why it changed, and with which code
 ```
+
+The tag scheme and the gate that cuts it are [`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md):
+`vYYYY.MM.DD`, cut when — and only when — a build reaches production.
+
+⚠ **No release tag exists yet.** The first is cut at the first production deploy after 2026-09-06, so
+this command currently has nothing to find. *This is recorded rather than quietly fixed, because until
+2026-09-06 the example named `v1.2.0` — a tag that never existed, in a repository whose only nine tags
+are branch archives. A documented recovery mechanism resting on nothing is worse than an absent one: it
+is trusted, and it fails at the moment somebody needs it.* The mechanism itself is proven — the tag
+gate and `git show <tag>:docs/…` were exercised end-to-end against a throwaway clone.
 
 **Rule 3a.3 — Small, frequent merges bound the drift.** Spec staleness is capped by how long a branch lives. A branch open for two days can be two days stale; one open for six weeks can be six weeks wrong. This is the main practical reason to keep pull requests small.
 
@@ -109,7 +119,7 @@ Because reconciliation happened per pull request, sprint close is an **audit, no
 - [ ] Nothing durable is stranded in the sprint folder → the "Where the durable content lives now" table is complete
 - [ ] Every `⏳ Changing` pointer the sprint raised has been removed or resolved
 - [ ] Every honesty marker is still accurate (things get verified without anyone clearing the marker)
-- [ ] Every deviation in the sprint tracker is either fixed, or recorded in the live spec as a `⚠ Deviates` marker, or logged in `followups/` + `TODO.md`
+- [ ] Every deviation in the sprint tracker is either fixed, or recorded in the live spec as a `⚠ Deviates` marker, or logged in `followups/` + `SPINE.md`
 - [ ] Originals moved to `archive/` with forwarding lines
 
 **Rule 3c.1 — If the audit finds a large gap, that is a signal about the process, not just a chore.** It means edits were not riding their PRs. Fix the habit, not only the document.
@@ -150,6 +160,45 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 
 **Rule 4.3 — An implementation-status table beats prose** for a spec that is partly built. `docs/seah/02_vault_privacy_and_reveal.md` is the exemplar — copy its shape.
 
+### 4a. The verification ladder — the same honesty, applied to *items*
+
+Everything above marks a **sentence in a document**. An item — a unit of work — carries the same
+honesty on its own axis, and the two are routinely confused: *"it's done"* means one thing about a
+paragraph and another about a ticket.
+
+**Rule 4a.1 — Every item carries two state fields, never one** ([`07_work_items.md`](07_work_items.md) §7.1).
+`state` says where it sits in the queue (`proposed → ready → current → merged → done`, plus `blocked` /
+`dropped`). **`verification` says how true it is:**
+
+| Level | Means | The honest next question |
+|---|---|---|
+| `planned` | Decided, nothing written | — |
+| `implemented` | Code merged. Nobody has run it against anything real | Has a test seen it? |
+| `tested` | Automated tests cover it and are green in CI | Has it run outside CI? |
+| `applied locally` | It works in the Docker stack on a developer machine | Is it on a server? |
+| `deployed` | It is running on staging or production | Has anyone confirmed it *there*? |
+| `verified in production` | Someone observed the behaviour on the production host, and dated it | — |
+
+**Rule 4a.2 — An item is `done` only when its verification meets what its profile requires** (07 §7.2).
+A chore is done at `tested`. A UI feature is not done at `deployed`. *Why: "done" without a level is
+the claim this whole section exists to prevent — it reads as finished and says nothing about whether
+anybody looked.*
+
+**Rule 4a.3 — The ladder and the markers must agree in the same commit.** They are two views of one
+fact, so a spec line and its item cannot honestly disagree:
+
+| Item verification | The live spec's line reads |
+|---|---|
+| `implemented` | `⚠ Not verified end-to-end` |
+| `tested` | `⚠ Not verified end-to-end` — CI is not a browser and not a server |
+| `applied locally` / `deployed` | `⚠ Not verified end-to-end` until a human or an E2E has driven it |
+| `verified in production` | *(nothing)* — the default, with the date recorded where the verification happened |
+
+⚠ **`deployed` is not `verified`, and the gap between them is where this project has been bitten.**
+Shipping code to a host proves the container started. The register carries closed items whose Done row
+says exactly this — *"deployed and it ran blind"* — and it says it because the field exists to be
+filled in honestly rather than optimistically.
+
 ---
 
 ## 5. How to write a rule
@@ -187,6 +236,35 @@ Anything that describes intended-but-unproven behaviour carries its state inline
 ```
 
 *Enforced by* [`tests/repo/test_doc_headers.py`](../../tests/repo/test_doc_headers.py) → `scripts/ops/doc_headers.py --check`. **Fix a gap with `--stamp`; never by hand across the tree.**
+
+**Rule 6.1a — The header bump is checked *before* the commit exists, by a hook.**
+
+```bash
+make hooks     # once per clone: points git at .githooks/
+```
+
+[`.githooks/pre-commit`](../../.githooks/pre-commit) runs `doc_headers.py --check-staged` — the same
+rule as `--check`, the same `SPEC_DIRS`, applied to the staged tree.
+
+⭐ **Why a hook and not another test, and this is the whole reason it exists.** `--check` reads
+**committed history**. A violation is therefore invisible while the commit is being written and
+appears only once it has landed — at which point the fix is *illegal*: bumping the header would have
+to ride a **later** commit, which is exactly what §3 forbids. **The check could only ever report a
+rule it had already made impossible to obey.** The hook moves the same rule to the one moment the fix
+costs a single line.
+
+⚠ **Measured, not argued.** On 2026-09-06 the author of that finding reproduced it one commit later —
+edited §3a.2 of this document, missed its header, and learned about it from the checker only after
+committing. Nothing was pushed, so it was fixed by amending; on a pushed commit it could not have been.
+
+**The bypass is `git commit --no-verify`, and it is expected to be loud** — say in the commit message
+why the body edit needed no date change. *Why a bypass at all: a hook that blocks a legitimate commit
+gets deleted, and a deleted hook enforces nothing. The same argument as the release gate's `HOTFIX=1`
+([`../deployment/20_release_and_versioning.md`](../deployment/20_release_and_versioning.md) §5).*
+
+⚠ **A hook is not a gate for anyone who has not run `make hooks`,** and `--no-verify` beats it. A
+CI-side check over each pull request's commit range is the version with teeth, and it is **not built**
+— it is a register row, not a plan of this document's.
 
 > ### ⚠ This rule was unenforced for a month, and the measurement is the argument
 >
@@ -267,7 +345,7 @@ git log --oneline -- docs/ticketing_system/12_workflows_configuration.md   # why
 - [ ] **Every spec the change touches has its `Last updated:` bumped in the same commit** (§6.1a) — `python scripts/ops/doc_headers.py --check` green
 - [ ] Unverified behaviour carries an honesty marker (§4)
 - [ ] Every new rule has its reason, and its enforcement point or an admission that it has none
-- [ ] Every deferral logged in `followups/` + `TODO.md`, **same commit**
+- [ ] Every deferral logged in `followups/` + `SPINE.md`, **same commit**
 - [ ] `PROGRESS.md` updated
 - [ ] Relative links resolve (CI link job)
 - [ ] If a doc moved: forwarding line added, inbound links fixed

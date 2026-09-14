@@ -4,6 +4,8 @@
 
 > **Status:** 📋 **Proposed — not approved.** Tier 3 per [`engineering/06_documentation_lifecycle.md`](../../engineering/06_documentation_lifecycle.md) §1.
 > **Why:** [`DESIGN-qa-and-build-pipeline.md`](DESIGN-qa-and-build-pipeline.md) — read it first.
+> 🚀 **Starting the sprint? [`KICKOFF.md`](KICKOFF.md)** — branch state, the one open decision, the three
+> asks that need the owner, and the traps that are not visible from these files.
 > ✅ **Q-01…Q-15 answered 2026-09-04** ([`QUESTIONS.md`](QUESTIONS.md)); every answer is folded into the
 > ticket that needs it, so an agent works from its spec alone.
 > ⚠ Three carry a residual check done *during* QA-02, not before it: the production host's CPU

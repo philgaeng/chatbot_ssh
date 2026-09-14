@@ -7,12 +7,12 @@
 | File                                    | Read for                                                                    |
 | --------------------------------------- | --------------------------------------------------------------------------- |
 | **→ `docs/PROGRESS.md`** | Current build state, demo DB, deviations, commit log (updated every commit) |
-| **→ `docs/TODO.md`**     | Open gaps, next features, tech debt                                         |
+| **→ `docs/SPINE.md`** | **What is next** — the register: one row per item, with kind · profile · state · verification. `docs/TODO.md` is retired behind it |
 | **→ `docs/engineering/00_engineering_index.md`** | **HOW we build** — DB, service layer, API, tests, frontend, doc lifecycle, **and which docs are public** (`06` §10 — a live spec never cites a sprint). Binding on every change. |
 | **→ `docs/deployment/DOCKER.md`**   | Build, start, migrate, seed, debug containers                               |
 | **→ `docs/README.md`**   | Index of the full spec tree (services, ticketing, chatbot, SEAH, deployment) |
 
-`PROGRESS.md` tells you what was _actually built_. `TODO.md` tells you what's next. `docs/engineering/` tells you **how to build it** (craft rules, per layer). `DOCKER.md` tells you how to run it. This file has the locked **architecture** — the decisions the craft rules follow from. Where a craft rule and this file disagree on a locked decision, this file wins; on _how_ to implement it, `docs/engineering/` wins.
+`PROGRESS.md` tells you what was _actually built_. `SPINE.md` tells you what's next. `docs/engineering/` tells you **how to build it** (craft rules, per layer). `DOCKER.md` tells you how to run it. This file has the locked **architecture** — the decisions the craft rules follow from. Where a craft rule and this file disagree on a locked decision, this file wins; on _how_ to implement it, `docs/engineering/` wins.
 
 ## 📝 SPECS ARE UPDATED BEFORE THE COMMIT, NOT AFTER (non-negotiable)
 
@@ -21,13 +21,20 @@
 Before every commit:
 
 ```bash
+make hooks                                  # ONCE PER CLONE — installs the pre-commit check
 python scripts/ops/doc_headers.py --check   # every live spec dated; header bumped where the body changed
 ```
+
+**`make hooks` is the one that matters.** It points git at [`.githooks/`](.githooks/), whose
+`pre-commit` runs the same rule against the **staged** tree. Without it you still get told — but only
+*after* the commit lands, when bumping the header would have to ride a later commit, which is the very
+thing rule 1 below forbids. ⚠ Measured 2026-09-06: that is not hypothetical, it happened to the agent
+that wrote the finding. Bypass with `git commit --no-verify`, and say why in the message.
 
 1. **Change the code → change the spec.** Find the specs your change makes wrong (`docs/README.md` is the map) and fix them in the same commit. `docs/engineering/06_documentation_lifecycle.md` §3 has the promotion rule; §4 the honesty markers for behaviour that is merged but unverified.
 2. **Bump `**Last updated:**` on every spec you touch** — enforced by [`tests/repo/test_doc_headers.py`](tests/repo/test_doc_headers.py), forward-only from 2026-09-04. You cannot edit a spec's body and leave its date claiming an older review.
 3. **Never put a commit hash in a doc** — it does not exist yet when you write it. Derive it: `python scripts/ops/doc_headers.py --provenance`. The reasoning, and why every workaround is worse, is §6.8.
-4. **Deferred anything? Log it same-commit** in `followups/` **and** `docs/TODO.md`.
+4. **Deferred anything? Log it same-commit** in `followups/` **and** `docs/SPINE.md` (§ *Backlog*, `kind: debt`).
 
 ⚠ **Why this is a rule and not an aspiration.** Rule 6.1 ("dated Status header on every doc") existed unenforced from 2026-08-03. Measured 2026-09-04: **40 of 80 live specs had no header at all**, and it was honoured **7 of 7** in `docs/engineering/` — the folder the rule lives in — and almost nowhere else. The same month, `GET /api/grievance/{id}` was documented in *this file* as decrypting server-side for months before it did, and an entire client-side decryption workaround grew inside ticketing because agents believed the line. **A rule with no enforcement point is a preference; the enforcement point is what makes it true.**
 
@@ -48,6 +55,7 @@ The May 10, 2026 demo shipped; parts of the locked plan below were superseded du
 | Target `grm.facets-ai.com` (staging on facets) | Production is **`grm-chatbot.dor.gov.np`** (DOR infra); facets is staging | `docs/deployment/12_environment_urls.md` |
 | "Two workflows" (Standard + SEAH) | Multi-stream workflow slots per project (safeguards/hazards/ca/seah) | `docs/ticketing_system/12_workflows_configuration.md` |
 | SEAH intake per April plan | Canonical model: `grievance_parties` + PII vault, legacy SEAH tables dropped | `docs/seah/` |
+| **File attachment on escalate/resolve:** *"warning encouraged but not blocked"* (§ *Officer case view*) | **Hard-blocked, on both sides.** `ticket_actions.py` raises *"At least one image attachment is required before escalating"* / *"…before resolving"*, and the UI refuses to open the form. ⚠ Measured 2026-09-06 by driving the flow in a browser (`GRM-073`) — the line below has been wrong for long enough that no live spec records the real rule | `ticketing/engine/ticket_actions.py` · `channels/ticketing-ui/lib/useTicketThread.ts` — **a live spec still owes this rule a home** |
 
 ---
 
@@ -601,7 +609,8 @@ ops/                    ← platform monitoring (own container, broker-independe
 requirements.grm.txt
 docs/
   README.md             ← index of the whole spec tree
-  PROGRESS.md, TODO.md  ← operational build logs
+  SPINE.md              ← the register: what is next
+  PROGRESS.md, TODO.md  ← build log; TODO retired 2026-09-04
   services/             ← shared backend service contracts
   ticketing_system/     ← GRM ticketing specs (+ ui/ for the officer UI)
   rest_chatbot/         ← chatbot architecture/flow/frontend specs

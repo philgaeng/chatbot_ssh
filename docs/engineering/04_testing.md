@@ -1,7 +1,8 @@
 # Testing standard
 
 **Status:** authoritative (2026-08-03). What we test, at which level, and what CI enforces.
-**Applies to:** `tests/` (Python, pytest) and `channels/ticketing-ui/**/*.test.ts` (Vitest).
+**Last updated:** 2026-09-07 — §6a: the suite now runs in CI (QA-05), from `images.yml` behind `needs: build` rather than from `ci.yml`, which raced the build and skipped every run; plus how to run it locally the same way and how to read a failed run's artifacts. Earlier: rules 6a.9–6a.12 (what counts as a crash; stub third parties; a state-changing flow creates its own subject; assert the outcome where the system keeps it), from writing the route smoke and driven-flow suites.
+**Applies to:** `tests/` (Python, pytest), `channels/ticketing-ui/**/*.test.ts` (Vitest) and `channels/ticketing-ui/e2e/**/*.spec.ts` (Playwright).
 **Reads with:** [`pytest.ini`](../../pytest.ini) — the marker contract, with its history — and `.github/workflows/ci.yml`.
 
 ---
@@ -28,7 +29,8 @@ This system takes grievances from people in rural Nepal, some of them SEAH cases
 | **API** | `tests/ticketing/test_authz_matrix_extended.py`, route tests | seeded Postgres | the contract: status codes, authz, response shape |
 | **Pinning / policy** | `test_boundary_policy.py`, `test_pii_boundary.py`, `route_snapshot.txt` | varies | architectural rules that must not erode |
 | **Frontend unit** | `channels/ticketing-ui/lib/*.test.ts` | nothing | hooks, pure helpers, command parsing |
-| **Manual browser sweep** | [`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md) | a human | what we have deliberately **not** automated yet |
+| **End-to-end** | `channels/ticketing-ui/e2e/*.spec.ts` | a **running, seeded stack** | what only a browser can see: a route that renders, a role that changes a queue, a flow that completes |
+| **Manual browser sweep** | [`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md) | a human | what is **still** not automated — shrinking as §6a's coverage lands |
 
 **Rule 2.1 — Test through the service layer, not the router, by default.** The service function is where the logic lives ([02 §1](02_python_services.md#1-the-architecture-named)); testing it needs no `TestClient` and stays valid when the route changes.
 
@@ -141,6 +143,124 @@ python scripts/ops/run_mutations.py --list                # no edits, no test ru
 
 ---
 
+## 6a. End-to-end tests — the browser level
+
+**Landed 2026-09-06 (QA-04a).** Before it there was no browser automation anywhere in this
+repository, and *"verified end-to-end"* meant 60–75 minutes of a human working through
+[`17_manual_browser_sweep.md`](../deployment/17_manual_browser_sweep.md).
+
+| | |
+|---|---|
+| Where | `channels/ticketing-ui/e2e/`, config beside it at `channels/ticketing-ui/playwright.config.ts` |
+| Naming | **`*.spec.ts`** — never `*.test.ts` |
+| Needs | a **running, seeded stack**; the suite never starts one |
+| Run | `npm run e2e` (in `channels/ticketing-ui`) |
+| First time | `npx playwright install --with-deps chromium` — no package in the Playwright chain has an install script, so `npm ci` does **not** fetch browsers (verified against 1.63.0, 2026-09-06) |
+
+**Rule 6a.1 — e2e specs are `*.spec.ts`; vitest owns `*.test.ts`.** Vitest's `include` is
+`**/*.test.ts`, so the two never collide. Name an e2e file `*.test.ts` and `npm test` collects a
+Playwright spec, which fails in a way that reads like a broken test rather than a misconfiguration.
+
+**Rule 6a.2 — What belongs here is what the other levels structurally cannot see.** A route that
+renders, a role that changes what a queue shows, a flow that completes across pages. **Not** what a
+unit test can answer — a permission matrix, tile arithmetic, a formatter. Those stay in `lib/*.test.ts`,
+where they run in a second with no stack. An e2e test costs a container stack and a browser; spend it
+only on the thing that needs one.
+
+**Rule 6a.3 — Identity comes from the seeded roster, never from a literal.** `e2e/fixtures/seed.ts`
+names every seeded id the suite relies on, and `asOfficer()` takes one of its officers. ⚠ **Role keys
+are documentation, not control.** Measured 2026-09-06: the server discards the roles a caller sends —
+`enrich_user` replaces them with the officer's DB-effective roles, so `l1-officer@grm.local` presenting
+`super_admin` still sees 6 tickets, not 281. A spec that "grants itself" a capability changes nothing
+and then asserts against a queue that never moved: a test passing for the wrong reason.
+
+**Rule 6a.4 — Never assert on a seeded ticket's status.** ⚠ Measured 2026-09-06: `GRV-2025-001` is
+seeded `IN_PROGRESS` and the dev database holds it `ESCALATED`, its event log naming `system` /
+*"Auto-escalated: SLA exceeded at previous step"*. Seeded status is a function of **how long the stack
+has been up**, not of the seed. Grievance id, assignee and the SEAH flag are stable; status is not.
+This is the browser-level form of Rule 3.3 — assert the property, not the snapshot.
+
+**Rule 6a.5 — Never `waitForTimeout`, never a CSS-class selector.** Use web-first assertions
+(`await expect(locator).toBeVisible()`) and role/label/text selectors. A sleep encodes today's latency
+and a Tailwind class encodes today's design; both go red for reasons that have nothing to do with a
+defect, and **a flaky e2e suite is worse than none — it trains everyone to ignore a red build.**
+
+**Rule 6a.6 — Order a negative assertion after a positive one.** `not.toBeVisible()` passes trivially
+against a list that has not finished loading. Assert what the officer *does* see first; only then
+assert what they must not.
+
+**Rule 6a.7 — One worker, no retries, and both are deliberate.** Every spec shares one database and one
+set of containers, so parallel workers interleave a flow's mutation with another spec's assertion. And
+a retry that turns red green destroys the only signal this level produces. If a spec needs a retry it is
+not deterministic yet — that is a bug in the spec. When wall-clock becomes the constraint, the answer is
+a second isolated stack, not a second worker on this one.
+
+**Rule 6a.8 — Screenshots are captured, not gated.** v1 uploads artifacts; there is no
+`toHaveScreenshot` baseline. Pixel diffing across platforms and font stacks is a later *decision*, not a
+deferred obligation — do not leave a TODO implying baselines are owed.
+
+**Rule 6a.9 — A failed `fetch` the application handles is not a crash.** The browser logs every
+non-2xx subresource as a console error, whether the page ignored it or rendered a careful empty
+state from it. Three routes do this *on their correct path* — an invalid closure link and an
+invalid report link both render "this link is invalid" **from** a 404. So the gate is: an uncaught
+exception, a `console.error` from application code, or the error boundary; a handled resource
+failure is **recorded as an artifact, not failed on**. Gating on raw console errors makes the
+suite permanently red; ignoring them entirely makes it blind. → `e2e/fixtures/smoke.ts`
+
+**Rule 6a.10 — Stub a third party; never depend on one.** A page that loads an image, a font or a
+script from outside this system must have that request intercepted in its spec. Otherwise the suite
+fails when a CI runner has no egress, sends this system's data to someone else once per run, and
+reports a third party's downtime as our regression. ⚠ **If you discover such a dependency while
+writing a spec, the stub is the test's fix and the dependency is a finding** — file it. That is how
+`GRM-072` was found.
+
+**Rule 6a.11 — A flow that changes state creates its own subject.** Never escalate, resolve or edit a
+*seeded* record: those actions are irreversible and non-idempotent, so the second run behaves
+differently from the first and the demo scenarios stop meaning what their script says. This is Rule
+3.5 at the browser level. ⚠ **And do not add a cleanup that deletes what the flow created** — this
+system has no erasure path for a grievance **by decision**, because in a complaints system a delete
+button is a suppression button. Prefix instead (`E2E-<timestamp>`), so leftovers are identifiable,
+and let an ephemeral stack be what throws them away.
+
+**Rule 6a.12 — Assert the outcome where the system keeps it, not only where the page shows it.** A UI
+can render an optimistic state for an action that failed. After driving an action, poll the API for
+the state that proves it — `expect.poll(() => getTicket(id).status_code).toBe("ESCALATED")`.
+
+### Running it in CI
+
+The `e2e` job in `.github/workflows/images.yml` — behind `needs: build`, so this commit's images
+are guaranteed to exist before it starts — pulls them, brings
+up an isolated seeded stack (`make ephemeral-up-full`), and runs the whole suite against it. Locally
+the same thing, minus the registry:
+
+```bash
+make ephemeral-up-full                       # isolated + seeded, on 13001 / 15002 / 18081
+cd channels/ticketing-ui
+E2E_BASE_URL=http://localhost:13001 \
+E2E_API_BASE_URL=http://localhost:15002 \
+E2E_WEBCHAT_URL=http://localhost:18081/rest-webchat/ npx playwright test
+make ephemeral-down                          # containers, network AND volumes
+```
+
+**Reading a failed CI run.** The job uploads `e2e-artifacts-<run id>` containing:
+
+| | |
+|---|---|
+| `test-results/` | a screenshot and a **trace** per failed test — `npx playwright show-trace <file>` replays the run with a DOM snapshot at every step |
+| `playwright-report/` | the HTML report, including the deliberate per-route screenshots |
+| `stack-logs/` | `docker logs` for every service |
+
+⚠ **Look at `stack-logs/` first when the suite did not start.** The failure you will actually get is
+"the API never came up", not "the button moved", and a readiness failure with no container logs is
+the least debuggable thing a pipeline can produce.
+
+⚠ **The job is report-only until 2026-09-21** (`continue-on-error`), a bedding-in period for the
+flakiest kind of job there is. **The date is the control, not an intention** — this repository has a
+recorded history of gates that decorate rather than gate, so the removal is tracked as `GRM-083`
+rather than left to memory. Until then, a green build does not mean these tests passed; open the job.
+
+---
+
 ## 7. Running them
 
 | Command | Runs |
@@ -149,7 +269,8 @@ python scripts/ops/run_mutations.py --list                # no edits, no test ru
 | `make test-ticketing-host` | same on the host (needs `make dev-grm-deps`, DB on `:5433`, migrations + seed) |
 | `make test-ticketing-unit` | the no-DB subset |
 | `npm test` (in `channels/ticketing-ui`) | Vitest |
-| `npx tsc --noEmit && npx eslint .` | the frontend gates |
+| `npx tsc --noEmit && npx eslint .` | the frontend gates — these cover `e2e/` too |
+| `npm run e2e` (in `channels/ticketing-ui`) | Playwright, against a running seeded stack (§6a) |
 | `python scripts/ops/run_mutations.py` | the mutation records (§5a) — **not** in CI, run deliberately |
 
 DB credentials for host tests come from compose, never `env.local` — `tests/ticketing/_host_env.py` (D-36).
@@ -179,4 +300,5 @@ DB credentials for host tests come from compose, never `env.local` — `tests/ti
 - [ ] New architectural rule: pinning test, or an explicit note that there is none
 - [ ] Every new test mutation-checked, and the mutation recorded in `tests/mutations/` (§5a) — not only in the commit message
 - [ ] CI green with **nothing** deselected, downgraded, or suppressed
-- [ ] Any deferral logged in `followups/` + `TODO.md`, same commit
+- [ ] A change a browser could see has an e2e spec, or a written reason it does not (§6a)
+- [ ] Any deferral logged in `followups/` + `SPINE.md`, same commit

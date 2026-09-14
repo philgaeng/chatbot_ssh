@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -127,13 +127,127 @@ Notes:
 | Ops check history | Postgres: `ops.system_health_checks` (queryable), plus daily ops email |
 | Keycloak | `docker compose --profile auth logs keycloak` |
 
+## 6a. Deploying a specific build, and rolling back
+
+**Staging pulls images that CI already built; production still builds on the box.** Both go
+through the same Makefile macros, and which one happens is `DEPLOY_BUILD` — `0` pulls, `1`
+builds. The `aws-*` targets set `0`; everything else defaults to `1`.
+
+```bash
+make aws-deploy IMAGE_TAG=<short-sha>        # deploy that commit's images
+make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ that is the rollback — no rebuild
+make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on the box instead
+```
+
+⭐ **The rollback is the capability worth knowing about.** Before images were tagged, going back
+a version meant rebuilding an older commit *on the deploy host* — the operation that took
+staging off the network for 41 minutes on 2026-09-04. Now it is a pull of an image that already
+exists, and it takes as long as the download.
+
+**`IMAGE_TAG` is a 7-character short sha**, the same one the build workflow tags with. Find one
+with `git rev-parse --short HEAD` on the commit you want, or read it off the Images run.
+
+⚠ **A deploy with no `IMAGE_TAG` is refused, on purpose.** The default resolves to `local`,
+which exists only on a developer's machine, so a pulling deploy without a tag would fail
+partway through with a registry 404 that reads like an outage. It stops before starting and
+says what to pass instead.
+
+⚠ **A pulling deploy needs a registry credential, and that is not optional any more**
+(`GRM-093` / `A-11`, 2026-09-14). [D-010](../DECISIONS.md) made the repository private on
+2026-09-04, so **its GHCR packages are private**: an unauthenticated `compose pull` answers
+`denied`. The deploy now authenticates before it pulls —
+`REMOTE_REGISTRY_LOGIN` reads **`GHCR_READ_TOKEN`** from `env.local` and runs `docker login`
+with `--password-stdin`, never as an argument.
+
+| | |
+|---|---|
+| **Token absent** | The login is **skipped**, with one line saying so, and the pull proceeds unauthenticated. Correct for a public registry; a private one then says `denied`. This is why `make wsl-up` and every `DEPLOY_BUILD=1` path are unaffected |
+| **Login fails** | The deploy stops there and names the fallback, rather than failing later inside `compose pull` |
+| **`DEPLOY_BUILD=1`** | No registry, no login, no token. The documented answer when the registry is unreachable *or* uncredentialed |
+
+⚠ **Three manual steps remain, and none of them is code.** ① create the token — a **classic**
+PAT with `read:packages` **and no other scope**; ② add it as `GHCR_READ_TOKEN` — the value via `make secrets-edit`
+**and** the `#@secret` marker in `.env.shared`, **in the same change**, because
+`gen_env_local.sh` fails when the two halves disagree in either direction; ③ run `make env-local`
+**on the host**, since `aws-deploy` deliberately does not. Pinned by
+[`tests/repo/test_registry_login.py`](../../tests/repo/test_registry_login.py).
+
+> ⚠ **It must be a classic token, and that is not a preference — verified against GitHub's docs
+> 2026-09-14.** *"GitHub Packages only supports authentication using a personal access token
+> (classic)."* A fine-grained token **cannot** read GHCR container packages, which is exactly what
+> `A-11` already had evidence of and did not recognise: the owner's own token returned
+> `403: Resource not accessible by personal access token` when listing packages. `A-11`'s original
+> recommendation said *fine-grained*, and following it would have produced a token that fails at
+> `docker login` for a reason the error message does not explain.
+
+⚠ **And the cost of that, stated plainly: a classic PAT cannot be scoped to one repository.**
+`read:packages` reads every package the account can read. The controls that remain are that it is
+**read-only** and carries **no second scope** — so grant nothing but `read:packages`, and give it
+an expiry. If a per-repo credential is required later, the answer is a GitHub App installation
+token or a machine account, not a differently-shaped PAT.
+
+⚠ **Residue:** a successful login writes a base64 credential to `~/.docker/config.json` on the
+host, unencrypted. Read-only and no-second-scope is the control; that file is not.
+
+⚠ **Production is deliberately unchanged.** `prod-deploy` still builds on the host, because
+nobody has yet run `curl -sI https://ghcr.io/v2/` from the VPN-only DOR box to confirm it can
+reach the registry at all. Converting it before that answer would put an untested path in a
+maintenance window. When the answer arrives, `make prod-deploy DEPLOY_BUILD=0` is the switch —
+and it needs the same credential on that host first.
+
+**Every deploy prints what is actually running**, per service, after `up -d`:
+
+```
+aws-deploy: running images —
+  ticketing_api      ghcr.io/philgaeng/chatbot_ssh/app:a1b2c3d   sha256:9f2e1c4a8b...
+  grm_ui             ghcr.io/philgaeng/chatbot_ssh/ui:a1b2c3d    sha256:3d7b0e5f2c...
+```
+
+⚠ **Read it.** A pulling deploy can succeed while changing nothing: if `IMAGE_TAG` was not
+bumped, `up -d` is a no-op and the deploy reports OK having redeployed the previous build. The
+digest is the only thing that distinguishes those two outcomes, and *"deployed" is not "has
+run"* is a lesson this project has already paid for once.
+
+## 6b. Running a second stack on one machine
+
+Two stacks coexist if they differ in **project name** (which names the containers, network and
+volumes) and in **published ports**. `make ephemeral-up` does both:
+
+```bash
+make ephemeral-up        # isolated + seeded: ui :13001, api :15002, webchat :18081
+make ephemeral-up-full   # the same plus the chatbot half (orchestrator, backend, celery, nginx)
+make ephemeral-down      # containers, network AND volumes — nothing survives
+```
+
+Verified 2026-09-07: both stacks healthy at once, `grm_ci_local_*` and `nepal_chatbot_*` volumes
+side by side, and the officer-UI e2e suite green against the ephemeral one while the dev stack
+kept serving.
+
+⚠ **Do not set `COMPOSE_PROJECT_NAME` on an existing stack.** Compose derives it from the
+directory and the volumes are named after it, so a rename makes compose look for
+`<newname>_postgres_data`, fail to find it, and create an **empty** one — the database still on
+disk, silently detached. The real environments therefore keep deriving their name; only the
+ephemeral stack sets one, because it has no data to lose.
+
+⚠ **The ephemeral stack needs the repository, not just the images.** `nginx` is
+`image: nginx:stable` and is never built: it bind-mounts `channels/REST_webchat`,
+`channels/shared` and its `.conf` from the checkout, so the webchat is served from the working
+tree. This is the one place where "pull, don't build" does not describe what happens.
+
 ## 7. Common procedures
 
 ```bash
-# Deploy update (staging/prod: prefer make aws-deploy / prod-deploy — they wrap this)
+# Deploy update (staging/prod: prefer make aws-deploy / prod-deploy — they wrap this; §6a)
 git pull --ff-only origin main
 make migrate_all
 docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d --build
+
+# ⚠ Never pipe a deploy through `tail`, `head` or `less`.
+#   make aws-deploy | tail -20     # DON'T
+# Those buffer until the pipe closes, so a deploy that is stalling looks identical to one that
+# is working — which is what left the operator blind for 41 minutes on 2026-09-04. Let it print,
+# or capture with `tee` (which passes output through as it arrives):
+#   make aws-deploy 2>&1 | tee deploy.log
 
 # Recreate nginx after editing deployment/nginx/*.conf
 make wsl-nginx

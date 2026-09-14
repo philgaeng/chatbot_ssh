@@ -123,3 +123,15 @@ backend/actions/utils/utterance_mapping_translation_checks/mapping_with_latest_t
 
 # Secrets hygiene (added 2026-08-20, docs/deployment/13_security.md §5.2)
 *.decrypted
+
+# ── Source material for the operating-model sprint — NOT committed (2026-09-06) ──
+# Decision: `resources/` stays out of the repository. It holds the three assessments
+# the sprint was built from AND the third-party project-kickoff prompt they review.
+# Why: the prompt is someone else's work, and committing it would redistribute it —
+# a decision that is not ours to make by default. The assessments are *inputs* to a
+# decision, not the record of it: the conclusions live in the sprint's DESIGN doc and
+# in docs/DECISIONS.md, which is where a reader should be sent.
+# ⚠ Consequence, accepted: `resources/01`–`03` citations in the sprint docs are LOCAL
+# paths, not repository paths, and will not resolve for anyone else. The sprint docs
+# say so where they cite them.
+resources/
