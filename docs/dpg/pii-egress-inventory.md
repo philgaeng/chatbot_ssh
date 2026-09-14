@@ -1,6 +1,6 @@
 # PII egress inventory — every path by which grievance text leaves the agency's control
 
-**Last updated:** 2026-09-15 — the owed systematic email search done (eight mail legs traced from the transport outward; none carries the grievance record beyond the three already closed); three paths leaving from the **browser** added (E14–E16), which a server-side trace could not see; E3 measured on staging (no backup has ever run); E13's stale "open" cell corrected.
+**Last updated:** 2026-09-15 — the owed systematic email search done (eight mail legs traced from the transport outward; none carries the grievance record beyond the three already closed); three paths leaving from the **browser** added (E14–E16), which a server-side trace could not see; E3 measured on staging (no backup has ever run); E13's stale "open" cell corrected, and the 2026-09-03 summary box no longer says nobody has searched for a fourth leg.
 
 > **Written:** 2026-08-27
 >
@@ -35,9 +35,9 @@
 >
 > All three are now closed, and behind **one** control rather than three copies of one — the
 > allow-list and the sensitivity gate live in `backend/services/admin_notifications.py`, which
-> imports neither the chatbot nor the API package. ⚠ **Nobody has grepped for a fourth.** The way to
-> do it is to grep the **templates**, not the senders: E5 was a single assignment, and no sender
-> looked wrong.
+> imports neither the chatbot nor the API package. ✅ **The search for a fourth was done on 2026-09-15
+> and found none** (§6c) — run from the transports outward, because E5 was a single assignment and no
+> sender looked wrong.
 >
 > ⭐ **The finding that should outlive the sprint.** Of the defects Sprint 3 found in **live** code —
 > the OTP at INFO, the erased SEAH detection, Redis persisting narratives, the classification payload —

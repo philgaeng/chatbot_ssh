@@ -90,6 +90,12 @@ def test_the_briefing_question_counts_match_the_assessment() -> None:
         14: "Fourteen", 15: "Fifteen", 16: "Sixteen", 17: "Seventeen", 18: "Eighteen",
         19: "Nineteen", 20: "Twenty",
     }
+    # ⚠ Extended 2026-09-15, when the 26th question made 21 non-blocking and this table raised KeyError
+    # instead of checking. Hyphenated compounds, the way the briefing writes them.
+    ones = ["", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
+    for tens, name in ((20, "Twenty"), (30, "Thirty"), (40, "Forty")):
+        for unit in range(1 if tens == 20 else 0, 10):
+            words[tens + unit] = f"{name}-{ones[unit]}" if unit else name
     # Match the claim, not its punctuation: the count word followed by "questions block work".
     assert re.search(rf"\b{words[blocking]}\*{{0,2}} questions block work\b", briefing), (
         f"01_consultant_briefing.md must say '{words[blocking]} questions block work' — "

@@ -1,12 +1,12 @@
 # DPG compliance status — Nepal GRM platform
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-15 — re-verified against the staging host and the images it runs. The monitor has now produced twelve days of evidence, and the evidence is the headline: production's TLS certificate expired on 2026-09-13 after ten nights of critical reports nobody read. Indicators 2, 5, 7, 8 and the scorecard revised; one question added (Q-02-03).
 
 > **What this is.** An indicator-by-indicator self-assessment against the
 > [DPG Standard](https://www.digitalpublicgoods.net/standard), for ADB's Digital Public Goods
 > consultant. Each indicator states **what we have**, **what is missing**, **what we propose**, and
-> **what we need from you**. **As of 2026-09-03** · branch `integration/stage`.
+> **what we need from you**. **As of 2026-09-15** · branch `integration/stage`, as deployed to staging that day.
 >
 > **What this is not.** Not a record of what was built — that is
 > [`03_remediation_record.md`](03_remediation_record.md), deliberately outside this assessment. Not
@@ -23,17 +23,37 @@
 Two of the nine indicators have real gaps, **one of which nobody on the engineering team can close**,
 and the AI-specific reading of indicator 4 is the substance of the meeting.
 
-⚠ **One caveat qualifies several indicators at once, and it is narrower than it was.** Not every
-control here runs where the data is. **Verified on the staging host, 2026-09-03:**
+> ## ⛔ Read first — what twelve days of monitoring evidence showed (2026-09-15)
+>
+> On 2026-09-03 this pack said the monitor on the staging host had produced its first rows and that its
+> nightly scans had "not yet had a night". **They have now had twelve**, and reading the monitor's own
+> tables for this revision found three things **no alert, report or person had surfaced**:
+>
+> 1. ⛔ **Production's TLS certificate expired on 2026-09-13.** The staging monitor watches the production
+>    hostname; it reported the certificate **critical on ten consecutive nights**, then *expired*. Verified
+>    from outside. Every browser reaching the production complainant channel now shows a security warning.
+> 2. ⛔ **The nightly CVE scan has saved no finding on any night** — a duplicate advisory rolls back the
+>    whole write — while recording a status that looks like a result.
+> 3. ⚠ **No backup has ever run on a deployed host**; the backup check has been critical every night.
+>
+> ⭐ **The monitor worked. The path from its findings to a person who acts does not exist.** That is a
+> different gap from the one this pack used to describe — *"deployed is not has run"* — and it is the
+> next one along: **has run is not has been read.** It is assessed under indicators 7 and 8.
+
+⚠ **One caveat qualifies several indicators at once.** Not every control here runs where the data is.
+**Verified on the staging host — first on 2026-09-03, re-verified 2026-09-15:**
 
 | | Verified | |
 |---|---|---|
 | **Redaction, log filter, broker fix, safeguarding escalate-only** | ✅ **running on staging** | `pii_service.py` is in the running image, and the model-call chokepoint resolves `redact` |
-| **`ops` health checks** | ✅ **running on staging, and producing output** | Five checks — db, redis, queue depth, beat liveness, endpoint — all `ok`, first written 2026-09-03 15:49 UTC. **The first evidence this platform has ever produced from a monitored deployed host** |
-| **`ops` dependency & licence scans** | 🟡 **scheduled on staging, never yet run** | `ops.dependency_findings` is **empty**. These are nightly and the container has not had a night |
+| **`ops` health checks** | ✅ **running on staging for twelve days** | Thousands of rows — db, redis, queue depth, beat liveness, endpoint — plus nightly certificate, backup, SMTP and database-security checks. ⛔ **Its critical findings reached nobody** — see the box above |
+| **`ops` licence scan** | ✅ **has run, eleven nights** | Scans 129 packages, flags exactly the five weak-copyleft packages the hand-generated audit dispositions |
+| **`ops` dependency CVE scan** | ⛔ **runs nightly and has saved nothing** | Every night ends *"persist failed"*: the scanner reports each advisory twice, and the duplicate rolls back the write. The measured CVE figures in this pack come from a person running the command |
+| **Edge hardening** | ✅ **running on staging, verified by behaviour 2026-09-14** | Security headers on every response, no site-wide cross-origin allowance, rate limiting on the public complainant endpoint (20 rapid requests → 11 served, 9 refused), internal service ports no longer answering from the internet |
+| **Officer session tokens** | ✅ **single-use refresh tokens on staging, 2026-09-15** | A second use of a refresh token — a replayed theft — ends the session for every holder. Measured against Keycloak before it was switched on |
 | **Keycloak authentication events** | ✅ **enabled on staging 2026-09-03, and proven to record** | `events_enabled=t`, `admin_events_enabled=t`, 90-day expiry — and a deliberate failed-login probe wrote a `LOGIN_ERROR` row, so this is a working control rather than a set flag. ⚠ **Forward-only:** nothing before 16:03 UTC exists, including a real officer login made minutes earlier |
 | **The email-boundary fixes** (indicator 7) | ✅ **running on staging** | Deployed 2026-09-03 15:55 UTC; `admin_notifications.py` is in the running **orchestrator** and **backend** images, and the old full-PII template is gone from both |
-| **DOR production** | ⚠ **not verified** | It tracks `main` and is reachable only over VPN. **Treat every row above as false for production** |
+| **DOR production** | ⚠ **not verified** | It tracks `main`; administrative access is over VPN. **Treat every row above as false for production.** ⛔ One production fact *was* established from outside on 2026-09-15: **its TLS certificate expired on 2026-09-13** |
 
 ⚠ **One deployment detail worth recording, because it nearly cost the row above.** The default
 `AWS_DEPLOY_SERVICES` list does **not** include the orchestrator, and four of the six changed files
@@ -42,11 +62,12 @@ have rebuilt the image, reported `aws-deploy OK`, and left the email fixes not a
 **The OK line verifies two ports; it does not verify that the code you changed is the code now
 executing.** Each claim in the table above was checked inside the running container instead.
 
-⭐ **The distinction that matters, and it is the one people skip: *deployed* is not *has run*.** Both
-halves of `ops` were shipped to staging in the same container on the same day. Its **health checks
-have produced real rows**; its **licence and CVE scans have produced nothing**, because they are
-nightly and it has not had a night. **Same deployment, two different claims** — and only one of them
-is evidence. The pack keeps them apart wherever it states either.
+⭐ **The distinctions that matter, and they come in a chain: *deployed* is not *has run*, *has run* is
+not *has worked*, and *has worked* is not *has been read*.** On 2026-09-03 both nightly scans were
+deployed and neither had run. Twelve days later both have run; the **licence** scan worked and agrees
+with the hand audit; the **CVE** scan ran every night and saved nothing; and the **certificate** check
+worked perfectly and was read by nobody while production's certificate expired. **Same container, four
+different claims.** The pack keeps them apart wherever it states any of them.
 
 ⚠ **The monitor also ran blind for five hours after that deploy**, authenticating with the wrong
 role's password and reporting `executed successfully` throughout — the second time that fallback has
@@ -65,9 +86,9 @@ never leaves the process"* is the strongest form available.
 
 | Evidence | What it holds |
 |---|---|
-| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, **21 findings**, assessed against the Individual Privacy Act 2018 |
-| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which grievance text leaves the agency's control** — 12, ranked by likelihood rather than by alarm, with what closed and what did not |
-| [`dependency-licenses.md`](dependency-licenses.md) | Generated inventory: **149 packages** across four dependency sets, plus measured CVEs — regenerated 2026-09-03 |
+| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, **27 findings**, assessed against the Individual Privacy Act 2018 — v1.3, 2026-09-15 |
+| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which personal data leaves the agency's control** — 16, ranked by likelihood rather than by alarm, three of them from the user's browser; plus the systematic email search |
+| [`dependency-licenses.md`](dependency-licenses.md) | Generated inventory: **149 packages** across four dependency sets, plus measured CVEs — regenerated 2026-09-15 **against the images that ship** |
 | [`open-model-configuration.md`](open-model-configuration.md) | How this system runs on open models; the measured capability matrix |
 | [`model-benchmarks.md`](model-benchmarks.md) | What the models score on a committed 105-item Nepali set |
 | [`vllm-deployment.md`](vllm-deployment.md) | Self-hosted inference, designed and costed; why it is parked |
@@ -79,13 +100,13 @@ never leaves the process"* is the strongest form available.
 | # | Indicator | Status | What is missing |
 |---|---|---|---|
 | 1 | Relevance to SDGs | ✅ Compliant | Needs writing up, not building |
-| 2 | Open licensing | 🟢 Substantially | The licence choice is provisional; the scan is now scheduled on staging but **has not yet produced any output** |
+| 2 | Open licensing | 🟢 Substantially | The licence choice is provisional. ✅ The nightly licence scan now runs on staging and agrees with the audit. ⚠ **No public copy of the source exists** since the working repository went private — the release copy is designed, not generated |
 | 3 | Ownership | 🔴 **Blocked** | No IP determination, so **no copyright holder and no submission**. Not closable by this team |
-| 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary. ⚠ The **closed** column is now stale too |
-| 5 | Documentation | ✅ Compliant | — |
+| 4 | Platform independence | 🟡 Mechanism done, choice not made | The open accuracy column is unmeasured; the repository default is still proprietary; the closed column predates redaction. ⚠ The CI job shows green on every change and **skips every time** — it has no token |
+| 5 | Documentation | 🟢 Substantially | Written and current. ⚠ **Not publicly readable today** — it lives in the private working repository until the first release copy is generated |
 | 6 | Mechanism for extracting data | ✅ Compliant | — |
-| 7 | Privacy & applicable laws | 🟠 Real gaps — **and a different shape from a fortnight ago** | Egress is pseudonymised, not stopped; **nothing is deployed**; no retention schedule; contact details not separable; no systematic search for a fourth email leg — and **no supervisor to validate any of it, while the exposure is criminal** |
-| 8 | Standards & best practices | 🟢 Substantially | No governance model or versioning policy, deliberately. ⚠ Nine advisories against the shipped web framework; authentication events now recorded on staging but **not on production** |
+| 7 | Privacy & applicable laws | 🟠 Real gaps | Egress is pseudonymised, not stopped; **production unverified**; the complainant's map pin sends the area around their home abroad before consent; **breach detection produces findings nobody reads**; no retention schedule; contact details not separable — and **no supervisor to validate any of it, while the exposure is criminal**. ✅ No fourth email leg |
+| 8 | Standards & best practices | 🟢 Substantially — ⚠ **two urgent items** | ⛔ **Production's certificate has expired.** ⛔ The shipped web framework now carries **two critical advisories**, one on an endpoint that is live and unused. No governance model; a release policy is written but **no release has been cut**; authentication events **not on production** |
 | 9 | Do no harm | 🟠 One gap inside a deliberate design | The recall-first classifier has no explicit return path for a cleared case, its recall is unmeasured, and **nothing measures the pipeline end to end** — every figure we have scores the model alone |
 
 ---
@@ -129,17 +150,20 @@ expects. **Remedy:** write it with the submission package, once indicator 3 unbl
 - ⚠ **The licence choice is provisional.** Apache-2.0 was applied so the repository would not sit
   unlicensed; it was not chosen against ADB's preferences.
 - ⚠ **`NOTICE` names no copyright holder** — deliberate, blocked on indicator 3.
-- ⚠ **The nightly licence scan has still never run on a deployed host** — but the reason narrowed on
-  2026-09-03. `ops` **is now deployed to staging** and demonstrably working there: its health checks
-  write `ok` rows. **`ops.dependency_findings` is nevertheless empty**, because the licence and CVE
-  scans are nightly and the container has not had a night. ⭐ **So the scan is now scheduled where the
-  data is and has still produced no evidence** — the most precise statement available, and **not a
-  continuous guarantee.**
+- ✅ **The nightly licence scan now runs on a deployed host, and agrees with the audit.** Eleven nights on
+  staging; it scans the same 129 Python packages and flags exactly the five weak-copyleft packages the
+  audit dispositions by hand. **Two independent routes to one answer** — which is what turns this
+  indicator from a dated artefact into a continuous control, on staging.
 - ⚠ **DOR production has no `ops` at all**, and was not reachable to verify from here.
+- ⚠ **No public copy of the source exists today.** The working repository was made **private on
+  2026-09-04**, deliberately: it carries process records — incident notes, infrastructure identifiers,
+  review drafts — that do not belong in public. The public repository is designed as a **generated
+  release copy**, cut at each production release, carrying the specifications, this evidence pack and
+  the open-source files. **The policy and the gate are written; no release has been cut yet**, because
+  none has reached production since. Until one is, an assessor has nothing public to read (Q-02-03).
 
-**Remedy.** Let the staging scan run and cite its first real output — at that point this becomes the
-continuous control the indicator asks for, rather than a dated artefact. Then deploy `ops` to
-production.
+**Remedy.** Cut the first public release copy — it needs one production release. Deploy `ops` to
+production so the licence scan runs where the data will be.
 
 **Questions.**
 
@@ -149,6 +173,11 @@ production.
 - **Q-02-02 — Do any of these licences cause a problem for the assessment, or in ADB/DOR procurement?**
   AGPLv3 (Redis, elected from its three), LGPL-with-linking-exception (`psycopg2-binary`), and two
   transitive LGPL libraries. All OSI-approved, all weak copyleft, none modified by us.
+- **Q-02-03 — Does a public repository that publishes releases, rather than the working history, meet
+  the Standard's expectation of openly available source?**
+  Our working repository is private; the public one would carry each production release's source,
+  specifications and this evidence pack, generated at release time. We would rather confirm that shape
+  before the first release than after.
 
 ---
 
@@ -217,27 +246,31 @@ anyway.
   provider rate limit caused by **our own prompt**, since cut 70%. The blocker is gone and the run has
   not been made — it needs owner-funded inference spend, deferred 2026-08-24
   ([`model-benchmarks.md`](model-benchmarks.md) §4).
-- ⚠ **And as of 2026-09-03 the *closed* column is stale as well**, for a reason worth stating because
+- ⚠ **And since 2026-09-03 the *closed* column is stale as well**, for a reason worth stating because
   it is a consequence of doing the privacy work properly. The benchmark harness calls **the product's
   own functions** rather than a reimplementation — deliberately, and it is the right design — so when
   redaction became the default at the chokepoint, the harness inherited it. **Every classification
   figure now describes an input the system no longer sends.** Detection figures are unaffected.
   ⭐ **This is the cheapest measurement in the pack and the only one blocked on neither money nor
-  absent data.** It needs one command, and nobody has run it.
+  absent data.** It needs one command. Nothing on the model path has changed since, and on 2026-09-15
+  the owner chose to keep the existing measurements rather than re-run.
 - ⛔ **SEAH detection recall is unmeasured for both candidates and cannot be measured from this
   repository** — the committed set holds no harassment reports, by decision. **The one gap money
   cannot close** ([`model-benchmarks.md`](model-benchmarks.md) §5).
 - ⚠ **The repository default is therefore still proprietary**, deliberately: an open base URL with
   unvalidated model ids is a repository that cannot serve one request on a fresh clone — weaker
   evidence, not stronger.
-- ⚠ **The CI job has never executed in CI.** It passes by hand. **A gate that has not run is not yet a
-  gate.**
+- ⚠ **The CI job runs on every change and skips every time.** Measured 2026-09-15 across the last six
+  runs: each logs *"Skipped — no HF_TOKEN available"* and reports **pass**, because the repository holds
+  no token for the open provider. It still passes by hand. **A green check that measured nothing is
+  worse than a missing one**, because it looks like evidence.
 - **Self-hosting is designed, costed and parked** for want of an operator, not a budget line. ⭐ A
   **data-sovereignty decision with a price, never a cost decision**
   ([`vllm-deployment.md`](vllm-deployment.md) §3).
 
-**Remedy.** Run the open column and re-meter cost in the same run; measure SEAH recall against the
-owner's held-out set; then flip the default and let CI run the job on every commit. The first is a
+**Remedy.** Give CI a token for the open provider, or make the job fail rather than pass when it cannot
+run. Run the open column and re-meter cost in the same run; measure SEAH recall against the owner's
+held-out set; then flip the default. The first is a
 spending decision, the second a data-availability constraint, the third follows from both.
 
 **Questions.**
@@ -269,9 +302,12 @@ ticketing and chatbot specs, deployment runbooks, an engineering craft-rules ind
 change, and a per-sprint decision register. APIs are OpenAPI-described, and every architectural
 invariant that matters is **pinned by a test**, so documentation and code cannot drift silently apart.
 
-**Gap.** None blocking. It is written for a maintainer rather than an external adopter; no
-deployment-from-scratch guide for a third party exists. **Remedy:** write the adopter quickstart if
-the DPGA expects one (Q-08-01).
+**Gaps.** It is written for a maintainer rather than an external adopter; no deployment-from-scratch
+guide for a third party exists. ⚠ **And it is not publicly readable today:** the working repository went
+private on 2026-09-04, and the public release copy that will carry the specifications has not yet been
+generated (indicator 2). A release policy is written — dated versions, cut only by a production deploy.
+**Remedy:** cut the first release copy; write the adopter quickstart if the DPGA expects one (Q-08-01,
+Q-02-03).
 
 ---
 
@@ -328,6 +364,9 @@ of that equals a regulator**, and **ADB is the nearest candidate standard-setter
   to a per-field rule. Celery payloads now carry a `grievance_id` and the task reads the narrative
   from Postgres, so **the broker no longer holds grievance text at all** — the cause removed rather
   than the store obscured.
+- ✅ **No fourth email leg carries the record** — the systematic search the last revision said nobody had
+  done, done on 2026-09-15 from every place mail leaves the process outward, with template placeholders
+  read from the deployed image. Eight legs; the three that carried the record are the three closed.
 - An **architecturally enforced PII boundary**: the ticketing subsystem cannot decrypt complainant PII
   and has no accessor for a key — pinned by a test. One audited server-side decryption point.
 - Granular consent, recorded and refusable; **anonymous submission end-to-end**; self-hosted identity;
@@ -351,7 +390,8 @@ because self-hosting is parked. **The transmission is the event that needs a law
 provider's retention, not whether it trains on the data, and **not what the text was scrubbed of
 first**. Redaction reduced the payload; it did not change the legal question.
 
-**3. Live on staging; nowhere else.** Verified inside the running containers on 2026-09-03:
+**3. Live on staging; nowhere else.** Verified inside the running containers on 2026-09-03, and still
+running on the build deployed to staging on 2026-09-15:
 redaction, the log filter, the broker fix, the safeguarding escalate-only fix **and the
 email-boundary controls** are all deployed to staging. **DOR production runs none of it and was not
 reachable to verify.** *Read every claim in this indicator as true of staging, unproven of
@@ -359,16 +399,24 @@ production.*
 
 **Gaps.**
 
-- ⚠ **Nobody has grepped for a fourth email leg.** Three carried the whole grievance record — a
-  submission receipt, a follow-up request, and a status update to an office list derived from the
-  grievance's **municipality** rather than from the case's assigned cast. All three are fixed, but
-  the third was found only by fixing the second, so **the search was never systematic.**
+- ⛔ **Breach detection produces findings that reach nobody.** The monitor runs on staging and its
+  checks work — and on staging it reported **production's TLS certificate critical for ten nights before
+  it expired on 2026-09-13**, **no backup on eleven nights**, and a CVE scan that **saved nothing on any
+  night**. None was acted on. A breach runbook that starts from detection (§5.3 of the privacy
+  assessment) is only as good as the path from a finding to a person, and **that path is not built.**
+- ⚠ **Three paths leave from the user's browser, and the method that found every other egress could not
+  see them.** The inventory traced code that transmits grievance text; these are fetched by the browser
+  and carry none. ⭐ **One matters for a complainant:** pinning a location on the intake map requests
+  street-level map tiles **around the pin** from a foreign service, from the complainant's own IP address,
+  **before any consent** — and for a household complaint the pin is usually their home. The other two
+  send the complainant's IP to three script CDNs, and every intake link to a third-party QR renderer.
 
-  ⭐ **The pattern is worth more than the legs, and it is the reason this stays in the gap list.**
-  **None of the three looked wrong at its own call site** — each was written by somebody solving a
-  different problem. The first had no admin template at all: `GRIEVANCE_RECAP_ADMIN_BODY` was
-  *assigned* from `GRIEVANCE_RECAP_COMPLAINANT_BODY` in one line, so the admin list received the
-  complainant's own receipt. Nobody decided that. **Grep the templates, not the senders.**
+  ⭐ **The pattern is the one the email legs taught, one level further out.** Three email paths each
+  carried the record and none looked wrong at its own call site; the fix was to search from the
+  transport outward rather than from the senders. **The browser paths are what that search could not
+  reach either** — every method has a blind side, and the defence is more than one method.
+- ⚠ **No backup has ever run on a deployed host**, so the backup controls — encryption that fails closed,
+  a restore drill — are properties of a script, not yet of a running system.
 - ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
   parked, so there is no future state in which the transfer stops.
 - ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
@@ -403,9 +451,10 @@ production.*
   than only as reliability because an uncategorised grievance is also one the keyword safeguarding
   route never scored.
 
-**Remedy.** **Verify production.** Staging now runs every privacy control in this indicator; production
-is an **unknown** rather than a known-bad — which is worse, and cheaper to resolve than anything else
-on this page. Then: write the retention schedule and
+**Remedy.** **Verify production** — and renew its certificate, which is the one production fact we
+could establish from outside. **Build the path from a monitor finding to a named person who acts.**
+Route the intake map's tiles through the platform (or self-host them) so a complainant's neighbourhood
+is not sent abroad before consent. Then: write the retention schedule and
 build contact minimisation at closure; purge the demo rows carrying real contact details; obtain and
 file the provider terms; and get a legal review — the last of which we cannot resource ourselves.
 
@@ -456,12 +505,32 @@ tell you the leaks are somewhere else.**
 **What we have.** OpenAPI-described APIs; OIDC via self-hosted Keycloak; architectural invariants
 pinned by tests that fail the build; `SECURITY.md` with a private reporting channel and a SEAH-aware
 scope, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md` and issue/PR templates — all describing what is already
-true rather than aspirations.
+true rather than aspirations. **Added since 2026-09-03:** branch protection on the integration branch,
+requiring five passing checks; container images built and published by CI and **pulled** by staging
+rather than built on the host, with the running image's digest reported on every deploy; an automated
+browser suite of **71 end-to-end tests** running in CI against an isolated, freshly seeded stack; a
+**written release and versioning policy** — dated versions, cut only by a production deploy; security
+headers, rate limiting and closed internal ports at the staging edge, verified by behaviour; and
+single-use officer refresh tokens.
 
 **Gaps.**
 
-- ⚠ **No governance model and no release/versioning policy**, deliberately deferred: both would state
-  commitments nobody has agreed to, on a project whose IP ownership is formally open (Q-08-01).
+- ⛔ **Production's TLS certificate expired on 2026-09-13**, verified from outside on 2026-09-15. The
+  staging monitor reported it critical for ten nights beforehand; nobody acted. Renewal on the production
+  host evidently did not run, and why is unknown from here.
+- ⛔ **The shipped web framework now carries two critical advisories.** Re-measured 2026-09-15:
+  `next@16.2.6` has **eleven** advisories, up from nine, and two are rated critical — unauthenticated
+  remote code execution on Windows hosts (not applicable) and **in the image optimisation endpoint when
+  AVIF files are used**. ⚠ **That endpoint is enabled and publicly reachable** on staging, verified with a
+  benign request; exploitability was not assessed. ⭐ **The portal does not use the endpoint at all**, so
+  switching it off is a one-line change with no functional effect, available today and independent of
+  the framework upgrade. **This row has been "the one to act on" since 2026-09-03, and it got worse.**
+  Python improved over the same period, from six advisories to four.
+- ⛔ **The nightly CVE scan saves nothing** — see the box at the top. Every CVE figure in this pack was
+  measured by hand.
+- ⚠ **No governance model**, deliberately deferred: it would state commitments nobody has agreed to, on a
+  project whose IP ownership is formally open (Q-08-01). ✅ **A release and versioning policy now exists**
+  — but **no release has been cut**, because none has reached production since it was written.
 - ⚠ **Keycloak recorded no login, login-failure or admin events at all until 2026-08-24** — realm event
   storage defaults to off and nothing enabled it, so the platform's primary authentication evidence did
   not exist. ✅ **Enabled on staging 2026-09-03** and **verified as a working control, not a set
@@ -477,24 +546,17 @@ true rather than aspirations.
   logs in.
   ⭐ **It paid for itself in four minutes, which is the best argument for the control we have.** The
   first real logout it recorded wrote `LOGOUT` **and** `LOGOUT_ERROR: invalid_client_credentials` in
-  the same second — a back-channel token revoke that cannot succeed on the password-login path, and
-  which the browser swallows by design (`void fetch`, *"best-effort"*). Narrow impact: on a normal
-  logout the front-channel logout terminates the session anyway; on the stale-session path, which
-  skips the front channel deliberately, it leaves a live refresh token behind. **Nothing else in this
-  platform would have surfaced it** — no test, no report, no user-visible symptom.
-- ⚠ **Nine advisories now stand against the shipped web framework.** Re-measured 2026-09-03: the npm
-  count held at *"4 high"* and **every finding behind it changed.** `next@16.2.6` carries nine of its
-  own — including a middleware/proxy bypass in App Router and two server-side request forgeries — and
-  it is what the officer portal ships. Two of the other three rows (`postcss`, `nanoid`) are in the
-  lockfile graph but **verified absent from the shipped image**, which is the distinction we would
-  rather make than inflate a count. **Python is unchanged at 6, and 2 of those 6 are unreachable.**
-  ⭐ *A count that holds still is not a tree that holds still* — which is the argument for the
-  scheduled scan below, and for deploying the thing that runs it.
+  the same second — a back-channel token revoke that could not succeed on the password-login path, and
+  which the browser swallowed by design. **Nothing else in this platform would have surfaced it.** ✅
+  **Fixed 2026-09-04:** sign-out now revokes server-side as the client that issued the session, and the
+  browser checks the answer rather than discarding it.
 
-**Remedy.** Bump `next` past the advisory range — it is one move and it takes three of the four npm
-rows with it. **Run `setup_realm_event_logging` against the DOR production realm** — not the full
-bootstrap, which also resets demo users, SMTP and client config; staging was closed with the single
-function. Write the governance and versioning documents once Q-08-01 and indicator 3 answer.
+**Remedy, in order.** **Renew production's certificate** and find why renewal did not run. **Switch off
+the unused image optimisation endpoint** today, then bump `next` to 16.3.5, which takes three other npm
+rows with it. **Fix the CVE scan** so it saves what it finds, and **give its findings a named reader.**
+**Run `setup_realm_event_logging` against the DOR production realm** — not the full bootstrap, which also
+resets demo users, SMTP and client config; staging was closed with the single function. Write the
+governance document once Q-08-01 and indicator 3 answer.
 
 **Questions.**
 
@@ -544,10 +606,9 @@ standard workflow. ⚠ **One behaviour there is deliberate and must not be "fixe
 > reading then OR-ing leaves a window and the consequence of losing that race is a missed harassment
 > report. Driven end to end against the live database.
 >
-> ⚠ **Fixed in code, and — like everything else this fortnight — not yet on a server.** The deployed
-> hosts still carry the defect. No genuine grievance has been processed anywhere, so nothing has been
-> misrouted; but **this is the one item on the undeployed list where the cost of waiting is a missed
-> harassment report**, and it should be the reason the next deploy happens rather than a line in it.
+> ✅ **Running on staging since 2026-09-03**, verified inside the running image. ⚠ **Not verified on DOR
+> production.** No genuine grievance has been processed anywhere, so nothing has been misrouted; but
+> **this is the one production gap where the cost of waiting is a missed harassment report.**
 >
 > ⚠ **Two things follow that are worth more than the fix.** First, **no benchmark would have caught
 > it**: every detection figure we publish scores the *model*, and all of them were consistent with a
@@ -604,6 +665,6 @@ as it stands would reward the wrong change.
   Anything in the current Standard revision, or the AI-systems guidance, that we would not find by
   reading the published documents.
 - **Q-00-06 — Does the assessment look at the repository or at a running deployment?**
-  Several of our controls — the redaction layer, the licence and CVE scans, authentication event
-  logging — are built and tested but run nowhere except a development stack. We would rather know
-  whether that distinction is material to an assessor than discover it matters after a submission.
+  Every privacy and security control in this pack runs on our staging host and has been verified there;
+  none has been verified on the production host, which we cannot reach. We would rather know whether
+  that distinction is material to an assessor than discover it matters after a submission.
