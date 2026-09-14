@@ -1,7 +1,7 @@
 # Operations — Docker-era guide
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
-**Last updated:** 2026-09-14 — §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
+**Last updated:** 2026-09-14 — §6a: the migration step now runs the deployed image and refuses a missing one (`GRM-099`), and the rollback line is marked as not valid across a migration (`GRM-102`) rather than rewritten, because which side moves is an open fork. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
 ## 1. Daily driving
 
@@ -135,7 +135,7 @@ builds. The `aws-*` targets set `0`; everything else defaults to `1`.
 
 ```bash
 make aws-deploy IMAGE_TAG=<short-sha>        # deploy that commit's images
-make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ that is the rollback — no rebuild
+make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ that is the rollback — no rebuild (⚠ NOT across a migration: GRM-102)
 make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on the box instead
 ```
 

@@ -253,6 +253,53 @@ done
 endef
 
 # Shared remote deploy steps (Make expands $(1)=remote dir, $(2)=services, $(3)=label).
+# ── The migration image must be the deployed image, or the deploy stops (GRM-099) ──
+# $(1)=label. Runs after `up -d`, before the first migration.
+#
+# REMOTE_DEPLOY_CORE used to prefix `up -d` with REMOTE_IMAGE_ENV and NOT the three
+# `compose run --rm backend … alembic` lines. On the first real pulling deploy (2026-09-14) those
+# resolved IMAGE_TAG=local, found no such image in the registry, and compose FELL BACK TO `build:`
+# — a 350 MB backend build on the host, while `make` exited 0 and `aws-deploy OK` printed. Swap
+# added an hour earlier absorbed 486 MB of it. Worse than the build: the migrations ran the host
+# CHECKOUT's code rather than the image's, which a rollback would have turned into migrating with
+# the wrong code.
+#
+# ⚠ Why a guard rather than a flag: `docker compose run` has NO `--no-build` (only `--build` and
+# `--pull`), so its fall-back-to-build cannot be switched off from the command line. This resolves
+# the exact image `run` will use — with the SAME image env — and refuses if it is not on the host.
+#
+# ⚠ Brace-grouped on purpose. `set -e` does not fire for a failure inside an `a && b` list; the
+# chain is the control. A bare `;` in here would let a failed earlier step fall through.
+define REMOTE_ASSERT_MIGRATION_IMAGE
+{ MIG_IMG="$$($(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) config --images backend 2>/dev/null | grep "/app:" | head -n1)"; \
+if [ -z "$$MIG_IMG" ] || ! docker image inspect "$$MIG_IMG" >/dev/null 2>&1; then \
+	echo "$(1): ERROR — migrations would run image '$$MIG_IMG', which is not on this host."; \
+	echo "  Refusing: compose would silently BUILD it here, and migrate with the checkout's code (GRM-099)."; \
+	exit 1; \
+fi; \
+echo "$(1): migrations will run $$MIG_IMG"; }
+endef
+
+# ── Migrations — ONE definition of "run a migration on the deployed image" (GRM-099) ──
+# ⚠ Extracted 2026-09-14 because the untagged-migration defect existed in THREE copies:
+# REMOTE_DEPLOY_CORE, REMOTE_DEPLOY_FULL and REMOTE_DEPLOY_OPS — i.e. all six deploy targets,
+# staging and production. Fixing the first copy left the other two broken, which is where three
+# copies of a block always end. The IMAGE_ENV prefix now lives in exactly one line.
+#
+# $(1)=alembic.ini path
+define REMOTE_MIGRATE_ONE
+$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c $(1) upgrade head
+endef
+
+# $(1)=label. All three streams, guarded. Order ticketing → public → ops is preserved from the
+# originals; GRM-079 records that CI uses a different order, and this change does not settle that.
+define REMOTE_RUN_MIGRATIONS
+$(call REMOTE_ASSERT_MIGRATION_IMAGE,$(1)) && \
+$(call REMOTE_MIGRATE_ONE,ticketing/migrations/alembic.ini) && \
+$(call REMOTE_MIGRATE_ONE,migrations/public/alembic.ini) && \
+$(call REMOTE_MIGRATE_ONE,ops/migrations/alembic.ini)
+endef
+
 define REMOTE_DEPLOY_CORE
 set -e; \
 	cd $(1) && \
@@ -265,9 +312,7 @@ set -e; \
 	echo "$(3): starting $(2)" && \
 	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(2) && \
 	$(call REMOTE_REPORT_DIGESTS,$(2),$(3)) && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
+	$(call REMOTE_RUN_MIGRATIONS,$(3))
 endef
 
 # Build + migrate + (re)start ONLY the ops monitor on a remote host.
@@ -283,7 +328,8 @@ set -e; \
 	git pull --ff-only origin $(DEPLOY_BRANCH) && \
 	$(call REMOTE_ACQUIRE_IMAGES,ops,$(2)) && \
 	echo "$(2): ops migration (ops.* schema + ops_app role)" && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head && \
+	$(call REMOTE_ASSERT_MIGRATION_IMAGE,$(2)) && \
+	$(call REMOTE_MIGRATE_ONE,ops/migrations/alembic.ini) && \
 	echo "$(2): starting ops" && \
 	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d ops && \
 	$(REMOTE_COMPOSE) ps ops
@@ -348,9 +394,7 @@ set -e; \
 	$(call REMOTE_ACQUIRE_IMAGES,$$($(REMOTE_COMPOSE) config --services),full deploy) && \
 	echo "full deploy: starting stack" && \
 	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head && \
-	$(REMOTE_COMPOSE) run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
+	$(call REMOTE_RUN_MIGRATIONS,full deploy)
 endef
 
 # $(1)=remote repo directory — upsert SEAH centres from committed CSV (idempotent).
