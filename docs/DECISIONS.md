@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-06). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-06 — D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
+**Last updated:** 2026-09-15 — D-012 added: officer sessions use a short access token (5 min) inside a 30-minute idle window and an 8-hour maximum; the rejected alternative (a longer idle window) and what would reverse it are recorded. ⚠ Decided, not built. Earlier: D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -317,3 +317,43 @@ the button; attaching the tag there costs nothing extra and cannot drift from wh
 over HTTP, where `/api/v1/` already carries the contract, but as a library or a shared package. At
 that point a compatibility promise would have a real audience and semver would start earning its
 overhead. A DOR or ADB requirement naming a version format would also settle it, and neither has.
+
+---
+
+## D-012 · Officer sessions: a 5-minute access token inside a 30-minute idle window
+
+**Date:** 2026-09-15 · **Status:** ✅ **decided** · ⚠ **not built** — the realm still runs a 60-minute
+access token inside Keycloak's default 30-minute idle window, which signs every officer out at about the
+hour (see [`deployment/16_auth_keycloak.md`](deployment/16_auth_keycloak.md) § *Sessions*).
+
+**Chosen:** access token **5 minutes**, SSO idle timeout **30 minutes**, SSO maximum **8 hours**. An
+officer who is working renews every few minutes and stays signed in for up to 8 hours; a session left
+untouched for 30 minutes ends.
+
+**Why the numbers have to be in this order.** A refresh token lives only as long as the idle window, and
+the officer UI renews shortly before the access token expires. So the access token **must be shorter
+than the idle window** — with a margin for a renewal that lands late — or renewal is attempted with a
+refresh token that has already expired. Measured on Keycloak: with a 60-minute access token and a
+30-minute idle window, the refresh token died 30 minutes before the token it existed to renew, and no
+officer could stay signed in past the hour whatever they did.
+
+**Why a 30-minute idle timeout, deliberately.** Officers work on shared office computers, in district
+offices, on case files that name complainants and, in the sensitive stream, survivors. A session that
+survives a person walking away is the risk this window closes. A shorter access token also shortens how
+long a stolen access token stays usable, and how long a role or jurisdiction change takes to reach an
+open session.
+
+**Rejected — keep the 60-minute access token and raise the idle window above it** (e.g. 2 hours). It
+fixes the sign-out with one setting and no change to renewal frequency, but it does so by letting an
+unattended session live for hours. It trades a usability defect for a weaker control, and the stronger
+fix costs only more frequent, same-origin renewals.
+
+**Accepted cost:** an officer who reads or drafts for more than 30 minutes without the page calling the
+server is signed out on their next action. That is the idle policy working, but it can lose a
+half-written note — a UI safeguard (warn before the window closes, or keep the draft) belongs with the
+build.
+
+**What would change the answer:** evidence that officers routinely lose work to the idle window in
+practice, or a DOR or ADB security requirement naming different limits. Either would be settled by
+moving the idle window, **never** by letting the access token exceed it.
+
