@@ -1,13 +1,43 @@
 # Privacy assessment and data-flow inventory
 
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-15 — v1.3: the systematic email search found no fourth leg (§7 closed); five findings added — three browser-side egress paths (F-23–F-25), a detection substrate whose findings reach nobody (F-26), officer session tokens readable by page script (F-27); F-12's AWS-key residual closed; §3.3 and §5.3 re-measured on the staging host.
 
 **Nepal GRM Platform** — Grievance Redress Mechanism for ADB-financed road infrastructure
 (Kakarbhitta–Laukahi Road, ADB Loan 52097-003)
 
-**Version:** 1.2 · **Date:** 2026-09-03 (v1.1 was 2026-08-24)
+**Version:** 1.3 · **Date:** 2026-09-15 (v1.2 was 2026-09-03, v1.1 2026-08-24)
 **Benchmark:** Nepal's **Individual Privacy Act, 2075 (2018)** — the sole benchmark (see §0.3)
 **Covers:** DPG Standard indicators **7** (privacy), **9** (do no harm) and **9a** (data privacy and security)
+
+> ## What changed in v1.3 — the email question is answered, and the inventory had a blind side
+>
+> 1. ✅ **No fourth email leg carries the record.** The search v1.2 said nobody had done is done — from
+>    every place mail physically leaves the process outward, with template placeholders read from the
+>    deployed image. Eight legs; the three that carried the record are the three already closed.
+> 2. ⚠ **Three egress paths were invisible to the method that built §2** (**F-23–F-25**). §2 traces
+>    code that *transmits* grievance text; these are performed by the **user's browser**. ⭐ **F-23 is
+>    the one that matters:** pinning a location on the complainant map requests street-level map tiles
+>    around the pin from a foreign service, from the complainant's own IP address, **before any consent
+>    has been given** — and for a household complaint the pin is usually the complainant's home.
+> 3. ⛔ **The detection substrate §5.3 relies on has now run on a deployed host — and its findings reach
+>    nobody** (**F-26**). On the staging host the monitor reported **production's TLS certificate as
+>    critical on ten consecutive nights, then expired** (it expired 2026-09-13; verified from outside);
+>    reported **no backup on eleven consecutive nights**; and its CVE scan **saved no finding on any
+>    night**, while recording a status that looked like a result. None of it was acted on. **A monitor
+>    nobody reads is BU7 demonstrated, not hypothesised.**
+> 4. 🟢 **Officer sessions got a real control, and one gap is now named.** Refresh tokens are single-use
+>    and a replayed stolen token **ends the session for both the officer and the thief** (live on
+>    staging); the staging edge gained security headers, rate limiting on the public complainant
+>    endpoint and closed internal ports. ⚠ **Session tokens are still readable by any script on the page**
+>    (**F-27**).
+> 5. ✅ **F-12's residual is closed:** the unused AWS keys were removed from the secrets file and deleted
+>    in the cloud account on 2026-09-14.
+>
+> ⚠ **Unchanged, and still the frame for everything below:** every control in this document is live on
+> **staging** and **unverified on DOR production**. v1.3 adds one fact about production from outside: its
+> web endpoint answers publicly on port 443, and its certificate has expired.
+
+---
 
 > ## What changed in v1.2 — the largest finding in v1.1 is no longer open
 >
@@ -301,9 +331,11 @@ Named so the omission is deliberate rather than an oversight.
 | **Application logs** | ⚠ **A live PII sink, and narrower than it was.** ✅ The two worst legs are closed: the translation error paths no longer interpolate the whole input dict — `_grievance_ref()` (`LLM_services.py:500`) bounds them to the grievance id plus **three words**, 60-char cap (DPG-19.3) — and `parse_llm_response` logs the response **length**, not the body (`:490`, DPG-13). ⚠ **What remains:** those three words are still narrative, and `backend/actions/services/contact/phone.py:27` logs the complainant's phone at **INFO on every validation** (`:38` again on the invalid path). Logs go to the Docker `json-file` driver and a `logs/` directory. Owned by the [redaction boundary](../deployment/11_llm_pipeline_policy.md) |
 | **The Celery result backend** | Task results land in Redis DB 2. Whether any result carries grievance text is `⚠ Not verified` — see §7 |
 | **AWS staging** | Runs outside Nepal and **holds no genuine grievance data** — seeded and demo records only (§0.5) |
+| **The user's browser fetching third-party resources** | ⚠ **Added v1.3 — three paths §2's method could not see**, because they are performed by the browser rather than transmitted by the server, and carry no grievance text: webchat scripts from three foreign CDNs (**F-24**), map tiles around the complainant's pin from OpenStreetMap (**F-23**), and every package's intake link to a third-party QR renderer (**F-25**). Detail in [`pii-egress-inventory.md`](pii-egress-inventory.md) §6d |
 
 **On staging, because the direction of the flow matters.** Production runs on the DOR box inside
-Nepal, over VPN. The only database sync in the repository runs **staging → production**
+Nepal. ⚠ *"Over VPN"* describes **administrative** access only: its web endpoint answers publicly on
+port 443, as a complainant channel must (verified from outside, 2026-09-15). The only database sync in the repository runs **staging → production**
 (`scripts/ops/aws_to_prod_db_sync.sh`) and drops the mock rows on arrival; **there is no production →
 staging path.** Going live therefore puts real grievances in Nepal and copies nothing outward. What
 the host does hold is demo contact details a participant may have entered about themselves (F-14) —
@@ -374,7 +406,11 @@ not record. `⚠ Not verified` — the terms should be obtained and filed as evi
 | Server-side decryption at a **single** boundary; ticketing holds no key and has no accessor | 🟢 **pinned by test** |
 | Officer access via OIDC/PKCE with role and jurisdiction gates; auth **fails closed** | 🟢 built |
 | Contact reveal explicit and audited; full admin audit log and per-ticket timeline | 🟢 built |
-| TLS at the edge; nightly dependency CVE and licence scans | 🟢 built |
+| TLS at the edge | 🟢 built · ⛔ **production's certificate expired 2026-09-13** and nothing that saw it coming reached a person (**F-26**) |
+| Security headers at the edge (HSTS, `nosniff`, framing, referrer policy); no site-wide cross-origin allowance; rate limiting on the public complainant endpoint; internal service ports not published | 🟢 **live on staging, verified by behaviour 2026-09-14** · ⚠ unverified on production |
+| **Officer refresh tokens are single-use**; a second use — a replayed stolen token — **ends the session for everyone holding it** | 🟢 **live on staging 2026-09-15**, measured against Keycloak · ⚠ tokens remain readable by page script (**F-27**) |
+| Nightly licence scan | 🟢 **runs on staging** — eleven nights, agreeing with the hand-generated audit |
+| Nightly dependency CVE scan | ⛔ **scheduled on staging and has saved no finding on any night** — a duplicate advisory rolls back the whole write (**F-26**) |
 
 **Gaps, all in §6:** grievance text in the broker (F-5) and in logs (F-6). The three storage-layer
 defects — conditional encryption (F-2), unsalted search hashes (F-3), unencrypted backups (F-4) —
@@ -681,7 +717,7 @@ Department of Roads:
 | Daily ops report — failed logins, contact-reveal counts (`ops/reports.py:53-69`) | Built |
 | `ticketing.admin_audit_log` records reveals and administrative actions | Built |
 | Private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) | Built; points at the runbook and names what is not yet committed |
-| **Deployment** | ⚠ **`ops` reached staging on 2026-09-03 and has produced no rows yet**; production has none. So on production this table still describes a development stack rather than a monitored one, and on staging it describes one that is scheduled to be monitored tonight |
+| **Deployment** | ✅ **Running on staging since 2026-09-03, and producing rows** — health checks every few minutes, nightly scans, backup and certificate checks. ⛔ **But its findings reach nobody** (**F-26**): production's certificate reported critical for ten nights then expired; no backup reported on eleven nights; the CVE scan saved nothing on any night. Production has no `ops` at all |
 
 ⚠ **Keycloak recorded no login or admin events at all until 2026-08-24** (F-18). It stayed invisible
 because the daily report queries that table, so a working monitor would have reported **0 logins and
@@ -745,8 +781,10 @@ They are about custody, and **none of them can be answered in this repository.**
 - [ ] **BU6 — Disposal.** How a backup is destroyed at end of life, at the destination and on any
       medium that ever held one. Deleting a file is not disposal on media that has left the building
 - [ ] **BU7 — Who is accountable when the drill fails.** The monitors exist and are correct. ⚠ But
-      `ops` **reached staging on 2026-09-03 with no output yet, and production has none** (§5.3), so nothing is currently reading the status
-      files `backup_db.sh` and `restore_drill.sh` write. **A restore drill nobody reads reports
+      ⛔ **demonstrated on staging, 2026-09-15:** the monitor has read the backup status file every night
+      and reported it **missing, as critical, on eleven consecutive nights** — and nobody acted, because no
+      backup job has ever been scheduled there and no alert reached a person (**F-26**). Production has no
+      `ops` at all. **A restore drill nobody reads reports
       success and failure identically** — the same shape as the Keycloak events that recorded
       nothing for months (F-18) while the daily report cheerfully returned zero
 
@@ -762,11 +800,11 @@ considering on its own merits, but **not** as a backup control, and **not** befo
 ## 6. Findings register
 
 Verified against the code on 2026-08-18; **F-1, F-5, F-6, F-9 and F-13 re-verified and F-19–F-22
-added 2026-09-03; **F-19 and F-22 fixed the same day.** Severity is engineering's judgement about privacy impact, not a legal
+added 2026-09-03; **F-19 and F-22 fixed the same day.** **F-23–F-27 added 2026-09-15.** Severity is engineering's judgement about privacy impact, not a legal
 characterisation. Detail for each sits in the section cited.
 
-⚠ **A `✅ Fixed` row means fixed in the code on `integration/stage`. It does not mean deployed** —
-see the v1.2 note above. Neither server runs any of it.
+⚠ **A `✅ Fixed` row means fixed in the code and, as of 2026-09-15, running on the staging host.** It does
+not mean running on DOR production, which has not been verified.
 
 | # | Finding | Where | Severity | Status |
 |---|---|---|---|---|
@@ -781,7 +819,7 @@ see the v1.2 note above. Neither server runs any of it.
 | **F-9** | **Third parties named in grievances have not consented** and cannot exercise any right | §4 | 🟠 Medium | 🟡 **Half closed 2026-09-03: the residual is now quantified.** Person-name recall is **7/7 on the labelled set** and overall recall **87.5%**, so *"names are not redacted"* is false and *"names cannot reach the provider"* is also false — the honest claim is the measured one. ⚠ **The legal half is untouched**, and no redaction gives these people rights over data already held. ⚠ **The measurement is on 16 labelled spans**, which is enough to refuse the two overstatements and not enough to certify the layer |
 | **F-10** | **Public closure endpoint is unauthenticated** with a non-expiring UUID4 token. Deliberate (the complainant has no account), but a forwarded link is a permanent disclosure | `public_closure.py:38,58` | 🟡 Low-medium | Open — add expiry |
 | **F-11** | **The data controller is not formally identified.** Overlaps the open IP-ownership question | §3.8 | 🟡 Low-medium | Open — with the IP determination |
-| **F-12** | ~~SMS fallback routed a complainant's phone number through AWS SNS in Singapore~~ | `sms_config.py` | — | ✅ **Closed — the path was deleted, not mitigated.** SMS has no cross-border route and fails closed to `disabled`. ⛔ Residual: the unused AWS keys remain in `secrets.enc.env` and should be revoked |
+| **F-12** | ~~SMS fallback routed a complainant's phone number through AWS SNS in Singapore~~ | `sms_config.py` | — | ✅ **Closed — the path was deleted, not mitigated.** SMS has no cross-border route and fails closed to `disabled`. ✅ **Residual closed 2026-09-14:** the unused AWS keys were removed from `secrets.enc.env` and **deleted in the cloud account**, after no running service logged an authentication failure while they were deactivated |
 | **F-13** | **Intake does not disclose** that grievance text is sent to an external AI provider. Consent is collected (§3.1), but not for this | `required_slots.py:21,46` | 🟡 Low to fix, high in principle | **Open — cheap, and the disclosure is now easier to write honestly.** ⚠ It must say *pseudonymised*, never *anonymised*, and it must not imply the transfer stopped |
 | **F-14** | **No environment holds genuine grievance data** — all records are seed data or demo dummies (§0.5). ⚠ A demo participant may have entered their **own** real contact details, so narratives are synthetic while some contact fields may not be. Those rows should be purged before go-live | §0.5, §2.3 | ✅ Closed, with a dated caveat | ⚠ Expires at go-live |
 | **F-15** | ~~A deployment doc forbade cross-schema reads the code had not obeyed for months~~ | `09_privacy.md` | — | ✅ **Closed** — the section states the as-built contract **with its reasoning**, since a rule separated from its reason is what let the contradiction survive |
@@ -792,6 +830,11 @@ see the v1.2 note above. Neither server runs any of it.
 | **F-22** | **A third leg, found while fixing F-19.** Status updates mailed `GRIEVANCE_STATUS_UPDATE_BODY` — **full narrative, complainant name, phone, municipality, village and address** — to `office_emails`, and `get_office_emails_for_grievance` derives that list from the grievance's **municipality**, not from the case's assigned cast. **So a status update on a SEAH case mailed a survivor's record to a location-derived office list** | `backend/api/routers/grievance.py` · `grievance_manager.py:1015` · `constants.py` | 🔴 High | ✅ **Fixed 2026-09-03.** ⭐ **The fix is that the control is now shared, not that a third copy was written.** The allow-list and the sensitivity gate moved to `backend/services/admin_notifications.py`, which imports neither package; all three legs delegate to it. Copying F-19's logic here would have produced a security control with two implementations, one of which is stale the first time either changes. The old template is **deleted**, not shadowed; `complainant_id` is deliberately **not** an allowed field. ✅ **Live on staging** — verified in the running **backend** image, and the old full-PII template is absent from it; ⚠ **not on production** |
 | **F-20** | **Nothing re-drives a classification that never ran.** Celery retry covers a task that ran and raised, not a message lost from the broker; the chatbot app has **no beat schedule at all**, and ticketing's two-minute sync never touches classification. A lost classification sits at `pending` **forever** | `backend/task_queue/celery_app.py` · `database_tables.py:41` | 🟡 Low-medium | **Open.** Not a confidentiality finding — an **integrity** one, and it reaches privacy through §3.4: an uncategorised grievance is also one the SEAH keyword route never scored. ⚠ **Independent of the F-5 fix**, which removed one way to lose the message, not the absence of recovery |
 | **F-21** | **The OTP had no expiry of any kind and was not cleared once used** — no timestamp, no TTL, so the bound was the conversation slot rather than a clock | `services/otp/verification.py` · `form_otp.py` | 🟠 Medium | ✅ **Fixed 2026-09-03** — a 10-minute window that **fails closed** (a missing or unparseable stamp counts as expired, so a parse bug cannot mint an eternal code), checked **before** the match so a correct-but-stale code does not verify, and the code erased on success. ⚠ **The finding that led here was overstated and was retracted the same day**: a logged OTP does *not* complete an impersonation, because verification is against that conversation's own slot. The credential-in-a-log finding stands on its own terms |
+| **F-23** | **The complainant location map sends the area around the pin to a foreign tile service**, from the complainant's own IP address, **before any consent** — the map is shown during intake. For a household complaint the pin is usually the complainant's home, so the tile requests locate them to within a few hundred metres | `channels/REST_webchat/modules/mapPicker.js:69` (`tile.openstreetmap.org`) | 🟠 Medium | **Open.** Outside every redaction layer, which sees only text. Options: a platform tile proxy (the provider sees the platform, not the complainant), or self-hosted tiles. Not decided |
+| **F-24** | **The complainant webchat loads three scripts from foreign CDNs on every visit**, sending each the complainant's IP address and browser before any consent | `channels/REST_webchat/index.html:21`, `:151`, `:152` | 🟡 Low-medium | **Open.** ✅ Integrity-pinned (SRI) and origin-only referrer, so neither code substitution nor the page URL is at issue. Fix: serve the three files from the platform |
+| **F-25** | **The officer QR-code page sends every package's full intake link, token included, to a third-party QR renderer** | `channels/ticketing-ui/app/qr-codes/page.tsx:11` (`api.qrserver.com`) | 🟡 Low | **Open.** No complainant data. Fix: render the QR code locally |
+| **F-26** | ⛔ **The detection substrate produces findings that reach nobody.** On the staging host, 2026-09-15, from the monitor's own tables: the certificate check — which watches the **production** hostname — reported critical on **ten consecutive nights**, then *expired*; **production's certificate did expire, on 2026-09-13**. The backup check reported **no backup on eleven consecutive nights**. The dependency CVE scan **saved no finding on any night** (a duplicate advisory rolls back the write) while recording a status that looked like a result. Whether alert emails were sent is unverified; **none was acted on** | `ops/alerts.py` · `ops/security.py` · `ops/checks.py` | 🟠 Medium | **Open.** A breach-detection control is only as good as the path from finding to person (§5.3, BU7). ⭐ The monitor is working; the organisation around it is not built. Needs: a named recipient who acts, production's certificate renewed and its renewal automated, the CVE scan fixed, and a decision on backups for staging |
+| **F-27** | **Officer session tokens are held in browser storage readable by any script on the page.** An injected script could read a refresh token. ✅ Since 2026-09-15 a replayed token ends the session for both holders, so a theft becomes a visible sign-out rather than a silent second session — but a thief who renews first still holds a session until the officer next renews | `channels/ticketing-ui/lib/auth/token-storage.ts` | 🟡 Low-medium | **Open, deliberately sequenced.** The stronger control — the refresh token in an `HttpOnly` cookie the page cannot read — changes the sign-in, renewal and sign-out contract and brings cross-site request forgery into scope; it needs a short design first |
 
 ---
 
@@ -812,8 +855,11 @@ optimistic about content in four places, all recorded in
 
 **Still open, and the first two are the ones that matter:**
 
-- [ ] 🔴 **That F-22 has been built**, and that no *fourth* email leg carries the record. Three did, each written by someone solving a different problem. ⭐ **Grep for the templates, not for the senders** — F-19 was one assignment and no sender looked wrong
-- [ ] 🔴 **That any of this is deployed.** Everything above is true on `integration/stage`. Both servers run the unredacted behaviour
+- [x] **That F-22 has been built, and that no fourth email leg carries the record** — built 2026-09-03; the systematic search, 2026-09-15, found eight legs and no fourth carrying the record ([`pii-egress-inventory.md`](pii-egress-inventory.md) §6c)
+- [x] **That the controls are deployed — on staging.** Verified inside the running containers 2026-09-03, and still running on the build deployed 2026-09-15
+- [ ] 🔴 **That any of this is on DOR production.** Not verified, and not reachable from here. The one production fact established from outside is that its certificate has expired (F-26)
+- [ ] 🔴 **That monitor findings reach a person who acts** (F-26) — the substrate works and has already missed a production outage
+- [ ] **Browser-side egress** (F-23–F-25) — and whether any page added since loads a third-party resource. §2's method cannot find these; the end-to-end tests' list of stubbed hosts can
 - [ ] That **no environment has begun holding genuine grievance data** (F-14). §0.5 expires, so re-confirm rather than inherit
 - [ ] The **backup off-box destination and its jurisdiction** (F-4) — a deployment fact, not a code
       fact. Intended to be Nepal government infrastructure; confirm the host, its operator and its
@@ -849,18 +895,19 @@ names. What remains is three separate things, and collapsing them again would be
    self-hosting has no cost owner. **The transmission is the event that needs a lawful basis**
    (§3.7.1) — not the provider's retention, not whether it trains on the data, not whether the model
    is open-weights, and **not what the text was scrubbed of first**.
-2. ⚠ **What the email legs say about the rest of this document.** Three separate paths each carried
-   the whole record; two were found by an inventory and the third only by fixing the second. Each
-   was written by somebody solving a different problem, and **none looked wrong at its own call
-   site.** They are closed. **The reason to keep this in the summary is that nobody has grepped for
-   a fourth** — and the way to do it is to grep the *templates*, not the senders.
-3. ⚠ **Deployment, which is now a split answer rather than a flat no.** Staging runs **every**
-   control this document credits — verified inside the running containers, not inferred from a
-   successful deploy. One thing it still does not have: the nightly licence and CVE scans
-   have not yet fired. **Authentication event recording was the other, and it was closed on
-   2026-09-03** — by running one realm function, after a full deploy had demonstrated that no
-   deploy would ever carry it. **DOR production runs none of it and was not verified.** A control on one
-   host of two is evidence about that host.
+2. ⚠ **What the email legs, and then the browser paths, say about method.** Three separate paths each
+   carried the whole record, and **none looked wrong at its own call site**; they are closed, and the
+   systematic search for a fourth found none. But the same review then found three egress paths §2
+   could never have found — performed by the **browser**, carrying no text — one of which sends the area
+   around a complainant's home to a foreign tile service before consent (F-23). **Every method has a
+   blind side; the defence is using more than one.**
+3. ⚠ **Deployment, and now detection.** Staging runs **every** control this document credits —
+   verified inside the running containers, not inferred from a successful deploy — and its monitor has
+   been producing evidence for twelve days. ⛔ **That evidence is the new finding:** it reported
+   production's certificate expiring for ten nights and no backup for eleven, and **nobody acted on
+   either** (F-26). **DOR production runs none of the controls and was not verified**; its certificate
+   expired on 2026-09-13. A control on one host of two is evidence about that host, and a finding nobody
+   reads is not yet a control.
 
 **The timing is still the opportunity.** Nothing in §6 describes harm that has happened, which keeps
 redaction a **go-live precondition rather than remediation** (§0.5) — and makes items 2 and 3 above
@@ -883,7 +930,7 @@ should be a lawyer.**
 | Document | What it adds |
 |---|---|
 | [`00_compliance_status.md`](00_compliance_status.md) | The full DPG indicator-by-indicator assessment; §7 is privacy and §9 is do-no-harm |
-| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which grievance text leaves the agency's control** — 12, ranked by likelihood. §4 there lists the four places this document was optimistic about content |
+| [`pii-egress-inventory.md`](pii-egress-inventory.md) | **Every path by which personal data leaves the agency's control** — 16, ranked by likelihood, three of them from the browser. §4 there lists the four places this document was optimistic about content; §6c is the email search |
 | [`dependency-licenses.md`](dependency-licenses.md) | Generated licence inventory (indicator 2) |
 | [`../deployment/09_privacy.md`](../deployment/09_privacy.md) | The privacy *design* spec — data domains, vault, reveal policy |
 | [`../deployment/13_security.md`](../deployment/13_security.md) | Security control inventory |
