@@ -1,8 +1,11 @@
 # `GRM-133` · `GRM-134` — officer setup emails reach Spam, and a mail scanner opens their link
 
 **Opened 2026-09-15** while verifying `GRM-130` on staging with the owner. Logged in
-[`SPINE.md`](../../../SPINE.md) per the standing deferral rule. Neither is fixed. `GRM-133` needs an
-owner decision on the sending address.
+[`SPINE.md`](../../../SPINE.md).
+
+**State, 2026-09-16:** `GRM-133` has its email template (built, tested, not deployed). The sender switch
+waits on the owner copying production's mail credentials. `GRM-134` was measured and is **not a
+problem**; the escaping defect it found is fixed.
 
 ## `GRM-133` — setup emails are filed as spam
 
@@ -28,21 +31,25 @@ the cause: before `GRM-130` no setup email left staging at all.
 2. **The sender's domain is not the link's domain.** From `gaeng.fr`, a personal domain, while the link
    points to `nepal-gms-chatbot.facets-ai.com`. `gaeng.fr`'s SPF (`include:spf.infomaniak.ch -all`) and
    DMARC (`p=reject`) are correct, so this is mismatch and reputation, not a broken record.
-3. **The same sender is on every host:** `SMTP_SERVER` is in `.env.shared` and `SMTP_FROM` is a shared
-   secret, so **production very likely sends from the same address**. Not checked on the DOR host.
+3. ⛔ ~~Production very likely sends from the same address~~ — **wrong, corrected by the owner
+   2026-09-15:** production already sends as `info@grm-chatbot-nepal.org`. The shared `SMTP_*` in
+   `secrets.enc.env` were reconciled from staging, but each host reads its own `env.local`.
 
 The spam headers from the received email (`X-Spam-*`, `Authentication-Results`) would confirm which
 rule fired. Read the headers only: the body holds a live setup link.
 
-### The fix, when picked up
+### The fix
 
-- **In code, cheap:** a `grm` email theme with a plain subject that names the service (e.g. *Set your
-  password for the GRM officer portal*), who sent it and why, and the same link. Set
-  `emailTheme: grm` in `setup_realm_login_theme`.
-- **Owner / DOR decision, the one that matters most:** send from a mailbox **on the portal's own
-  domain**, with SPF, DKIM and DMARC for it. For production that is a `dor.gov.np` address. For staging,
-  a `facets-ai.com` one. Until then every setup email arrives from a personal address with a link to
-  another domain.
+- ✅ **Built 2026-09-16:** a `grm` email theme (`emailTheme: grm`, set by `setup_realm_login_theme`).
+  Subject *Set your password for GRM Ticketing*, plain wording for officers reading English as a second
+  language, and a *Set my password* button. Rendered by a local Keycloak into Mailpit and read back.
+  Pinned by `tests/ticketing/test_keycloak_themes.py`.
+- ⏳ **Owner decision, 2026-09-15: staging and production send as `info@grm-chatbot-nepal.org`**, with
+  production's credentials. The domain is on Infomaniak with SPF (`include:spf.infomaniak.ch -all`) and
+  DMARC (`p=reject`). The owner copies the credentials to staging; then recreate `backend` and
+  `ticketing_api`, re-apply the realm SMTP, and send a setup email to an owned mailbox: inbox or Spam?
+  The link still points at another domain than the sender's; whether that alone keeps it in Spam is
+  what that test will show.
 
 ## `GRM-134` — a mail scanner opens the setup link before the officer does
 
@@ -54,14 +61,23 @@ Microsoft 365 link scanning (Defender Safe Links) behaves. **The grm login theme
 forward on its own:** `info.ftl` auto-continues past Keycloak's *"Perform the following actions"* page
 (`16_auth_keycloak.md` §3), which was added so officers skip a click.
 
-### Not measured
+### Measured on a local realm, 2026-09-16 — the link is NOT used up
 
-Whether that visit **uses up the link**. If Keycloak treats the execute-actions token as single-use, or
-the scanner's visit binds it to the scanner's session, every officer on a scanned mailbox (ADB, and
-probably DOR) will find their setup link already expired or used. Measure on a local realm first:
-open the link in one client, stop at the password form, then open it in another client.
+Local Keycloak with the `grm` theme, realm SMTP pointed at a throwaway Mailpit (restored after), throwaway
+users (deleted). Each scenario used a fresh setup link. The scanner and the officer each had their own
+browser session.
 
-### The fix, if it is consumed
+| Scanner behaviour | What the officer then gets from the same link |
+| --- | --- |
+| none (control) | password form → password saved → forwarded to the GRM login |
+| fetches the link only | the same |
+| fetches it **and runs the auto-continue script**, reaching the password form (what staging's log shows) | the same |
 
-Make the first page need a human action: drop the auto-continue so the officer clicks *Continue*.
-Scanners fetch pages but do not click.
+Keycloak confirmed each account then had a password and nothing pending. **No fix needed.**
+
+### Found by the same measurement, and fixed
+
+The auto-continue wrote its URL HTML-escaped into a `<script>`, where `&amp;` stays literal, so Keycloak
+received `amp;client_id` and `amp;tab_id` and ignored them (staging's nginx log shows the same). It worked
+anyway. `info.ftl` now uses `?js_string?no_esc`; the three scenarios were re-run on the fixed theme with
+the same result.
