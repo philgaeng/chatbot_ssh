@@ -2,7 +2,7 @@
 
 **Opened 2026-09-15** while fixing `GRM-130`, **measured and fixed the same day** at the owner's request.
 Logged in [`SPINE.md`](../../../SPINE.md). **Kind:** `bug` · **+SENSITIVE** (auth) · 🔴 high.
-What is still owed is at the end: a clean-up on each realm.
+Staging is cleaned up. **Production still owes the deploy and the clean-up** (end of this file).
 
 ## What was true
 
@@ -50,7 +50,13 @@ strips; a returning account keeps its password; the clean-up touching demo offic
 applying. **On real Keycloak:** an invite refused by Keycloak left no account; after the clean-up's
 delete step, the takeover login on an old-style account was refused.
 
-## Owed, per realm, after the deploy
+## Staging, 2026-09-15 (`GRM-132`)
+
+Deployed at `e1ba6d3`. `--clear-invite-passwords` counted **29** accounts waiting on setup, all 29 holding
+the password, 0 demo officers. `--apply` cleared 29, and a recount shows 0. None of the 29 had been
+signed in with the password: using it forces a new one, and that ends *waiting on setup*.
+
+## Owed on production, after the deploy
 
 1. `python -m ticketing.auth.keycloak_setup --clear-invite-passwords` — read the counts.
 2. The same command with `--apply`.
