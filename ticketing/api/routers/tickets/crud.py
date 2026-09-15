@@ -43,6 +43,7 @@ from ticketing.services.grievance_content import (
     merge_grievance_into_ticket,
 )
 from ticketing.services.overdue_episodes import overdue_days_display
+from ticketing.services.resolution_catalog import options_for_ticket
 from ticketing.services.ticket_intake import (
     DuplicateTicketError,
     TicketIntakeError,
@@ -504,6 +505,7 @@ def get_ticket(
     payload = TicketDetail.model_validate(ticket, from_attributes=True).model_dump()
     payload.update(merged)
     payload["step_supervisor_available"] = _step_supervisor_available(db, ticket)
+    payload["resolution_options"] = options_for_ticket(db, ticket)
     return TicketDetail(**payload)
 
 

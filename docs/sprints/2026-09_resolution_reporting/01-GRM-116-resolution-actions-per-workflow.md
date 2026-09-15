@@ -126,15 +126,24 @@ panel here — `GRM-119` builds the editable one next.
 Measured against the uncommitted implementation 2026-09-15. Edit in place; on dev run the ticketing
 stream `downgrade -1` then `upgrade head` through Docker (`docs/deployment/DOCKER.md`).
 
-- [ ] `b3d5f7h9_resolution_actions.py` — `owner_organization_id NOT NULL`; `counts_as_code` replaces `replaced_by_code`; the workflow/template owner backfill (step 2) **before** the seed; seed owned by the ministry found, nothing on an empty DB; downgrade note (step 3)
-- [ ] `models/resolution_action.py` — same two columns
-- [ ] `services/resolution_catalog.py` — availability without `NULL` owners; `MAX_RESOLUTION_ACTIONS`; empty refused only when published; **`default_codes_for` removed** (a new workflow starts empty)
-- [ ] `constants/resolution.py` — `MAX_RESOLUTION_ACTIONS = 8`
-- [ ] `routers/workflows.py` — templates get `catalog_owner_for`; built-in templates carry no list; publish gate (step 5)
-- [ ] `seed/kl_road_standard.py`, `seed/kl_road_seah.py` — DOR-owned workflows and actions
-- [ ] `routers/locations.py` delete-impact — also counts owned workflows and templates
-- [ ] `tests/ticketing/test_resolution_catalog.py` — the G-TEST list below replaces the global cases
-- [ ] live specs the build already edited (`04`, `08`, `11`, `12`) — re-read against DESIGN §3.1.1: **no global actions, every workflow and template owned, 8 max, copied not inherited**
+- [x] `b3d5f7h9_resolution_actions.py` — `owner_organization_id NOT NULL`; `counts_as_code` replaces `replaced_by_code`; the workflow/template owner backfill (step 2) **before** the seed; seed owned by the ministry found, nothing on an empty DB; downgrade note (step 3)
+- [x] `models/resolution_action.py` — same two columns
+- [x] `services/resolution_catalog.py` — availability without `NULL` owners; `MAX_RESOLUTION_ACTIONS`; empty refused only when published; **`default_codes_for` removed** (a new workflow starts empty)
+- [x] `constants/resolution.py` — `MAX_RESOLUTION_ACTIONS = 8`
+- [x] `routers/workflows.py` — templates get `catalog_owner_for`; built-in templates carry no list; publish gate (step 5)
+- [x] `seed/kl_road_standard.py`, `seed/kl_road_seah.py` — DOR-owned workflows and actions
+- [x] `routers/locations.py` delete-impact — also counts owned workflows and templates
+- [x] `tests/ticketing/test_resolution_catalog.py` — the G-TEST list below replaces the global cases
+- [x] live specs the build already edited (`04`, `08`, `11`, `12`) — re-read against DESIGN §3.1.1: **no global actions, every workflow and template owned, 8 max, copied not inherited**
+
+✅ **Reworked and committed 2026-09-15** (not deployed). Dev DB re-migrated (`downgrade -1`, `upgrade head`): the three
+workflows belong to `DOR`, ten shared `DOR` actions. Replayed from empty on a throwaway stack (migration
+seeds nothing; seeds create them), downgrade/upgrade clean. Ticketing suite 882 passed · 5 skipped;
+e2e 72/72 on the rebuilt stack. Two choices made while building, for review:
+- **Save as template** takes the **workflow's** organization (`GRM-122`'s stated rule, taken now): with
+  `catalog_owner_for` a platform admin's template would have none, and copying the list would be refused.
+- With **several** ministries implementing projects, the migration seeds **no** starter actions (codes
+  are platform-unique) — it does not guess one. Not reachable on any database today.
 
 ## Files it may touch
 

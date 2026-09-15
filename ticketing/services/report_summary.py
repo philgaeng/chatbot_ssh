@@ -16,7 +16,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from ticketing.api.dependencies import CurrentUser
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import action_labels, event_action_label
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -227,7 +227,7 @@ def build_report_summary(
             ).scalars().all()
         )
 
-    resolution_cat: dict[str, str] = {}
+    latest_payloads: dict[str, dict] = {}
     for row in db.execute(
         select(TicketEvent.ticket_id, TicketEvent.payload)
         .where(
@@ -236,10 +236,13 @@ def build_report_summary(
         )
         .order_by(TicketEvent.created_at.desc())
     ).all():
-        if row[0] not in resolution_cat:
-            payload = row[1] or {}
-            code = payload.get("resolution_category")
-            resolution_cat[row[0]] = resolution_category_label(code) if code else "Unknown"
+        if row[0] not in latest_payloads:
+            latest_payloads[row[0]] = row[1] or {}
+    labels = action_labels(db, (p.get("resolution_category") for p in latest_payloads.values()))
+    resolution_cat: dict[str, str] = {
+        tid: event_action_label(db, payload, labels=labels) or "Unknown"
+        for tid, payload in latest_payloads.items()
+    }
 
     matrix_rows: list[dict[str, Any]] = []
     row_keys: list[tuple[str, str | None]] = [(project_id, None)]

@@ -27,6 +27,12 @@ from ticketing.services.admin_access import (
     require_settings_write,
     workflow_track_from_type,
 )
+from ticketing.services.resolution_catalog import (
+    ResolutionCatalogError,
+    copy_workflow_actions,
+    is_sensitive_workflow,
+    selected_codes,
+)
 from ticketing.services.role_scope import (
     require_named_jobs,
     unnamed_jobs,
@@ -257,11 +263,10 @@ def create_workflow(
         version=1,
         is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
-        # SH-7 §S5: templates stay global (NULL); a scoped org_admin owns its custom workflows.
-        owner_organization_id=(
-            None if payload.is_template
-            else catalog_owner_for(current_user, workflow_track_from_type(normalized_type))
-        ),
+        # GRM-116 (Q-10): templates belong to an organization like workflows do — a template with
+        # none could not name an organization's resolution actions. A platform admin's gets none
+        # until GRM-122 lets them choose; it can then list no action and cannot be published.
+        owner_organization_id=catalog_owner_for(current_user, workflow_track_from_type(normalized_type)),
     )
     db.add(wf)
 
@@ -320,6 +325,21 @@ def create_workflow(
             expected_actions=s.get("expected_actions"),
         ))
 
+    # GRM-116: a copy of a database workflow or template gets a COPY of its resolution actions —
+    # never inherited, so a later change to the source does not reach it. From a built-in template or
+    # from scratch it starts with none, and cannot be published until it has one.
+    clone_src = (
+        payload.clone_from_id
+        if payload.clone_from_id and not payload.clone_from_id.startswith("__builtin_")
+        and db.get(WorkflowDefinition, payload.clone_from_id)
+        else None
+    )
+    if clone_src:
+        try:
+            copy_workflow_actions(db, clone_src, wf)
+        except ResolutionCatalogError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     db.commit()
     db.refresh(wf)
     return WorkflowDefinitionResponse.model_validate(wf)
@@ -360,6 +380,14 @@ def publish_workflow(
     _require_workflow_write(current_user, wf.workflow_type)
     if wf.status == "archived":
         raise HTTPException(status_code=422, detail="Cannot publish an archived workflow")
+    # GRM-116: only a published workflow can be bound to a project, so this is what guarantees a case
+    # never meets an empty list on a non-sensitive workflow — the empty list stays the resolve form's
+    # signal for a sensitive one.
+    if not is_sensitive_workflow(wf) and not selected_codes(db, wf.workflow_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Add at least one resolution action before publishing.",
+        )
     active_steps = [s for s in wf.steps if not s.is_deleted]
     missing = [s.display_name for s in active_steps if not s.assigned_role_key]
     if missing:
@@ -452,6 +480,9 @@ def save_as_template(
         is_template=True,
         template_source_id=workflow_id,
         updated_by_user_id=current_user.user_id,
+        # A template takes the workflow's organization (GRM-122's rule, needed here so its copied
+        # resolution actions stay usable — an ownerless template could list none).
+        owner_organization_id=src.owner_organization_id,
     )
     db.add(tpl)
     for s in sorted(src.steps, key=lambda x: x.step_order):
@@ -471,6 +502,10 @@ def save_as_template(
                 staff_per_package=bool(s.staff_per_package),
                 stakeholders=s.stakeholders, expected_actions=s.expected_actions,
             ))
+    try:
+        copy_workflow_actions(db, workflow_id, tpl)  # GRM-116 — a copy, never inherited
+    except ResolutionCatalogError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     db.refresh(tpl)
     return WorkflowDefinitionResponse.model_validate(tpl)

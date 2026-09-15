@@ -164,6 +164,12 @@ class ClassificationValidateResponse(BaseModel):
     event_id: str
 
 
+class ResolutionOptionOut(BaseModel):
+    code: str
+    label: str
+    default_wording: str
+
+
 class TicketDetail(BaseModel):
     ticket_id: str
     grievance_id: str
@@ -205,6 +211,9 @@ class TicketDetail(BaseModel):
     # Spec 12: who holds the "reply to complainant" capability
     # Defaults to L1 actor; any Actor above L1 can reassign.
     complainant_reply_owner_id: Optional[str] = None
+    # GRM-116: what an officer may record as done on this case — its workflow's selection from the
+    # resolution-action catalog. Empty for a sensitive workflow, whose cases record no action.
+    resolution_options: list[ResolutionOptionOut] = []
     # QR token context — UUID of the package this ticket was filed from (null = no QR)
     package_id: Optional[str] = None
     # Resolved supervisor for current step (role configured + officer in scope)
@@ -248,7 +257,11 @@ class TicketActionRequest(BaseModel):
     note: Optional[str] = None
     resolution_category: Optional[str] = Field(
         None,
-        description="Required for RESOLVE — CLASSIFIED | DEMAND_REJECTED | ACCEPTED_*",
+        description=(
+            "RESOLVE — the code of what was done, one of the case's workflow selection "
+            "(TicketDetail.resolution_options). Required when that list is non-empty; refused "
+            "when it is empty (a sensitive workflow records no action)."
+        ),
     )
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
     grc_hearing_date: Optional[str] = Field(None, description="ISO date for GRC_CONVENE e.g. 2026-05-03")

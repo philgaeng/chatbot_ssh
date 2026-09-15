@@ -34,8 +34,6 @@ from ticketing.clients.grievance_api import update_grievance_status
 from ticketing.constants.classification import officer_validation_required
 from ticketing.constants.resolution import (
     format_resolution_note,
-    resolution_category_label,
-    validate_resolution_category,
     validate_resolution_note,
 )
 from ticketing.engine.escalation import convene_grc, escalate_ticket
@@ -48,6 +46,7 @@ from ticketing.models.workflow import WorkflowStep
 from ticketing.services.chart_behaviors import user_can_see_seah
 from ticketing.services.grievance_content import fetch_grievance_row
 from ticketing.services.overdue_episodes import close_open_episode
+from ticketing.services.resolution_catalog import options_for_workflow
 
 if TYPE_CHECKING:  # runtime-free — annotations are strings under `from __future__`
     from ticketing.api.dependencies import CurrentUser
@@ -286,6 +285,42 @@ def escalate(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Acti
     )
 
 
+def _resolution_action(db: Session, ticket: Ticket, requested: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    """Validate the requested action against **this case's workflow selection** (GRM-116) and
+    return ``(code, label)``.
+
+    A workflow that offers actions requires one of them. A workflow that offers none — a sensitive
+    workflow, whose cases record no action (DESIGN §3.1.3) — refuses one, so a client cannot write
+    a general outcome onto a SEAH case by sending it anyway.
+    """
+    options = options_for_workflow(db, ticket.current_workflow_id)
+    code = (requested or "").strip() or None
+    if not options:
+        if code:
+            raise ActionError(
+                "This case's workflow does not record a resolution action. "
+                "Send the resolution text only."
+            )
+        return None, None
+    if not code:
+        raise ActionError("resolution_category is required — choose what was done.")
+    for option in options:
+        if option["code"] == code:
+            return code, option["label"]
+    raise ActionError(
+        "resolution_category is not offered by this case's workflow. The case may have moved to "
+        "another workflow — choose what was done again."
+    )
+
+
+def _resolution_payload(code: Optional[str], label: Optional[str]) -> dict:
+    """The action keys both resolution events carry — none when no action was recorded. The label
+    is snapshotted so a later rename in the catalog never rewrites what the officer chose."""
+    if not code:
+        return {}
+    return {"resolution_category": code, "resolution_category_label": label}
+
+
 def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> ActionOutcome:
     old_status = ticket.status_code
     event_step_id = ticket.current_step_id
@@ -296,17 +331,17 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
             "Upload a site photo or ask the complainant to send photos via WhatsApp."
         )
     try:
-        category = validate_resolution_category(payload.resolution_category)
         officer_text = validate_resolution_note(payload.note)
     except ValueError as exc:
         raise ActionError(str(exc)) from exc
+    category, category_label = _resolution_action(db, ticket, payload.resolution_category)
 
     # Backfill path: allow officers to add missing resolution details
     # on already resolved/closed tickets (needed for closure summary generation).
     if ticket.status_code in ("RESOLVED", "CLOSED"):
         if _has_resolution_record_event(db, ticket.ticket_id):
             raise ActionError("Ticket is already resolved.")
-        formatted_note = format_resolution_note(category, officer_text)
+        formatted_note = format_resolution_note(category_label, officer_text)
         resolution_event = _add_event(
             db,
             ticket,
@@ -316,7 +351,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
             payload={
                 "internal": True,
                 "is_resolution_record": True,
-                "resolution_category": category,
+                **_resolution_payload(category, category_label),
                 "resolution_backfilled": True,
             },
             created_by=actor.user_id,
@@ -335,7 +370,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
 
     _auto_acknowledge_if_assigned_actor(db, ticket, actor)
     close_open_episode(db, ticket, "RESOLVED")
-    formatted_note = format_resolution_note(category, officer_text)
+    formatted_note = format_resolution_note(category_label, officer_text)
     resolution_event = _add_event(
         db,
         ticket,
@@ -345,7 +380,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
         payload={
             "internal": True,
             "is_resolution_record": True,
-            "resolution_category": category,
+            **_resolution_payload(category, category_label),
         },
         created_by=actor.user_id,
         seen=True,
@@ -355,7 +390,6 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
 
     ticket.status_code = "RESOLVED"
     ticket.updated_by_user_id = actor.user_id
-    cat_label = resolution_category_label(category)
     event = _add_event(
         db,
         ticket,
@@ -363,9 +397,9 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
         old_status=old_status,
         new_status="RESOLVED",
         step_id=event_step_id,
-        note=f"Case resolved — {cat_label}",
+        note=f"Case resolved — {category_label}" if category_label else "Case resolved",
         payload={
-            "resolution_category": category,
+            **_resolution_payload(category, category_label),
             "resolution_event_id": resolution_event.event_id,
         },
         created_by=actor.user_id,

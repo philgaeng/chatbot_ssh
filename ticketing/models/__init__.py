@@ -9,6 +9,7 @@ from .user import Role, UserRole
 from .admin_scope import AdminScope
 from .officer_onboarding import OfficerOnboarding
 from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
+from .resolution_action import ResolutionAction, WorkflowResolutionAction
 from .ticket import Ticket, TicketEvent
 from .ticket_overdue_episode import TicketOverdueEpisode
 from .ticket_file import TicketFile
@@ -39,6 +40,8 @@ __all__ = [
     "WorkflowDefinition",
     "WorkflowStep",
     "WorkflowAssignment",
+    "ResolutionAction",
+    "WorkflowResolutionAction",
     "Ticket",
     "TicketEvent",
     "TicketOverdueEpisode",

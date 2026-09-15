@@ -714,7 +714,7 @@ export default function TicketDetailPage() {
     mentionParticipants, pendingTaskCount, hasResolutionRecord, canManageViewers,
     userCanAssign, userCanSupervisorAssign, reassignMode, rosterIds,
     reload, ensureAcknowledged, performSimpleAction,
-    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve, resolutionError,
     submitReassignment, submitCallReport, submitNote, handleHashCommand,
     handleCompleteTask, closeFieldReport, submitFieldReportForm, handleAttachFile,
   } = useTicketThread({ ticketId: id, user, roleKeys, isAdmin });
@@ -1304,6 +1304,8 @@ export default function TicketDetailPage() {
         onClose={() => setResolutionOpen(false)}
         onSubmit={submitResolve}
         submitting={actLoading}
+        options={ticket?.resolution_options ?? []}
+        error={resolutionError}
       />
 
     </div>

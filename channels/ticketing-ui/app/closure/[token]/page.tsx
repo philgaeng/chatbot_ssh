@@ -86,7 +86,9 @@ export default function PublicClosurePage({ params }: { params: Promise<{ token:
 
       <section className="bg-white rounded-xl p-4 shadow-sm mb-4 border-l-4 border-green-600">
         <h2 className="font-semibold text-gray-900 mb-2">Outcome</h2>
-        <p className="text-sm font-medium text-green-800">{pub.resolution_category_label}</p>
+        {pub.resolution_category_label && (
+          <p className="text-sm font-medium text-green-800">{pub.resolution_category_label}</p>
+        )}
         <p className="text-sm text-gray-800 mt-2 whitespace-pre-wrap">{pub.resolution_text_public}</p>
       </section>
 

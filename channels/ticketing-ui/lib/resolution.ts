@@ -1,20 +1,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TicketEvent } from "@/lib/api";
-
-export const RESOLUTION_CATEGORIES = [
-  { code: "CLASSIFIED", label: "Grievance classified", defaultWording: "This grievance has been reviewed and classified. No specific remedial action is required beyond continued monitoring under the project GRM procedure." },
-  { code: "DEMAND_REJECTED", label: "Complainant demand rejected", defaultWording: "After investigation, the grievance was found not to be substantiated. The complainant's request is not accepted. The case is closed with this determination." },
-  { code: "ACCEPTED_MONETARY", label: "Grievance accepted — monetary compensation", defaultWording: "The grievance is substantiated. Remedial action includes monetary compensation as agreed with the complainant / per contract and GRM procedure." },
-  { code: "ACCEPTED_RELOCATION", label: "Grievance accepted — relocation", defaultWording: "The grievance is substantiated. Remedial action includes relocation / resettlement support as applicable under project safeguards." },
-  { code: "ACCEPTED_OTHER", label: "Grievance accepted — other remedy", defaultWording: "The grievance is substantiated. Remedial action has been agreed (other than monetary compensation or relocation). Details are recorded below." },
-] as const;
-
-export type ResolutionCategoryCode = (typeof RESOLUTION_CATEGORIES)[number]["code"];
-
-export function resolutionCategoryLabel(code: string): string {
-  return RESOLUTION_CATEGORIES.find((c) => c.code === code)?.label ?? code;
-}
+import type { ResolutionOption } from "@/lib/api";
 
 export function isResolutionRecordEvent(event: {
   event_type: string;
@@ -27,3 +13,41 @@ export function isResolutionRecordEvent(event: {
 }
 
 export const RESOLUTION_MIN_NOTE_LEN = 12;
+
+/** Preselected when the case's workflow offers it — the default before the catalog existed. */
+export const PREFERRED_DEFAULT_ACTION_CODE = "ACCEPTED_OTHER";
+
+export interface ResolutionFormState {
+  /** No options: a sensitive workflow, whose cases record no action (GRM-116). */
+  textOnly: boolean;
+  category: string | null;
+  note: string;
+  valid: boolean;
+}
+
+/**
+ * The resolve form, derived — never seeded from an effect (GRM-107's lesson: a seed that waits on
+ * async loads loses to a fast click). `chosen` and `typed` are what the officer did; everything
+ * else follows from the options the ticket currently offers, so a reload that changes them (the
+ * case moved workflow) cannot leave the form on an action it no longer offers.
+ */
+export function resolutionFormState(
+  options: ResolutionOption[],
+  chosen: string | null,
+  typed: string | null,
+): ResolutionFormState {
+  const textOnly = options.length === 0;
+  const fallback = textOnly
+    ? null
+    : options.some((o) => o.code === PREFERRED_DEFAULT_ACTION_CODE)
+      ? PREFERRED_DEFAULT_ACTION_CODE
+      : options[0].code;
+  const category = chosen && options.some((o) => o.code === chosen) ? chosen : fallback;
+  const note = typed ?? options.find((o) => o.code === category)?.default_wording ?? "";
+  return {
+    textOnly,
+    category,
+    note,
+    valid: note.trim().length >= RESOLUTION_MIN_NOTE_LEN && (textOnly || category !== null),
+  };
+}

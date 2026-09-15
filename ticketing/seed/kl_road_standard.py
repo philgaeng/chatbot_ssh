@@ -30,6 +30,8 @@ from ticketing.models.organization import Organization
 from ticketing.models.project import Project, ProjectDonor, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.constants.resolution import GENERAL_ACTION_CODES
+from ticketing.services.resolution_catalog import ensure_starter_actions, set_workflow_actions
 from ticketing.seed.position_types import seed_position_types
 from ticketing.seed.grm_roles import upsert_grm_roles
 
@@ -178,9 +180,16 @@ def seed_standard_workflow(db: Session) -> None:
             "Time-based escalation per ADB Loan 52097-003 requirements."
         ),
         workflow_type="STANDARD",
+        # GRM-116 (Q-10): every workflow belongs to an organization, or it can offer no action.
+        owner_organization_id=ORG_DOR_ID,
     )
     db.add(workflow)
     logger.info("  + workflow: KL_ROAD_STANDARD")
+    # GRM-116: DOR's shared resolution actions (the migration seeds them on a database that already
+    # had a ministry; this covers a fresh one), and the general five as this workflow's list —
+    # through the catalog service, the only writer.
+    ensure_starter_actions(db, ORG_DOR_ID)
+    set_workflow_actions(db, workflow, GENERAL_ACTION_CODES)
 
     steps = [
         WorkflowStep(

@@ -1,6 +1,7 @@
 # Workflows configuration
 
 **Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
+**Last updated:** 2026-09-15 — §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
 **Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
@@ -83,6 +84,41 @@ No `slot_key` (dropped 2026-07 by `c5e7f9a1_workflow_classifications`), so no `(
 ### `ticketing.tickets.workflow_version`
 
 Snapshot of definition `version` at ticket creation.
+
+### Resolution actions — what the workflow's officers can record as done (`GRM-116`)
+
+Each workflow holds an **ordered list of at most 8** actions from the resolution-action catalog
+(`ticketing.workflow_resolution_actions` → `ticketing.resolution_actions`). A case offers its
+workflow's list when an officer resolves it. The catalog — owned by organizations, never global, with
+local actions counting as a ministry's shared ones — is specified in
+[08 §2.2](08_ticket_resolution_and_case_summary.md). What matters here:
+
+**A workflow's organization decides what it can list.** An action is usable when it belongs to the
+workflow's organization or one above it, so **every workflow and template belongs to an
+organization** (`owner_organization_id`). An `org_admin`'s workflows and templates get its
+organization (`catalog_owner_for`) — templates included, which used to be stamped with none. *Save as
+template* gives the template the workflow's organization. A platform admin's new workflow has none
+until it can be chosen (`GRM-122`), so it can list nothing and cannot be published.
+
+| How the workflow came to exist | Lists |
+| --- | --- |
+| Created from scratch, or from a built-in template | **nothing** — built-in templates belong to no organization and carry no list |
+| Cloned, created from a database template, or saved as a template | a **copy** of the source's list — refused (422) if the new organization cannot use one of its actions |
+| Existing before migration `b3d5f7h9` | sensitive → none · bound to the road-hazard menu on any project → the road-works five · otherwise the general five |
+
+**Copied, never inherited**: a later change to the source does not reach the copy.
+
+**Publishing requires an action.** `POST /workflows/{id}/publish` refuses a non-sensitive workflow
+with no active action: *"Add at least one resolution action before publishing."* A published one
+cannot be emptied. Only published workflows bind to projects, so a case meets an empty list only in a
+sensitive workflow.
+
+**A sensitive workflow never lists an action** — its cases record neither what was done nor who did
+it. `workflow_type` cannot change after creation, so the rule is decided once. Every path above goes
+through `resolution_catalog.set_workflow_actions`, the only writer.
+
+⚠ **Not on screen yet:** the Workflows tab does not show or edit a workflow's list (`GRM-119`) or its
+organization (`GRM-122`). Until `GRM-119`, a list changes by data migration.
 
 ### Legacy: `ticketing.workflow_assignments`
 

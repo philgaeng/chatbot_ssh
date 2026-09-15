@@ -16,7 +16,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from ticketing.api.dependencies import CurrentUser
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import action_labels, event_action_label
 from ticketing.engine.workflow_engine import compute_sla_deadline
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import ProjectPackage
@@ -292,6 +292,7 @@ def _fetch_auxiliary_maps(
     escalated_ids: set[str] = set()
 
     if ticket_ids:
+        latest_payloads: dict[str, dict] = {}
         for row in db.execute(
             select(TicketEvent.ticket_id, TicketEvent.created_at, TicketEvent.payload)
             .where(
@@ -303,8 +304,12 @@ def _fetch_auxiliary_maps(
             tid = row[0]
             if tid not in resolved_at:
                 resolved_at[tid] = row[1]
-                payload = row[2] or {}
-                resolution_cat[tid] = payload.get("resolution_category")
+                latest_payloads[tid] = row[2] or {}
+        # GRM-116: the label the officer chose, snapshotted on the event; the catalog's label only
+        # for events written before snapshots existed. One catalog query for the whole page.
+        labels = action_labels(db, (p.get("resolution_category") for p in latest_payloads.values()))
+        for tid, payload in latest_payloads.items():
+            resolution_cat[tid] = event_action_label(db, payload, labels=labels) or None
 
         escalated_ids = set(
             db.execute(
@@ -384,7 +389,7 @@ def build_report_row(
     package_labels: dict[str, str],
     resolved_at_map: dict[str, datetime | None],
     escalated_ids: set[str],
-    resolution_cat_map: dict[str, str | None],
+    resolution_cat_map: dict[str, str | None],  # ticket_id → resolution action *label*
     date_from: date,
     date_to: date,
     now: datetime | None = None,
@@ -411,8 +416,7 @@ def build_report_row(
         or overdue_now
     )
 
-    res_code = resolution_cat_map.get(ticket.ticket_id)
-    res_label = resolution_category_label(res_code) if res_code else ""
+    res_label = resolution_cat_map.get(ticket.ticket_id) or ""  # already a label (GRM-116)
 
     pkg_label = package_labels.get(ticket.package_id) if ticket.package_id else "(No package)"
     proj_name = ""

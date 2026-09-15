@@ -44,7 +44,9 @@ def build_closure_pdf(public_json: dict[str, Any], grievance_id: str) -> bytes:
     story.append(Spacer(1, 12))
 
     story.append(Paragraph("<b>Outcome</b>", styles["Heading2"]))
-    story.append(Paragraph(_p(public_json.get("resolution_category_label", "")), styles["Normal"]))
+    # GRM-116: a SEAH case records no action, so it has no outcome label — omit the line.
+    if public_json.get("resolution_category_label"):
+        story.append(Paragraph(_p(public_json["resolution_category_label"]), styles["Normal"]))
     story.append(Paragraph(_p(public_json.get("resolution_text_public", "")), styles["Normal"]))
     story.append(Spacer(1, 12))
 

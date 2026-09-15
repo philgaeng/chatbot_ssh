@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend.config.llm_config import findings_task, model_for
 from ticketing.clients.grievance_api import get_grievance_detail
 from ticketing.config.settings import get_settings
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import event_action_label
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -185,7 +185,7 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
         "resolution_ev": resolution_ev,
         "resolution": {
             "category": category,
-            "category_label": resolution_category_label(category) if category else "",
+            "category_label": event_action_label(db, res_payload),
             "text": resolution_text,
         },
         "original_complaint": original,

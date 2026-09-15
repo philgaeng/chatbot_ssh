@@ -48,7 +48,6 @@ import {
   type HashCommand,
 } from "@/lib/mobile-constants";
 import { parseThreadCommand } from "@/lib/threadCommands";
-import type { ResolutionCategoryCode } from "@/lib/resolution";
 import type { FilterChip } from "@/components/thread/FilterChips";
 import type { MentionParticipant } from "@/components/thread/ComposeBar";
 import type { ReassignmentReasonCode } from "@/components/thread/ReassignmentRequestCard";
@@ -158,7 +157,10 @@ export interface UseTicketThreadResult {
   openEscalationFlow: () => void;
   submitEscalation: (data: { escalationDate: string; personsInvolved: string[]; notes: string }) => Promise<void>;
   openResolveFlow: () => void;
-  submitResolve: (category: ResolutionCategoryCode, note: string) => Promise<void>;
+  /** ``category`` is null for a case in a sensitive workflow, which records no action (GRM-116). */
+  submitResolve: (category: string | null, note: string) => Promise<void>;
+  /** Why the last resolve was refused — the sheet shows it, since it covers the page notice. */
+  resolutionError: string | null;
   submitReassignment: (reasonCode: ReassignmentReasonCode, notes: string) => Promise<void>;
   submitCallReport: (data: CallReportFormData) => Promise<void>;
   /** Compose-bar submit — routes `#assign` / `#inspect` / plain note (see threadCommands). */
@@ -199,6 +201,7 @@ export function useTicketThread({
   // ── Flow-open state ──────────────────────────────────────────────────────────
   const [escalationOpen, setEscalationOpen] = useState(false);
   const [resolutionOpen, setResolutionOpen] = useState(false);
+  const [resolutionError, setResolutionError] = useState<string | null>(null);
   const [reassignOpen, setReassignOpen]     = useState(false);
   const [callReportOpen, setCallReportOpen] = useState(false);
   const [fieldReportOpen, setFieldReportOpen] = useState(false);
@@ -398,24 +401,30 @@ export function useTicketThread({
       setActionNotice({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
       return;
     }
+    setResolutionError(null);
     setResolutionOpen(true);
   }, [hasImages]);
 
-  const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
+  const submitResolve = useCallback(async (category: string | null, note: string) => {
     setActionNotice(null);
+    setResolutionError(null);
     setSubmitting(true);
     try {
       await ensureAcknowledged();
       await performAction(ticketId, {
         action_type: "RESOLVE",
-        resolution_category: category,
+        ...(category ? { resolution_category: category } : {}),
         note,
       });
       setResolutionOpen(false);
       await reload();
     } catch (e) {
       console.error("Resolve failed", e);
-      setActionNotice(formatUserFacingError(e));
+      const notice = formatUserFacingError(e);
+      setActionNotice(notice);
+      setResolutionError(notice.message);
+      // The refusal may mean the case moved workflow — reload so the sheet offers the new list.
+      await reload();
     } finally {
       setSubmitting(false);
     }
@@ -608,7 +617,7 @@ export function useTicketThread({
     mentionParticipants, pendingTaskCount, hasResolutionRecord,
     canManageViewers, userCanAssign, userCanSupervisorAssign, reassignMode,
     reload, ensureAcknowledged, performSimpleAction,
-    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve, resolutionError,
     submitReassignment, submitCallReport, submitNote, handleHashCommand,
     handleCompleteTask, openFieldReport, closeFieldReport, submitFieldReportForm,
     handleAttachFile,

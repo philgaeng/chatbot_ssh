@@ -115,7 +115,7 @@ test("acknowledge → attach a photo → resolve", async ({ page, asOfficer }, t
 
   // The category select is populated from the resolution catalogue, so pick by index rather
   // than by a label this spec would then be pinning.
-  const category = page.locator("select").filter({ hasText: /./ }).first();
+  const category = page.getByLabel("What was done");
   await category.selectOption({ index: 1 });
   await page
     .getByRole("textbox")
@@ -141,6 +141,46 @@ test("acknowledge → attach a photo → resolve", async ({ page, asOfficer }, t
   await page.goto(`/tickets/${ticket.ticketId}/closure`);
   await expect(page.getByText("Case closure summary", { exact: false })).toBeVisible();
   await captureScreenshot(page, testInfo, "flow-resolve-closure");
+});
+
+test("a SEAH case resolves with the text alone — no action is recorded", async ({ page, asOfficer }, testInfo) => {
+  // GRM-116: a case in a sensitive workflow records neither what was done nor who did it, so its
+  // resolve form must not offer the general outcomes (it used to force one, such as "Complainant
+  // demand rejected"). The server refuses an action for it; this asserts the form never sends one.
+  const ticket = await createTicket("seah-resolve", { seah: true });
+  // The intake key cannot read a SEAH case (fixtures/ticket.ts), so learn the assignee as the
+  // seeded SEAH officer — a cast member, who can — then act as whoever was actually chosen.
+  await asOfficer(OFFICERS.seahNational);
+  const seen = await page.request.get(`/api/v1/tickets/${ticket.ticketId}`);
+  expect(seen.ok(), `the SEAH officer should be able to read the case (HTTP ${seen.status()})`).toBe(true);
+  const { assigned_to_user_id: assignee } = (await seen.json()) as { assigned_to_user_id: string | null };
+  expect(assignee, "auto-assignment should have given the SEAH case an assignee").toBeTruthy();
+  await asOfficer(asAssignee(assignee as string));
+
+  await page.goto(`/tickets/${ticket.ticketId}`);
+  await page.getByRole("button", { name: "Acknowledge", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Resolve", exact: true })).toBeVisible();
+  await attachSitePhoto(page);
+
+  await page.getByRole("button", { name: "Resolve", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Resolve case" })).toBeVisible();
+  // Positive first (Rule 6a.6): the text box is there; only then assert the select is not.
+  const text = page.getByLabel(/Resolution text/);
+  await expect(text).toBeVisible();
+  await expect(page.getByLabel("What was done")).toHaveCount(0);
+  await captureScreenshot(page, testInfo, "flow-resolve-seah-text-only");
+
+  await text.fill("Complainant referred to support services with consent; case closed by the SEAH officer.");
+  await page.getByRole("button", { name: "Confirm resolve" }).click();
+
+  await expect
+    .poll(
+      async () =>
+        ((await (await page.request.get(`/api/v1/tickets/${ticket.ticketId}`)).json()) as { status_code: string })
+          .status_code,
+      { message: "the SEAH ticket should have resolved", timeout: 20_000 },
+    )
+    .toBe("RESOLVED");
 });
 
 test.describe("the officer sees only their own", () => {

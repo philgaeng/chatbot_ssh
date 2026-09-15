@@ -118,6 +118,17 @@ export interface TicketDetail extends TicketListItem {
   complainant_reply_owner_id: string | null;
   /** Step supervisor role configured and at least one officer resolvable in scope. */
   step_supervisor_available?: boolean;
+  /**
+   * GRM-116: what an officer may record as done on this case — its workflow's selection from the
+   * resolution-action catalog. **Empty for a sensitive workflow**, whose cases record no action.
+   */
+  resolution_options?: ResolutionOption[];
+}
+
+export interface ResolutionOption {
+  code: string;
+  label: string;
+  default_wording: string;
 }
 
 export interface SlaStatus {
@@ -2112,6 +2123,10 @@ export interface OrgDeleteImpact {
   workflow_assignment_count: number;
   package_actor_count: number;
   project_actor_count: number;
+  /** GRM-116: resolution actions this organization owns — an owner cannot be deleted. */
+  resolution_action_count: number;
+  /** Workflows and templates this organization owns — informational: a delete leaves them with no organization. */
+  workflow_count: number;
   deletable: boolean;
 }
 
