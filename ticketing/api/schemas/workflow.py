@@ -152,6 +152,11 @@ class WorkflowDefinitionResponse(BaseModel):
     version: int
     is_template: bool
     template_source_id: Optional[str]
+    # GRM-122: the organization it belongs to — decides which resolution actions it can offer.
+    owner_organization_id: Optional[str] = None
+    owner_name: Optional[str] = None
+    # Filled only by GET /workflows/{id}: names of the projects bound to it, shown when moving it.
+    used_by_projects: list[str] = []
     steps: list[WorkflowStepResponse] = []
     assignments: list[WorkflowAssignmentResponse] = []
     created_at: datetime
@@ -172,6 +177,13 @@ class WorkflowCreate(BaseModel):
     description: Optional[str] = None
     clone_from_id: Optional[str] = None     # clone steps from this workflow/template
     is_template: bool = False               # True → reusable template (not assigned to tickets)
+    # GRM-122: required from a platform admin; an org_admin's defaults to its organization.
+    owner_organization_id: Optional[str] = None
+
+
+class WorkflowOrganizationUpdate(BaseModel):
+    """PATCH /workflows/{id}/organization (GRM-122)."""
+    organization_id: str
 
 
 class SaveAsTemplateBody(BaseModel):

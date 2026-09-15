@@ -19,16 +19,24 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import get_db, get_authenticated_user, CurrentUser
+from ticketing.models.admin_audit_log import AdminAuditLog
+from ticketing.models.organization import Organization
+from ticketing.models.project import Project
+from ticketing.models.project_workflow import ProjectWorkflow
 from ticketing.services.admin_access import (
     SettingsAction,
     apply_catalog_scope,
+    can_admin_org,
     can_mutate_workflow,
     catalog_owner_for,
+    is_super_admin,
     require_settings_write,
     workflow_track_from_type,
 )
+from ticketing.services.org_tree import ancestor_org_ids
 from ticketing.services.resolution_catalog import (
     ResolutionCatalogError,
+    actions_unusable_by,
     copy_workflow_actions,
     is_sensitive_workflow,
     selected_codes,
@@ -46,6 +54,7 @@ from ticketing.api.schemas.workflow import (
     WorkflowCreate,
     WorkflowDefinitionResponse,
     WorkflowListResponse,
+    WorkflowOrganizationUpdate,
     WorkflowStepCreate,
     WorkflowStepResponse,
     WorkflowStepUpdate,
@@ -131,12 +140,20 @@ def list_workflows(
     workflow_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     is_template: Optional[bool] = Query(None),
+    for_organization_id: Optional[str] = Query(
+        None,
+        description=(
+            "GRM-122: only workflows/templates owned by this organization or one ABOVE it — what a "
+            "new workflow of that organization may start from. Must be inside the caller's reach."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowListResponse:
     q = select(WorkflowDefinition).options(
         selectinload(WorkflowDefinition.steps),
         selectinload(WorkflowDefinition.assignments),
+        selectinload(WorkflowDefinition.owner_organization),
     )
     # Hide sensitive workflow definitions from admins without the configure capability
     if not current_user.can_configure_sensitive:
@@ -147,8 +164,17 @@ def list_workflows(
         q = q.where(WorkflowDefinition.status == status)
     if is_template is not None:
         q = q.where(WorkflowDefinition.is_template == is_template)
-    # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
-    q = apply_catalog_scope(q, db, current_user, WorkflowDefinition.owner_organization_id)
+    if for_organization_id:
+        # Ancestor-aware on purpose — unlike apply_catalog_scope, which omits what is owned above
+        # the viewer: a PD-ADB workflow may start from DOR's template (DESIGN §3.1.1).
+        if not can_admin_org(db, current_user, for_organization_id):
+            raise HTTPException(status_code=403, detail="You can only create workflows for organizations you manage.")
+        q = q.where(WorkflowDefinition.owner_organization_id.in_(
+            ancestor_org_ids(db, for_organization_id, include_self=True)
+        ))
+    else:
+        # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+        q = apply_catalog_scope(q, db, current_user, WorkflowDefinition.owner_organization_id)
 
     workflows = db.execute(q.order_by(WorkflowDefinition.display_name)).scalars().all()
     return WorkflowListResponse(
@@ -231,7 +257,30 @@ def get_workflow(
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
     wf = _load_workflow(workflow_id, db, current_user)
-    return WorkflowDefinitionResponse.model_validate(wf)
+    out = WorkflowDefinitionResponse.model_validate(wf)
+    out.used_by_projects = list(db.execute(
+        select(Project.name)
+        .join(ProjectWorkflow, ProjectWorkflow.project_id == Project.project_id)
+        .where(ProjectWorkflow.workflow_id == workflow_id)
+        .distinct()
+        .order_by(Project.name)
+    ).scalars())
+    return out
+
+
+def _owner_for_new_workflow(db: Session, current_user: CurrentUser, requested: Optional[str], track: str) -> str:
+    """GRM-122: the organization a new workflow or template belongs to. A platform admin must choose
+    one; an org_admin's defaults to its own and may be any organization inside its reach."""
+    if requested:
+        if db.get(Organization, requested) is None:
+            raise HTTPException(status_code=422, detail=f"Organization '{requested}' not found")
+        if not is_super_admin(current_user) and not can_admin_org(db, current_user, requested, track):
+            raise HTTPException(status_code=403, detail="You can only create workflows for organizations you manage.")
+        return requested
+    default = None if is_super_admin(current_user) else catalog_owner_for(current_user, track)
+    if not default:
+        raise HTTPException(status_code=422, detail="Choose the organization this workflow belongs to.")
+    return default
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
@@ -263,10 +312,11 @@ def create_workflow(
         version=1,
         is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
-        # GRM-116 (Q-10): templates belong to an organization like workflows do — a template with
-        # none could not name an organization's resolution actions. A platform admin's gets none
-        # until GRM-122 lets them choose; it can then list no action and cannot be published.
-        owner_organization_id=catalog_owner_for(current_user, workflow_track_from_type(normalized_type)),
+        # GRM-116/GRM-122: every workflow and template belongs to an organization — it decides which
+        # resolution actions it can offer. Chosen by a platform admin; an org_admin's own by default.
+        owner_organization_id=_owner_for_new_workflow(
+            db, current_user, payload.owner_organization_id, workflow_track_from_type(normalized_type)
+        ),
     )
     db.add(wf)
 
@@ -363,6 +413,69 @@ def update_workflow(
     if payload.workflow_key is not None:
         wf.workflow_key = payload.workflow_key
     wf.updated_by_user_id = current_user.user_id
+    db.commit()
+    db.refresh(wf)
+    return WorkflowDefinitionResponse.model_validate(wf)
+
+
+# ── Organization (GRM-122) ────────────────────────────────────────────────────
+
+@router.patch(
+    "/workflows/{workflow_id}/organization",
+    response_model=WorkflowDefinitionResponse,
+    summary="Change the organization a workflow or template belongs to",
+)
+def change_workflow_organization(
+    workflow_id: str,
+    payload: WorkflowOrganizationUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> WorkflowDefinitionResponse:
+    """Move a workflow or template to another organization (GRM-122, DESIGN §3.1.1).
+
+    Refused while its resolution-action list holds an action the new organization could not use —
+    one line per action, so the admin knows what to remove. Moving **down** (DOR → PD-ADB) never
+    hits this; sideways, up or to another ministry can. The caller must manage both organizations.
+    """
+    wf = _load_workflow(workflow_id, db, current_user)  # sensitive workflows: configure capability
+    _require_workflow_write(current_user, wf.workflow_type)
+    track = workflow_track_from_type(wf.workflow_type)
+
+    target = db.get(Organization, payload.organization_id)
+    if target is None:
+        raise HTTPException(status_code=422, detail=f"Organization '{payload.organization_id}' not found")
+    current = wf.owner_organization_id
+    if not is_super_admin(current_user) and (
+        not can_admin_org(db, current_user, target.organization_id, track)
+        or (current is not None and not can_admin_org(db, current_user, current, track))
+    ):
+        raise HTTPException(status_code=403, detail="You can only move workflows between organizations you manage.")
+    if current == target.organization_id:
+        return WorkflowDefinitionResponse.model_validate(wf)
+
+    blocked = actions_unusable_by(db, wf.workflow_id, target.organization_id)
+    if blocked:
+        owners = {
+            o.organization_id: o.name
+            for o in db.execute(
+                select(Organization).where(Organization.organization_id.in_({a.owner_organization_id for a in blocked}))
+            ).scalars()
+        }
+        raise HTTPException(
+            status_code=422,
+            detail="\n".join(
+                f"Remove '{a.label}' first — it belongs to {owners.get(a.owner_organization_id, a.owner_organization_id)}."
+                for a in blocked
+            ),
+        )
+
+    wf.owner_organization_id = target.organization_id
+    wf.updated_by_user_id = current_user.user_id
+    db.add(AdminAuditLog(
+        actor_user_id=current_user.user_id,
+        action="workflow_organization_changed",
+        payload={"workflow_id": wf.workflow_id, "from_organization_id": current, "to_organization_id": target.organization_id},
+    ))
     db.commit()
     db.refresh(wf)
     return WorkflowDefinitionResponse.model_validate(wf)

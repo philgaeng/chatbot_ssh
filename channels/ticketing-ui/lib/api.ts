@@ -222,6 +222,11 @@ export interface WorkflowDefinition {
   version: number;
   is_template: boolean;
   template_source_id: string | null;
+  /** GRM-122: the organization it belongs to — decides which resolution actions it can offer. */
+  owner_organization_id?: string | null;
+  owner_name?: string | null;
+  /** Only on GET /workflows/{id}: names of the projects bound to it. */
+  used_by_projects?: string[];
   steps: WorkflowStep[];
   assignments: WorkflowAssignmentItem[];
   created_at: string;
@@ -665,11 +670,14 @@ export function listWorkflows(filters?: {
   workflow_type?: string;
   status?: string;
   is_template?: boolean;
+  /** GRM-122: only those owned by this organization or one above it (a new workflow's templates). */
+  for_organization_id?: string;
 }): Promise<{ items: WorkflowDefinition[]; total: number }> {
   const p = new URLSearchParams();
   if (filters?.workflow_type) p.set("workflow_type", filters.workflow_type);
   if (filters?.status) p.set("status", filters.status);
   if (filters?.is_template !== undefined) p.set("is_template", String(filters.is_template));
+  if (filters?.for_organization_id) p.set("for_organization_id", filters.for_organization_id);
   const qs = p.toString();
   return apiFetch(`/api/v1/workflows${qs ? `?${qs}` : ""}`);
 }
@@ -684,6 +692,8 @@ export interface WorkflowCreatePayload {
   description?: string;
   clone_from_id?: string;
   is_template?: boolean;
+  /** GRM-122: required from a platform admin; an org admin's defaults to its own organization. */
+  owner_organization_id?: string;
 }
 
 export function createWorkflow(payload: WorkflowCreatePayload): Promise<WorkflowDefinition> {
@@ -692,6 +702,17 @@ export function createWorkflow(payload: WorkflowCreatePayload): Promise<Workflow
 
 export function getWorkflow(workflowId: string): Promise<WorkflowDefinition> {
   return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}`);
+}
+
+/**
+ * GRM-122: move a workflow or template to another organization. Refused (422) while its resolution
+ * actions include one the new organization cannot use — the detail names each, one per line.
+ */
+export function changeWorkflowOrganization(workflowId: string, organizationId: string): Promise<WorkflowDefinition> {
+  return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}/organization`, {
+    method: "PATCH",
+    body: JSON.stringify({ organization_id: organizationId }),
+  });
 }
 
 export function saveWorkflowAsTemplate(
@@ -2101,13 +2122,15 @@ export interface OrganizationUpdate {
 
 export function listOrganizations(
   country?: string,
-  opts?: { rootId?: string; tree?: boolean; q?: string },
+  opts?: { rootId?: string; tree?: boolean; q?: string; manageable?: boolean },
 ): Promise<OrganizationItem[]> {
   const p = new URLSearchParams();
   if (country) p.set("country", country);
   p.set("active_only", "false");
   if (opts?.rootId) p.set("root_id", opts.rootId);
   if (opts?.tree) p.set("tree", "true");
+  // GRM-122: only organizations the caller administers (a platform admin: all).
+  if (opts?.manageable) p.set("manageable", "true");
   if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
   return apiFetch<OrganizationItem[]>(`/api/v1/organizations?${p}`);
 }

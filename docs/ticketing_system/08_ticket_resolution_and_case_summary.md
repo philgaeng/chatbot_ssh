@@ -1,7 +1,7 @@
 # Ticket resolution record and resolved case summary
 
 **Status:** Implemented baseline (June 2026); Summary enhancements and complainant closure page/PDF tracked in this spec.  
-**Last updated:** 2026-09-15 — §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
+**Last updated:** 2026-09-15 — §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
 **Related:** [04_ticketing_schema.md](04_ticketing_schema.md) (`ticket_events`), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [CLAUDE.md](../../CLAUDE.md) (PII rules)
 
 This document defines:
@@ -93,7 +93,7 @@ catalog rule of [11 §3.3](11_roles_and_permissions.md), with global items remov
 | **Shared action** | owned by a **ministry** — a top organization, no parent (e.g. `DOR`). Its national vocabulary |
 | **Local action** | owned **below** its ministry. Must **count as** one shared action of that same ministry (`counts_as_code`), so national totals stay whole |
 | **Usable by a workflow** | when the action belongs to the workflow's organization or one **above** it. A workflow with no organization can use nothing; one ministry's actions never reach another's |
-| **Every workflow and template** | belongs to an organization. The migration gave each existing one its projects' ministry; choosing and changing it in Settings is `GRM-122` |
+| **Every workflow and template** | belongs to an organization. The migration gave each existing one its projects' ministry; it is chosen on create and changed in Settings ([12](12_workflows_configuration.md)) |
 
 ⚠ `owner_organization_id` is `NOT NULL` and `ON DELETE RESTRICT` — deleting an owning organization is
 refused. An action is never deleted: historical events cite its code.
@@ -150,10 +150,9 @@ limit of 8, or silently drop local actions; a copy never forces that choice.
 routed to a project's default workflow resolves with that workflow's actions. Measured 2026-09-15:
 no project on the dev DB binds one, so there `KL_ROAD`'s road-hazard reports offer the general five.
 
-**Changing a list or creating an action on screen is not built** (`GRM-119`), nor choosing a
-workflow's organization (`GRM-122`) — until `GRM-122`, a platform admin's new workflow has no
-organization, so it can list no action and cannot be published. Until `GRM-119`, a list changes by
-data migration. Nepali labels: not yet — the admin UI is English-only ([ui/05](ui/05_ui_copy_style.md)).
+**Changing a list or creating an action on screen is not built** (`GRM-119`); until then a list
+changes by data migration. A workflow's organization is chosen on create and changed in the editor
+([12](12_workflows_configuration.md), `GRM-122`). Nepali labels: not yet — the admin UI is English-only ([ui/05](ui/05_ui_copy_style.md)).
 
 ### 2.3 Storage model (no new table)
 

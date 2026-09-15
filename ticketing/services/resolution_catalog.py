@@ -192,6 +192,22 @@ def selected_codes(db: Session, workflow_id: str, *, active_only: bool = True) -
     return list(db.execute(stmt).scalars())
 
 
+def actions_unusable_by(db: Session, workflow_id: str, organization_id: str) -> list[ResolutionAction]:
+    """The actions on a workflow's list that ``organization_id`` could not use — what blocks moving
+    the workflow there (GRM-122). Inactive ones included: they are still on the list."""
+    codes = selected_codes(db, workflow_id, active_only=False)
+    if not codes:
+        return []
+    actions = db.execute(select(ResolutionAction).where(ResolutionAction.code.in_(codes))).scalars().all()
+    by_code = {a.code: a for a in actions}
+    blocked = []
+    for code in codes:
+        action = by_code[code]
+        if organization_id not in descendant_org_ids(db, action.owner_organization_id, include_self=True):
+            blocked.append(action)
+    return blocked
+
+
 def copy_workflow_actions(db: Session, source_workflow_id: str, target: WorkflowDefinition) -> None:
     """Give ``target`` a **copy** of the source's list — for clone, create-from-template and
     save-as-template. Refused (nothing written) if the target's organization cannot use one of the

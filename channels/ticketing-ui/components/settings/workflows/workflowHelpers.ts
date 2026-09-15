@@ -9,7 +9,7 @@
  *
  * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
  */
-import { type WorkflowDefinition, type ProjectWorkflowSlot } from "@/lib/api";
+import { type OrganizationItem, type WorkflowDefinition, type ProjectWorkflowSlot } from "@/lib/api";
 
 // `scope` is the role's workflow_scope ("Standard" | "SEAH" | "Both") — carried so the step
 // cast can grey out-of-track roles ("wrong track") instead of hiding them (DESIGN §4.3).
@@ -98,3 +98,13 @@ export const NOTIFICATION_EVENTS: { key: string; label: string }[] = [
 export const SEAH_EVENTS = new Set(["ticket_created","ticket_escalated","ticket_resolved","sla_breach","assignment"]);
 export const NOTIF_TIERS = ["actor","supervisor","informed","observer"] as const;
 export const NOTIF_CHANNELS = ["app","email","sms"] as const;
+
+/**
+ * GRM-122: the organizations in `orgs` whose parent is not also in `orgs` — the tops of an admin's
+ * reach. With exactly one, a new workflow defaults to it (the server's `catalog_owner_for` does the
+ * same); with several, or for a platform admin, the admin must choose.
+ */
+export function topOrganizations(orgs: OrganizationItem[]): OrganizationItem[] {
+  const ids = new Set(orgs.map((o) => o.organization_id));
+  return orgs.filter((o) => !o.parent_organization_id || !ids.has(o.parent_organization_id));
+}

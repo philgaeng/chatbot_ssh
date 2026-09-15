@@ -288,8 +288,9 @@ def _dor_admin():
 def test_a_new_workflow_starts_empty_and_cannot_be_published(db, monkeypatch):
     app, client = _client(db, monkeypatch, _super())
     try:
-        for body in ({"display_name": "GRM-116 scratch"},
-                     {"display_name": "GRM-116 built-in", "clone_from_id": "__builtin_default_grm"}):
+        for body in ({"display_name": "GRM-116 scratch", "owner_organization_id": ORG_DOR},
+                     {"display_name": "GRM-116 built-in", "clone_from_id": "__builtin_default_grm",
+                      "owner_organization_id": ORG_DOR}):
             res = client.post("/api/v1/workflows", json=body)
             assert res.status_code == 201, res.text
             wf_id = res.json()["workflow_id"]
@@ -304,7 +305,8 @@ def test_a_new_workflow_starts_empty_and_cannot_be_published(db, monkeypatch):
 def test_a_sensitive_workflow_publishes_with_no_action(db, monkeypatch):
     app, client = _client(db, monkeypatch, _super())
     try:
-        res = client.post("/api/v1/workflows", json={"display_name": "GRM-116 sensitive", "workflow_type": "seah"})
+        res = client.post("/api/v1/workflows", json={"display_name": "GRM-116 sensitive", "workflow_type": "seah",
+                                                     "owner_organization_id": ORG_DOR})
         assert res.status_code == 201, res.text
         pub = client.post(f"/api/v1/workflows/{res.json()['workflow_id']}/publish")
         assert pub.status_code == 200, pub.text
@@ -327,13 +329,15 @@ def test_an_org_admins_clone_copies_the_list_and_its_template_is_owned(db, monke
         app.dependency_overrides.clear()
 
 
-def test_a_platform_admins_clone_has_no_organization_so_its_list_is_refused(db, monkeypatch):
-    # Until GRM-122 lets a platform admin choose the organization: an ownerless copy can use nothing,
-    # and the copy is refused rather than silently emptied.
+def test_a_clone_into_an_organization_that_cannot_use_its_actions_is_refused(db, monkeypatch):
+    # DOR's shared actions cannot be used by another ministry, so a copy owned there is refused
+    # rather than silently emptied.
     source = _seeded(db, WORKFLOW_STANDARD_KEY)
+    other = _org(db, "OTHER_MINISTRY")
     app, client = _client(db, monkeypatch, _super())
     try:
-        res = client.post("/api/v1/workflows", json={"display_name": "GRM-116 clone", "clone_from_id": source.workflow_id})
+        res = client.post("/api/v1/workflows", json={"display_name": "GRM-116 clone", "clone_from_id": source.workflow_id,
+                                                     "owner_organization_id": other})
         assert res.status_code == 422, res.text
     finally:
         app.dependency_overrides.clear()

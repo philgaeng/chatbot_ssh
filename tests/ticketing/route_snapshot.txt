@@ -114,6 +114,7 @@ PATCH /api/v1/users/me/preferences
 PATCH /api/v1/users/me/profile
 PATCH /api/v1/users/{user_id}
 PATCH /api/v1/workflows/{workflow_id}
+PATCH /api/v1/workflows/{workflow_id}/organization
 PATCH /api/v1/workflows/{workflow_id}/steps/{step_id}
 POST /api/v1/admin-scopes
 POST /api/v1/admin-scopes/{admin_scope_id}/send-invite

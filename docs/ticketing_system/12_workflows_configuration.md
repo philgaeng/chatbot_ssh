@@ -1,7 +1,7 @@
 # Workflows configuration
 
 **Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
-**Last updated:** 2026-09-15 — §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
+**Last updated:** 2026-09-15 — §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
 **Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
@@ -95,10 +95,7 @@ local actions counting as a ministry's shared ones — is specified in
 
 **A workflow's organization decides what it can list.** An action is usable when it belongs to the
 workflow's organization or one above it, so **every workflow and template belongs to an
-organization** (`owner_organization_id`). An `org_admin`'s workflows and templates get its
-organization (`catalog_owner_for`) — templates included, which used to be stamped with none. *Save as
-template* gives the template the workflow's organization. A platform admin's new workflow has none
-until it can be chosen (`GRM-122`), so it can list nothing and cannot be published.
+organization** (`owner_organization_id`). How it is set and changed is the next section.
 
 | How the workflow came to exist | Lists |
 | --- | --- |
@@ -117,8 +114,36 @@ sensitive workflow.
 it. `workflow_type` cannot change after creation, so the rule is decided once. Every path above goes
 through `resolution_catalog.set_workflow_actions`, the only writer.
 
-⚠ **Not on screen yet:** the Workflows tab does not show or edit a workflow's list (`GRM-119`) or its
-organization (`GRM-122`). Until `GRM-119`, a list changes by data migration.
+⚠ **Not on screen yet:** the Workflows tab does not show or edit a workflow's list (`GRM-119`). Until
+then, a list changes by data migration.
+
+### A workflow's organization — *Belongs to* (`GRM-122`)
+
+**Why it matters.** It decides which resolution actions the workflow can offer (above), and it is what
+an organization's admin needs in reach to manage the workflow. The migration gave every existing
+workflow and template **its projects' ministry** — the only safe automatic answer — but the right
+owner is often lower down: the KL Road workflows are PD-ADB's, not all of DOR's. So admins move them.
+
+| Where | What |
+| --- | --- |
+| **New workflow / New template** | **Belongs to** is required. A platform admin chooses; an `org_admin` finds its organization filled in (the top of its reach, as `catalog_owner_for`) and may pick any organization it manages. The template list then shows **only templates of that organization or one above it**, so everything a template copies is usable |
+| **Workflow editor** | *Belongs to: Department of Roads · Change* beside *Type* and *Key*, on workflows and templates. *Belongs to: — · Choose* when it has none |
+| **Change** | Organizations the admin manages (a platform admin: all), and, for information, the projects using the workflow. **Refused, dialog kept open, one line per action**, while the list holds an action the new organization could not use: *"Remove 'Culvert cleared' first — it belongs to PD-ADB."* Moving **down** (DOR → PD-ADB) never hits this; sideways, up or to another ministry can. Local actions do not move with the workflow |
+| **Workflow list** | Each workflow and template shows *For <organization>* under its name |
+| **Save as template** | The template takes the workflow's organization |
+
+**Who.** Moving needs reach on **both** the current and the new organization; a sensitive workflow
+additionally needs the sensitive-configuration capability (`_load_workflow`). Every move is written to
+`admin_audit_log` (`workflow_organization_changed`, with both organizations).
+
+**Deliberately not checked:** whether the projects using a workflow sit under its new organization —
+no catalog enforces that today, and the dialog shows the projects so the admin can see it (`GRM-120`).
+✅ **Verified in a browser, local stack, 2026-09-15** — `e2e/flows/settings-workflow-organization.spec.ts`
+creates a draft that must be given an organization and moves it (DOR → ADB, two top organizations: a
+fresh seed has nothing below DOR). ⚠ **Two cases are pinned only by API tests**
+(`tests/ticketing/test_workflow_organization.py`): moving **down** to a sub-organization, and the
+**refused** move — the latter was driven in a browser once that day but is not in the committed spec,
+because the only workflow that can carry actions today has steps and cannot be cleaned up (`GRM-124`).
 
 ### Legacy: `ticketing.workflow_assignments`
 
@@ -321,13 +346,14 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET` | `/workflows` | List workflows |
+| `GET` | `/workflows` | List workflows — each with `owner_organization_id` and `owner_name`; `?for_organization_id=` lists those owned by that organization **or one above it** (the new-workflow template picker; must be in reach) |
 | `GET` | `/workflows/routing-options` | Category classifications + chatbot menu paths for the project editor |
 | `GET` | `/workflows/templates` | Templates only |
-| `GET` | `/workflows/{id}` | Detail + steps |
-| `POST` | `/workflows` | Create |
+| `GET` | `/workflows/{id}` | Detail + steps + `used_by_projects` (names) |
+| `POST` | `/workflows` | Create — `owner_organization_id` required from a platform admin, defaulted for an `org_admin` (must be in reach) |
 | `PATCH` | `/workflows/{id}` | Metadata |
-| `POST` | `/workflows/{id}/publish` | Publish |
+| `POST` | `/workflows/{id}/publish` | Publish — refused for a non-sensitive workflow with no resolution action |
+| `PATCH` | `/workflows/{id}/organization` | `{organization_id}` — move it (`GRM-122`); 403 without reach on both organizations, 422 naming each action the new one cannot use |
 | `GET` | `/projects/{id}/workflows` | Workflow links on the project |
 | `PUT` | `/projects/{id}/workflows` | Replace all links (name + workflow + routing + default) |
 | `PATCH` | `/projects/{id}` | Legacy `standard_workflow_id` / `seah_workflow_id` (syncs links) |

@@ -372,6 +372,9 @@ def list_organizations(
     q: str | None = Query(
         None, description="Case-insensitive search on id / name / Nepali name (Frame 12 at scale)."
     ),
+    manageable: bool = Query(
+        False, description="GRM-122: only organizations the caller administers (a platform admin: all)."
+    ),
     db: Session = Depends(get_db),
     _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
@@ -387,6 +390,17 @@ def list_organizations(
         if not subtree:
             return []
         stmt = stmt.where(Organization.organization_id.in_(subtree))
+    if manageable:
+        from ticketing.services.admin_access import admin_org_scope_ids, is_org_admin, is_super_admin
+
+        reach = admin_org_scope_ids(db, _user)
+        if reach is None:
+            if not (is_super_admin(_user) or is_org_admin(_user)):
+                return []
+        elif not reach:
+            return []
+        else:
+            stmt = stmt.where(Organization.organization_id.in_(reach))
     if q and q.strip():
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(
