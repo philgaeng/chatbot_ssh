@@ -1440,7 +1440,6 @@ class OfficerInviteRequest(BaseModel):
     project_code: Optional[str] = None
     package_id: Optional[str] = None
     includes_children: bool = False
-    temp_password: Optional[str] = None
     # R7 (BUILD-REVIEW M5): invite-by-position — record the officer_positions row so a
     # freshly-invited officer shows their position (parity with assign_officer_position).
     position_type_id: Optional[str] = None
@@ -1535,7 +1534,7 @@ def invite_officer(
             raise HTTPException(status_code=404, detail="Position type not found")
 
         if keycloak_configured():
-            keycloak_create_user(email, None, body.organization_id, body.temp_password)
+            keycloak_create_user(email, None, body.organization_id)
             onboarding_status = "invited"
         else:
             onboarding_status = "active"
@@ -1594,7 +1593,7 @@ def invite_officer(
         raise HTTPException(status_code=404, detail=f"Role not found: {role_key}")
 
     if keycloak_configured():
-        keycloak_create_user(email, role_key, body.organization_id, body.temp_password)
+        keycloak_create_user(email, role_key, body.organization_id)
         onboarding_status = "invited"
     else:
         onboarding_status = "active"

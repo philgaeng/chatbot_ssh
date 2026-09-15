@@ -1,7 +1,7 @@
 # Auth — Keycloak (canonical auth ops doc)
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/AUTH_MIGRATION.md` (the Cognito→Keycloak migration notes). Keycloak is the identity provider **everywhere** (dev auth profile, AWS staging, DOR prod); Cognito is fully retired.
-**Last updated:** 2026-09-15 — §1 *Sessions*: **D-012 built (`GRM-111`)** — the setup script now writes a 5-min access token and an explicit 30-min idle window, the order is pinned by a test, the idle behaviour was measured on Keycloak, and officers get a warning before the idle window ends a session; rollout step and §5 item updated. Earlier the same day: §1 *Sessions*: ⚠ **renewal fails by timing, so officers are signed out at about the hour** (measured: refresh token 30 min, access token 60 min — `GRM-111`); the decided target (D-012: 5-min access token, 30-min idle, 8-h max) recorded, not yet built. Earlier, 2026-09-14: §1 *Sessions*: **used refresh tokens are now revoked** (`GRM-105`) — a second use is refused and, measured on Keycloak, ends the whole session; renewal is serialised across tabs so an officer's own tabs cannot trip that; the rollout order (UI first, realm policy second) and `--token-policy-only` added. §5: the token-lifespan item updated. Earlier the same day: §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
+**Last updated:** 2026-09-15 — §3: ⛔ **invited accounts no longer get a password** (`GRM-131`, measured: the documented demo password, given to every invitee, let anyone who knew the email take the account); a refused setup email removes the new account; `--clear-invite-passwords` repairs existing realms. Also §3: **the invite redirect must be on the `ticketing-ui` client's allowed list, or Keycloak sends no email** (`GRM-130`, measured on staging); the setup script now always allows the host's own invite address, and `--clients-only` applies that to a live realm. §5 redirect-URI item updated. Earlier the same day: §1 *Sessions*: **D-012 built (`GRM-111`)** — the setup script now writes a 5-min access token and an explicit 30-min idle window, the order is pinned by a test, the idle behaviour was measured on Keycloak, and officers get a warning before the idle window ends a session; rollout step and §5 item updated. Earlier the same day: §1 *Sessions*: ⚠ **renewal fails by timing, so officers are signed out at about the hour** (measured: refresh token 30 min, access token 60 min — `GRM-111`); the decided target (D-012: 5-min access token, 30-min idle, 8-h max) recorded, not yet built. Earlier, 2026-09-14: §1 *Sessions*: **used refresh tokens are now revoked** (`GRM-105`) — a second use is refused and, measured on Keycloak, ends the whole session; renewal is serialised across tabs so an officer's own tabs cannot trip that; the rollout order (UI first, realm policy second) and `--token-policy-only` added. §5: the token-lifespan item updated. Earlier the same day: §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
 
 ## 1. Architecture
 
@@ -207,7 +207,8 @@ defaults) and run `make wsl-up` — the same single :3001/:5002 stack, no Keyclo
 ## 3. Officer invite flow (as-built)
 
 1. Admin creates the officer in the ticketing UI → `POST /api/v1/users/invite` (role, org, location).
-2. Ticketing creates the Keycloak user with required action **`UPDATE_PASSWORD` only** (password-only invite — no profile interstitial) and sends the execute-actions email via realm SMTP. Invite/action-token links are valid **7 days** (`ACTION_TOKEN_ADMIN_LIFESPAN`).
+2. Ticketing creates the Keycloak user with required action **`UPDATE_PASSWORD` only** (password-only invite — no profile interstitial) and **no password at all**, then sends the execute-actions email via realm SMTP. Invite/action-token links are valid **7 days** (`ACTION_TOKEN_ADMIN_LIFESPAN`). If Keycloak refuses the email, the account just created is deleted, so a failed invite leaves nothing behind.
+   ⛔ **Never give an invitee a password, temporary or not** (`GRM-131`). Until 2026-09-15 every invitee got the documented demo password as a temporary one. Measured on Keycloak: its browser login accepts a temporary password and lets whoever typed it choose the new one, so knowing an invited officer's email was enough to take the account. With no password, that login is refused and only the email link can set one. Re-sending setup to an account that never finished it also removes any password on it.
 3. The custom `grm` login theme auto-continues past Keycloak's "Perform the following actions" page (via `actionUri`) and, after password set, redirects to the officer UI login via `KEYCLOAK_INVITE_REDIRECT_URI`.
    **Theme gotcha:** `info.ftl` must prefer `actionUri` over `pageRedirectUri` — both exist at flow start; preferring `pageRedirectUri` sends officers to login *before* they set a password.
 4. On successful `UPDATE_PASSWORD`, the Keycloak event webhook (`ticketing/services/keycloak_webhook.py`) flips `ticketing.officer_onboarding.status` → `active`, so the UI's *Invited* status is accurate.
@@ -220,6 +221,30 @@ SMTP_SERVER=... SMTP_PORT=587 SMTP_USERNAME=... SMTP_PASSWORD=... SMTP_FROM=... 
 KEYCLOAK_INVITE_CLIENT_ID=ticketing-ui
 KEYCLOAK_INVITE_REDIRECT_URI=https://grm-chatbot.dor.gov.np/login   # dev: http://localhost:3001/login
 ```
+
+⚠ **Keycloak sends no email when the redirect is not allowed.** `KEYCLOAK_INVITE_REDIRECT_URI` must match
+the `ticketing-ui` client's `redirectUris`, or every appointment and resend fails with
+`400 Invalid redirect uri` (`GRM-130`: on staging the UI had moved to `nepal-gms-chatbot.facets-ai.com`
+and the client still named only the old `grm-auth.` subdomain). `keycloak_setup` writes `UI_ORIGINS`
+**plus the origin of this host's own `KEYCLOAK_INVITE_REDIRECT_URI`**, so a run on the host always
+allows its own address. On a live realm, apply only that:
+
+```bash
+docker compose … exec -T ticketing_api python -m ticketing.auth.keycloak_setup --clients-only
+```
+
+The invite preflight (`GET /api/v1/users/invite/preflight`) reports a refused redirect before a send.
+
+**Realms with accounts invited before `GRM-131`** still carry the demo password on every account that
+has not finished setup. Remove those passwords per realm, after the deploy. The command logs counts
+only, never usernames, and changes nothing without `--apply`. Demo officers are skipped.
+
+```bash
+docker compose … exec -T ticketing_api python -m ticketing.auth.keycloak_setup --clear-invite-passwords          # count
+docker compose … exec -T ticketing_api python -m ticketing.auth.keycloak_setup --clear-invite-passwords --apply  # remove
+```
+
+An officer who was told the demo password as a workaround then needs **Send setup email**.
 
 Notes: `$` in SMTP passwords must be `$$` in `env.local` (Compose escaping). The realm shares the same SMTP relay as the Messaging API ([`../services/05_messaging_service.md`](../services/05_messaging_service.md)). On DOR prod the Keycloak JVM runs with `-Djava.net.preferIPv4Stack=true` (no IPv6 route to the mail provider). After theme changes: `docker compose ... --profile auth up -d --force-recreate keycloak`.
 
@@ -234,7 +259,7 @@ Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_off
 - [ ] **Admin password:** strong `KEYCLOAK_ADMIN_PASSWORD` in `env.local` (never the `admin` default).
 - [ ] **Webhook secret:** strong `KEYCLOAK_WEBHOOK_SECRET`, matching the event-listener extension config.
 - [ ] **Realm SMTP configured** and invite email tested (`scripts/ops/test-smtp.sh`).
-- [ ] **Redirect URIs:** update in `keycloak_setup.py` for the new domain, re-run `keycloak-setup`.
+- [ ] **Redirect URIs:** the host's own `KEYCLOAK_INVITE_REDIRECT_URI` origin is allowed automatically. Add any other hostname the UI is served on to `UI_ORIGINS` in `keycloak_setup.py`. Then run `keycloak_setup --clients-only` and read `ticketing-ui`'s `redirectUris` back (§3).
 - [ ] **Token lifespans and rotation:** **access 5 min, SSO idle 30 min, SSO max 8 h** (D-012, `GRM-111`), written by the setup script. ⚠ A realm that has not had `--token-policy-only` since `GRM-111` still runs a 1-h access token with Keycloak's default 30-min idle, which signs officers out at the hour (§1 *Session length*). Also: **a refresh token is good for one use** (`revokeRefreshToken: true`, `refreshTokenMaxReuse: 0`, `GRM-105`). Applied by `keycloak_setup --token-policy-only` — ⛔ **only after** the UI with the cross-tab renewal lock is deployed (§1 *Refresh-token rotation*). **Verify on the realm, do not assume:** until 2026-09-14 this line claimed "rotation ON" and the realm had it off.
 - [ ] **Brute-force protection:** enabled by the setup script — verify in realm settings.
 - [ ] ⭐ **Event storage:** applied by the setup script (`setup_realm_event_logging` — login + admin events, 90-day expiration). **Verify, do not assume**, and re-run `make keycloak-setup` on every environment:

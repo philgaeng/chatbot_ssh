@@ -259,9 +259,17 @@ def keycloak_invite_preflight() -> dict[str, Any]:
     missing = [k for k in required if not str(smtp.get(k, "")).strip()]
     smtp_configured = len(missing) == 0
     email_action_supported = hasattr(admin, "send_update_account")
-    ok = bool(realm_data.get("enabled", True)) and smtp_configured and email_action_supported
+    redirect_problem = _invite_redirect_problem(admin)
+    ok = (
+        bool(realm_data.get("enabled", True))
+        and smtp_configured
+        and email_action_supported
+        and redirect_problem is None
+    )
 
-    if not smtp_configured:
+    if redirect_problem:
+        hint = redirect_problem
+    elif not smtp_configured:
         env_missing = missing_smtp_env_fields()
         if env_missing:
             hint = f"Keycloak realm SMTP not configured. Missing env: {', '.join(env_missing)}. {SMTP_SETUP_HINT}"
@@ -330,6 +338,43 @@ def _keycloak_invite_email_options() -> tuple[str, str]:
     if not redirect_uri:
         redirect_uri = "http://localhost:3002/login"
     return client_id, redirect_uri
+
+
+def _invite_redirect_hint(redirect_uri: str) -> str:
+    return (
+        f"Setup emails cannot be sent: Keycloak does not allow this site's sign-in address "
+        f"({redirect_uri}). Run: python -m ticketing.auth.keycloak_setup --clients-only"
+    )
+
+
+def _invite_redirect_problem(admin) -> str | None:
+    """
+    Keycloak refuses execute-actions email ('400 Invalid redirect uri') when the invite
+    redirect is not in the client's redirectUris. Returns the hint when it would, else None.
+    """
+    from ticketing.auth.keycloak_setup import redirect_uri_allowed
+
+    client_id, redirect_uri = _keycloak_invite_email_options()
+    client = next((c for c in admin.get_clients() if c.get("clientId") == client_id), None)
+    if client is None:
+        return f"Setup emails cannot be sent: Keycloak client {client_id!r} does not exist."
+    if not redirect_uri_allowed(redirect_uri, client.get("redirectUris") or []):
+        return _invite_redirect_hint(redirect_uri)
+    return None
+
+
+def _invite_email_error(exc: Exception) -> HTTPException:
+    """Map a failed Keycloak invite call to an error an admin can act on."""
+    err = str(exc)
+    if "invalid redirect uri" in err.lower():
+        return HTTPException(
+            status_code=503, detail=_invite_redirect_hint(_keycloak_invite_email_options()[1])
+        )
+    if "sender address" in err.lower() or "execute actions email" in err.lower():
+        from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+
+        return HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
+    return HTTPException(status_code=500, detail=f"Keycloak error: {err}")
 
 
 def _names_from_email(email: str) -> tuple[str, str]:
@@ -607,6 +652,12 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
         admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
 
     try:
+        if "UPDATE_PASSWORD" in (kc_user.get("requiredActions") or []):
+            # Setup never finished, so any password on the account is one the officer did not
+            # choose — before GRM-131, the documented demo password. Only the email may set it.
+            from ticketing.auth.keycloak_setup import delete_password_credentials
+
+            delete_password_credentials(admin, kc_user["id"])
         admin.update_user(
             user_id=kc_user["id"],
             payload={"requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS)},
@@ -615,12 +666,7 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
     except HTTPException:
         raise
     except Exception as exc:
-        err = str(exc)
-        if "sender address" in err.lower() or "execute actions email" in err.lower():
-            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
-
-            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
-        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+        raise _invite_email_error(exc)
 
     sent_to = (kc_user.get("email") or email).strip().lower()
     if db is not None:
@@ -632,8 +678,19 @@ def keycloak_create_user(
     email: str,
     role_key: Optional[str],
     organization_id: str,
-    temp_password: Optional[str] = None,
 ) -> None:
+    """
+    Create the officer's Keycloak account and send the setup email.
+
+    ⚠ GRM-131: the account is created WITHOUT a password — the setup email sets the first one.
+    Until 2026-09-15 every account got the documented demo password as a temporary one, and
+    measured on Keycloak, its browser login accepts a temporary password and lets whoever typed it
+    choose the new one: anyone who knew an invitee's email could take the account first.
+    And if the email is refused, the account just created is deleted, so a failed invite leaves
+    nothing behind.
+    """
+    from ticketing.auth.keycloak_setup import delete_password_credentials
+
     admin = _keycloak_admin()
     first_name, last_name = _names_from_email(email)
     # Position-based invites carry no operational role (DESIGN-cast-model): the account is
@@ -652,24 +709,10 @@ def keycloak_create_user(
             "organization_id": [organization_id],
             "phone_number": ["9800000000"],
         },
-        "credentials": [{
-            "type": "password",
-            "value": temp_password or "GrmDemo2026!",
-            "temporary": True,
-        }],
         "requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS),
     }
     try:
         admin.create_user(create_payload)
-        kc_user = _keycloak_find_user(admin, email)
-        if not kc_user:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Keycloak user was created but could not be reloaded for invite email dispatch."
-                ),
-            )
-        _keycloak_send_invite_email(admin, kc_user, email)
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
@@ -680,6 +723,8 @@ def keycloak_create_user(
                     detail=f"User {email!r} already exists in Keycloak",
                 )
             if existing:
+                # A disabled account coming back: its old password must not come back with it.
+                delete_password_credentials(admin, existing["id"])
                 admin.update_user(
                     user_id=existing["id"],
                     payload={
@@ -690,20 +735,37 @@ def keycloak_create_user(
                         "emailVerified": False,
                         "attributes": create_payload["attributes"],
                         "requiredActions": create_payload["requiredActions"],
-                        "credentials": create_payload["credentials"],
                     },
                 )
-                _keycloak_send_invite_email(admin, existing, email)
+                try:
+                    _keycloak_send_invite_email(admin, existing, email)
+                except HTTPException:
+                    raise
+                except Exception as send_exc:
+                    raise _invite_email_error(send_exc)
                 return
             raise HTTPException(
                 status_code=409,
                 detail=f"User {email!r} already exists in Keycloak",
             )
-        if "sender address" in err.lower() or "execute actions email" in err.lower():
-            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+        raise _invite_email_error(exc)
 
-            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
-        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+    kc_user = _keycloak_find_user(admin, email)
+    if not kc_user:
+        raise HTTPException(
+            status_code=500,
+            detail="Keycloak user was created but could not be reloaded for invite email dispatch.",
+        )
+    try:
+        _keycloak_send_invite_email(admin, kc_user, email)
+    except Exception as exc:
+        try:
+            admin.delete_user(kc_user["id"])
+        except Exception as cleanup_exc:
+            logger.error("Invite email failed and the new Keycloak account was not removed: %s", cleanup_exc)
+        if isinstance(exc, HTTPException):
+            raise
+        raise _invite_email_error(exc)
 
 
 def keycloak_update_user_attributes(
