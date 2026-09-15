@@ -485,6 +485,7 @@ def build_closure_display_context(
         resolved_at_map=aux[3],
         escalated_ids=aux[4],
         resolution_cat_map=aux[5],
+        resolution_extra_map=aux[6],
         date_from=_now().date(),
         date_to=_now().date(),
     )

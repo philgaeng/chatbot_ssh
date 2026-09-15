@@ -248,6 +248,23 @@ def action_labels(db: Session, codes: Iterable[str]) -> dict[str, str]:
     )
 
 
+def national_action_labels(db: Session, codes: Iterable[str]) -> dict[str, str]:
+    """Code → the label of the **shared** action it counts as nationally (GRM-118): the action itself
+    when shared (``counts_as_code`` NULL), its ``counts_as_code`` when local. Read through the **current**
+    catalog, so correcting what a local action counts as corrects past totals. One query per hop."""
+    wanted = {c for c in codes if c}
+    if not wanted:
+        return {}
+    national_of = {
+        code: counts_as or code
+        for code, counts_as in db.execute(
+            select(ResolutionAction.code, ResolutionAction.counts_as_code).where(ResolutionAction.code.in_(wanted))
+        ).all()
+    }
+    labels = action_labels(db, national_of.values())
+    return {code: labels.get(national, national) for code, national in national_of.items()}
+
+
 def event_action_label(db: Session, payload: Optional[dict], *, labels: Optional[dict[str, str]] = None) -> str:
     """The label a resolution event records: its snapshot, else the catalog's label for its code,
     else the code itself, else "" (a sensitive-workflow case records none)."""
