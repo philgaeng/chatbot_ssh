@@ -1,6 +1,6 @@
 # PII egress inventory — every path by which grievance text leaves the agency's control
 
-**Last updated:** 2026-09-15 — the owed systematic email search done (eight mail legs traced from the transport outward; none carries the grievance record beyond the three already closed); three paths leaving from the **browser** added (E14–E16), which a server-side trace could not see; E3 measured on staging (no backup has ever run); E13's stale "open" cell corrected, and the 2026-09-03 summary box no longer says nobody has searched for a fourth leg.
+**Last updated:** 2026-09-15 — the owed systematic email search done (eight mail legs traced from the transport outward; none carries the grievance record beyond the three already closed); three paths leaving from the **browser** added (E14–E16), which a server-side trace could not see; E3 restated: backups are production-only by design, and production's are unverified; E13's stale "open" cell corrected, and the 2026-09-03 summary box no longer says nobody has searched for a fourth leg. Correction the same day: backups are production-only by design (owner, 2026-09-15), so staging's backup alarm is noise and production's backups are the open question.
 
 > **Written:** 2026-08-27
 >
@@ -69,12 +69,11 @@
 > complaint is usually **where the complainant lives** — and the tiles for that spot are requested from a
 > foreign service, from the complainant's own IP address, before the grievance is even submitted. §6d.
 >
-> **3. E3 was measured, and the answer is that the path has never been exercised.** The monitor on the
-> staging host has reported *"No backup status file"* as **critical on eleven consecutive nights**, and
-> no restore drill has ever run. Staging holds synthetic data only, so nothing is at risk there — ⚠ but
-> **no deployed host has ever taken, shipped or restored a backup**, so every property this inventory
-> states about E3 (encryption fails closed, an off-box destination) is a property of a script, not of a
-> running system.
+> **3. E3 on production is unverified.** Backups are **production-only by design** — staging holds
+> synthetic data, and its monitor's nightly *"No backup status file"* alarm is noise from a check that
+> should not run there. Production runs no monitor, so **whether it takes, ships or restores backups has
+> not been observed**, and every property this inventory states about E3 (encryption fails closed, an
+> off-box destination) is a property of the script until someone checks the production host.
 
 ---
 
@@ -109,7 +108,7 @@ The right-hand column is what is true now; where the two disagree, the right-han
 |---|---|---|---|---|---|
 | **E1** | **Application logs** | OTP codes, phone numbers, the full grievance narrative, the whole grievance dict | §3 | 🔴 **1 — happens continuously, today** | ✅ **closed at the boundary** — central filter + 11 sites pruned + OTP lines deleted |
 | **E2** | **Celery payloads → Redis** | `grievance_description` verbatim | §2 | 🔴 **2 — every intake; persistence unverified** | ✅ **cause removed** — id-only payloads, both tasks |
-| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged, and never exercised** — encryption fails closed, destination still unnamed; ⚠ **no deployed host has ever run a backup** (staging: critical 11 nights running) |
+| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged** — encryption fails closed, destination still unnamed; ⚠ **production's backups unverified** (production-only by design; no monitor there) |
 | **E4** | **Model provider** (crosses the border) | Raw narrative, officer notes, whole case timelines | §5 | 🟠 **4 — deliberate, and the only one already designed for** | 🟢 **pseudonymised, both surfaces** — 87.5% recall, residual named (§5) |
 | **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** | ✅ **closed at the boundary** (§6) |
 | **E13** | **Status-update emails → office list** | The **entire** grievance dict | §6 | ⚠ **not in the original twelve — found 2026-09-03** | ✅ **closed 2026-09-03** behind the same shared boundary as E5 (§6b) |
@@ -630,7 +629,7 @@ and the reason is still physics, not effort.
 | ⚪ | ~~Grep the templates for a fourth email leg~~ ✅ **done 2026-09-15** — eight legs, none carries the record beyond the three already closed (§6c) | — |
 | 🟠 | **E15 — the location map sends the area around the pin to a foreign tile service**, from the complainant's IP. Choose self-hosted tiles or a platform tile proxy | engineering + DOR |
 | 🟡 | **E14 — vendor the three webchat scripts**; **E16 — render QR codes locally** | engineering |
-| 🟡 | **Exercise the backup path on a deployed host** — no host has ever taken or restored one | engineering + DOR |
+| 🟡 | **Verify production's backups** — that the job runs, the restore drill passes, and where the copy goes. Production-only by design; nobody has observed it | DOR |
 | ⚪ | **`send_email_task` — delete it or put it behind the allow-list** before anything calls it | engineering |
 | ⚪ | ~~E5 — build the decided admin-email change~~ ✅ **done 2026-09-03** | — |
 | ⚪ | ~~E13 — the status-update email to the office list~~ ✅ **done 2026-09-03**, behind the same shared boundary | — |

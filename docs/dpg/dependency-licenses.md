@@ -1,7 +1,7 @@
 # Dependency licence audit
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-15 — regenerated against the exact images CI built and staging runs (identified by registry digest below): licences, CVEs and image digests in one pass. No licence moved; the CVE picture split — Python improved, the web framework now carries two critical advisories. The nightly licence scan has run for real, and the CVE scan beside it was found writing nothing.
+**Last updated:** 2026-09-15 — regenerated against the exact images CI built and staging runs (identified by registry digest below): licences, CVEs and image digests in one pass. No licence moved; the CVE picture split — Python improved, the web framework now carries two critical advisories. The nightly licence scan has run for real, and the CVE scan beside it was found writing nothing. Correction the same day: the staging backup alarm is noise — backups are production-only by design (owner, 2026-09-15).
 
 > **Regenerated 2026-09-15** — licences, CVEs and image digests in one pass, so this file carries **one
 > date**. **Serves DPG indicator 2** (use of an approved open licence) and, for the container-image set,
@@ -220,9 +220,11 @@ because they are the best evidence available about whether the monitor is *read*
 - the **certificate check** — which on staging is configured to watch the **production** hostname —
   reported production's TLS certificate as critical for ten consecutive nights, then expired. **It
   expired on 2026-09-13**; verified from outside on 2026-09-15.
-- the **backup check** has been critical on every night: no backup has run on the staging host.
+- the **backup check** has been critical on every night — ⚠ **a false alarm**: backups are production-only
+  by design, and the check should not run on staging at all. A real alarm beside a false one every night
+  is how the real one goes unread.
 
-⭐ **Neither was acted on, because neither reached a person.** The scans work; the path from a finding to
+⭐ **The certificate alarm was not acted on, because it reached nobody.** The scans work; the path from a finding to
 someone who acts on it is the part not yet built. Assessed in
 [`00_compliance_status.md`](00_compliance_status.md) indicators 7 and 8.
 
