@@ -11,6 +11,7 @@ import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 import type { OfficerRosterEntry } from "@/lib/api";
 import { getBadge } from "@/lib/api";
 import { NotificationBell } from "@/components/NotificationBell";
+import { SessionIdleWarning } from "@/components/SessionIdleWarning";
 import {
   IconAllTickets, IconReports, IconQrCodes, IconSettings, IconHelp,
   IconMobileQueue, IconMobileSearch, IconMobileTasks,
@@ -340,6 +341,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <>
       <ViewportRouteSync />
+      <SessionIdleWarning />
       {pathname.startsWith("/m") ? (
         <MobileShell>{children}</MobileShell>
       ) : (

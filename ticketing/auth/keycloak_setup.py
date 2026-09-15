@@ -28,9 +28,18 @@ REALM = "grm"
 CLIENT_UI = "ticketing-ui"   # public, PKCE, browser
 CLIENT_API = "ticketing-api"  # confidential, for JWKS endpoint + service account
 
-# Realm token lifespans (seconds). Officer invite emails use actionTokenGeneratedByAdminLifespan.
-SSO_SESSION_MAX_LIFESPAN = 28800  # 8h
-ACCESS_TOKEN_LIFESPAN = 3600  # 1h
+# Realm token lifespans (seconds) — D-012. Officer invite emails use actionTokenGeneratedByAdminLifespan.
+# ⚠ THE ORDER IS THE POLICY: access token < idle window, with room for the UI's renewal lead
+# (`isAccessTokenExpiringSoon(token, 60)` in lib/api.ts). A refresh token lives only as long as the
+# idle window, and the UI renews on the officer's next request near the access token's end — so an
+# access token that outlives the idle window can never be renewed. Until `GRM-111` the realm ran a
+# 60-min access token inside Keycloak's DEFAULT 30-min idle window (this file never set it), and every
+# officer was signed out at about the hour whatever they did. Measured on Keycloak 2026-09-15 with the
+# timers scaled down: renewal after the access token expired, inside the idle window → 200; after the
+# idle window → 400 "Token is not active".
+SSO_SESSION_MAX_LIFESPAN = 28800  # 8h — the longest an officer stays signed in, working or not
+SSO_SESSION_IDLE_TIMEOUT = 1800  # 30 min without a renewal ends the session (shared office computers)
+ACCESS_TOKEN_LIFESPAN = 300  # 5 min — so a working officer renews every few minutes
 ACTION_TOKEN_ADMIN_LIFESPAN = 604800  # 7d — execute-actions / resend-invite links
 
 # Refresh-token rotation (`GRM-105`). A refresh token is good for ONE renewal; presenting it again is
@@ -174,6 +183,7 @@ def setup_realm(master: KeycloakAdmin) -> None:
             "enabled": True,
             "displayName": "GRM Ticketing",
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "ssoSessionIdleTimeout": SSO_SESSION_IDLE_TIMEOUT,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
             "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
@@ -190,12 +200,14 @@ def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
 
     ⚠ It used to set lifespans only, so a realm created before rotation was added kept Keycloak's
     default — `revokeRefreshToken` OFF — however often this ran. Updating is what reaches an
-    existing realm; the create payload alone never would.
+    existing realm; the create payload alone never would. ⚠ The idle timeout was never set either, and
+    that default is what signed officers out at the hour (`GRM-111`).
     """
     admin.update_realm(
         REALM,
         {
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "ssoSessionIdleTimeout": SSO_SESSION_IDLE_TIMEOUT,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
             "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
@@ -203,10 +215,11 @@ def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
         },
     )
     logger.info(
-        "Realm '%s' token policy updated (access=%ss, sso=%ss, admin invite link=%ss, "
+        "Realm '%s' token policy updated (access=%ss, sso idle=%ss, sso max=%ss, admin invite link=%ss, "
         "revoke refresh token=%s, max reuse=%s)",
         REALM,
         ACCESS_TOKEN_LIFESPAN,
+        SSO_SESSION_IDLE_TIMEOUT,
         SSO_SESSION_MAX_LIFESPAN,
         ACTION_TOKEN_ADMIN_LIFESPAN,
         REVOKE_REFRESH_TOKEN,

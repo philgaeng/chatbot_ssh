@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-06). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-15 — D-012 added: officer sessions use a short access token (5 min) inside a 30-minute idle window and an 8-hour maximum; the rejected alternative (a longer idle window) and what would reverse it are recorded. ⚠ Decided, not built. Earlier: D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
+**Last updated:** 2026-09-15 — D-012 **built** (`GRM-111`): the setup script writes the three lengths, a test pins their order, and officers are warned before the idle window ends a session — not yet applied to staging or production. Earlier the same day: D-012 added: officer sessions use a short access token (5 min) inside a 30-minute idle window and an 8-hour maximum; the rejected alternative (a longer idle window) and what would reverse it are recorded. ⚠ Decided, not built. Earlier: D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -322,9 +322,10 @@ overhead. A DOR or ADB requirement naming a version format would also settle it,
 
 ## D-012 · Officer sessions: a 5-minute access token inside a 30-minute idle window
 
-**Date:** 2026-09-15 · **Status:** ✅ **decided** · ⚠ **not built** — the realm still runs a 60-minute
-access token inside Keycloak's default 30-minute idle window, which signs every officer out at about the
-hour (see [`deployment/16_auth_keycloak.md`](deployment/16_auth_keycloak.md) § *Sessions*).
+**Date:** 2026-09-15 · **Status:** ✅ **decided** · ✅ **built 2026-09-15** (`GRM-111`) · ⚠ **not yet applied
+to staging or production**: a realm runs these lengths only after `keycloak_setup --token-policy-only`, and
+until then it keeps the 60-minute access token inside Keycloak's default 30-minute idle window, which signs
+every officer out at about the hour (see [`deployment/16_auth_keycloak.md`](deployment/16_auth_keycloak.md) § *Session length*).
 
 **Chosen:** access token **5 minutes**, SSO idle timeout **30 minutes**, SSO maximum **8 hours**. An
 officer who is working renews every few minutes and stays signed in for up to 8 hours; a session left
@@ -350,8 +351,9 @@ fix costs only more frequent, same-origin renewals.
 
 **Accepted cost:** an officer who reads or drafts for more than 30 minutes without the page calling the
 server is signed out on their next action. That is the idle policy working, but it can lose a
-half-written note — a UI safeguard (warn before the window closes, or keep the draft) belongs with the
-build.
+half-written note. The build chose to **warn**: a countdown two minutes before the window closes, with
+*Stay signed in*. It rejected keeping the draft, because a draft saved in the browser outlives the session
+on the very shared computer this window protects, and in the sensitive stream it can name a survivor.
 
 **What would change the answer:** evidence that officers routinely lose work to the idle window in
 practice, or a DOR or ADB security requirement naming different limits. Either would be settled by
