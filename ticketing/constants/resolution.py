@@ -69,6 +69,18 @@ STARTER_ACTIONS: tuple[tuple[str, str, str], ...] = (
      "The site was inspected and no hazard was found."),
 )
 
+# Who took the action, when it was an outside body (GRM-117) — (key, label), fixed in code, **no free
+# text** (Q-02): the Excel's *Resolved by* column must be unable to hold a person's name. Users'
+# committee added by the owner (Q-06).
+RESOLUTION_EXTERNAL_ACTORS: tuple[tuple[str, str], ...] = (
+    ("police", "Police"),
+    ("local_government", "Municipality or ward office"),
+    ("contractor", "Contractor"),
+    ("court", "Court"),
+    ("users_committee", "Users' committee"),
+    ("other_government", "Other government office"),
+)
+
 # Preselected in the resolve form when a workflow offers it (the pre-catalog default).
 PREFERRED_DEFAULT_ACTION_CODE = "ACCEPTED_OTHER"
 
@@ -83,10 +95,16 @@ def validate_resolution_note(note: Optional[str]) -> str:
 
 
 def format_resolution_note(
-    action_label: Optional[str], officer_text: str, *, at: Optional[datetime] = None
+    action_label: Optional[str],
+    officer_text: str,
+    *,
+    actor_label: Optional[str] = None,
+    at: Optional[datetime] = None,
 ) -> str:
-    """The thread bubble body. ``action_label`` is None for a case in a sensitive workflow,
-    which records no action (DESIGN §3.1.3) — the heading then names no outcome."""
+    """The thread bubble body. ``action_label`` and ``actor_label`` are None for a case in a sensitive
+    workflow, which records neither (DESIGN §3.1.3) — the heading then names no outcome, and there is
+    no *Resolved by* line."""
     when = (at or datetime.now(timezone.utc)).strftime("%Y-%m-%d")
     heading = f"Resolution — {action_label}" if action_label else "Resolution"
-    return f"{heading}\nDate: {when}\n\n{officer_text.strip()}"
+    resolved_by = f"\nResolved by: {actor_label}" if actor_label else ""
+    return f"{heading}\nDate: {when}{resolved_by}\n\n{officer_text.strip()}"

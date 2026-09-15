@@ -186,6 +186,8 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
         "resolution": {
             "category": category,
             "category_label": event_action_label(db, res_payload),
+            # GRM-117: the office or outside body that took the action — an organization name, no PII.
+            "actor_label": res_payload.get("resolution_actor_label") or "",
             "text": resolution_text,
         },
         "original_complaint": original,
@@ -285,6 +287,7 @@ def build_summary_json(
             ),
             "category": data["resolution"]["category"],
             "category_label": data["resolution"]["category_label"],
+            "actor_label": data["resolution"]["actor_label"],
             "text": data["resolution"]["text"],
         },
         "findings_summary": findings,

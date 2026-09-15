@@ -123,6 +123,33 @@ export interface TicketDetail extends TicketListItem {
    * resolution-action catalog. **Empty for a sensitive workflow**, whose cases record no action.
    */
   resolution_options?: ResolutionOption[];
+  /**
+   * GRM-117: who can be named as having taken the action — the officer's own office(s), the
+   * organizations on this case's project, and the fixed outside bodies. **All empty on a sensitive
+   * workflow**, whose cases record no actor.
+   */
+  resolution_self_offices?: OrganizationChoice[];
+  resolution_office_suggestions?: OrganizationChoice[];
+  resolution_external_actors?: ExternalActor[];
+}
+
+export interface OrganizationChoice {
+  organization_id: string;
+  name: string;
+}
+
+export interface ExternalActor {
+  key: string;
+  label: string;
+}
+
+export type ResolutionActorKind = "self" | "organization" | "external";
+
+/** The actor fields of a RESOLVE — never a label: the server computes it (GRM-117). */
+export interface ResolutionActorPayload {
+  resolution_actor_kind: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
 }
 
 export interface ResolutionOption {
@@ -533,6 +560,9 @@ export interface ActionPayload {
   action_type: string;
   note?: string;
   resolution_category?: string;
+  resolution_actor_kind?: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
   assign_to_user_id?: string;
   grc_hearing_date?: string;
   escalation_date?: string;
@@ -2122,11 +2152,11 @@ export interface OrganizationUpdate {
 
 export function listOrganizations(
   country?: string,
-  opts?: { rootId?: string; tree?: boolean; q?: string; manageable?: boolean },
+  opts?: { rootId?: string; tree?: boolean; q?: string; manageable?: boolean; activeOnly?: boolean },
 ): Promise<OrganizationItem[]> {
   const p = new URLSearchParams();
   if (country) p.set("country", country);
-  p.set("active_only", "false");
+  p.set("active_only", opts?.activeOnly ? "true" : "false");
   if (opts?.rootId) p.set("root_id", opts.rootId);
   if (opts?.tree) p.set("tree", "true");
   // GRM-122: only organizations the caller administers (a platform admin: all).

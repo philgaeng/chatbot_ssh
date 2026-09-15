@@ -164,6 +164,16 @@ class ClassificationValidateResponse(BaseModel):
     event_id: str
 
 
+class OrganizationChoiceOut(BaseModel):
+    organization_id: str
+    name: str
+
+
+class ExternalActorOut(BaseModel):
+    key: str
+    label: str
+
+
 class ResolutionOptionOut(BaseModel):
     code: str
     label: str
@@ -214,6 +224,10 @@ class TicketDetail(BaseModel):
     # GRM-116: what an officer may record as done on this case — its workflow's selection from the
     # resolution-action catalog. Empty for a sensitive workflow, whose cases record no action.
     resolution_options: list[ResolutionOptionOut] = []
+    # GRM-117: who can be named as having taken the action — all empty on a sensitive workflow.
+    resolution_self_offices: list[OrganizationChoiceOut] = []
+    resolution_office_suggestions: list[OrganizationChoiceOut] = []
+    resolution_external_actors: list[ExternalActorOut] = []
     # QR token context — UUID of the package this ticket was filed from (null = no QR)
     package_id: Optional[str] = None
     # Resolved supervisor for current step (role configured + officer in scope)
@@ -262,6 +276,18 @@ class TicketActionRequest(BaseModel):
             "(TicketDetail.resolution_options). Required when that list is non-empty; refused "
             "when it is empty (a sensitive workflow records no action)."
         ),
+    )
+    # GRM-117: who took the action. Never typed — the label is computed server-side from an
+    # organization or the fixed outside-body list, and a request cannot set it. Refused (422) on a
+    # case in a sensitive workflow, which records no actor.
+    resolution_actor_kind: Optional[str] = Field(None, description="RESOLVE — self | organization | external. Omitted → self")
+    resolution_actor_organization_id: Optional[str] = Field(
+        None, max_length=64,
+        description="RESOLVE — required for organization; for self only when the officer has several offices",
+    )
+    resolution_actor_external: Optional[str] = Field(
+        None, max_length=64,
+        description="RESOLVE — required for external: a key of TicketDetail.resolution_external_actors",
     )
     assign_to_user_id: Optional[str] = Field(None, max_length=128)
     grc_hearing_date: Optional[str] = Field(None, description="ISO date for GRC_CONVENE e.g. 2026-05-03")

@@ -3,7 +3,7 @@
 import { describe, expect, it } from "vitest";
 import type { ResolutionOption } from "@/lib/api";
 import { systemEventLabel } from "@/lib/mobile-constants";
-import { resolutionFormState } from "@/lib/resolution";
+import { DEFAULT_ACTOR_CHOICE, resolutionActorState, resolutionFormState } from "@/lib/resolution";
 
 const general: ResolutionOption[] = [
   { code: "CLASSIFIED", label: "Grievance classified", default_wording: "Reviewed and classified." },
@@ -65,5 +65,48 @@ describe("the RESOLVED system pill", () => {
 
   it("names no outcome for a case that recorded none", () => {
     expect(systemEventLabel("RESOLVED", {})).toBe("Case resolved");
+  });
+});
+
+describe("resolutionActorState (GRM-117)", () => {
+  const jhapa = { organization_id: "JHA", name: "Jhapa Division Road Office" };
+  const ilam = { organization_id: "ILA", name: "Ilam Division Road Office" };
+  const police = { key: "police", label: "Police" };
+  const offers = { selfOffices: [jhapa], externalActors: [police] };
+
+  it("is hidden when nothing is offered — a sensitive workflow records no actor", () => {
+    const s = resolutionActorState({ selfOffices: [], externalActors: [] }, DEFAULT_ACTOR_CHOICE);
+    expect(s.hidden).toBe(true);
+    expect(s.payload).toBeNull();
+  });
+
+  it("defaults to 'I did' with the one derived office, and sends no office id", () => {
+    const s = resolutionActorState(offers, DEFAULT_ACTOR_CHOICE);
+    expect(s.selfOffice).toEqual(jhapa);
+    expect(s.payload).toEqual({ resolution_actor_kind: "self" });
+  });
+
+  it("an officer with several offices must choose one of theirs", () => {
+    const several = { selfOffices: [jhapa, ilam], externalActors: [police] };
+    const none = resolutionActorState(several, DEFAULT_ACTOR_CHOICE);
+    expect(none.selfOffice).toBeNull();
+    expect(none.payload).toBeNull();
+    expect(none.missing).toMatch(/which of your offices/);
+    const picked = resolutionActorState(several, { kind: "self", organizationId: "ILA", external: null });
+    expect(picked.payload).toEqual({ resolution_actor_kind: "self", resolution_actor_organization_id: "ILA" });
+  });
+
+  it("another office needs an office picked", () => {
+    expect(resolutionActorState(offers, { kind: "organization", organizationId: null, external: null }).missing)
+      .toMatch(/office that took the action/);
+    expect(resolutionActorState(offers, { kind: "organization", organizationId: "ADB", external: null }).payload)
+      .toEqual({ resolution_actor_kind: "organization", resolution_actor_organization_id: "ADB" });
+  });
+
+  it("an outside body must be one of the listed ones — nothing typed gets through", () => {
+    expect(resolutionActorState(offers, { kind: "external", organizationId: null, external: "a neighbour" }).payload)
+      .toBeNull();
+    expect(resolutionActorState(offers, { kind: "external", organizationId: null, external: "police" }).payload)
+      .toEqual({ resolution_actor_kind: "external", resolution_actor_external: "police" });
   });
 });

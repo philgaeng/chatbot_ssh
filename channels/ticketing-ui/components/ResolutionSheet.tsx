@@ -3,8 +3,20 @@
 "use client";
 
 import { useState } from "react";
-import type { ResolutionOption } from "@/lib/api";
-import { RESOLUTION_MIN_NOTE_LEN, resolutionFormState } from "@/lib/resolution";
+import type {
+  ExternalActor,
+  OrganizationChoice,
+  ResolutionActorPayload,
+  ResolutionOption,
+} from "@/lib/api";
+import {
+  DEFAULT_ACTOR_CHOICE,
+  RESOLUTION_MIN_NOTE_LEN,
+  resolutionActorState,
+  resolutionFormState,
+  type ResolutionActorChoice,
+} from "@/lib/resolution";
+import { ResolutionActorSection } from "@/components/ResolutionActorSection";
 
 /**
  * Resolve form (spec 08 §2.6). What an officer can choose comes from the case's workflow
@@ -14,9 +26,14 @@ import { RESOLUTION_MIN_NOTE_LEN, resolutionFormState } from "@/lib/resolution";
 export function ResolutionSheet(props: {
   open: boolean;
   onClose: () => void;
-  onSubmit: (category: string | null, note: string) => Promise<void>;
+  onSubmit: (category: string | null, note: string, actor: ResolutionActorPayload | null) => Promise<void>;
   submitting: boolean;
   options: ResolutionOption[];
+  /** GRM-117 — who can be named as having taken the action. All empty on a sensitive workflow. */
+  selfOffices?: OrganizationChoice[];
+  officeSuggestions?: OrganizationChoice[];
+  externalActors?: ExternalActor[];
+  countryCode?: string | null;
   /** Why the last submit was refused — shown inside the sheet, which covers the page's notice. */
   error?: string | null;
 }) {
@@ -31,10 +48,17 @@ function ResolutionForm({
   submitting,
   options,
   error,
+  selfOffices = [],
+  officeSuggestions = [],
+  externalActors = [],
+  countryCode = null,
 }: Parameters<typeof ResolutionSheet>[0]) {
   const [chosen, setChosen] = useState<string | null>(null);
   const [typed, setTyped] = useState<string | null>(null);
-  const { textOnly, category, note, valid } = resolutionFormState(options, chosen, typed);
+  const [actorChoice, setActorChoice] = useState<ResolutionActorChoice>(DEFAULT_ACTOR_CHOICE);
+  const { textOnly, category, note, valid: formValid } = resolutionFormState(options, chosen, typed);
+  const actor = resolutionActorState({ selfOffices, externalActors }, actorChoice);
+  const valid = formValid && (actor.hidden || actor.payload !== null);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40">
@@ -43,7 +67,7 @@ function ResolutionForm({
         <p className="text-sm text-gray-500 mb-4">
           {textOnly
             ? "Describe what was decided. This will appear in the case thread."
-            : "Choose what was done and describe what was decided. This will appear in the case thread."}
+            : "Choose what was done and who did it, and describe what was decided. This will appear in the case thread."}
         </p>
         {!textOnly && (
           <>
@@ -62,6 +86,15 @@ function ResolutionForm({
             </select>
           </>
         )}
+        <ResolutionActorSection
+          selfOffices={selfOffices}
+          officeSuggestions={officeSuggestions}
+          externalActors={externalActors}
+          countryCode={countryCode}
+          choice={actorChoice}
+          state={actor}
+          onChange={setActorChoice}
+        />
         <label htmlFor="resolution-text" className="block text-xs font-medium text-gray-600 mb-1">
           Resolution text (at least {RESOLUTION_MIN_NOTE_LEN} characters)
         </label>
@@ -89,7 +122,7 @@ function ResolutionForm({
           <button
             type="button"
             disabled={!valid || submitting}
-            onClick={() => onSubmit(textOnly ? null : category, note.trim())}
+            onClick={() => onSubmit(textOnly ? null : category, note.trim(), actor.payload)}
             className="flex-1 py-2.5 rounded-xl bg-green-600 text-white text-sm font-semibold disabled:opacity-50"
           >
             {submitting ? "Resolving…" : "Confirm resolve"}

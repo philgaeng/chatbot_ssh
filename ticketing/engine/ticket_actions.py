@@ -46,6 +46,7 @@ from ticketing.models.workflow import WorkflowStep
 from ticketing.services.chart_behaviors import user_can_see_seah
 from ticketing.services.grievance_content import fetch_grievance_row
 from ticketing.services.overdue_episodes import close_open_episode
+from ticketing.services.resolution_actor import ResolutionActorError, resolve_actor
 from ticketing.services.resolution_catalog import options_for_workflow
 
 if TYPE_CHECKING:  # runtime-free — annotations are strings under `from __future__`
@@ -335,13 +336,28 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
     except ValueError as exc:
         raise ActionError(str(exc)) from exc
     category, category_label = _resolution_action(db, ticket, payload.resolution_category)
+    try:
+        # GRM-117: who took the action — an office or an outside body, never typed; None on a case in
+        # a sensitive workflow, which records no actor.
+        resolved_by = resolve_actor(
+            db, ticket, actor.user_id,
+            # getattr: handlers take any payload with the action's fields (the engine is called with
+            # lightweight payloads outside the router too); an absent actor means "self".
+            kind=getattr(payload, "resolution_actor_kind", None),
+            organization_id=getattr(payload, "resolution_actor_organization_id", None),
+            external=getattr(payload, "resolution_actor_external", None),
+        )
+    except ResolutionActorError as exc:
+        raise ActionError(str(exc)) from exc
+    actor_payload = resolved_by.payload() if resolved_by else {}
+    actor_label = resolved_by.label if resolved_by else None
 
     # Backfill path: allow officers to add missing resolution details
     # on already resolved/closed tickets (needed for closure summary generation).
     if ticket.status_code in ("RESOLVED", "CLOSED"):
         if _has_resolution_record_event(db, ticket.ticket_id):
             raise ActionError("Ticket is already resolved.")
-        formatted_note = format_resolution_note(category_label, officer_text)
+        formatted_note = format_resolution_note(category_label, officer_text, actor_label=actor_label)
         resolution_event = _add_event(
             db,
             ticket,
@@ -352,6 +368,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
                 "internal": True,
                 "is_resolution_record": True,
                 **_resolution_payload(category, category_label),
+                **actor_payload,
                 "resolution_backfilled": True,
             },
             created_by=actor.user_id,
@@ -370,7 +387,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
 
     _auto_acknowledge_if_assigned_actor(db, ticket, actor)
     close_open_episode(db, ticket, "RESOLVED")
-    formatted_note = format_resolution_note(category_label, officer_text)
+    formatted_note = format_resolution_note(category_label, officer_text, actor_label=actor_label)
     resolution_event = _add_event(
         db,
         ticket,
@@ -381,6 +398,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
             "internal": True,
             "is_resolution_record": True,
             **_resolution_payload(category, category_label),
+            **actor_payload,
         },
         created_by=actor.user_id,
         seen=True,
@@ -400,6 +418,7 @@ def resolve(db: Session, ticket: Ticket, actor: "CurrentUser", payload) -> Actio
         note=f"Case resolved — {category_label}" if category_label else "Case resolved",
         payload={
             **_resolution_payload(category, category_label),
+            **actor_payload,
             "resolution_event_id": resolution_event.event_id,
         },
         created_by=actor.user_id,

@@ -127,6 +127,8 @@ def build_ticket_context(ticket_id: str, db: Session) -> dict:
         elif is_resolution_record:
             entry["is_resolution_record"] = True
             entry["resolution_category"] = payload.get("resolution_category")
+            if payload.get("resolution_actor_label"):  # GRM-117 — an office or outside body, no PII
+                entry["resolved_by"] = payload.get("resolution_actor_label")
 
         timeline.append(entry)
 

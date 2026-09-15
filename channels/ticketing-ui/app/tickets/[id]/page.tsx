@@ -1305,6 +1305,10 @@ export default function TicketDetailPage() {
         onSubmit={submitResolve}
         submitting={actLoading}
         options={ticket?.resolution_options ?? []}
+        selfOffices={ticket?.resolution_self_offices ?? []}
+        officeSuggestions={ticket?.resolution_office_suggestions ?? []}
+        externalActors={ticket?.resolution_external_actors ?? []}
+        countryCode={ticket?.country_code ?? null}
         error={resolutionError}
       />
 

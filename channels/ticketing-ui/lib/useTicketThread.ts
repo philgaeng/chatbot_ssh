@@ -24,6 +24,7 @@ import {
   patchTicket, listTicketFiles, listOfficerAttachments, uploadOfficerAttachment, listOfficerRoster,
   type TicketDetail, type TicketEvent, type SlaStatus, type TicketTask,
   type TicketFile, type OfficerAttachment,
+  type ResolutionActorPayload,
 } from "@/lib/api";
 import {
   canonicalUserId, assigneeIsCurrentUser, type TokenPayload,
@@ -158,7 +159,7 @@ export interface UseTicketThreadResult {
   submitEscalation: (data: { escalationDate: string; personsInvolved: string[]; notes: string }) => Promise<void>;
   openResolveFlow: () => void;
   /** ``category`` is null for a case in a sensitive workflow, which records no action (GRM-116). */
-  submitResolve: (category: string | null, note: string) => Promise<void>;
+  submitResolve: (category: string | null, note: string, actor: ResolutionActorPayload | null) => Promise<void>;
   /** Why the last resolve was refused — the sheet shows it, since it covers the page notice. */
   resolutionError: string | null;
   submitReassignment: (reasonCode: ReassignmentReasonCode, notes: string) => Promise<void>;
@@ -405,7 +406,7 @@ export function useTicketThread({
     setResolutionOpen(true);
   }, [hasImages]);
 
-  const submitResolve = useCallback(async (category: string | null, note: string) => {
+  const submitResolve = useCallback(async (category: string | null, note: string, actor: ResolutionActorPayload | null) => {
     setActionNotice(null);
     setResolutionError(null);
     setSubmitting(true);
@@ -414,6 +415,7 @@ export function useTicketThread({
       await performAction(ticketId, {
         action_type: "RESOLVE",
         ...(category ? { resolution_category: category } : {}),
+        ...(actor ?? {}),  // GRM-117 — absent on a sensitive workflow, which records no actor
         note,
       });
       setResolutionOpen(false);
