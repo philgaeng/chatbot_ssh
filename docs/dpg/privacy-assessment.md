@@ -1,6 +1,6 @@
 # Privacy assessment and data-flow inventory
 
-**Last updated:** 2026-09-15 — v1.3: the systematic email search found no fourth leg (§7 closed); five findings added — three browser-side egress paths (F-23–F-25), a detection substrate whose findings reach nobody (F-26), officer session tokens readable by page script (F-27); F-12's AWS-key residual closed; §3.3 and §5.3 re-measured on the staging host.
+**Last updated:** 2026-09-15 — v1.3: the systematic email search found no fourth leg (§7 closed); five findings added — three browser-side egress paths (F-23–F-25), a detection substrate whose findings reach nobody (F-26), officer session tokens readable by page script (F-27); F-12's AWS-key residual closed; §3.3 and §5.3 re-measured on the staging host. Correction the same day: backups are production-only by design (owner, 2026-09-15); the staging backup alarm is recorded as noise masking the real alarm, not as a missing backup.
 
 **Nepal GRM Platform** — Grievance Redress Mechanism for ADB-financed road infrastructure
 (Kakarbhitta–Laukahi Road, ADB Loan 52097-003)
@@ -22,8 +22,8 @@
 > 3. ⛔ **The detection substrate §5.3 relies on has now run on a deployed host — and its findings reach
 >    nobody** (**F-26**). On the staging host the monitor reported **production's TLS certificate as
 >    critical on ten consecutive nights, then expired** (it expired 2026-09-13; verified from outside);
->    reported **no backup on eleven consecutive nights**; and its CVE scan **saved no finding on any
->    night**, while recording a status that looked like a result. None of it was acted on. **A monitor
+>    raised a backup alarm every night on a host that by design takes no backups — noise beside the real
+>    alarm; and its CVE scan **saved no finding on any night**, while recording a status that looked like a result. None of it was acted on. **A monitor
 >    nobody reads is BU7 demonstrated, not hypothesised.**
 > 4. 🟢 **Officer sessions got a real control, and one gap is now named.** Refresh tokens are single-use
 >    and a replayed stolen token **ends the session for both the officer and the thief** (live on
@@ -717,7 +717,7 @@ Department of Roads:
 | Daily ops report — failed logins, contact-reveal counts (`ops/reports.py:53-69`) | Built |
 | `ticketing.admin_audit_log` records reveals and administrative actions | Built |
 | Private vulnerability disclosure channel ([`SECURITY.md`](../../SECURITY.md)) | Built; points at the runbook and names what is not yet committed |
-| **Deployment** | ✅ **Running on staging since 2026-09-03, and producing rows** — health checks every few minutes, nightly scans, backup and certificate checks. ⛔ **But its findings reach nobody** (**F-26**): production's certificate reported critical for ten nights then expired; no backup reported on eleven nights; the CVE scan saved nothing on any night. Production has no `ops` at all |
+| **Deployment** | ✅ **Running on staging since 2026-09-03, and producing rows** — health checks every few minutes, nightly scans, backup and certificate checks. ⛔ **But its findings reach nobody** (**F-26**): production's certificate reported critical for ten nights then expired, beside a backup alarm that fires every night on a host designed to take no backups; the CVE scan saved nothing on any night. Production has no `ops` at all |
 
 ⚠ **Keycloak recorded no login or admin events at all until 2026-08-24** (F-18). It stayed invisible
 because the daily report queries that table, so a working monitor would have reported **0 logins and
@@ -781,10 +781,10 @@ They are about custody, and **none of them can be answered in this repository.**
 - [ ] **BU6 — Disposal.** How a backup is destroyed at end of life, at the destination and on any
       medium that ever held one. Deleting a file is not disposal on media that has left the building
 - [ ] **BU7 — Who is accountable when the drill fails.** The monitors exist and are correct. ⚠ But
-      ⛔ **demonstrated on staging, 2026-09-15:** the monitor has read the backup status file every night
-      and reported it **missing, as critical, on eleven consecutive nights** — and nobody acted, because no
-      backup job has ever been scheduled there and no alert reached a person (**F-26**). Production has no
-      `ops` at all. **A restore drill nobody reads reports
+      ⚠ **Production has no `ops` at all**, so on the one host that takes backups nothing reads the status
+      files. ⚠ **And on staging the opposite failure is live:** backups are production-only by design, yet
+      the backup check runs there and reports critical every night — a false alarm beside real ones, which
+      is how a real one goes unread (**F-26**). **A restore drill nobody reads reports
       success and failure identically** — the same shape as the Keycloak events that recorded
       nothing for months (F-18) while the daily report cheerfully returned zero
 
@@ -833,7 +833,7 @@ not mean running on DOR production, which has not been verified.
 | **F-23** | **The complainant location map sends the area around the pin to a foreign tile service**, from the complainant's own IP address, **before any consent** — the map is shown during intake. For a household complaint the pin is usually the complainant's home, so the tile requests locate them to within a few hundred metres | `channels/REST_webchat/modules/mapPicker.js:69` (`tile.openstreetmap.org`) | 🟠 Medium | **Open.** Outside every redaction layer, which sees only text. Options: a platform tile proxy (the provider sees the platform, not the complainant), or self-hosted tiles. Not decided |
 | **F-24** | **The complainant webchat loads three scripts from foreign CDNs on every visit**, sending each the complainant's IP address and browser before any consent | `channels/REST_webchat/index.html:21`, `:151`, `:152` | 🟡 Low-medium | **Open.** ✅ Integrity-pinned (SRI) and origin-only referrer, so neither code substitution nor the page URL is at issue. Fix: serve the three files from the platform |
 | **F-25** | **The officer QR-code page sends every package's full intake link, token included, to a third-party QR renderer** | `channels/ticketing-ui/app/qr-codes/page.tsx:11` (`api.qrserver.com`) | 🟡 Low | **Open.** No complainant data. Fix: render the QR code locally |
-| **F-26** | ⛔ **The detection substrate produces findings that reach nobody.** On the staging host, 2026-09-15, from the monitor's own tables: the certificate check — which watches the **production** hostname — reported critical on **ten consecutive nights**, then *expired*; **production's certificate did expire, on 2026-09-13**. The backup check reported **no backup on eleven consecutive nights**. The dependency CVE scan **saved no finding on any night** (a duplicate advisory rolls back the write) while recording a status that looked like a result. Whether alert emails were sent is unverified; **none was acted on** | `ops/alerts.py` · `ops/security.py` · `ops/checks.py` | 🟠 Medium | **Open.** A breach-detection control is only as good as the path from finding to person (§5.3, BU7). ⭐ The monitor is working; the organisation around it is not built. Needs: a named recipient who acts, production's certificate renewed and its renewal automated, the CVE scan fixed, and a decision on backups for staging |
+| **F-26** | ⛔ **The detection substrate produces findings that reach nobody.** On the staging host, 2026-09-15, from the monitor's own tables: the certificate check — which watches the **production** hostname — reported critical on **ten consecutive nights**, then *expired*; **production's certificate did expire, on 2026-09-13**. The backup check reports critical every night on staging, **which by design takes no backups** — a false alarm beside the real one. The dependency CVE scan **saved no finding on any night** (a duplicate advisory rolls back the write) while recording a status that looked like a result. Whether alert emails were sent is unverified; **none was acted on** | `ops/alerts.py` · `ops/security.py` · `ops/checks.py` | 🟠 Medium | **Open.** A breach-detection control is only as good as the path from finding to person (§5.3, BU7). ⭐ The monitor is working; the organisation around it is not built. Needs: a named recipient who acts, production's certificate renewed and its renewal automated, the CVE scan fixed, and the backup checks switched off on staging so the monitor stops crying wolf |
 | **F-27** | **Officer session tokens are held in browser storage readable by any script on the page.** An injected script could read a refresh token. ✅ Since 2026-09-15 a replayed token ends the session for both holders, so a theft becomes a visible sign-out rather than a silent second session — but a thief who renews first still holds a session until the officer next renews | `channels/ticketing-ui/lib/auth/token-storage.ts` | 🟡 Low-medium | **Open, deliberately sequenced.** The stronger control — the refresh token in an `HttpOnly` cookie the page cannot read — changes the sign-in, renewal and sign-out contract and brings cross-site request forgery into scope; it needs a short design first |
 
 ---
@@ -904,8 +904,8 @@ names. What remains is three separate things, and collapsing them again would be
 3. ⚠ **Deployment, and now detection.** Staging runs **every** control this document credits —
    verified inside the running containers, not inferred from a successful deploy — and its monitor has
    been producing evidence for twelve days. ⛔ **That evidence is the new finding:** it reported
-   production's certificate expiring for ten nights and no backup for eleven, and **nobody acted on
-   either** (F-26). **DOR production runs none of the controls and was not verified**; its certificate
+   production's certificate expiring for ten nights — beside a backup alarm firing every night on a host
+   designed to take no backups — and **nobody acted** (F-26). **DOR production runs none of the controls and was not verified**; its certificate
    expired on 2026-09-13. A control on one host of two is evidence about that host, and a finding nobody
    reads is not yet a control.
 

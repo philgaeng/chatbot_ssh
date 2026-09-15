@@ -1,7 +1,7 @@
 # DPG compliance status — Nepal GRM platform
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-15 — re-verified against the staging host and the images it runs. The monitor has now produced twelve days of evidence, and the evidence is the headline: production's TLS certificate expired on 2026-09-13 after ten nights of critical reports nobody read. Indicators 2, 5, 7, 8 and the scorecard revised; one question added (Q-02-03).
+**Last updated:** 2026-09-15 — re-verified against the staging host and the images it runs. The monitor has now produced twelve days of evidence, and the evidence is the headline: production's TLS certificate expired on 2026-09-13 after ten nights of critical reports nobody read. Indicators 2, 5, 7, 8 and the scorecard revised; one question added (Q-02-03). Correction the same day: the staging backup alarm is noise, not a finding — backups are production-only by design (owner, 2026-09-15); production's backups are what is unverified.
 
 > **What this is.** An indicator-by-indicator self-assessment against the
 > [DPG Standard](https://www.digitalpublicgoods.net/standard), for ADB's Digital Public Goods
@@ -34,7 +34,10 @@ and the AI-specific reading of indicator 4 is the substance of the meeting.
 >    from outside. Every browser reaching the production complainant channel now shows a security warning.
 > 2. ⛔ **The nightly CVE scan has saved no finding on any night** — a duplicate advisory rolls back the
 >    whole write — while recording a status that looks like a result.
-> 3. ⚠ **No backup has ever run on a deployed host**; the backup check has been critical every night.
+> 3. ⚠ **The monitor also cries wolf.** Its backup check reports critical every night on staging, which
+>    by design takes no backups — the backup job is for production only. **A real alarm and a false one,
+>    side by side every night, is how the real one goes unread.** Whether production takes backups is
+>    unverified: it runs no monitor.
 >
 > ⭐ **The monitor worked. The path from its findings to a person who acts does not exist.** That is a
 > different gap from the one this pack used to describe — *"deployed is not has run"* — and it is the
@@ -401,8 +404,8 @@ production.*
 
 - ⛔ **Breach detection produces findings that reach nobody.** The monitor runs on staging and its
   checks work — and on staging it reported **production's TLS certificate critical for ten nights before
-  it expired on 2026-09-13**, **no backup on eleven nights**, and a CVE scan that **saved nothing on any
-  night**. None was acted on. A breach runbook that starts from detection (§5.3 of the privacy
+  it expired on 2026-09-13** — beside a backup alarm that fires every night on a host designed to take no
+  backups — and a CVE scan that **saved nothing on any night**. None was acted on. A breach runbook that starts from detection (§5.3 of the privacy
   assessment) is only as good as the path from a finding to a person, and **that path is not built.**
 - ⚠ **Three paths leave from the user's browser, and the method that found every other egress could not
   see them.** The inventory traced code that transmits grievance text; these are fetched by the browser
@@ -415,8 +418,9 @@ production.*
   carried the record and none looked wrong at its own call site; the fix was to search from the
   transport outward rather than from the senders. **The browser paths are what that search could not
   reach either** — every method has a blind side, and the defence is more than one method.
-- ⚠ **No backup has ever run on a deployed host**, so the backup controls — encryption that fails closed,
-  a restore drill — are properties of a script, not yet of a running system.
+- ⚠ **Production's backups are unverified.** Backups are production-only by design — staging holds
+  synthetic data — and production runs no monitor, so the backup controls (encryption that fails closed,
+  a weekly restore drill) have not been observed running on any host.
 - ⚠ **Grievance text still leaves Nepal on every model call, permanently** — self-hosted inference is
   parked, so there is no future state in which the transfer stops.
 - ⛔ **Audio cannot be redacted at all.** A voice note carries the speaker's name in the speaker's own
