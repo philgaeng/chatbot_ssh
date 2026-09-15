@@ -147,7 +147,7 @@ export function InviteOfficerModal({
           </div>
           <OfficerJurisdictionFields {...j} />
           <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Temporary password via Keycloak when auth stack is running; demo mode creates DB roster only.
+            The officer gets an email to set their own password. In demo mode (no sign-in), they are only added to the list.
           </p>
           {error && <p className="text-xs text-red-500">{error}</p>}
           <div className="flex justify-end gap-3 pt-1">

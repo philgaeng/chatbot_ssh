@@ -24,8 +24,15 @@ in order:
    implement projects, nothing is seeded: codes are platform-unique, so a second ministry's starter
    actions need codes of their own (`GRM-120`).
 3. **Give each workflow its starting list**, when it belongs to that ministry or below:
-   sensitive → nothing · bound on any project to the road-hazard menu → the road-works five ·
-   anything else, templates included → the general five.
+   sensitive → nothing · bound **only** to the road-hazard menu → the road-works five · bound to it
+   **and** to another route → the general five plus three road-works actions (8, the most a workflow
+   holds) · anything else, templates included → the general five.
+
+   ⚠ **Corrected 2026-09-15, after it ran on staging.** The rule was "bound to the road-hazard menu on
+   ANY project → the road-works five". Staging's default standard workflow is also the road-hazard
+   route on two projects, so it got road works only, and an ordinary grievance could no longer close
+   as accepted or rejected. It was fixed there by hand to the list this rule now gives; production has
+   not run this migration.
 
 The seed rows are written out here rather than imported: a migration must say what it did on the
 day it ran, whatever the application's constants say later.
@@ -96,6 +103,23 @@ def _ministry(parents: dict[str, str | None], org_id: str | None) -> str | None:
             return org_id
         org_id = parents[org_id]
     return None
+
+
+# A workflow that serves road-hazard reports AND another route: the general five, then the road-works
+# actions most road-hazard reports close with, up to the 8 a workflow can hold.
+ROAD_WORKS_FOR_A_SHARED_WORKFLOW = ["ROAD_REPAIRED", "ROAD_MADE_SAFE", "ROAD_NO_HAZARD_FOUND"]
+
+
+def starter_codes(*, sensitive: bool, road_hazard: bool, other_route: bool) -> list[str]:
+    """Step 3's rule for one workflow: the codes of its starting list, in order."""
+    if sensitive:
+        return []
+    general = [code for code, _label, _wording in GENERAL]
+    if road_hazard and not other_route:
+        return [code for code, _label, _wording in ROAD_WORKS]
+    if road_hazard:
+        return general + ROAD_WORKS_FOR_A_SHARED_WORKFLOW
+    return general
 
 
 def assign_workflow_organizations(bind) -> str | None:
@@ -218,7 +242,12 @@ def upgrade() -> None:
                        SELECT 1 FROM ticketing.project_workflows pw
                        WHERE pw.workflow_id = w.workflow_id
                          AND pw.intake_route = 'road_hazard_grievance'
-                   ) AS road_hazard
+                   ) AS road_hazard,
+                   EXISTS (
+                       SELECT 1 FROM ticketing.project_workflows pw
+                       WHERE pw.workflow_id = w.workflow_id
+                         AND pw.intake_route IS DISTINCT FROM 'road_hazard_grievance'
+                   ) AS other_route
             FROM ticketing.workflow_definitions w
             """
         )
@@ -227,12 +256,11 @@ def upgrade() -> None:
         "INSERT INTO ticketing.workflow_resolution_actions (workflow_id, code, sort_order) "
         "VALUES (:workflow_id, :code, :sort_order)"
     )
-    for workflow_id, owner, sensitive, road_hazard in workflows:
+    for workflow_id, owner, sensitive, road_hazard, other_route in workflows:
         # Only a workflow of this ministry (or below it) can use this ministry's actions.
-        if sensitive or _ministry(parents, owner) != ministry:
+        if _ministry(parents, owner) != ministry:
             continue
-        starter = ROAD_WORKS if road_hazard else GENERAL
-        for i, (code, _label, _wording) in enumerate(starter):
+        for i, code in enumerate(starter_codes(sensitive=sensitive, road_hazard=road_hazard, other_route=other_route)):
             bind.execute(
                 insert_selection,
                 {"workflow_id": workflow_id, "code": code, "sort_order": (i + 1) * 10},

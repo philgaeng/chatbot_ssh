@@ -1,7 +1,7 @@
 # Workflows configuration
 
 **Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
-**Last updated:** 2026-09-15 — §2 gains *The resolution panel* (`GRM-119`: one panel per workflow, up to 8, no owner field, who may do what; API rows). Earlier the same day: §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
+**Last updated:** 2026-09-15 — §2 lists table: the starting list for a workflow that serves road-hazard reports **and** another route is the general five plus three road-works actions (corrected after the migration's first rule gave staging's default workflow road works only). Earlier the same day: §2 gains *The resolution panel* (`GRM-119`: one panel per workflow, up to 8, no owner field, who may do what; API rows). Earlier the same day: §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
 **Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
@@ -101,7 +101,7 @@ organization** (`owner_organization_id`). How it is set and changed is the next 
 | --- | --- |
 | Created from scratch, or from a built-in template | **nothing** — built-in templates belong to no organization and carry no list |
 | Cloned, created from a database template, or saved as a template | a **copy** of the source's list — refused (422) if the new organization cannot use one of its actions |
-| Existing before migration `b3d5f7h9` | sensitive → none · bound to the road-hazard menu on any project → the road-works five · otherwise the general five |
+| Existing before migration `b3d5f7h9` | sensitive → none · bound **only** to the road-hazard menu → the road-works five · bound to it **and** another route → the general five plus *Hazard repaired*, *Made safe* and *No hazard found on inspection* (8) · otherwise the general five |
 
 **Copied, never inherited**: a later change to the source does not reach the copy.
 

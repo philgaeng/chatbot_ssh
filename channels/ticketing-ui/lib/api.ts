@@ -3030,7 +3030,6 @@ export interface OfficerInvitePayload {
   project_code?: string | null;
   package_id?: string | null;
   includes_children?: boolean;
-  temp_password?: string;
   /** R7 (M5): invite-by-position — records the officer_positions row. */
   position_type_id?: string | null;
 }

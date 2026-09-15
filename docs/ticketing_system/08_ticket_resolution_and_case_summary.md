@@ -1,7 +1,7 @@
 # Ticket resolution record and resolved case summary
 
 **Status:** Implemented baseline (June 2026); Summary enhancements and complainant closure page/PDF tracked in this spec.  
-**Last updated:** 2026-09-15 — §2.2: lists are managed in the workflow's resolution panel (`GRM-119`). Earlier the same day: §2.3–§2.6, §3.4, §3.6.1: *Who took the action?* (`GRM-117`) — the officer's office, another organization or a listed outside body, never typed; four payload keys, a *Resolved by* line, none on SEAH cases. Earlier the same day: §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
+**Last updated:** 2026-09-15 — §2.2: a workflow serving road-hazard reports and another route starts with the general five plus three road-works actions. The first rule ("road hazard on any project → road works") left staging's default workflow unable to close an ordinary grievance as accepted or rejected. Earlier the same day: §2.2: lists are managed in the workflow's resolution panel (`GRM-119`). Earlier the same day: §2.3–§2.6, §3.4, §3.6.1: *Who took the action?* (`GRM-117`) — the officer's office, another organization or a listed outside body, never typed; four payload keys, a *Resolved by* line, none on SEAH cases. Earlier the same day: §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
 **Related:** [04_ticketing_schema.md](04_ticketing_schema.md) (`ticket_events`), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [CLAUDE.md](../../CLAUDE.md) (PII rules)
 
 This document defines:
@@ -137,7 +137,8 @@ still resolves to a label.
 | Workflow | Lists |
 | --- | --- |
 | existing before the migration, sensitive (`workflow_type = seah`) | nothing |
-| existing before the migration, bound on any project to the road-hazard chatbot menu | the road-works five |
+| existing before the migration, bound **only** to the road-hazard chatbot menu | the road-works five |
+| existing before the migration, bound to the road-hazard menu **and** to another route | the general five, then *Hazard repaired*, *Made safe* and *No hazard found on inspection* — 8, the most a workflow holds |
 | existing before the migration, anything else (templates included) | the general five |
 | created from scratch or from a built-in template | **nothing** — and it cannot be published until it has an action |
 | cloned, created from a database template, or saved as a template | a **copy** of the source's list — refused if the new organization cannot use one of its actions |

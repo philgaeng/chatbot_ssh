@@ -15,6 +15,7 @@ import logging
 import os
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakGetError, KeycloakPostError
@@ -368,35 +369,58 @@ def _get_client_uuid(admin: KeycloakAdmin, client_id: str) -> str | None:
     return None
 
 
+# Hosts the officer UI is served from. `ticketing-ui` allows redirects back to these (and to nothing
+# else), which the invite email needs: Keycloak refuses to send it when `KEYCLOAK_INVITE_REDIRECT_URI`
+# is not allowed — `400 Invalid redirect uri`, and no email.
+# ⚠ Staging's UI moved to the apex `nepal-gms-chatbot.facets-ai.com` while this list still named only
+# the old `grm-auth.` subdomain, so every appoint/resend there failed (measured 2026-09-15). That is
+# why `_ui_origins()` also allows this host's own configured invite address: the env that picks the
+# redirect is the same env that allows it, and a new hostname cannot drift out of this list again.
+UI_ORIGINS = [
+    "http://localhost:3001",
+    "http://localhost:3002",
+    # EC2: dedicated auth subdomain (Pattern B). Avoids Next.js basePath
+    # surgery and keeps the demo UI at the original hostname intact.
+    "https://grm-auth.nepal-gms-chatbot.facets-ai.com",
+    "https://nepal-gms-chatbot.facets-ai.com",
+    "https://grm-chatbot.dor.gov.np",
+    "https://grm.stage.facets-ai.com",
+    "https://grm.facets-ai.com",
+]
+
+
+def _ui_origins() -> list[str]:
+    """`UI_ORIGINS` plus the origin of this deployment's `KEYCLOAK_INVITE_REDIRECT_URI`."""
+    origins = list(UI_ORIGINS)
+    parsed = urlsplit((get_settings().keycloak_invite_redirect_uri or "").strip())
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        own = f"{parsed.scheme}://{parsed.netloc}"
+        if own not in origins:
+            origins.append(own)
+    return origins
+
+
+def redirect_uri_allowed(uri: str, allowed: list[str]) -> bool:
+    """Keycloak's rule for an absolute redirect: an exact match, or a prefix match on a `*` pattern."""
+    return any(
+        uri.startswith(pattern[:-1]) if pattern.endswith("*") else uri == pattern
+        for pattern in allowed
+    )
+
+
 def _post_logout_redirect_uris() -> str:
     """Keycloak stores post-logout URIs as a '##'-joined string, not a list."""
-    return "##".join([
-        "http://localhost:3001/login",
-        "http://localhost:3002/login",
-        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/login",
-        "https://grm-chatbot.dor.gov.np/login",
-        "https://grm.stage.facets-ai.com/login",
-        "https://grm.facets-ai.com/login",
-    ])
+    return "##".join(f"{origin}/login" for origin in _ui_origins())
 
 
 def setup_clients(admin: KeycloakAdmin) -> str:
     """Create ticketing-ui and ticketing-api clients. Returns ticketing-ui internal UUID.
 
     Idempotent: re-runs update the existing client's redirectUris and
-    post.logout.redirect.uris so adding a new deployment hostname only needs
-    a code change + re-run of this script.
+    post.logout.redirect.uris. This host's own invite address is always allowed; another
+    hostname needs a `UI_ORIGINS` entry + a re-run (`--clients-only` on a live realm).
     """
-    redirect_uris = [
-        "http://localhost:3001/*",
-        "http://localhost:3002/*",
-        # EC2: dedicated auth subdomain (Pattern B). Avoids Next.js basePath
-        # surgery and keeps the demo UI at the original hostname intact.
-        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/*",
-        "https://grm-chatbot.dor.gov.np/*",
-        "https://grm.stage.facets-ai.com/*",
-        "https://grm.facets-ai.com/*",
-    ]
+    redirect_uris = [f"{origin}/*" for origin in _ui_origins()]
     post_logout_uris = _post_logout_redirect_uris()
     ui_payload = {
         "clientId": CLIENT_UI,
@@ -457,6 +481,42 @@ def setup_token_mappers(admin: KeycloakAdmin, ui_uuid: str) -> None:
         else:
             admin.add_mapper_to_client(ui_uuid, payload=mapper)
             logger.info("Created mapper '%s'", mapper["name"])
+
+
+def delete_password_credentials(admin: KeycloakAdmin, user_id: str) -> int:
+    """Remove every password on an account; the setup email then sets the only one. Returns the count."""
+    removed = 0
+    for cred in admin.get_credentials(user_id):
+        if cred.get("type") == "password":
+            admin.delete_credential(user_id, cred["id"])
+            removed += 1
+    return removed
+
+
+def clear_invite_passwords(admin: KeycloakAdmin, *, apply: bool) -> dict[str, int]:
+    """GRM-131 clean-up for accounts invited before the fix.
+
+    An account still waiting on `UPDATE_PASSWORD` never had a password its officer chose; before
+    2026-09-15 it carried the documented demo password, which Keycloak's browser login accepts and
+    then lets the typist replace (measured). Demo officers are left alone — their password is the
+    point of them, and production strips them. Reports counts only: no usernames reach the log.
+    """
+    demo = {o["username"] for o in DEMO_OFFICERS}
+    counts = {"setup_pending": 0, "with_password": 0, "cleared": 0, "demo_skipped": 0}
+    for user in admin.get_users({}):
+        if "UPDATE_PASSWORD" not in (user.get("requiredActions") or []):
+            continue
+        if user.get("username") in demo:
+            counts["demo_skipped"] += 1
+            continue
+        counts["setup_pending"] += 1
+        if not any(c.get("type") == "password" for c in admin.get_credentials(user["id"])):
+            continue
+        counts["with_password"] += 1
+        if apply:
+            delete_password_credentials(admin, user["id"])
+            counts["cleared"] += 1
+    return counts
 
 
 def _demo_user_payload(officer: dict[str, str], attributes: dict[str, list[str]]) -> dict[str, Any]:
@@ -535,6 +595,27 @@ def main(argv: list[str] | None = None) -> None:
         # theme — none of which a token-policy change should touch on staging or production.
         setup_realm_token_lifespans(_realm_admin())
         logger.info("Token policy applied; nothing else was changed.")
+        return
+    if "--clients-only" in args:
+        # For a live realm whose UI hostname changed: redirect + post-logout URIs, nothing else.
+        grm = _realm_admin()
+        setup_clients(grm)
+        ui_uuid = _get_client_uuid(grm, CLIENT_UI)
+        if ui_uuid:
+            logger.info("%s redirectUris now: %s", CLIENT_UI, grm.get_client(ui_uuid).get("redirectUris"))
+        logger.info("Clients applied; nothing else was changed.")
+        return
+    if "--clear-invite-passwords" in args:
+        # GRM-131. Without --apply this only counts, so an operator sees the size first.
+        apply = "--apply" in args
+        counts = clear_invite_passwords(_realm_admin(), apply=apply)
+        logger.info(
+            "Accounts waiting on setup: %(setup_pending)s · holding a password: %(with_password)s · "
+            "cleared: %(cleared)s · demo officers skipped: %(demo_skipped)s",
+            counts,
+        )
+        if not apply and counts["with_password"]:
+            logger.info("Nothing was changed. Re-run with --apply to remove those passwords.")
         return
     master = _master_admin()
     setup_realm(master)
