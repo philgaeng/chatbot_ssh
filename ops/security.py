@@ -24,6 +24,7 @@ import subprocess
 from sqlalchemy import text
 
 from ops.checks import CRIT, OK, WARN, _emit
+from ops.findings import Finding, pip_audit_findings, unique_findings
 from ops.licences import classify_licence
 from ops.db import session_scope
 from ops.models import DependencyFinding
@@ -78,29 +79,16 @@ def dependency_scan() -> None:
         _emit("dependency_scan", WARN, message=f"pip-audit run failed: {exc}")
         return
 
-    deps = payload.get("dependencies", payload if isinstance(payload, list) else [])
-    seen_keys: set[tuple] = set()
+    # Unique per key before any write: pip-audit repeats advisories, and one repeat used to roll
+    # back the whole night (GRM-113, ops/findings.py).
+    findings = pip_audit_findings(payload)
+    seen_keys = {f.key for f in findings}
     counts = {"critical": 0, "high": 0, "moderate": 0, "low": 0, "unknown": 0}
     try:
         with session_scope() as db:
-            for dep in deps:
-                name = dep.get("name")
-                ver = dep.get("version")
-                for v in dep.get("vulns", []) or []:
-                    advisory = v.get("id")
-                    fix = ",".join(v.get("fix_versions", []) or []) or None
-                    sev = (v.get("severity") or "unknown").lower()
-                    counts[sev if sev in counts else "unknown"] += 1
-                    seen_keys.add(("pip-audit", name, advisory))
-                    _upsert_finding(
-                        db,
-                        source="pip-audit",
-                        package=name,
-                        installed_ver=ver,
-                        advisory_id=advisory,
-                        severity=sev,
-                        fixed_in=fix,
-                    )
+            for f in findings:
+                counts[f.severity if f.severity in counts else "unknown"] += 1
+                _upsert_finding(db, **f._asdict())
             # Mark previously-open pip-audit findings that no longer appear as resolved.
             now = dt.datetime.now(dt.timezone.utc)
             open_rows = (
@@ -208,27 +196,22 @@ def licence_scan() -> None:
         _emit("licence_scan", WARN, message=f"pip-licenses run failed: {exc}")
         return
 
+    flagged: list[Finding] = []
+    for pkg in payload:
+        licence = (pkg.get("License") or "").strip()
+        severity, is_finding = classify_licence(licence)
+        if is_finding:
+            flagged.append(Finding("pip-licenses", pkg.get("Name") or "?", pkg.get("Version") or "",
+                                   licence, severity, None))
+    # The same table and key as the CVE scan, so the same guard: a repeat rolls back everything.
+    findings = unique_findings(flagged)
+    seen_keys = {f.key for f in findings}
     counts: dict[str, int] = {}
-    seen_keys: set[tuple[str, str, str]] = set()
     try:
         with session_scope() as db:
-            for pkg in payload:
-                name = pkg.get("Name") or "?"
-                licence = (pkg.get("License") or "").strip()
-                severity, is_finding = classify_licence(licence)
-                if not is_finding:
-                    continue
-                counts[severity] = counts.get(severity, 0) + 1
-                seen_keys.add(("pip-licenses", name, licence))
-                _upsert_finding(
-                    db,
-                    source="pip-licenses",
-                    package=name,
-                    installed_ver=pkg.get("Version") or "",
-                    advisory_id=licence,
-                    severity=severity,
-                    fixed_in=None,
-                )
+            for f in findings:
+                counts[f.severity] = counts.get(f.severity, 0) + 1
+                _upsert_finding(db, **f._asdict())
 
             now = dt.datetime.now(dt.timezone.utc)
             open_rows = (

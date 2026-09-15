@@ -1,7 +1,7 @@
 # Security Monitoring & Hardening Spec
 
 **Status:** As-built (implemented June 2026 — item-level status and remaining hardening backlog in [`agents/PROGRESS.md`](agents/PROGRESS.md)). Companion to [`11_health_and_monitoring_service.md`](11_health_and_monitoring_service.md). Adapts Stratcon `CELERY_REDIS_TASK_QUEUE_SPEC §17/§19` (dependency monitoring) to the **self-hosted** Nepal GRM stack and adds hardening items found by screening the codebase.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-15 — §2.2: a scan hands the table each finding once (`GRM-113`); that paragraph re-verified against the code. The rest: ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Deployment reality:** single Ubuntu host, 2 vCPU / 8 GiB, Docker Compose, self-hosted Postgres + Redis. **No Supabase Advisors** — its DB-advisor checks from the source spec do not apply; we substitute self-hosted equivalents.
 **Authoritative index of *implemented* controls:** [`../deployment/13_security.md`](../deployment/13_security.md). This document covers **monitoring of** security posture + **gaps to close**; it does not restate what `13_security.md` already documents as built.
 
@@ -55,6 +55,14 @@ CREATE TABLE ops.dependency_findings (
 ```
 
 Dedupe by `(source, package, advisory_id)`; bump `last_seen` on re-detection; set `resolved_at` when no longer reported. Daily report shows **new** + **open critical/high** counts.
+
+⚠ **Each finding reaches the table once per run, and that is load-bearing.** A scan writes every finding
+in one transaction, and the ops session does not autoflush, so the upsert cannot see a row it added
+earlier in the same run: a repeated key hits the `UNIQUE` constraint and **rolls back the whole night**.
+pip-audit does repeat keys — measured 2026-09-15, it lists an identical vulnerability twice inside one
+dependency — and the scan ran eleven nights on staging and saved nothing (`GRM-113`). Scanner output is
+therefore parsed into unique findings first, in `ops/findings.py` (pure, pinned by
+`tests/repo/test_dependency_findings.py`); `licence_scan` writes through the same guard.
 
 ---
 
