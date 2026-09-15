@@ -68,6 +68,9 @@ def seed_seah_workflow(db: Session) -> None:
             "Managed by dedicated SEAH officers only."
         ),
         workflow_type="seah",
+        # GRM-116 (Q-10): every workflow belongs to an organization. A sensitive workflow lists no
+        # resolution action — its cases record none — so nothing else is seeded for it.
+        owner_organization_id=ORG_DOR_ID,
     )
     db.add(workflow)
     logger.info("  + workflow: KL_ROAD_SEAH")

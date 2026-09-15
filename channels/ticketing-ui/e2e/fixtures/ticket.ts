@@ -57,7 +57,10 @@ export interface CreatedTicket {
  * @param label short, spec-identifying text; ends up in the grievance id and the summary so a
  *              leftover row in the queue says which spec made it.
  */
-export async function createTicket(label: string): Promise<CreatedTicket> {
+export async function createTicket(
+  label: string,
+  { seah = false }: { seah?: boolean } = {},
+): Promise<CreatedTicket> {
   const grievanceId = `E2E-${label.toUpperCase().replace(/[^A-Z0-9]+/g, "-")}-${Date.now()}`;
 
   const created = await post("/api/v1/tickets", {
@@ -69,9 +72,17 @@ export async function createTicket(label: string): Promise<CreatedTicket> {
     grievance_summary: `Created by the e2e suite for: ${label}. Safe to ignore.`,
     grievance_categories: "Environmental Impact",
     grievance_location: "Urlabari, Morang District, Province 1",
+    // The chatbot's SEAH menu — routes the ticket to the project's sensitive workflow.
+    ...(seah ? { intake_route: "seah_intake", is_seah: true } : {}),
   });
 
   const ticketId = (created as { ticket_id: string }).ticket_id;
+  if (seah) {
+    // ⚠ The intake key cannot read a SEAH case back — a sensitive workflow's cases are visible only
+    // to its cast (D-007), and `getTicket` answers 403. That refusal is the system working. The
+    // spec reads the assignee through a SEAH officer's own session instead (`readTicketAs`).
+    return { ticketId, grievanceId, assignee: "" };
+  }
   const detail = await getTicket(ticketId);
 
   if (!detail.assigned_to_user_id) {

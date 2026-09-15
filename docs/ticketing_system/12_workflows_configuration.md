@@ -1,6 +1,7 @@
 # Workflows configuration
 
 **Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
+**Last updated:** 2026-09-15 — §2 gains *The resolution panel* (`GRM-119`: one panel per workflow, up to 8, no owner field, who may do what; API rows). Earlier the same day: §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
 **Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
@@ -83,6 +84,114 @@ No `slot_key` (dropped 2026-07 by `c5e7f9a1_workflow_classifications`), so no `(
 ### `ticketing.tickets.workflow_version`
 
 Snapshot of definition `version` at ticket creation.
+
+### Resolution actions — what the workflow's officers can record as done (`GRM-116`)
+
+Each workflow holds an **ordered list of at most 8** actions from the resolution-action catalog
+(`ticketing.workflow_resolution_actions` → `ticketing.resolution_actions`). A case offers its
+workflow's list when an officer resolves it. The catalog — owned by organizations, never global, with
+local actions counting as a ministry's shared ones — is specified in
+[08 §2.2](08_ticket_resolution_and_case_summary.md). What matters here:
+
+**A workflow's organization decides what it can list.** An action is usable when it belongs to the
+workflow's organization or one above it, so **every workflow and template belongs to an
+organization** (`owner_organization_id`). How it is set and changed is the next section.
+
+| How the workflow came to exist | Lists |
+| --- | --- |
+| Created from scratch, or from a built-in template | **nothing** — built-in templates belong to no organization and carry no list |
+| Cloned, created from a database template, or saved as a template | a **copy** of the source's list — refused (422) if the new organization cannot use one of its actions |
+| Existing before migration `b3d5f7h9` | sensitive → none · bound to the road-hazard menu on any project → the road-works five · otherwise the general five |
+
+**Copied, never inherited**: a later change to the source does not reach the copy.
+
+**Publishing requires an action.** `POST /workflows/{id}/publish` refuses a non-sensitive workflow
+with no active action: *"Add at least one resolution action before publishing."* A published one
+cannot be emptied. Only published workflows bind to projects, so a case meets an empty list only in a
+sensitive workflow.
+
+**A sensitive workflow never lists an action** — its cases record neither what was done nor who did
+it. `workflow_type` cannot change after creation, so the rule is decided once. Every path above goes
+through `resolution_catalog.set_workflow_actions`, the only writer.
+
+### The resolution panel — where the list is managed (`GRM-119`)
+
+**One place:** a panel in the workflow editor, below *Notifications*, on workflows **and** templates —
+*What officers can choose when closing a case*, with **n of 8**. The owner's review of the first design
+(a panel *and* a catalog screen, ownership choices, retire and merge) found it too complex for the admins
+who will run it; this is what remained.
+
+- One row per action, in order: **▲▼**, the name, **Edit** where the viewer may edit that action,
+  **Remove**. A local action shows *counts as <shared action>* under its name.
+- **+ Add an action** searches the actions **this workflow can use** that it does not already offer;
+  typed text that matches nothing offers **+ Create "…"**.
+- **Every change saves at once** and applies to the next case closed. The list is read live — it is
+  **not** versioned by *Publish*.
+- **Full (8 of 8):** *Add* disabled — *"A workflow can offer at most 8 actions. Remove one to add
+  another."* **Empty:** *"Add at least one action before publishing."*, and *Publish* is disabled (the
+  server refuses it too). **Last action of a published workflow:** *Remove* disabled. **Sensitive:** one
+  line — *"SEAH workflows do not record a resolution action."* — no controls.
+
+**Create and edit — one dialog.** *Action* · *Default text for the officer* · and, when the workflow does
+**not** belong to a ministry itself, **In national reports, count this as** — required, one of the
+ministry's active shared actions. An admin who manages the ministry also sees **A new national action**
+first in that list. **There is no owner field:** a new action belongs to the workflow's organization, or
+to its ministry when *A new national action* is chosen, and is appended to the list in the same request.
+Editing a shared action warns *"Used by N workflows — the change applies to all of them."*
+
+**Who may do what** — enforced in `services/resolution_authoring.py`; the panel renders the flags the
+server returns. *Reach* is the organizations an admin administers on the standard track; a platform admin
+reaches everything.
+
+| Action | Allowed when |
+| --- | --- |
+| Change a workflow's list (add, remove, reorder, create into it) | the workflow's organization is in reach · not sensitive · ≤ 8 |
+| Create *A new national action* | as above, and the workflow's ministry is in reach |
+| Edit an action (label, default text, what it counts as) | the action's organization is in reach |
+| Pick an action | it is active and usable by the workflow (its organization or one above) |
+
+⚠ **The track check alone is not enough.** Workflow writes elsewhere check only the track
+(`can_mutate_workflow`), so any standard-track `org_admin` passes it; the panel's endpoints check reach on
+the workflow's organization after it. `project_admin`, `officer_admin` and officers author nothing.
+
+A create refused at 8 — or for any other reason — is refused **before** the action row is written: actions
+are never deleted, so a refusal must not leave one behind.
+
+✅ **Verified in a browser, local stack, 2026-09-15** — `e2e/flows/settings-resolution-panel.spec.ts`: an
+empty draft blocks Publish; add, reorder and remove save at once; 8 of 8 refuses a ninth; the create dialog
+opens (with no *counts as* on DOR's own workflow) and is cancelled. ⚠ **Pinned only at the API level**
+(`tests/ticketing/test_resolution_authoring.py`): **creating and editing** an action — an action is never
+deleted, so each e2e run would add a permanent one to DOR's catalog, and a local action needs an
+organization below DOR that e2e must not create (`GRM-092`) — and the **sensitive** panel state, which no
+seeded user can open in the browser (`GRM-125`).
+
+### A workflow's organization — *Belongs to* (`GRM-122`)
+
+**Why it matters.** It decides which resolution actions the workflow can offer (above), and it is what
+an organization's admin needs in reach to manage the workflow. The migration gave every existing
+workflow and template **its projects' ministry** — the only safe automatic answer — but the right
+owner is often lower down: the KL Road workflows are PD-ADB's, not all of DOR's. So admins move them.
+
+| Where | What |
+| --- | --- |
+| **New workflow / New template** | **Belongs to** is required. A platform admin chooses; an `org_admin` finds its organization filled in (the top of its reach, as `catalog_owner_for`) and may pick any organization it manages. The template list then shows **only templates of that organization or one above it**, so everything a template copies is usable |
+| **Workflow editor** | *Belongs to: Department of Roads · Change* beside *Type* and *Key*, on workflows and templates. *Belongs to: — · Choose* when it has none |
+| **Change** | Organizations the admin manages (a platform admin: all), and, for information, the projects using the workflow. **Refused, dialog kept open, one line per action**, while the list holds an action the new organization could not use: *"Remove 'Culvert cleared' first — it belongs to PD-ADB."* Moving **down** (DOR → PD-ADB) never hits this; sideways, up or to another ministry can. Local actions do not move with the workflow |
+| **Workflow list** | Each workflow and template shows *For <organization>* under its name |
+| **Save as template** | The template takes the workflow's organization |
+
+**Who.** Moving needs reach on **both** the current and the new organization; a sensitive workflow
+additionally needs the sensitive-configuration capability (`_load_workflow`). Every move is written to
+`admin_audit_log` (`workflow_organization_changed`, with both organizations).
+
+**Deliberately not checked:** whether the projects using a workflow sit under its new organization —
+no catalog enforces that today, and the dialog shows the projects so the admin can see it (`GRM-120`).
+✅ **Verified in a browser, local stack, 2026-09-15** — `e2e/flows/settings-workflow-organization.spec.ts`
+creates a draft that must be given an organization and moves it (DOR → ADB, two top organizations: a
+fresh seed has nothing below DOR). ⚠ **Two cases are pinned only by API tests**
+(`tests/ticketing/test_workflow_organization.py`): moving **down** to a sub-organization, and the
+**refused** move — the latter was driven in a browser once that day but is not in the committed spec,
+because the only workflow that can carry actions today has steps and cannot be cleaned up (`GRM-124`).
 
 ### Legacy: `ticketing.workflow_assignments`
 
@@ -285,13 +394,19 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 
 | Method | Path | Notes |
 |--------|------|-------|
-| `GET` | `/workflows` | List workflows |
+| `GET` | `/workflows` | List workflows — each with `owner_organization_id` and `owner_name`; `?for_organization_id=` lists those owned by that organization **or one above it** (the new-workflow template picker; must be in reach) |
 | `GET` | `/workflows/routing-options` | Category classifications + chatbot menu paths for the project editor |
 | `GET` | `/workflows/templates` | Templates only |
-| `GET` | `/workflows/{id}` | Detail + steps |
-| `POST` | `/workflows` | Create |
+| `GET` | `/workflows/{id}` | Detail + steps + `used_by_projects` (names) |
+| `POST` | `/workflows` | Create — `owner_organization_id` required from a platform admin, defaulted for an `org_admin` (must be in reach) |
 | `PATCH` | `/workflows/{id}` | Metadata |
-| `POST` | `/workflows/{id}/publish` | Publish |
+| `POST` | `/workflows/{id}/publish` | Publish — refused for a non-sensitive workflow with no resolution action |
+| `GET` | `/workflows/{id}/resolution-actions` | The panel: `actions [{code, label, default_wording, counts_as_label, can_edit, used_by_count}]`, `can_change`, `max`, `national_choices`, `can_create_national`, `is_sensitive`, `owner_is_ministry` (`GRM-119`) |
+| `GET` | `/workflows/{id}/resolution-actions/available?q=` | Actions the workflow can use and does not offer |
+| `PUT` | `/workflows/{id}/resolution-actions` | `{codes}` — replace the list, order included |
+| `POST` | `/workflows/{id}/resolution-actions/new` | `{label, default_wording, counts_as_code?, national?}` — create and append; code generated server-side |
+| `PATCH` | `/resolution-actions/{code}` | `{label?, default_wording?, counts_as_code?}` — edit; applies to every workflow using it |
+| `PATCH` | `/workflows/{id}/organization` | `{organization_id}` — move it (`GRM-122`); 403 without reach on both organizations, 422 naming each action the new one cannot use |
 | `GET` | `/projects/{id}/workflows` | Workflow links on the project |
 | `PUT` | `/projects/{id}/workflows` | Replace all links (name + workflow + routing + default) |
 | `PATCH` | `/projects/{id}` | Legacy `standard_workflow_id` / `seah_workflow_id` (syncs links) |

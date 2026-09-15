@@ -37,7 +37,10 @@ class WorkflowDefinition(Base):
     is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     template_source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    # Org-scoped catalog (doc 11 §3.3, SH-7). NULL = global. Mirrors position_types.
+    # The organization this workflow or template belongs to (doc 11 §3.3). Every one has one since
+    # GRM-116's migration: it decides which resolution actions the workflow can offer, and who may
+    # change it. Chosen on create and changed in Settings (GRM-122). SET NULL on org delete leaves a
+    # workflow that can offer no action — GRM-120 decides that rule.
     owner_organization_id: Mapped[str | None] = mapped_column(
         String(64),
         ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
@@ -59,6 +62,14 @@ class WorkflowDefinition(Base):
     assignments: Mapped[list["WorkflowAssignment"]] = relationship(
         "WorkflowAssignment", back_populates="workflow", lazy="select"
     )
+    owner_organization: Mapped["Organization | None"] = relationship(  # noqa: F821
+        "Organization", foreign_keys=[owner_organization_id], lazy="select", viewonly=True
+    )
+
+    @property
+    def owner_name(self) -> str | None:
+        """The owning organization's name, for the workflow list and editor (GRM-122)."""
+        return self.owner_organization.name if self.owner_organization else None
 
 
 class WorkflowStep(Base):

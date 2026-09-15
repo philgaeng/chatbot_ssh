@@ -14,6 +14,10 @@ export interface ActionNoticeState {
 export const MSG_IMAGE_BEFORE_ESCALATE =
   "Add at least one photo before escalating. Upload a site photo or ask the complainant to send photos via WhatsApp.";
 
+/** GRM-116: the case moved to another workflow while the resolve form was open. */
+export const MSG_RESOLUTION_WORKFLOW_CHANGED =
+  "This case moved to another workflow. Choose what was done again.";
+
 export const MSG_IMAGE_BEFORE_RESOLVE =
   "Add at least one photo before resolving. Upload a site photo or ask the complainant to send photos via WhatsApp.";
 
@@ -89,6 +93,9 @@ function mapDetailToNotice(detail: string): ActionNoticeState | null {
   }
   if (d.includes("At least one image attachment is required before resolving")) {
     return { message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" };
+  }
+  if (d.includes("not offered by this case's workflow")) {
+    return { message: MSG_RESOLUTION_WORKFLOW_CHANGED, kind: "validation" };
   }
   if (d.includes("escalation_notes is required")) {
     return {

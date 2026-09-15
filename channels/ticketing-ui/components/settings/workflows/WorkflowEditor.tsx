@@ -31,6 +31,8 @@ import {
 } from "@/components/settings/workflows/workflowHelpers";
 import { StepForm } from "@/components/settings/workflows/StepForm";
 import { WorkflowNotificationsPanel } from "@/components/settings/workflows/WorkflowNotificationsPanel";
+import { WorkflowOrganizationDialog } from "@/components/settings/workflows/WorkflowOrganizationDialog";
+import { ResolutionPanel } from "@/components/settings/resolution/ResolutionPanel";
 
 export function WorkflowEditor({
   workflow: initial,
@@ -56,6 +58,9 @@ export function WorkflowEditor({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [addingStep, setAddingStep] = useState(false);
   const [msg, setMsg]               = useState("");
+  const [changingOrg, setChangingOrg] = useState(false);
+  // GRM-119: a non-sensitive workflow with no resolution action cannot be published (the server refuses).
+  const [needsAction, setNeedsAction] = useState(false);
 
   const isTemplate = wf.is_template;
   const steps = wf.steps.filter(s => !s.is_deleted).sort((a, b) => a.step_order - b.step_order);
@@ -187,7 +192,8 @@ export function WorkflowEditor({
           <span className={`text-xs font-medium px-2 py-0.5 rounded ${statusBadge(wf.status)}`}>{wf.status}</span>
           <span className="text-xs text-gray-400">v{wf.version}</span>
           {!isTemplate && wf.status !== "archived" && (
-            <button type="button" onClick={handlePublish} disabled={publishing}
+            <button type="button" onClick={handlePublish} disabled={publishing || needsAction}
+              title={needsAction ? "Add at least one resolution action before publishing." : undefined}
               className="text-sm bg-green-600 text-white hover:bg-green-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
               {publishing ? "Publishing…" : wf.status === "published" ? "Re-publish" : "Publish"}
             </button>
@@ -215,8 +221,32 @@ export function WorkflowEditor({
       <div className="flex items-center gap-4 mb-6 text-xs text-gray-500">
         <span>Type: <span className={`font-medium px-1.5 py-0.5 rounded ${typeBadge(wf.workflow_type)}`}>{wf.workflow_type.toUpperCase()}</span></span>
         <span>Key: <code className="text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">{wf.workflow_key}</code></span>
+        {/* GRM-122: the organization decides which resolution actions this workflow can offer. */}
+        <span>
+          Belongs to:{" "}
+          {wf.owner_name ? <span className="font-medium text-gray-700">{wf.owner_name}</span> : <span>—</span>}
+          {" · "}
+          <button type="button" onClick={() => setChangingOrg(true)} className="text-blue-600 hover:underline">
+            {wf.owner_organization_id ? "Change" : "Choose"}
+          </button>
+        </span>
         {wf.description && <span className="text-gray-400 italic">{wf.description}</span>}
       </div>
+
+      {changingOrg && (
+        <WorkflowOrganizationDialog
+          workflow={wf}
+          onClose={() => setChangingOrg(false)}
+          onSaved={(updated) => {
+            // The PATCH response does not repeat the projects using it; keep what the editor loaded.
+            const merged = { ...updated, used_by_projects: wf.used_by_projects };
+            setWf(merged);
+            onUpdated(merged);
+            setChangingOrg(false);
+            flash("Organization changed ✓");
+          }}
+        />
+      )}
 
       {/* Steps */}
       <div className="space-y-2 mb-4">
@@ -296,6 +326,9 @@ export function WorkflowEditor({
       {!isTemplate && (
         <WorkflowNotificationsPanel workflowSlug={workflowTrackOf(wf)} />
       )}
+
+      {/* Resolution actions (GRM-119) — on workflows and templates alike */}
+      <ResolutionPanel workflow={wf} onBlocksPublishChange={setNeedsAction} />
     </div>
   );
 }

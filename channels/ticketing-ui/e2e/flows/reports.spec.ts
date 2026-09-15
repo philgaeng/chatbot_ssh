@@ -12,6 +12,7 @@
  */
 import { test, expect } from "../fixtures/officer";
 import { captureScreenshot } from "../fixtures/artifacts";
+import { workbookStrings } from "../fixtures/xlsx";
 import { createReportShare, OFFICERS } from "../fixtures/seed";
 
 /** XLSX files are ZIP archives; every one starts with the local-file-header magic `PK\x03\x04`. */
@@ -72,6 +73,14 @@ test("reports → export all data as XLSX", async ({ page, asOfficer }, testInfo
     bytes.subarray(0, 4).equals(ZIP_MAGIC),
     "an .xlsx that is not a ZIP archive is an error page wearing a spreadsheet's name",
   ).toBe(true);
+
+  // GRM-118: what was done and who did it are in the workbook, as headers. That a resolved row is
+  // filled is pinned by tests/ticketing/test_report_resolution_columns.py — the cases this suite
+  // resolves live in Morang, and a long-running dev box holds more there than the 100-row export cap.
+  const strings = workbookStrings(bytes);
+  for (const header of ["Resolution action", "Resolved by", "Resolution action (national)"]) {
+    expect(strings, `the export should carry the "${header}" column`).toContain(header);
+  }
 
   await testInfo.attach("report-export", { path: file });
   await captureScreenshot(page, testInfo, "flow-reports-export");

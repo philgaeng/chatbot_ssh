@@ -15,6 +15,7 @@ import { describe, it, expect } from "vitest";
 import type { WorkflowDefinition, ProjectWorkflowSlot } from "@/lib/api";
 import {
   statusBadge,
+  topOrganizations,
   typeBadge,
   emptyBinding,
   workflowTrackOf,
@@ -162,5 +163,26 @@ describe("notification vocab", () => {
   it("pins the tier and channel vocabularies", () => {
     expect(NOTIF_TIERS).toEqual(["actor", "supervisor", "informed", "observer"]);
     expect(NOTIF_CHANNELS).toEqual(["app", "email", "sms"]);
+  });
+});
+
+describe("topOrganizations (GRM-122)", () => {
+  const org = (id: string, parent: string | null) =>
+    ({ organization_id: id, name: id, parent_organization_id: parent, country_code: "NP",
+       is_active: true, created_at: "", updated_at: "" });
+
+  it("an admin scoped at one office gets that office as the only top", () => {
+    const reach = [org("PD_ADB", "DOR"), org("LOT1", "PD_ADB"), org("LOT2", "PD_ADB")];
+    expect(topOrganizations(reach).map((o) => o.organization_id)).toEqual(["PD_ADB"]);
+  });
+
+  it("two separate branches give two tops, so the admin must choose", () => {
+    const reach = [org("JHAPA", "DOR"), org("ILAM", "DOR")];
+    expect(topOrganizations(reach).map((o) => o.organization_id)).toEqual(["JHAPA", "ILAM"]);
+  });
+
+  it("a whole forest (a platform admin's reach) has every root as a top", () => {
+    const reach = [org("DOR", null), org("PD_ADB", "DOR"), org("CUSTOMS", null)];
+    expect(topOrganizations(reach).map((o) => o.organization_id)).toEqual(["DOR", "CUSTOMS"]);
   });
 });

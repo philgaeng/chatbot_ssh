@@ -1,6 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
-"""Resolution categories and note formatting (spec §2.2)."""
+"""Resolution note rules, the per-workflow action limit, and the starter actions (spec 08 §2.2).
+
+The actions themselves live in the ``ticketing.resolution_actions`` catalog (GRM-116). Migration
+``b3d5f7h9`` seeds the starter actions on a database that already has a ministry, from its own frozen
+copy; :data:`STARTER_ACTIONS` is what the seed scripts use on a database that does not yet.
+"""
 
 from __future__ import annotations
 
@@ -9,55 +14,75 @@ from typing import Optional
 
 RESOLUTION_MIN_NOTE_LEN = 12
 
-RESOLUTION_CATEGORIES: dict[str, dict[str, str]] = {
-    "CLASSIFIED": {
-        "label": "Grievance classified",
-        "default_wording": (
-            "This grievance has been reviewed and classified. "
-            "No specific remedial action is required beyond continued monitoring "
-            "under the project GRM procedure."
-        ),
-    },
-    "DEMAND_REJECTED": {
-        "label": "Complainant demand rejected",
-        "default_wording": (
-            "After investigation, the grievance was found not to be substantiated. "
-            "The complainant's request is not accepted. The case is closed with this determination."
-        ),
-    },
-    "ACCEPTED_MONETARY": {
-        "label": "Grievance accepted — monetary compensation",
-        "default_wording": (
-            "The grievance is substantiated. Remedial action includes monetary compensation "
-            "as agreed with the complainant / per contract and GRM procedure."
-        ),
-    },
-    "ACCEPTED_RELOCATION": {
-        "label": "Grievance accepted — relocation",
-        "default_wording": (
-            "The grievance is substantiated. Remedial action includes relocation / "
-            "resettlement support as applicable under project safeguards."
-        ),
-    },
-    "ACCEPTED_OTHER": {
-        "label": "Grievance accepted — other remedy",
-        "default_wording": (
-            "The grievance is substantiated. Remedial action has been agreed "
-            "(other than monetary compensation or relocation). Details are recorded below."
-        ),
-    },
-}
+# At most this many actions per workflow and per template (owner's rule, Q-10). A constant, not a
+# setting: an officer chooses from a short list, often on a phone, in a second language — and a list
+# that cannot pass 8 cannot fill up with near-duplicates. Enforced in set_workflow_actions.
+MAX_RESOLUTION_ACTIONS = 8
 
+# Today's five — codes unchanged since before the catalog, so every historical event still resolves.
+GENERAL_ACTION_CODES: tuple[str, ...] = (
+    "CLASSIFIED",
+    "DEMAND_REJECTED",
+    "ACCEPTED_MONETARY",
+    "ACCEPTED_RELOCATION",
+    "ACCEPTED_OTHER",
+)
 
-def resolution_category_label(code: str) -> str:
-    return RESOLUTION_CATEGORIES.get(code, {}).get("label", code)
+# For a workflow bound to the road-hazard chatbot menu.
+ROAD_WORKS_ACTION_CODES: tuple[str, ...] = (
+    "ROAD_REPAIRED",
+    "ROAD_MADE_SAFE",
+    "ROAD_DUST_NOISE_CONTROLLED",
+    "ROAD_NOT_PROJECT_ROAD",
+    "ROAD_NO_HAZARD_FOUND",
+)
 
+# (code, label, default wording) — shared actions of the ministry that owns them.
+STARTER_ACTIONS: tuple[tuple[str, str, str], ...] = (
+    ("CLASSIFIED", "Grievance classified",
+     "This grievance has been reviewed and classified. No specific remedial action is required "
+     "beyond continued monitoring under the project GRM procedure."),
+    ("DEMAND_REJECTED", "Complainant demand rejected",
+     "After investigation, the grievance was found not to be substantiated. The complainant's "
+     "request is not accepted. The case is closed with this determination."),
+    ("ACCEPTED_MONETARY", "Grievance accepted — monetary compensation",
+     "The grievance is substantiated. Remedial action includes monetary compensation as agreed "
+     "with the complainant / per contract and GRM procedure."),
+    ("ACCEPTED_RELOCATION", "Grievance accepted — relocation",
+     "The grievance is substantiated. Remedial action includes relocation / resettlement support "
+     "as applicable under project safeguards."),
+    ("ACCEPTED_OTHER", "Grievance accepted — other remedy",
+     "The grievance is substantiated. Remedial action has been agreed (other than monetary "
+     "compensation or relocation). Details are recorded below."),
+    ("ROAD_REPAIRED", "Hazard repaired",
+     "The reported hazard was inspected and repaired."),
+    ("ROAD_MADE_SAFE", "Made safe — signs, barriers or traffic control",
+     "The site was made safe with warning signs, barriers or traffic control. A permanent repair "
+     "is planned."),
+    ("ROAD_DUST_NOISE_CONTROLLED", "Dust or noise controlled",
+     "The contractor was instructed to control dust or noise, for example by spraying water or "
+     "limiting working hours."),
+    ("ROAD_NOT_PROJECT_ROAD", "Not on a project road — passed on",
+     "The location is not on a project road. The report was passed to the authority responsible "
+     "for it."),
+    ("ROAD_NO_HAZARD_FOUND", "No hazard found on inspection",
+     "The site was inspected and no hazard was found."),
+)
 
-def validate_resolution_category(code: Optional[str]) -> str:
-    if not code or code not in RESOLUTION_CATEGORIES:
-        valid = ", ".join(sorted(RESOLUTION_CATEGORIES))
-        raise ValueError(f"resolution_category must be one of: {valid}")
-    return code
+# Who took the action, when it was an outside body (GRM-117) — (key, label), fixed in code, **no free
+# text** (Q-02): the Excel's *Resolved by* column must be unable to hold a person's name. Users'
+# committee added by the owner (Q-06).
+RESOLUTION_EXTERNAL_ACTORS: tuple[tuple[str, str], ...] = (
+    ("police", "Police"),
+    ("local_government", "Municipality or ward office"),
+    ("contractor", "Contractor"),
+    ("court", "Court"),
+    ("users_committee", "Users' committee"),
+    ("other_government", "Other government office"),
+)
+
+# Preselected in the resolve form when a workflow offers it (the pre-catalog default).
+PREFERRED_DEFAULT_ACTION_CODE = "ACCEPTED_OTHER"
 
 
 def validate_resolution_note(note: Optional[str]) -> str:
@@ -69,7 +94,17 @@ def validate_resolution_note(note: Optional[str]) -> str:
     return text
 
 
-def format_resolution_note(category: str, officer_text: str, *, at: Optional[datetime] = None) -> str:
+def format_resolution_note(
+    action_label: Optional[str],
+    officer_text: str,
+    *,
+    actor_label: Optional[str] = None,
+    at: Optional[datetime] = None,
+) -> str:
+    """The thread bubble body. ``action_label`` and ``actor_label`` are None for a case in a sensitive
+    workflow, which records neither (DESIGN §3.1.3) — the heading then names no outcome, and there is
+    no *Resolved by* line."""
     when = (at or datetime.now(timezone.utc)).strftime("%Y-%m-%d")
-    label = resolution_category_label(category)
-    return f"Resolution — {label}\nDate: {when}\n\n{officer_text.strip()}"
+    heading = f"Resolution — {action_label}" if action_label else "Resolution"
+    resolved_by = f"\nResolved by: {actor_label}" if actor_label else ""
+    return f"{heading}\nDate: {when}{resolved_by}\n\n{officer_text.strip()}"

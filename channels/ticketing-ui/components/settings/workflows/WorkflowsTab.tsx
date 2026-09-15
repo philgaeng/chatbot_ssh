@@ -192,6 +192,7 @@ export function WorkflowsTab({
               </div>
               <div className="text-xs text-gray-400 mt-0.5">
                 {wf.steps.filter(s => s && !s.is_deleted).length} steps
+                {" · "}{wf.owner_name ? `For ${wf.owner_name}` : "No organization"}
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -235,7 +236,7 @@ export function WorkflowsTab({
                     {workflowTrackOf(tpl) === "seah" && <Lock size={11} strokeWidth={2.5} className="text-red-500 shrink-0" />}
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {tpl.steps.filter(s => s && !s.is_deleted).length} steps · {tpl.workflow_id.startsWith("__builtin_") ? "built-in" : "admin template"}
+                    {tpl.steps.filter(s => s && !s.is_deleted).length} steps · {tpl.workflow_id.startsWith("__builtin_") ? "built-in" : tpl.owner_name ? `For ${tpl.owner_name}` : "No organization"}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

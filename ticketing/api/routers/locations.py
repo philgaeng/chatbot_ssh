@@ -97,7 +97,7 @@ from ticketing.services import project_go_live as go_live_svc
 from ticketing.services import project_types as types_svc
 from ticketing.models.ticket import Ticket
 from ticketing.models.user import UserRole
-from ticketing.models.workflow import WorkflowAssignment
+from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition
 
 router = APIRouter()
 
@@ -372,6 +372,9 @@ def list_organizations(
     q: str | None = Query(
         None, description="Case-insensitive search on id / name / Nepali name (Frame 12 at scale)."
     ),
+    manageable: bool = Query(
+        False, description="GRM-122: only organizations the caller administers (a platform admin: all)."
+    ),
     db: Session = Depends(get_db),
     _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
@@ -387,6 +390,17 @@ def list_organizations(
         if not subtree:
             return []
         stmt = stmt.where(Organization.organization_id.in_(subtree))
+    if manageable:
+        from ticketing.services.admin_access import admin_org_scope_ids, is_org_admin, is_super_admin
+
+        reach = admin_org_scope_ids(db, _user)
+        if reach is None:
+            if not (is_super_admin(_user) or is_org_admin(_user)):
+                return []
+        elif not reach:
+            return []
+        else:
+            stmt = stmt.where(Organization.organization_id.in_(reach))
     if q and q.strip():
         like = f"%{q.strip().lower()}%"
         stmt = stmt.where(
@@ -850,6 +864,21 @@ def delete_organization(
             detail=f"Cannot delete: {proj_count} project actor assignment(s) use this organization.",
         )
 
+    # GRM-116: the FK is RESTRICT on purpose — an org deleted out from under its resolution actions
+    # would otherwise turn them global. Say why here rather than surface a constraint error.
+    from ticketing.models.resolution_action import ResolutionAction
+
+    action_count = db.scalar(
+        select(func.count())
+        .select_from(ResolutionAction)
+        .where(ResolutionAction.owner_organization_id == organization_id)
+    ) or 0
+    if action_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: this organization owns {action_count} resolution action(s).",
+        )
+
     db.delete(org)
     db.commit()
 
@@ -864,6 +893,11 @@ class OrgDeleteImpact(BaseModel):
     workflow_assignment_count: int
     package_actor_count: int
     project_actor_count: int
+    resolution_action_count: int = 0
+    # Informational, like positions: the workflow FK is SET NULL, so these do not block the delete —
+    # but a workflow left with no organization can offer no resolution action (GRM-116). The delete
+    # rule for workflows is GRM-120's to decide.
+    workflow_count: int = 0
     deletable: bool
 
 
@@ -877,6 +911,7 @@ def organization_delete_impact(
     in one call, so the UI shows the combined "N children / N projects / N officers / N
     cases" line instead of only the first blocking guard the DELETE returns."""
     from ticketing.models.officer_position import OfficerPosition
+    from ticketing.models.resolution_action import ResolutionAction
 
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail="Organization not found")
@@ -892,6 +927,8 @@ def organization_delete_impact(
     assigns = _count(WorkflowAssignment, WorkflowAssignment.organization_id)
     pkgs = _count(PackageOrganization, PackageOrganization.organization_id)
     projs = _count(ProjectOrganization, ProjectOrganization.organization_id)
+    actions = _count(ResolutionAction, ResolutionAction.owner_organization_id)
+    workflows = _count(WorkflowDefinition, WorkflowDefinition.owner_organization_id)
     return OrgDeleteImpact(
         organization_id=organization_id,
         child_count=child,
@@ -902,9 +939,11 @@ def organization_delete_impact(
         workflow_assignment_count=assigns,
         package_actor_count=pkgs,
         project_actor_count=projs,
+        resolution_action_count=actions,
+        workflow_count=workflows,
         # positions are informational — the org FK cascades them, so they don't block the
         # DELETE (which guards child/ticket/role/scope/assignment/package/project refs).
-        deletable=not any([child, tickets, roles, scopes, assigns, pkgs, projs]),
+        deletable=not any([child, tickets, roles, scopes, assigns, pkgs, projs, actions]),
     )
 
 

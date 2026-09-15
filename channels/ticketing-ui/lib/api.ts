@@ -118,6 +118,44 @@ export interface TicketDetail extends TicketListItem {
   complainant_reply_owner_id: string | null;
   /** Step supervisor role configured and at least one officer resolvable in scope. */
   step_supervisor_available?: boolean;
+  /**
+   * GRM-116: what an officer may record as done on this case — its workflow's selection from the
+   * resolution-action catalog. **Empty for a sensitive workflow**, whose cases record no action.
+   */
+  resolution_options?: ResolutionOption[];
+  /**
+   * GRM-117: who can be named as having taken the action — the officer's own office(s), the
+   * organizations on this case's project, and the fixed outside bodies. **All empty on a sensitive
+   * workflow**, whose cases record no actor.
+   */
+  resolution_self_offices?: OrganizationChoice[];
+  resolution_office_suggestions?: OrganizationChoice[];
+  resolution_external_actors?: ExternalActor[];
+}
+
+export interface OrganizationChoice {
+  organization_id: string;
+  name: string;
+}
+
+export interface ExternalActor {
+  key: string;
+  label: string;
+}
+
+export type ResolutionActorKind = "self" | "organization" | "external";
+
+/** The actor fields of a RESOLVE — never a label: the server computes it (GRM-117). */
+export interface ResolutionActorPayload {
+  resolution_actor_kind: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
+}
+
+export interface ResolutionOption {
+  code: string;
+  label: string;
+  default_wording: string;
 }
 
 export interface SlaStatus {
@@ -211,6 +249,11 @@ export interface WorkflowDefinition {
   version: number;
   is_template: boolean;
   template_source_id: string | null;
+  /** GRM-122: the organization it belongs to — decides which resolution actions it can offer. */
+  owner_organization_id?: string | null;
+  owner_name?: string | null;
+  /** Only on GET /workflows/{id}: names of the projects bound to it. */
+  used_by_projects?: string[];
   steps: WorkflowStep[];
   assignments: WorkflowAssignmentItem[];
   created_at: string;
@@ -517,6 +560,9 @@ export interface ActionPayload {
   action_type: string;
   note?: string;
   resolution_category?: string;
+  resolution_actor_kind?: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
   assign_to_user_id?: string;
   grc_hearing_date?: string;
   escalation_date?: string;
@@ -654,11 +700,14 @@ export function listWorkflows(filters?: {
   workflow_type?: string;
   status?: string;
   is_template?: boolean;
+  /** GRM-122: only those owned by this organization or one above it (a new workflow's templates). */
+  for_organization_id?: string;
 }): Promise<{ items: WorkflowDefinition[]; total: number }> {
   const p = new URLSearchParams();
   if (filters?.workflow_type) p.set("workflow_type", filters.workflow_type);
   if (filters?.status) p.set("status", filters.status);
   if (filters?.is_template !== undefined) p.set("is_template", String(filters.is_template));
+  if (filters?.for_organization_id) p.set("for_organization_id", filters.for_organization_id);
   const qs = p.toString();
   return apiFetch(`/api/v1/workflows${qs ? `?${qs}` : ""}`);
 }
@@ -673,6 +722,8 @@ export interface WorkflowCreatePayload {
   description?: string;
   clone_from_id?: string;
   is_template?: boolean;
+  /** GRM-122: required from a platform admin; an org admin's defaults to its own organization. */
+  owner_organization_id?: string;
 }
 
 export function createWorkflow(payload: WorkflowCreatePayload): Promise<WorkflowDefinition> {
@@ -681,6 +732,72 @@ export function createWorkflow(payload: WorkflowCreatePayload): Promise<Workflow
 
 export function getWorkflow(workflowId: string): Promise<WorkflowDefinition> {
   return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}`);
+}
+
+// ── GRM-119: a workflow's resolution panel ───────────────────────────────────
+
+export interface ResolutionActionRow {
+  code: string;
+  label: string;
+  default_wording: string;
+  /** Set on a local action: the shared action it counts as in national reports. */
+  counts_as_code?: string | null;
+  counts_as_label?: string | null;
+  /** The viewer manages the action's organization. */
+  can_edit: boolean;
+  /** Workflows offering it — an edit applies to all of them. */
+  used_by_count: number;
+}
+
+export interface WorkflowResolutionPanel {
+  actions: ResolutionActionRow[];
+  /** The viewer manages the workflow's organization (and the workflow is not sensitive). */
+  can_change: boolean;
+  max: number;
+  /** The shared actions of the workflow's ministry — what a new local action may count as. */
+  national_choices: { code: string; label: string }[];
+  can_create_national: boolean;
+  is_sensitive: boolean;
+  /** The workflow belongs to a ministry itself: a new action is national and asks no "counts as". */
+  owner_is_ministry: boolean;
+}
+
+export function getWorkflowResolutionPanel(workflowId: string): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`);
+}
+
+export function listAvailableResolutionActions(workflowId: string, q?: string): Promise<ResolutionActionRow[]> {
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/available${qs}`);
+}
+
+export function setWorkflowResolutionActions(workflowId: string, codes: string[]): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`, { method: "PUT", body: JSON.stringify({ codes }) });
+}
+
+export function createWorkflowResolutionAction(
+  workflowId: string,
+  body: { label: string; default_wording: string; counts_as_code?: string; national?: boolean },
+): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/new`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateResolutionAction(
+  code: string,
+  body: { label?: string; default_wording?: string; counts_as_code?: string },
+): Promise<ResolutionActionRow> {
+  return apiFetch(`/api/v1/resolution-actions/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/**
+ * GRM-122: move a workflow or template to another organization. Refused (422) while its resolution
+ * actions include one the new organization cannot use — the detail names each, one per line.
+ */
+export function changeWorkflowOrganization(workflowId: string, organizationId: string): Promise<WorkflowDefinition> {
+  return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}/organization`, {
+    method: "PATCH",
+    body: JSON.stringify({ organization_id: organizationId }),
+  });
 }
 
 export function saveWorkflowAsTemplate(
@@ -2090,13 +2207,15 @@ export interface OrganizationUpdate {
 
 export function listOrganizations(
   country?: string,
-  opts?: { rootId?: string; tree?: boolean; q?: string },
+  opts?: { rootId?: string; tree?: boolean; q?: string; manageable?: boolean; activeOnly?: boolean },
 ): Promise<OrganizationItem[]> {
   const p = new URLSearchParams();
   if (country) p.set("country", country);
-  p.set("active_only", "false");
+  p.set("active_only", opts?.activeOnly ? "true" : "false");
   if (opts?.rootId) p.set("root_id", opts.rootId);
   if (opts?.tree) p.set("tree", "true");
+  // GRM-122: only organizations the caller administers (a platform admin: all).
+  if (opts?.manageable) p.set("manageable", "true");
   if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
   return apiFetch<OrganizationItem[]>(`/api/v1/organizations?${p}`);
 }
@@ -2112,6 +2231,10 @@ export interface OrgDeleteImpact {
   workflow_assignment_count: number;
   package_actor_count: number;
   project_actor_count: number;
+  /** GRM-116: resolution actions this organization owns — an owner cannot be deleted. */
+  resolution_action_count: number;
+  /** Workflows and templates this organization owns — informational: a delete leaves them with no organization. */
+  workflow_count: number;
   deletable: boolean;
 }
 

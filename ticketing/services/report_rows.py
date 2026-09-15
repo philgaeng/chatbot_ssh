@@ -16,7 +16,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from ticketing.api.dependencies import CurrentUser
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import action_labels, event_action_label, national_action_labels
 from ticketing.engine.workflow_engine import compute_sla_deadline
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import ProjectPackage
@@ -42,6 +42,7 @@ DEFAULT_REPORT_COLUMNS = [
     "days_in_stage",
     "total_days",
     "resolution_category",
+    "resolution_actor",
     "status_code",
     "project_name",
     "package_label",
@@ -51,6 +52,7 @@ DEFAULT_REPORT_COLUMNS = [
 # Flat export-all (TP-07) — analysis-ready officer scope export
 ALL_DATA_EXPORT_COLUMNS = [
     *DEFAULT_REPORT_COLUMNS,
+    "resolution_action_national",
     "grievance_summary",
     "stage_level",
     "priority",
@@ -85,7 +87,11 @@ FIELD_LABELS: dict[str, str] = {
     "complaint_category": "Complaint category",
     "days_in_stage": "Days in stage",
     "total_days": "Total days",
-    "resolution_category": "Resolution category",
+    # GRM-118: the key stays `resolution_category` (persisted in events and saved templates — Q-05);
+    # what managers read is the action.
+    "resolution_category": "Resolution action",
+    "resolution_actor": "Resolved by",
+    "resolution_action_national": "Resolution action (national)",
     "status_code": "Status",
     "priority": "Priority",
     "project_name": "Project",
@@ -105,6 +111,8 @@ GROUP_BY_KEYS = frozenset({
     "location_display",
     "stage",
     "resolution_category",
+    "resolution_actor",
+    "resolution_action_national",
     "complaint_category",
     "status_code",
     "is_seah",
@@ -265,6 +273,7 @@ def _fetch_auxiliary_maps(
     dict[str, datetime | None],
     set[str],
     dict[str, str | None],
+    dict[str, dict[str, str]],
 ]:
     step_ids = {t.current_step_id for t in tickets if t.current_step_id}
     step_map: dict[str, WorkflowStep] = {}
@@ -289,9 +298,12 @@ def _fetch_auxiliary_maps(
     ticket_ids = [t.ticket_id for t in tickets]
     resolved_at: dict[str, datetime | None] = {}
     resolution_cat: dict[str, str | None] = {}
+    # GRM-118: ticket_id → {"actor": label or "", "national": label or ""} from the same RESOLVED event.
+    resolution_extra: dict[str, dict[str, str]] = {}
     escalated_ids: set[str] = set()
 
     if ticket_ids:
+        latest_payloads: dict[str, dict] = {}
         for row in db.execute(
             select(TicketEvent.ticket_id, TicketEvent.created_at, TicketEvent.payload)
             .where(
@@ -303,8 +315,17 @@ def _fetch_auxiliary_maps(
             tid = row[0]
             if tid not in resolved_at:
                 resolved_at[tid] = row[1]
-                payload = row[2] or {}
-                resolution_cat[tid] = payload.get("resolution_category")
+                latest_payloads[tid] = row[2] or {}
+        # GRM-116: the label the officer chose, snapshotted on the event; the catalog's label only
+        # for events written before snapshots existed. One catalog query for the whole page.
+        labels = action_labels(db, (p.get("resolution_category") for p in latest_payloads.values()))
+        national = national_action_labels(db, (p.get("resolution_category") for p in latest_payloads.values()))
+        for tid, payload in latest_payloads.items():
+            resolution_cat[tid] = event_action_label(db, payload, labels=labels) or None
+            resolution_extra[tid] = {
+                "actor": payload.get("resolution_actor_label") or "",
+                "national": national.get(payload.get("resolution_category") or "", ""),
+            }
 
         escalated_ids = set(
             db.execute(
@@ -317,7 +338,7 @@ def _fetch_auxiliary_maps(
             ).scalars().all()
         )
 
-    return step_map, project_names, package_labels, resolved_at, escalated_ids, resolution_cat
+    return step_map, project_names, package_labels, resolved_at, escalated_ids, resolution_cat, resolution_extra
 
 
 def _is_overdue_now(ticket: Ticket, step: WorkflowStep | None, now: datetime) -> bool:
@@ -384,7 +405,7 @@ def build_report_row(
     package_labels: dict[str, str],
     resolved_at_map: dict[str, datetime | None],
     escalated_ids: set[str],
-    resolution_cat_map: dict[str, str | None],
+    resolution_cat_map: dict[str, str | None],  # ticket_id → resolution action *label*
     date_from: date,
     date_to: date,
     now: datetime | None = None,
@@ -393,6 +414,8 @@ def build_report_row(
     #: single `ticket.organization_id` was one true name and several missing ones. Falls back to
     #: the stamp for a grievance with no project.
     project_org_names: dict[str, str] | None = None,
+    #: GRM-118 — ticket_id → {"actor", "national"} from the latest RESOLVED event (`_fetch_auxiliary_maps`).
+    resolution_extra_map: dict[str, dict[str, str]] | None = None,
 ) -> dict[str, Any]:
     now = now or _now_utc()
     step = step_map.get(ticket.current_step_id) if ticket.current_step_id else None
@@ -411,8 +434,15 @@ def build_report_row(
         or overdue_now
     )
 
-    res_code = resolution_cat_map.get(ticket.ticket_id)
-    res_label = resolution_category_label(res_code) if res_code else ""
+    res_label = resolution_cat_map.get(ticket.ticket_id) or ""  # already a label (GRM-116)
+    # GRM-118 — who took the action, and the national action it counts as. Blank until resolved, and on
+    # every SEAH row: a SEAH case records neither, and "Not recorded" would imply it should have.
+    extra = (resolution_extra_map or {}).get(ticket.ticket_id)
+    if extra is None or ticket.is_seah:
+        actor_label, national_label = "", ""
+    else:
+        actor_label = extra["actor"] or "Not recorded"  # resolved before GRM-117 — never backfilled
+        national_label = extra["national"]
 
     pkg_label = package_labels.get(ticket.package_id) if ticket.package_id else "(No package)"
     proj_name = ""
@@ -443,6 +473,8 @@ def build_report_row(
         "days_in_stage": _calendar_days_between(stage_start, clock_end),
         "total_days": _calendar_days_between(ticket.created_at, clock_end),
         "resolution_category": res_label,
+        "resolution_actor": actor_label,
+        "resolution_action_national": national_label,
         "status_code": ticket.status_code,
         "priority": ticket.priority,
         "project_name": proj_name,
@@ -525,6 +557,7 @@ def load_report_rows(
             resolved_at_map=aux[3],
             escalated_ids=aux[4],
             resolution_cat_map=aux[5],
+            resolution_extra_map=aux[6],
             date_from=date_from,
             date_to=date_to,
             now=now,

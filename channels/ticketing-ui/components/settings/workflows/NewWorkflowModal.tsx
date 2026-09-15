@@ -7,10 +7,12 @@
  *
  * Extracted verbatim from `app/settings/page.tsx` (T3-05) — no behaviour change.
  */
-import React, { useState } from "react";
-import { createWorkflow, type WorkflowDefinition } from "@/lib/api";
+import React, { useEffect, useState } from "react";
+import { createWorkflow, listWorkflows, type OrganizationItem, type WorkflowDefinition } from "@/lib/api";
+import { useAuth } from "@/app/providers/AuthProvider";
+import { OrganizationSelect } from "@/components/settings/workflows/OrganizationSelect";
 import { friendlyError } from "@/components/settings/lib/friendlyError";
-import { typeBadge, workflowTrackOf } from "@/components/settings/workflows/workflowHelpers";
+import { topOrganizations, typeBadge, workflowTrackOf } from "@/components/settings/workflows/workflowHelpers";
 
 export function NewWorkflowModal({
   mode = "workflow",
@@ -31,7 +33,14 @@ export function NewWorkflowModal({
   onClose: () => void;
 }) {
   const isTemplateMode = mode === "template";
+  const { isSuperAdmin } = useAuth();
   const [name, setName]             = useState("");
+  // GRM-122: every workflow and template belongs to an organization — it decides which resolution
+  // actions it can offer. A platform admin chooses; an org admin's own is filled in.
+  const [ownerOrgId, setOwnerOrgId] = useState("");
+  // Templates of the chosen organization or one above it — so everything a template copies is
+  // usable. null = not loaded for this organization yet.
+  const [orgTemplates, setOrgTemplates] = useState<WorkflowDefinition[] | null>(null);
   const [wfType, setWfType]         = useState<string>(fixedWorkflowType ?? "standard");
   const [cloneFrom, setCloneFrom]   = useState(initialCloneFrom ?? "__builtin_default_grm");
   const [creating, setCreating]     = useState(false);
@@ -43,11 +52,42 @@ export function NewWorkflowModal({
     { id: "",  label: "Blank (0 steps)",  type: "any" },
   ];
 
-  const adminTemplates = templates.filter(t => canSeeSeah || workflowTrackOf(t) !== "seah");
+  useEffect(() => {
+    if (!ownerOrgId) return;
+    let alive = true;
+    listWorkflows({ is_template: true, for_organization_id: ownerOrgId })
+      .then((res) => alive && setOrgTemplates(res.items))
+      .catch(() => alive && setOrgTemplates([]));
+    return () => { alive = false; };
+  }, [ownerOrgId]);
+
+  function chooseOwner(id: string) {
+    setOrgTemplates(null);
+    setOwnerOrgId(id);
+    // A template of the previous organization may not belong to the new one.
+    if (cloneFrom && !cloneFrom.startsWith("__builtin_") && cloneFrom !== initialCloneFrom) {
+      setCloneFrom("__builtin_default_grm");
+    }
+  }
+
+  function defaultOwner(orgs: OrganizationItem[]) {
+    if (isSuperAdmin || ownerOrgId) return;
+    const tops = topOrganizations(orgs);
+    if (tops.length === 1) chooseOwner(tops[0].organization_id);
+  }
+
+  // Before an organization is chosen, only the prop's list (the caller's) can be shown; after, the
+  // organization's own. `templates` is kept as the fallback so the Clone preset stays selectable.
+  const candidateTemplates = ownerOrgId ? (orgTemplates ?? []) : templates;
+  const adminTemplates = candidateTemplates.filter(t => canSeeSeah || workflowTrackOf(t) !== "seah");
 
   async function handleCreate() {
     if (!name.trim()) {
       setError(isTemplateMode ? "Template name is required." : "Workflow name is required.");
+      return;
+    }
+    if (!ownerOrgId) {
+      setError(`Choose the organization this ${isTemplateMode ? "template" : "workflow"} belongs to.`);
       return;
     }
     setCreating(true); setError("");
@@ -57,6 +97,7 @@ export function NewWorkflowModal({
         workflow_type: wfType,
         clone_from_id: cloneFrom || undefined,
         is_template: isTemplateMode,
+        owner_organization_id: ownerOrgId,
       });
       onCreated(created);
     } catch (e: unknown) {
@@ -82,6 +123,11 @@ export function NewWorkflowModal({
               onKeyDown={e => e.key === "Enter" && handleCreate()}
               placeholder={isTemplateMode ? "e.g. KL Road GRM template" : "e.g. KL Road Standard GRM"}
               className="w-full text-sm border border-gray-300 rounded px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-400" />
+          </div>
+
+          <div>
+            <label htmlFor="new-wf-owner" className="text-xs font-medium text-gray-500 block mb-1">Belongs to *</label>
+            <OrganizationSelect id="new-wf-owner" value={ownerOrgId} onChange={(id) => chooseOwner(id)} onLoaded={defaultOwner} />
           </div>
 
           <div>
@@ -122,7 +168,7 @@ export function NewWorkflowModal({
 
         <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-3">
           <button onClick={onClose} className="text-sm text-gray-500 hover:text-gray-700 px-4 py-1.5 rounded transition">Cancel</button>
-          <button onClick={handleCreate} disabled={creating || !name.trim()}
+          <button onClick={handleCreate} disabled={creating || !name.trim() || !ownerOrgId}
             className="text-sm bg-blue-600 text-white hover:bg-blue-700 px-4 py-1.5 rounded font-medium disabled:opacity-50 transition">
             {creating ? "Creating…" : "Create workflow"}
           </button>

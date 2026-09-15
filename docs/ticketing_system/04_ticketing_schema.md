@@ -1,6 +1,6 @@
 # Ticketing System – Database Schema (as-built, July 2026)
 
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-15 — §3 gains `resolution_actions` (owned, never global; `counts_as_code`) and `workflow_resolution_actions` (`GRM-116`, migration `b3d5f7h9`, which also gave every workflow and template an organization). ⚠ §9's migration history was already stale before this edit and is not brought up to date by it. Earlier: 2026-09-04 — sprint citations folded · ⚠ header date backfilled; content not re-verified against the code
 
 All tables live in the `ticketing` schema inside `grievance_db`.
 No cross-schema FK from `ticketing.*` into `public.*`.
@@ -280,6 +280,43 @@ sort_order          INTEGER       DEFAULT 0
 created_at          TIMESTAMPTZ
 updated_at          TIMESTAMPTZ
 ```
+
+### `ticketing.resolution_actions` — the catalog of what an officer can record as done (`GRM-116`)
+
+```sql
+code                   VARCHAR(64)   PK               -- platform-unique, immutable, never reused
+label                  TEXT          NOT NULL
+default_wording        TEXT          NOT NULL         -- pre-fills the resolution text
+owner_organization_id  VARCHAR(64)   NOT NULL FK → organizations  ON DELETE RESTRICT
+                                                      -- a ministry (shared) or below it (local); never global
+counts_as_code         VARCHAR(64)   FK → resolution_actions (self)
+                                                      -- required for a local action, NULL for a shared one
+is_active              BOOLEAN       NOT NULL DEFAULT TRUE   -- no screen sets it yet (GRM-123)
+created_by_user_id     VARCHAR(128)                   -- NULL for seed rows
+created_at, updated_at TIMESTAMPTZ
+```
+
+Seeded with ten shared actions of `DOR` (spec [08 §2.2](08_ticket_resolution_and_case_summary.md)).
+No PII. ⚠ **`RESTRICT`, not the `SET NULL` workflows use:** deleting an owning organization would
+otherwise detach its actions from their ministry. "Same ministry" and "shared" are facts about the
+organization tree, so `counts_as_code` is checked in the service, not by a constraint.
+
+### `ticketing.workflow_resolution_actions` — each workflow's ordered selection (`GRM-116`)
+
+```sql
+workflow_id  VARCHAR(36)  FK → workflow_definitions  ON DELETE CASCADE
+code         VARCHAR(64)  FK → resolution_actions    ON DELETE RESTRICT
+sort_order   INTEGER      NOT NULL
+PRIMARY KEY (workflow_id, code)
+```
+
+Written only through `ticketing/services/resolution_catalog.py` `set_workflow_actions`, which refuses
+any action on a sensitive workflow, more than 8, an empty list on a published non-sensitive workflow,
+and an action the workflow's organization cannot use.
+
+⚠ **`workflow_definitions.owner_organization_id` is now set on every workflow and template**
+(migration `b3d5f7h9` assigned each ownerless one its projects' ministry). The column and its
+`SET NULL` FK are unchanged; a workflow that loses its organization can list no action.
 
 ### `ticketing.workflow_assignments` — legacy
 

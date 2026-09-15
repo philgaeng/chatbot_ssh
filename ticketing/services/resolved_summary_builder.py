@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, joinedload
 from backend.config.llm_config import findings_task, model_for
 from ticketing.clients.grievance_api import get_grievance_detail
 from ticketing.config.settings import get_settings
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import event_action_label
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
@@ -185,7 +185,9 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
         "resolution_ev": resolution_ev,
         "resolution": {
             "category": category,
-            "category_label": resolution_category_label(category) if category else "",
+            "category_label": event_action_label(db, res_payload),
+            # GRM-117: the office or outside body that took the action — an organization name, no PII.
+            "actor_label": res_payload.get("resolution_actor_label") or "",
             "text": resolution_text,
         },
         "original_complaint": original,
@@ -285,6 +287,7 @@ def build_summary_json(
             ),
             "category": data["resolution"]["category"],
             "category_label": data["resolution"]["category_label"],
+            "actor_label": data["resolution"]["actor_label"],
             "text": data["resolution"]["text"],
         },
         "findings_summary": findings,
@@ -482,6 +485,7 @@ def build_closure_display_context(
         resolved_at_map=aux[3],
         escalated_ids=aux[4],
         resolution_cat_map=aux[5],
+        resolution_extra_map=aux[6],
         date_from=_now().date(),
         date_to=_now().date(),
     )

@@ -97,6 +97,8 @@ GET /api/v1/workflows/routing-options
 GET /api/v1/workflows/templates
 GET /api/v1/workflows/{workflow_id}
 GET /api/v1/workflows/{workflow_id}/assignments
+GET /api/v1/workflows/{workflow_id}/resolution-actions
+GET /api/v1/workflows/{workflow_id}/resolution-actions/available
 GET /health
 PATCH /api/v1/organizations/{organization_id}
 PATCH /api/v1/position-types/{position_type_id}
@@ -106,6 +108,7 @@ PATCH /api/v1/projects/{project_id}/messaging
 PATCH /api/v1/projects/{project_id}/organizations/{organization_id}
 PATCH /api/v1/projects/{project_id}/packages/{package_id}
 PATCH /api/v1/reports/quarterly-assignments/{assignment_id}
+PATCH /api/v1/resolution-actions/{code}
 PATCH /api/v1/roles/{role_id}
 PATCH /api/v1/tickets/{ticket_id}
 PATCH /api/v1/tickets/{ticket_id}/classification
@@ -114,6 +117,7 @@ PATCH /api/v1/users/me/preferences
 PATCH /api/v1/users/me/profile
 PATCH /api/v1/users/{user_id}
 PATCH /api/v1/workflows/{workflow_id}
+PATCH /api/v1/workflows/{workflow_id}/organization
 PATCH /api/v1/workflows/{workflow_id}/steps/{step_id}
 POST /api/v1/admin-scopes
 POST /api/v1/admin-scopes/{admin_scope_id}/send-invite
@@ -170,6 +174,7 @@ POST /api/v1/workflows
 POST /api/v1/workflows/{workflow_id}/archive
 POST /api/v1/workflows/{workflow_id}/assignments
 POST /api/v1/workflows/{workflow_id}/publish
+POST /api/v1/workflows/{workflow_id}/resolution-actions/new
 POST /api/v1/workflows/{workflow_id}/save-as-template
 POST /api/v1/workflows/{workflow_id}/steps
 POST /api/v1/workflows/{workflow_id}/steps/reorder
@@ -178,3 +183,4 @@ PUT /api/v1/projects/{project_id}/workflows
 PUT /api/v1/reports/quarterly-schedule
 PUT /api/v1/settings/{key}
 PUT /api/v1/tickets/{ticket_id}/complainant-reply-owner
+PUT /api/v1/workflows/{workflow_id}/resolution-actions

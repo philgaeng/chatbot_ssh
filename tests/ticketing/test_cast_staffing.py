@@ -51,7 +51,9 @@ def test_step_toggles_mint_synthetic_keys():
     created_wf = None
     try:
         wf = client.post("/api/v1/workflows", json={
-            "display_name": "Cast Mint " + uuid.uuid4().hex[:6], "workflow_type": "standard"}).json()
+            "display_name": "Cast Mint " + uuid.uuid4().hex[:6], "workflow_type": "standard",
+            # GRM-122: a platform admin chooses the organization a workflow belongs to.
+            "owner_organization_id": "DOR"}).json()
         created_wf = wf["workflow_id"]
         step = client.post(f"/api/v1/workflows/{created_wf}/steps", json={
             "display_name": "Level 1 — Site review",

@@ -43,6 +43,13 @@ from ticketing.services.grievance_content import (
     merge_grievance_into_ticket,
 )
 from ticketing.services.overdue_episodes import overdue_days_display
+from ticketing.services.resolution_catalog import options_for_ticket
+from ticketing.services.resolution_actor import (
+    external_actor_choices,
+    office_suggestions,
+    records_actor,
+    resolve_self_offices,
+)
 from ticketing.services.ticket_intake import (
     DuplicateTicketError,
     TicketIntakeError,
@@ -504,6 +511,11 @@ def get_ticket(
     payload = TicketDetail.model_validate(ticket, from_attributes=True).model_dump()
     payload.update(merged)
     payload["step_supervisor_available"] = _step_supervisor_available(db, ticket)
+    payload["resolution_options"] = options_for_ticket(db, ticket)
+    if records_actor(db, ticket):  # GRM-117 — a sensitive workflow records no actor: all three stay empty
+        payload["resolution_self_offices"] = resolve_self_offices(db, current_user.user_id, ticket)
+        payload["resolution_office_suggestions"] = office_suggestions(db, ticket)
+        payload["resolution_external_actors"] = external_actor_choices()
     return TicketDetail(**payload)
 
 

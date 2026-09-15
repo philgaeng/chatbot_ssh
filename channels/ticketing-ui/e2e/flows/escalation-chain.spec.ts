@@ -83,20 +83,16 @@ test("a case walks L1 → L2 → L3 and the GRC chair convenes a hearing", async
 
   // ── Convene ───────────────────────────────────────────────────────────────────────
   //
-  // ⚠ **Driven as the admin, not as the GRC chair, and that is a defect not a preference.**
-  // `app/tickets/[id]/page.tsx:787` gates the control on
-  // `roleKeys.includes("grc_chair") || roleKeys.includes("super_admin")` — a **legacy** role key.
-  // The cast model issues `wf:KL_ROAD_STANDARD:LEVEL_3_GRC:actor` instead, and measured
-  // 2026-09-07 **no seeded officer holds `grc_chair` at all**. So the one action named after the
-  // GRC chair is invisible to them and available only to the super admin. Filed as `GRM-084`.
-  //
-  // ⭐ **The spec covers the action without endorsing the gate.** The assertions above already
-  // pin the correct behaviour — the case *does* land with the GRC chair — so when `GRM-084` is
-  // fixed the change here is one line: convene as `OFFICERS.grcChair` and delete this note.
-  // Asserting today's gate as if it were right is the trap QA-04d warns about: encoding a bug
-  // report as a requirement.
+  // Not the officer who handed the case on: at the GRC step the control belongs to whoever holds it.
+  await page.goto(`/tickets/${ticket.ticketId}`);
+  await expect(page.getByRole("heading", { name: ticket.grievanceId })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Convene GRC" })).toHaveCount(0);
+
+  // ⭐ The GRC chair convenes — by the cast role `wf:KL_ROAD_STANDARD:LEVEL_3_GRC:actor`. Until
+  // `GRM-084` the control also required the legacy `grc_chair` role key, which no officer holds,
+  // so only the super admin could convene and this spec had to drive it as the admin.
   await context.clearCookies();
-  await asOfficer(OFFICERS.admin);
+  await asOfficer(OFFICERS.grcChair);
   await page.goto(`/tickets/${ticket.ticketId}`);
 
   const hearing = page.locator('input[type="date"]').first();
@@ -106,5 +102,8 @@ test("a case walks L1 → L2 → L3 and the GRC chair convenes a hearing", async
   await page.getByRole("button", { name: "Convene GRC" }).click();
 
   await expect(page.getByRole("button", { name: "Convene GRC" })).toBeHidden({ timeout: 20_000 });
+  const convened = await getTicket(ticket.ticketId);
+  expect(convened.status_code).toBe("GRC_HEARING_SCHEDULED");
+  expect(convened.assigned_to_user_id, "convening does not move the case").toBe(OFFICERS.grcChair.userId);
   await captureScreenshot(page, testInfo, "flow-grc-convened");
 });

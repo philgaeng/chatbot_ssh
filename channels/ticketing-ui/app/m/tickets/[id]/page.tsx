@@ -689,7 +689,7 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
     mentionParticipants, pendingTaskCount, canManageViewers,
     userCanSupervisorAssign, reassignMode, rosterIds,
     reload, performSimpleAction,
-    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve, resolutionError,
     submitReassignment, submitCallReport, submitNote, handleHashCommand,
     handleCompleteTask, openFieldReport, closeFieldReport, submitFieldReportForm,
     handleAttachFile,
@@ -1027,6 +1027,12 @@ export default function MobileThreadPage({ params }: { params: Promise<{ id: str
         onClose={() => setResolutionOpen(false)}
         onSubmit={submitResolve}
         submitting={submitting}
+        options={ticket?.resolution_options ?? []}
+        selfOffices={ticket?.resolution_self_offices ?? []}
+        officeSuggestions={ticket?.resolution_office_suggestions ?? []}
+        externalActors={ticket?.resolution_external_actors ?? []}
+        countryCode={ticket?.country_code ?? null}
+        error={resolutionError}
       />
 
       {ticket && revealModalOpen && (

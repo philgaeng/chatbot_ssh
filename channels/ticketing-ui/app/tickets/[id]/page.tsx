@@ -714,7 +714,7 @@ export default function TicketDetailPage() {
     mentionParticipants, pendingTaskCount, hasResolutionRecord, canManageViewers,
     userCanAssign, userCanSupervisorAssign, reassignMode, rosterIds,
     reload, ensureAcknowledged, performSimpleAction,
-    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve, resolutionError,
     submitReassignment, submitCallReport, submitNote, handleHashCommand,
     handleCompleteTask, closeFieldReport, submitFieldReportForm, handleAttachFile,
   } = useTicketThread({ ticketId: id, user, roleKeys, isAdmin });
@@ -783,8 +783,12 @@ export default function TicketDetailPage() {
   const isOpen       = status === "OPEN";
   const isEscalated  = status === "ESCALATED";
   const isGrcHearing = status === "GRC_HEARING_SCHEDULED";
+  // GRM-084: convening is for whoever holds the case at the GRC step — the same rule the server
+  // applies (assigned officer or admin), and the actions around it already sit inside `isAssigned`.
+  // It used to also require the legacy `grc_chair` role key, which the cast model never issues, so
+  // the GRC chair could not convene and only the super admin could.
   const stepKey      = ticket?.current_step?.step_key ?? "";
-  const isGrcChair   = roleKeys.includes("grc_chair") || roleKeys.includes("super_admin");
+  const isGrcStep    = stepKey === "LEVEL_3_GRC";
 
   const slaBreached = (ticket?.sla_breached ?? false) || (sla?.breached ?? false);
   const slaHours    = sla?.remaining_hours ?? null;
@@ -900,7 +904,7 @@ export default function TicketDetailPage() {
                   </button>
                 </>
               )}
-              {isGrcChair && stepKey === "LEVEL_3_GRC" && !isGrcHearing && (
+              {isGrcStep && !isGrcHearing && (
                 <>
                   <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
                     className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
@@ -1304,6 +1308,12 @@ export default function TicketDetailPage() {
         onClose={() => setResolutionOpen(false)}
         onSubmit={submitResolve}
         submitting={actLoading}
+        options={ticket?.resolution_options ?? []}
+        selfOffices={ticket?.resolution_self_offices ?? []}
+        officeSuggestions={ticket?.resolution_office_suggestions ?? []}
+        externalActors={ticket?.resolution_external_actors ?? []}
+        countryCode={ticket?.country_code ?? null}
+        error={resolutionError}
       />
 
     </div>

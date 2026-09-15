@@ -1,0 +1,194 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Resolution actions — workflow panel (GRM-119, GRM-121, GRM-122)</title>
+<style>
+  :root{--ink:#1f2937;--mute:#6b7280;--faint:#9ca3af;--line:#e5e7eb;--bg:#f9fafb;--amber:#92400e;--amber-bg:#fffbeb;--red:#991b1b;--red-bg:#fef2f2}
+  *{box-sizing:border-box}
+  body{margin:0;padding:24px;background:var(--bg);color:var(--ink);
+       font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .wrap{max-width:820px;margin:0 auto}
+  h1{font-size:19px;margin:0 0 4px}
+  h2{font-size:15px;margin:28px 0 8px}
+  h3{font-size:13px;margin:0 0 8px;color:var(--mute);font-weight:600}
+  .sub{color:var(--mute);margin:0 0 20px;font-size:13px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+  .crumb{font-size:12px;color:var(--mute);margin-bottom:10px}
+  .metaline{font-size:12px;color:var(--mute);margin:-4px 0 12px;display:flex;gap:14px;flex-wrap:wrap}
+  .metaline b{color:var(--ink);font-weight:600}
+  .link{color:#1d4ed8}
+  .head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap;margin:6px 0 4px}
+  .title{font-weight:600}
+  .count{font-size:12px;color:var(--mute)}
+  .row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #f3f4f6;flex-wrap:wrap}
+  .row .grow{flex:1 1 180px;min-width:0}
+  .sub2{display:block;font-size:12px;color:var(--mute)}
+  .meta{color:var(--mute);font-size:12px}
+  .lock{font-size:11px;color:#dc2626;white-space:nowrap}
+  .btn{display:inline-block;border:1px solid #d1d5db;border-radius:6px;padding:4px 10px;font-size:12px;background:#fff;white-space:nowrap}
+  .btn.pri{border-color:var(--ink);background:var(--ink);color:#fff}
+  .btn.q{border:0;color:var(--mute);padding:4px 6px}
+  .btn.off{opacity:.4}
+  .add{display:block;text-align:center;border:1px dashed #d1d5db;border-radius:8px;padding:8px;margin-top:10px;color:var(--ink);font-size:13px}
+  .add.off{color:var(--faint)}
+  .input{border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;background:#fff;color:var(--ink);margin:4px 0 10px}
+  .label{font-size:12px;color:var(--mute)}
+  .opt{padding:7px 10px;border-bottom:1px solid #f3f4f6;font-size:13px}
+  .opt:last-child{border:0}
+  .opt.new{font-weight:600}
+  .list{border:1px solid var(--line);border-radius:6px;margin:-4px 0 6px}
+  .quiet{color:var(--mute);font-size:13px;margin:6px 0}
+  .warn{border-left:3px solid #d97706;background:var(--amber-bg);color:var(--amber);padding:8px 12px;
+        border-radius:0 6px 6px 0;margin:10px 0;font-size:13px}
+  .err{border-left:3px solid #dc2626;background:var(--red-bg);color:var(--red);padding:8px 12px;
+       border-radius:0 6px 6px 0;margin:10px 0;font-size:13px}
+  .actions{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-size:11px;color:var(--mute);font-weight:600;padding:6px;border-bottom:1px solid var(--line)}
+  td{padding:8px 6px;border-bottom:1px solid #f3f4f6;vertical-align:top}
+  .scroll{overflow-x:auto}
+  code{font-size:12px}
+  @media(max-width:420px){body{padding:12px}}
+</style>
+<div class="wrap">
+  <h1>Resolution actions — workflow panel</h1>
+  <p class="sub">
+    Wireframe for <code>GRM-119</code> (frames 1, 2, 3), <code>GRM-121</code> (the suggestion in 2b) and
+    <code>GRM-122</code> (frame 4). Binds <b>IA and layout only</b> (<code>05_frontend</code> rule 9a.2) —
+    not colour, not copy, not component structure. <b>One place:</b> a panel in the workflow editor. An
+    admin chooses up to 8 actions for a workflow; a new local action says what it counts as nationally;
+    the admin never chooses an action’s owner.
+  </p>
+
+  <!-- ── Frame 1: the panel ─────────────────────────────────────────────── -->
+  <h2>1 · The panel</h2>
+  <div class="card">
+    <div class="crumb">Settings › Workflows › KL Road – 4-Level Standard GRM Workflow &nbsp;·&nbsp; … Steps · Notifications …</div>
+    <div class="head"><span class="title">What officers can choose when closing a case</span><span class="count">4 of 8</span></div>
+    <div class="row"><span class="btn q">↑↓</span><span class="grow">Hazard repaired</span><span class="btn q">Remove</span></div>
+    <div class="row"><span class="btn q">↑↓</span><span class="grow">Made safe — signs, barriers or traffic control</span><span class="btn q">Remove</span></div>
+    <div class="row"><span class="btn q">↑↓</span><span class="grow">Culvert cleared<span class="sub2">counts as Hazard repaired</span></span><span class="btn q">Edit</span><span class="btn q">Remove</span></div>
+    <div class="row"><span class="btn q">↑↓</span><span class="grow">No hazard found on inspection</span><span class="btn q">Remove</span></div>
+    <span class="add">+ Add an action</span>
+    <p class="meta">Every change saves at once and applies to the next case closed. <i>Edit</i> appears only
+      on actions the viewer may edit. “counts as” appears only on local actions.</p>
+  </div>
+
+  <!-- ── Frame 2: add / create ──────────────────────────────────────────── -->
+  <h2>2 · Add an action — pick one, or type a new one</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>2a · Search</h3>
+      <div class="label">Add an action</div>
+      <div class="input">Pothole|</div>
+      <div class="list">
+        <div class="opt">Pothole patched</div>
+        <div class="opt new">+ Create “Pothole filled”</div>
+      </div>
+      <p class="meta">Lists actions this workflow can use and does not already offer. Picking one adds it.</p>
+    </div>
+    <div class="card">
+      <h3>2b · Create — on a workflow of PD-ADB (below DOR)</h3>
+      <div class="label">Action</div>
+      <div class="input">Pothole filled</div>
+      <div class="label">Default text for the officer</div>
+      <div class="input">The pothole was filled and the surface made safe.</div>
+      <div class="label">In national reports, count this as</div>
+      <div class="input">Hazard repaired ▾</div>
+      <div class="warn">“Hazard repaired” already exists and may mean the same thing.</div>
+      <div class="actions"><span class="btn">Create anyway</span><span class="btn pri">Use “Hazard repaired”</span></div>
+      <p class="meta">The yellow line and the pre-filled choice come from <code>GRM-121</code>; without it,
+        only <b>Create</b>. The national field is absent on a workflow of DOR itself. An admin who manages
+        DOR also sees “A new national action” at the top of its list. Edit uses this same dialog,
+        filled in.</p>
+    </div>
+  </div>
+
+  <!-- ── Frame 3: the three other states ───────────────────────────────── -->
+  <h2>3 · When the panel is full, empty or not used</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>3a · Full</h3>
+      <div class="head"><span class="title">What officers can choose…</span><span class="count">8 of 8</span></div>
+      <div class="row"><span class="grow meta">… 8 actions …</span></div>
+      <span class="add off">+ Add an action</span>
+      <p class="quiet">A workflow can offer at most 8 actions. Remove one to add another.</p>
+    </div>
+    <div class="card">
+      <h3>3b · New workflow, no actions yet</h3>
+      <div class="head"><span class="title">What officers can choose…</span><span class="count">0 of 8</span></div>
+      <span class="add">+ Add an action</span>
+      <p class="quiet">Add at least one action before publishing.</p>
+      <p class="meta"><span class="btn off">Publish</span> stays disabled at the top of the editor.</p>
+    </div>
+    <div class="card">
+      <h3>3c · SEAH workflow</h3>
+      <div class="crumb">KL Road — SEAH <span class="lock">🔒 SEAH</span></div>
+      <p class="quiet">SEAH workflows do not record a resolution action. Officers describe the outcome in writing only.</p>
+    </div>
+  </div>
+
+  <!-- ── Frame 4: belongs to (GRM-122) ─────────────────────────────────── -->
+  <h2>4 · Which organization a workflow belongs to (GRM-122)</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>4a · In the workflow editor</h3>
+      <div class="crumb">Settings › Workflows › KL Road – 4-Level Standard GRM Workflow</div>
+      <div class="metaline"><span>Type <b>STANDARD</b></span><span>Belongs to <b>Department of Roads</b> · <span class="link">Change</span></span></div>
+      <p class="meta">Same line on templates. With no organization: “Belongs to — <span class="link">Choose</span>”, and the resolution panel says “Choose the organization this workflow belongs to first.”</p>
+    </div>
+    <div class="card">
+      <h3>4b · Change</h3>
+      <div class="label">Belongs to</div>
+      <div class="input">PD-ADB ▾</div>
+      <p class="meta" style="margin-top:-4px">Only organizations you manage are listed.</p>
+      <p class="quiet">Projects using this workflow: KL Road</p>
+      <div class="actions"><span class="btn">Cancel</span><span class="btn pri">Save</span></div>
+    </div>
+    <div class="card">
+      <h3>4c · Refused</h3>
+      <div class="label">Belongs to</div>
+      <div class="input">Ilam Division Road Office ▾</div>
+      <div class="err">Remove “Culvert cleared” first — it belongs to PD-ADB.</div>
+      <div class="actions"><span class="btn">Cancel</span><span class="btn pri off">Save</span></div>
+    </div>
+  </div>
+  <div class="grid">
+    <div class="card">
+      <h3>4d · New workflow</h3>
+      <div class="label">Name</div>
+      <div class="input">KL Road — road hazards</div>
+      <div class="label">Belongs to</div>
+      <div class="input">PD-ADB ▾</div>
+      <div class="label">Start from</div>
+      <div class="input">Standard GRM — Department of Roads ▾</div>
+      <p class="meta">A platform admin must choose “Belongs to”; an organization’s admin finds its own
+        organization filled in. Templates listed: those of the chosen organization or one above it.</p>
+    </div>
+    <div class="card">
+      <h3>4e · In the workflow list</h3>
+      <div class="row"><span class="grow">KL Road – 4-Level Standard GRM Workflow<span class="sub2">For PD-ADB</span></span></div>
+      <div class="row"><span class="grow">KL Road — SEAH <span class="lock">🔒 SEAH</span><span class="sub2">For PD-ADB</span></span></div>
+      <div class="row"><span class="grow">Standard GRM <span class="meta">Template</span><span class="sub2">For Department of Roads</span></span></div>
+    </div>
+  </div>
+
+  <!-- ── Frame 5: state contract ───────────────────────────────────────── -->
+  <h2>5 · State contract (rule 9a, step 5)</h2>
+  <div class="card scroll">
+    <table>
+      <tr><th>Surface</th><th>State</th><th>Behaviour</th></tr>
+      <tr><td>Panel</td><td>Loading</td><td>Skeleton rows; “Add an action” waits for the list</td></tr>
+      <tr><td>Panel</td><td>8 of 8</td><td>Frame 3a — refused by the server too, not only by the button</td></tr>
+      <tr><td>Panel</td><td>No actions, draft</td><td>Frame 3b — Publish disabled; the server refuses it too</td></tr>
+      <tr><td>Panel</td><td>Last action on a published workflow</td><td>Remove disabled on it: “A published workflow needs at least one action”</td></tr>
+      <tr><td>Panel</td><td>A change fails to save</td><td>The row goes back to how it was, with the reason in one line</td></tr>
+      <tr><td>Panel</td><td>Viewer may not change this workflow</td><td>List only, no buttons</td></tr>
+      <tr><td>Dialog</td><td>Checking for similar actions</td><td>“Checking…” on the Create button; if the check is unavailable, no suggestion appears and Create works</td></tr>
+      <tr><td>Dialog</td><td>Editing a shared action</td><td>“Used by N workflows — the change applies to all of them.” above Save</td></tr>
+      <tr><td>Belongs to</td><td>Move refused</td><td>Frame 4c — one line per blocking action; the dialog stays open</td></tr>
+      <tr><td>All</td><td>360 px</td><td>Same lists; dialogs full-width</td></tr>
+    </table>
+  </div>
+</div>
