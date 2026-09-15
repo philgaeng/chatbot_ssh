@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, expect, it } from "vitest";
-import type { ResolutionOption } from "@/lib/api";
+import type { ResolutionOption, WorkflowResolutionPanel } from "@/lib/api";
 import { systemEventLabel } from "@/lib/mobile-constants";
-import { DEFAULT_ACTOR_CHOICE, resolutionActorState, resolutionFormState } from "@/lib/resolution";
+import { DEFAULT_ACTOR_CHOICE, resolutionActorState, resolutionFormState, resolutionPanelState } from "@/lib/resolution";
 
 const general: ResolutionOption[] = [
   { code: "CLASSIFIED", label: "Grievance classified", default_wording: "Reviewed and classified." },
@@ -108,5 +108,42 @@ describe("resolutionActorState (GRM-117)", () => {
       .toBeNull();
     expect(resolutionActorState(offers, { kind: "external", organizationId: null, external: "police" }).payload)
       .toEqual({ resolution_actor_kind: "external", resolution_actor_external: "police" });
+  });
+});
+
+describe("resolutionPanelState (GRM-119)", () => {
+  const row = (code: string) => ({ code, label: code, default_wording: "", can_edit: false, used_by_count: 1 });
+  const panel = (n: number, extra: Partial<WorkflowResolutionPanel> = {}): WorkflowResolutionPanel => ({
+    actions: Array.from({ length: n }, (_, i) => row(`A${i}`)), can_change: true, max: 8,
+    national_choices: [], can_create_national: false, is_sensitive: false, owner_is_ministry: true, ...extra,
+  });
+
+  it("counts against the limit and says so when full", () => {
+    const s = resolutionPanelState(panel(8), true);
+    expect(s.countLabel).toBe("8 of 8");
+    expect(s.full).toBe(true);
+    expect(s.hint).toMatch(/at most 8/);
+  });
+
+  it("an empty draft blocks publishing and says why", () => {
+    const s = resolutionPanelState(panel(0), false);
+    expect(s.blocksPublish).toBe(true);
+    expect(s.hint).toBe("Add at least one action before publishing.");
+  });
+
+  it("the last action of a published workflow cannot be removed", () => {
+    expect(resolutionPanelState(panel(1), true).canRemove).toBe(false);
+    expect(resolutionPanelState(panel(1), false).canRemove).toBe(true);
+    expect(resolutionPanelState(panel(2), true).canRemove).toBe(true);
+  });
+
+  it("a sensitive workflow never blocks publishing and has nothing to say", () => {
+    const s = resolutionPanelState(panel(0, { is_sensitive: true, can_change: false }), false);
+    expect(s.blocksPublish).toBe(false);
+    expect(s.hint).toBeNull();
+  });
+
+  it("a viewer who may not change the workflow can remove nothing", () => {
+    expect(resolutionPanelState(panel(3, { can_change: false }), false).canRemove).toBe(false);
   });
 });

@@ -734,6 +734,61 @@ export function getWorkflow(workflowId: string): Promise<WorkflowDefinition> {
   return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}`);
 }
 
+// ── GRM-119: a workflow's resolution panel ───────────────────────────────────
+
+export interface ResolutionActionRow {
+  code: string;
+  label: string;
+  default_wording: string;
+  /** Set on a local action: the shared action it counts as in national reports. */
+  counts_as_code?: string | null;
+  counts_as_label?: string | null;
+  /** The viewer manages the action's organization. */
+  can_edit: boolean;
+  /** Workflows offering it — an edit applies to all of them. */
+  used_by_count: number;
+}
+
+export interface WorkflowResolutionPanel {
+  actions: ResolutionActionRow[];
+  /** The viewer manages the workflow's organization (and the workflow is not sensitive). */
+  can_change: boolean;
+  max: number;
+  /** The shared actions of the workflow's ministry — what a new local action may count as. */
+  national_choices: { code: string; label: string }[];
+  can_create_national: boolean;
+  is_sensitive: boolean;
+  /** The workflow belongs to a ministry itself: a new action is national and asks no "counts as". */
+  owner_is_ministry: boolean;
+}
+
+export function getWorkflowResolutionPanel(workflowId: string): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`);
+}
+
+export function listAvailableResolutionActions(workflowId: string, q?: string): Promise<ResolutionActionRow[]> {
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/available${qs}`);
+}
+
+export function setWorkflowResolutionActions(workflowId: string, codes: string[]): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`, { method: "PUT", body: JSON.stringify({ codes }) });
+}
+
+export function createWorkflowResolutionAction(
+  workflowId: string,
+  body: { label: string; default_wording: string; counts_as_code?: string; national?: boolean },
+): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/new`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateResolutionAction(
+  code: string,
+  body: { label?: string; default_wording?: string; counts_as_code?: string },
+): Promise<ResolutionActionRow> {
+  return apiFetch(`/api/v1/resolution-actions/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
 /**
  * GRM-122: move a workflow or template to another organization. Refused (422) while its resolution
  * actions include one the new organization cannot use — the detail names each, one per line.

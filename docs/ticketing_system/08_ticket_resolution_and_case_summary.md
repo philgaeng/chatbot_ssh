@@ -1,7 +1,7 @@
 # Ticket resolution record and resolved case summary
 
 **Status:** Implemented baseline (June 2026); Summary enhancements and complainant closure page/PDF tracked in this spec.  
-**Last updated:** 2026-09-15 — §2.3–§2.6, §3.4, §3.6.1: *Who took the action?* (`GRM-117`) — the officer's office, another organization or a listed outside body, never typed; four payload keys, a *Resolved by* line, none on SEAH cases. Earlier the same day: §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
+**Last updated:** 2026-09-15 — §2.2: lists are managed in the workflow's resolution panel (`GRM-119`). Earlier the same day: §2.3–§2.6, §3.4, §3.6.1: *Who took the action?* (`GRM-117`) — the officer's office, another organization or a listed outside body, never typed; four payload keys, a *Resolved by* line, none on SEAH cases. Earlier the same day: §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
 **Related:** [04_ticketing_schema.md](04_ticketing_schema.md) (`ticket_events`), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [CLAUDE.md](../../CLAUDE.md) (PII rules)
 
 This document defines:
@@ -150,8 +150,8 @@ limit of 8, or silently drop local actions; a copy never forces that choice.
 routed to a project's default workflow resolves with that workflow's actions. Measured 2026-09-15:
 no project on the dev DB binds one, so there `KL_ROAD`'s road-hazard reports offer the general five.
 
-**Changing a list or creating an action on screen is not built** (`GRM-119`); until then a list
-changes by data migration. A workflow's organization is chosen on create and changed in the editor
+A workflow's list is managed in its **resolution panel** in Settings — add, reorder, remove, create, edit
+([12](12_workflows_configuration.md), `GRM-119`). A workflow's organization is chosen on create and changed in the editor
 ([12](12_workflows_configuration.md), `GRM-122`). Nepali labels: not yet — the admin UI is English-only ([ui/05](ui/05_ui_copy_style.md)).
 
 ### 2.3 Storage model (no new table)

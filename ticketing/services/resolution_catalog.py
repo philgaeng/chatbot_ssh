@@ -104,9 +104,9 @@ def create_action(
                 "A local action must say which national action it counts as in national reports."
             )
         target = db.get(ResolutionAction, counts_as_code)
-        if target is None:
-            raise ResolutionCatalogError(f"Unknown resolution action: {counts_as_code}")
-        if target.owner_organization_id != ministry:
+        if target is None or not target.is_active:
+            raise ResolutionCatalogError(f"{counts_as_code} is not an active resolution action.")
+        if target.owner_organization_id != ministry or target.counts_as_code is not None:
             raise ResolutionCatalogError(
                 f"{counts_as_code} is not a national action of this organization's ministry."
             )

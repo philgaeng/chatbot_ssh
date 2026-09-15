@@ -1,7 +1,7 @@
 # Workflows configuration
 
 **Status:** As-built — **reconciled 2026-08-02**: a project links **N named workflows**; the fixed `slot_key` vocabulary was **dropped** by migration `c5e7f9a1_workflow_classifications`  
-**Last updated:** 2026-09-15 — §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
+**Last updated:** 2026-09-15 — §2 gains *The resolution panel* (`GRM-119`: one panel per workflow, up to 8, no owner field, who may do what; API rows). Earlier the same day: §2 gains *A workflow's organization* (`GRM-122`: chosen on create, shown and changed in the editor, refused while the list would strand an action; API table). Earlier the same day: §2 gains *Resolution actions*: every workflow and template belongs to an organization, lists hold at most 8 and are copied not inherited, publishing requires one, a sensitive workflow never has one (`GRM-116`).  
 **UI:** Settings → Workflows, roles & permissions → **Workflows**; project links under **Projects & packages → Grievance workflows**  
 **Code:** `ticketing/api/routers/workflows.py`, `ticketing/constants/workflow_routing.py`, `ticketing/services/project_workflows.py`, `ticketing/services/workflow_routing.py`, `ticketing/engine/workflow_engine.py`  
 **Related:** [11_roles_and_permissions.md](11_roles_and_permissions.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)
@@ -114,8 +114,56 @@ sensitive workflow.
 it. `workflow_type` cannot change after creation, so the rule is decided once. Every path above goes
 through `resolution_catalog.set_workflow_actions`, the only writer.
 
-⚠ **Not on screen yet:** the Workflows tab does not show or edit a workflow's list (`GRM-119`). Until
-then, a list changes by data migration.
+### The resolution panel — where the list is managed (`GRM-119`)
+
+**One place:** a panel in the workflow editor, below *Notifications*, on workflows **and** templates —
+*What officers can choose when closing a case*, with **n of 8**. The owner's review of the first design
+(a panel *and* a catalog screen, ownership choices, retire and merge) found it too complex for the admins
+who will run it; this is what remained.
+
+- One row per action, in order: **▲▼**, the name, **Edit** where the viewer may edit that action,
+  **Remove**. A local action shows *counts as <shared action>* under its name.
+- **+ Add an action** searches the actions **this workflow can use** that it does not already offer;
+  typed text that matches nothing offers **+ Create "…"**.
+- **Every change saves at once** and applies to the next case closed. The list is read live — it is
+  **not** versioned by *Publish*.
+- **Full (8 of 8):** *Add* disabled — *"A workflow can offer at most 8 actions. Remove one to add
+  another."* **Empty:** *"Add at least one action before publishing."*, and *Publish* is disabled (the
+  server refuses it too). **Last action of a published workflow:** *Remove* disabled. **Sensitive:** one
+  line — *"SEAH workflows do not record a resolution action."* — no controls.
+
+**Create and edit — one dialog.** *Action* · *Default text for the officer* · and, when the workflow does
+**not** belong to a ministry itself, **In national reports, count this as** — required, one of the
+ministry's active shared actions. An admin who manages the ministry also sees **A new national action**
+first in that list. **There is no owner field:** a new action belongs to the workflow's organization, or
+to its ministry when *A new national action* is chosen, and is appended to the list in the same request.
+Editing a shared action warns *"Used by N workflows — the change applies to all of them."*
+
+**Who may do what** — enforced in `services/resolution_authoring.py`; the panel renders the flags the
+server returns. *Reach* is the organizations an admin administers on the standard track; a platform admin
+reaches everything.
+
+| Action | Allowed when |
+| --- | --- |
+| Change a workflow's list (add, remove, reorder, create into it) | the workflow's organization is in reach · not sensitive · ≤ 8 |
+| Create *A new national action* | as above, and the workflow's ministry is in reach |
+| Edit an action (label, default text, what it counts as) | the action's organization is in reach |
+| Pick an action | it is active and usable by the workflow (its organization or one above) |
+
+⚠ **The track check alone is not enough.** Workflow writes elsewhere check only the track
+(`can_mutate_workflow`), so any standard-track `org_admin` passes it; the panel's endpoints check reach on
+the workflow's organization after it. `project_admin`, `officer_admin` and officers author nothing.
+
+A create refused at 8 — or for any other reason — is refused **before** the action row is written: actions
+are never deleted, so a refusal must not leave one behind.
+
+✅ **Verified in a browser, local stack, 2026-09-15** — `e2e/flows/settings-resolution-panel.spec.ts`: an
+empty draft blocks Publish; add, reorder and remove save at once; 8 of 8 refuses a ninth; the create dialog
+opens (with no *counts as* on DOR's own workflow) and is cancelled. ⚠ **Pinned only at the API level**
+(`tests/ticketing/test_resolution_authoring.py`): **creating and editing** an action — an action is never
+deleted, so each e2e run would add a permanent one to DOR's catalog, and a local action needs an
+organization below DOR that e2e must not create (`GRM-092`) — and the **sensitive** panel state, which no
+seeded user can open in the browser (`GRM-125`).
 
 ### A workflow's organization — *Belongs to* (`GRM-122`)
 
@@ -353,6 +401,11 @@ Unchanged per step — [Escalation_rules.md](Escalation_rules.md). Each ticket f
 | `POST` | `/workflows` | Create — `owner_organization_id` required from a platform admin, defaulted for an `org_admin` (must be in reach) |
 | `PATCH` | `/workflows/{id}` | Metadata |
 | `POST` | `/workflows/{id}/publish` | Publish — refused for a non-sensitive workflow with no resolution action |
+| `GET` | `/workflows/{id}/resolution-actions` | The panel: `actions [{code, label, default_wording, counts_as_label, can_edit, used_by_count}]`, `can_change`, `max`, `national_choices`, `can_create_national`, `is_sensitive`, `owner_is_ministry` (`GRM-119`) |
+| `GET` | `/workflows/{id}/resolution-actions/available?q=` | Actions the workflow can use and does not offer |
+| `PUT` | `/workflows/{id}/resolution-actions` | `{codes}` — replace the list, order included |
+| `POST` | `/workflows/{id}/resolution-actions/new` | `{label, default_wording, counts_as_code?, national?}` — create and append; code generated server-side |
+| `PATCH` | `/resolution-actions/{code}` | `{label?, default_wording?, counts_as_code?}` — edit; applies to every workflow using it |
 | `PATCH` | `/workflows/{id}/organization` | `{organization_id}` — move it (`GRM-122`); 403 without reach on both organizations, 422 naming each action the new one cannot use |
 | `GET` | `/projects/{id}/workflows` | Workflow links on the project |
 | `PUT` | `/projects/{id}/workflows` | Replace all links (name + workflow + routing + default) |

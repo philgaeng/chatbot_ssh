@@ -6,6 +6,7 @@ import type {
   ResolutionActorKind,
   ResolutionActorPayload,
   ResolutionOption,
+  WorkflowResolutionPanel,
 } from "@/lib/api";
 
 export function isResolutionRecordEvent(event: {
@@ -114,4 +115,34 @@ export function resolutionActorState(
     ? { hidden: false, selfOffice, missing: null,
         payload: { resolution_actor_kind: "external", resolution_actor_external: external.key } }
     : { hidden: false, selfOffice, missing: "Choose who took the action.", payload: null };
+}
+
+export interface ResolutionPanelState {
+  count: number;
+  full: boolean;
+  /** "n of 8" */
+  countLabel: string;
+  /** The line under the list, when there is one to say. */
+  hint: string | null;
+  /** Remove is disabled on a published workflow's last action — it would leave officers nothing. */
+  canRemove: boolean;
+  /** Publish must wait: a non-sensitive workflow with no action cannot be published (GRM-116). */
+  blocksPublish: boolean;
+}
+
+/** The panel's derived state (GRM-119, `ui/08` frames 1 and 3). */
+export function resolutionPanelState(panel: WorkflowResolutionPanel, published: boolean): ResolutionPanelState {
+  const count = panel.actions.length;
+  const full = count >= panel.max;
+  let hint: string | null = null;
+  if (full) hint = `A workflow can offer at most ${panel.max} actions. Remove one to add another.`;
+  else if (count === 0) hint = "Add at least one action before publishing.";
+  return {
+    count,
+    full,
+    countLabel: `${count} of ${panel.max}`,
+    hint: panel.is_sensitive ? null : hint,
+    canRemove: panel.can_change && !(published && count <= 1),
+    blocksPublish: !panel.is_sensitive && count === 0,
+  };
 }

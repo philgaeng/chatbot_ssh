@@ -21,6 +21,7 @@ from ticketing.api.routers import auth as auth_router
 from ticketing.api.routers import tickets, workflows, users
 from ticketing.api.routers import settings as settings_router
 from ticketing.api.routers import reports
+from ticketing.api.routers import resolution_actions as resolution_actions_router
 from ticketing.api.routers import locations as locations_router
 from ticketing.api.routers import project_types as project_types_router
 from ticketing.api.routers import position_types as position_types_router
@@ -114,6 +115,7 @@ app.add_middleware(
 app.include_router(auth_router.router,       prefix="/api/v1", tags=["Auth"])
 app.include_router(tickets.router,          prefix="/api/v1", tags=["Tickets"])
 app.include_router(workflows.router,        prefix="/api/v1", tags=["Workflows"])
+app.include_router(resolution_actions_router.router, prefix="/api/v1", tags=["Resolution actions"])
 app.include_router(users.router,            prefix="/api/v1", tags=["Users & Roles"])
 app.include_router(settings_router.router,  prefix="/api/v1", tags=["Settings"])
 app.include_router(reports.router,          prefix="/api/v1", tags=["Reports"])
