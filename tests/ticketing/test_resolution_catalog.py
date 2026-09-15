@@ -409,6 +409,29 @@ def test_the_migration_leaves_an_owned_workflow_alone(db, tree):
     assert db.get(WorkflowDefinition, wf.workflow_id).owner_organization_id == tree["ilam"]
 
 
+# ── the migration: each workflow's starting list ────────────────────────────────────────────────
+
+def test_a_workflow_serving_only_road_hazard_reports_starts_with_road_works():
+    assert _migration().starter_codes(sensitive=False, road_hazard=True, other_route=False) == list(ROAD_WORKS_ACTION_CODES)
+
+
+def test_a_workflow_serving_road_hazard_and_another_route_keeps_the_general_five():
+    """⭐ Measured on staging 2026-09-15: the default standard workflow is also two projects' road-hazard
+    route. The first rule ("road hazard on ANY project → road works") gave it road works only, so an
+    ordinary grievance could not close as accepted or rejected."""
+    codes = _migration().starter_codes(sensitive=False, road_hazard=True, other_route=True)
+    assert codes[:5] == list(GENERAL_ACTION_CODES)
+    assert codes[5:] == ["ROAD_REPAIRED", "ROAD_MADE_SAFE", "ROAD_NO_HAZARD_FOUND"]
+    assert len(codes) == MAX_RESOLUTION_ACTIONS and set(codes) <= set(GENERAL_ACTION_CODES + ROAD_WORKS_ACTION_CODES)
+
+
+def test_other_workflows_start_with_the_general_five_and_sensitive_ones_with_nothing():
+    m = _migration()
+    assert m.starter_codes(sensitive=False, road_hazard=False, other_route=True) == list(GENERAL_ACTION_CODES)
+    assert m.starter_codes(sensitive=False, road_hazard=False, other_route=False) == list(GENERAL_ACTION_CODES)
+    assert m.starter_codes(sensitive=True, road_hazard=True, other_route=True) == []
+
+
 # ── the backfill, read off the seeded workflows ─────────────────────────────────────────────────
 
 def _seeded(db, key: str) -> WorkflowDefinition:
