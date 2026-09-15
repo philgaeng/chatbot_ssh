@@ -1,7 +1,7 @@
 # Questions for the DPG consultant
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-03 · derived from `00_compliance_status.md`; regenerate rather than edit
+**Last updated:** 2026-09-15 · derived from `00_compliance_status.md`; regenerate rather than edit
 
 > ⚠ **Generated file — do not edit.** These questions live under the indicator they belong to
 > in [`00_compliance_status.md`](00_compliance_status.md), next to the evidence behind them.
@@ -9,7 +9,7 @@
 > `tests/repo/test_dpg_questions_generated.py` fails the build if the two disagree.
 > **To change a question, edit `00_compliance_status.md` and regenerate.**
 >
-> **25 questions**, of which **5 are marked 🔴** — we cannot finish the
+> **26 questions**, of which **5 are marked 🔴** — we cannot finish the
 > work without those.
 >
 > **Numbers are derived from structure**: `Q-04-02` is the second question about indicator 4,
@@ -31,6 +31,12 @@
 - **Q-02-02 — Do any of these licences cause a problem for the assessment, or in ADB/DOR procurement?**
   AGPLv3 (Redis, elected from its three), LGPL-with-linking-exception (`psycopg2-binary`), and two
   transitive LGPL libraries. All OSI-approved, all weak copyleft, none modified by us.
+
+- **Q-02-03 — Does a public repository that publishes releases, rather than the working history, meet
+  the Standard's expectation of openly available source?**
+  Our working repository is private; the public one would carry each production release's source,
+  specifications and this evidence pack, generated at release time. We would rather confirm that shape
+  before the first release than after.
 
 ## Indicator 3 — Ownership
 
@@ -138,6 +144,6 @@
   reading the published documents.
 
 - **Q-00-06 — Does the assessment look at the repository or at a running deployment?**
-  Several of our controls — the redaction layer, the licence and CVE scans, authentication event
-  logging — are built and tested but run nowhere except a development stack. We would rather know
-  whether that distinction is material to an assessor than discover it matters after a submission.
+  Every privacy and security control in this pack runs on our staging host and has been verified there;
+  none has been verified on the production host, which we cannot reach. We would rather know whether
+  that distinction is material to an assessor than discover it matters after a submission.

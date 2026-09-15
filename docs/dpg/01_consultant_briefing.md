@@ -1,11 +1,11 @@
 # Nepal GRM platform — DPG briefing
 
 **Status:** evidence pack — cited by the DPG assessment.
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-15 — brought into line with the re-verified assessment: three urgent items surfaced by the monitor's own evidence, documentation moved to *substantially* while no public copy exists, the email search closed, the browser-side map finding added, question counts updated.
 
 > **What this is.** A **pre-read**, for the twenty minutes before a meeting: what the platform is,
 > where it stands against the nine indicators, and what we need a decision or an opinion on.
-> **As of 2026-09-03.**
+> **As of 2026-09-15.**
 >
 > **What this is not.** Not the assessment — that is
 > [`00_compliance_status.md`](00_compliance_status.md), which states every claim below with its
@@ -31,17 +31,36 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
 
 | | |
 |---|---|
-| ✅ **Compliant** | Relevance to SDGs · Documentation · Data extraction |
-| 🟢 **Substantially** | Open licensing · Standards & best practices |
+| ✅ **Compliant** | Relevance to SDGs · Data extraction |
+| 🟢 **Substantially** | Open licensing · Documentation — *written, not publicly readable until the first release copy* · Standards & best practices — *with two urgent items below* |
 | 🟡 **Partly** | Platform independence — mechanism built and measured, model choice not made |
 | 🟠 **Real gaps** | Privacy & applicable laws · Do no harm — *an unfinished half of a deliberate design, not a defect* |
 | 🔴 **Blocked, and not by us** | Ownership |
 
+> ## ⛔ Three things we would rather you heard from us first
+>
+> Found on 2026-09-15 by reading our own monitor's records while preparing this revision — **not by any
+> alert**, which is itself the finding:
+>
+> 1. **The production site's TLS certificate expired on 2026-09-13.** Our staging monitor, which watches
+>    the production hostname, reported it critical on ten consecutive nights beforehand. Nobody acted,
+>    because nothing carried the finding to a person.
+> 2. **The officer portal's web framework now carries two critical advisories**, and one is on an
+>    endpoint that is enabled, publicly reachable — and **unused by the portal**, so it can be switched off
+>    in one line. It has been our top-ranked vulnerability item since 2026-09-03, and it got worse.
+> 3. **Our nightly vulnerability scan has saved nothing on any night**, while reporting a status that
+>    looked like a result. Every vulnerability figure in this pack was measured by hand.
+>
+> **None involves real complainant data** — none has ever been processed — and all three are cheap to
+> fix. We raise them because they are the clearest evidence we have that *a control that runs* and *a
+> control someone reads* are different things.
+
 **Four sentences that carry most of the meaning:**
 
 1. **There is no proprietary component anywhere in the runtime stack** — no closed database, identity
-   provider, framework or SDK. A generated audit over 149 packages in four dependency sets returns
-   zero unknown and zero non-OSI licences.
+   provider, framework or SDK. A generated audit over 149 packages in four dependency sets — now scanned
+   **inside the images that ship** — returns zero unknown and zero non-OSI licences, and a nightly scan on
+   the staging host independently agrees.
 2. **The AI layer was our one genuine closed dependency, and the mechanism that removes it is built,
    tested and running** — every model is a configuration value, and one environment change moves both
    LLM subsystems together. **What is not done is the *choice*:** the comparative benchmark is one
@@ -52,23 +71,31 @@ cannot see into. Open source, Apache-2.0, destined for Nepal Department of Roads
    and the transfer has been **narrowed, not stopped**. ⚠ **And email was the leak we had not been
    looking at:** three separate paths each mailed the whole grievance record, one of them to an
    office list derived from the grievance's *municipality* rather than the case's cast. All three
-   are closed; **nobody has yet grepped for a fourth.**
+   are closed, and a systematic search found **no fourth**. ⚠ **What that search could not see is the
+   browser:** pinning a location on the intake map sends the area around the pin — often the
+   complainant's home — to a foreign tile service before consent. Open, and ours to fix.
 4. **Nothing real has been processed yet.** Every grievance record is seed data or a demo dummy —
    which makes every privacy exposure prospective, and puts the remaining work in the window where it
    is a **go-live precondition rather than a remediation**.
 
-⚠ **And one qualification, which we would rather you heard from us than inferred.** Verified inside
-the running containers on the staging host, 2026-09-03: **every privacy control in this pack is live
-there** — redaction, the log filter, the broker fix, the safeguarding correction and the
-email-boundary controls. **One thing is still not:** the `ops` monitor's nightly licence and
-CVE scans, which now have a home on staging and **have not yet had a night** — though its health
-checks began writing real rows the same day, the first monitoring evidence this platform has produced
-from a deployed host. Authentication event recording was the other, and it was switched on and
-verified on 2026-09-03. ⛔ **DOR production runs none of it**, and we could not reach it to check.
+⚠ **And two qualifications, which we would rather you heard from us than inferred.**
 
-⭐ **The distinction we would ask you to hold us to is *deployed* versus *has run*.** A scheduled job
-on a server is not yet evidence. If the assessment distinguishes a repository from a running system,
-we would like to know early (Q-00-06).
+**First, where the controls run.** Verified inside the running containers on the staging host, and
+re-verified on 2026-09-15: **every privacy and security control in this pack is live there** —
+redaction, the log filter, the broker fix, the safeguarding correction, the email-boundary controls,
+authentication event recording, and since September the edge hardening and single-use officer refresh
+tokens. The nightly licence scan has run for eleven nights and agrees with our hand audit. ⛔ **DOR
+production runs none of it that we can verify**, and we could not reach it to check.
+
+**Second, where the source is.** Our working repository has been **private since 2026-09-04** — it
+carries incident notes and infrastructure detail that do not belong in public. The public repository is
+designed as a **release copy** generated at each production release, carrying the source, the
+specifications and this pack. **None has been cut yet.** Whether that shape meets the Standard is
+Q-02-03.
+
+⭐ **The distinction we would ask you to hold us to runs in a chain: *deployed*, *has run*, *has worked*,
+*has been read*.** The three items at the top of this page each failed at a different link. If the
+assessment distinguishes a repository from a running system, we would like to know early (Q-00-06).
 
 ---
 
@@ -76,7 +103,7 @@ we would like to know early (Q-00-06).
 
 **Five questions block work**, stated in full with their evidence in
 [`02_questions.md`](02_questions.md) — generated from the assessment, so it cannot drift out of step
-with it. Twenty further questions there are useful but not blocking.
+with it. Twenty-one further questions there are useful but not blocking.
 
 | | | Why it blocks |
 |---|---|---|
@@ -105,10 +132,10 @@ worked on at all, by anyone here, and it gates the submission rather than merely
 - *"`rasa-sdk` is only a type shim"* is **false** — 49 modules import it and the orchestrator executes
   its form-validation dispatch. The sufficient claim is **no Rasa server, no Rasa NLU, no TensorFlow**;
   `rasa-sdk` is Apache-2.0 anyway.
-- **GitHub's alert count is measured against `main`**, which is months and hundreds of commits stale.
-  Measured here on 2026-09-03: **6 Python and 4 npm-high**, ranked by **reachability** rather than
-  count. ⚠ **The npm count is unchanged and every finding behind it changed** — `next` now carries nine
-  advisories of its own, and that is the one row we would act on rather than explain.
+- **We do not quote a vulnerability count without saying where it was measured.** On 2026-09-15,
+  inside the shipped images: **4 Python advisories** (down from 6) and, in the web portal's dependency
+  graph, **1 critical, 3 high, 1 moderate** — ranked by **reachability**, not count. Two of the npm
+  findings are verified absent from the shipped image; the critical one is not, and its endpoint is live.
 
 **2. ⭐ Nepal has no operational data protection authority**, and that frames the privacy half. The
 Individual Privacy Act 2018 establishes none and the authority legislated by the Data Act 2079 is not
@@ -152,6 +179,11 @@ assignment: an admin body defined as the complainant's own receipt. ⚠ **And ou
 missed the third** — it was found by fixing the second, not by the document written to find exactly
 this.
 
+**And it repeated a third time in the week this revision was written.** Our monitor had been
+producing correct findings for twelve days — including production's certificate approaching expiry —
+and **the finding that production's certificate had expired was made by a person reading the monitor's
+tables for a different purpose**, not by the monitor reaching anyone.
+
 ⚠ **We are telling you this because it cuts against us as well as for us.** It is the argument for
 taking the measured claims here seriously; it is equally the reason to treat any claim in this pack
 that is *not* marked as measured as provisional.
@@ -163,10 +195,10 @@ that is *not* marked as measured as provisional.
 | | |
 |---|---|
 | [`00_compliance_status.md`](00_compliance_status.md) | **The assessment.** Indicator by indicator: what we have, gaps, remedy, questions |
-| [`02_questions.md`](02_questions.md) | The 25 questions, generated from the assessment |
-| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, 21 findings, assessed against the Individual Privacy Act 2018 |
-| [`pii-egress-inventory.md`](pii-egress-inventory.md) | Every path by which grievance text leaves our control — 12, ranked by likelihood, with what closed and what did not |
-| [`dependency-licenses.md`](dependency-licenses.md) | Generated: 149 packages, four dependency sets, plus measured CVEs |
+| [`02_questions.md`](02_questions.md) | The 26 questions, generated from the assessment |
+| [`privacy-assessment.md`](privacy-assessment.md) | 13 data-flow legs verified at file and line, 27 findings, assessed against the Individual Privacy Act 2018 |
+| [`pii-egress-inventory.md`](pii-egress-inventory.md) | Every path by which personal data leaves our control — 16, ranked by likelihood, three of them from the browser, with what closed and what did not |
+| [`dependency-licenses.md`](dependency-licenses.md) | Generated from the images that ship: 149 packages, four dependency sets, plus measured CVEs |
 | [`open-model-configuration.md`](open-model-configuration.md) | How to run this system on open models, and the measured capability matrix |
 | [`model-benchmarks.md`](model-benchmarks.md) | What the models score on a committed 105-item Nepali set |
 | [`vllm-deployment.md`](vllm-deployment.md) | Self-hosted inference, designed and costed; why it is parked |

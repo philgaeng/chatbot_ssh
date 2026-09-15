@@ -1,6 +1,6 @@
 # Model benchmarks — what this system scores
 
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-15 — re-checked, not re-measured: no change to the model layer, prompts, registry, redaction or benchmark set since 2026-09-03 (verified from history), so every figure and every caveat below stands as written; the owner decided on 2026-09-15 to keep the measurements as they are rather than re-run.
 
 > **What this is.** Measured results for the models this system calls, on a committed 105-item Nepali
 > grievance set. **Measurements dated 2026-08-20 / 08-21**; where a finding has since been acted on,
@@ -38,6 +38,10 @@
 >
 > ⭐ **This is a cheap re-run and it is the highest-value one available**, because it is the only
 > number in this document that is blocked on neither money nor absent data. It needs one command.
+>
+> **Status 2026-09-15: deliberately not re-run.** Nothing on the model path has changed since
+> 2026-09-03, and the owner chose to keep these measurements as they are. That is a scheduling decision
+> about spend, not evidence that the redaction default costs nothing — the caveat above still applies.
 >
 > **Set:** [`tests/data/benchmark/`](../../tests/data/benchmark/README.md) ·
 > **Harness:** [`scripts/ops/llm_benchmark.py`](../../scripts/ops/llm_benchmark.py)

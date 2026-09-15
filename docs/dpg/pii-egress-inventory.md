@@ -1,6 +1,6 @@
 # PII egress inventory — every path by which grievance text leaves the agency's control
 
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+**Last updated:** 2026-09-15 — the owed systematic email search done (eight mail legs traced from the transport outward; none carries the grievance record beyond the three already closed); three paths leaving from the **browser** added (E14–E16), which a server-side trace could not see; E3 measured on staging (no backup has ever run); E13's stale "open" cell corrected, and the 2026-09-03 summary box no longer says nobody has searched for a fourth leg.
 
 > **Written:** 2026-08-27
 >
@@ -35,15 +35,46 @@
 >
 > All three are now closed, and behind **one** control rather than three copies of one — the
 > allow-list and the sensitivity gate live in `backend/services/admin_notifications.py`, which
-> imports neither the chatbot nor the API package. ⚠ **Nobody has grepped for a fourth.** The way to
-> do it is to grep the **templates**, not the senders: E5 was a single assignment, and no sender
-> looked wrong.
+> imports neither the chatbot nor the API package. ✅ **The search for a fourth was done on 2026-09-15
+> and found none** (§6c) — run from the transports outward, because E5 was a single assignment and no
+> sender looked wrong.
 >
 > ⭐ **The finding that should outlive the sprint.** Of the defects Sprint 3 found in **live** code —
 > the OTP at INFO, the erased SEAH detection, Redis persisting narratives, the classification payload —
 > **none was in this inventory.** It was necessary and it was not sufficient: it found the
 > *boundaries*, and the leaks were not at the boundaries. They came from driving the code, from the
 > owner correcting a wrong model of the intake flow, and from mutations catching decorative tests.
+
+> ## ✅ Updated 2026-09-15 — the email search is done, and the inventory had a blind side
+>
+> **1. The systematic search for a fourth email leg, owed since 2026-09-03, is done** — and done the way
+> the finding said it had to be: **from where mail physically leaves the process, outward**, rather than
+> by reading senders. Every path to an SMTP socket or the Messaging API's `send-email` was traced to its
+> callers and every template's placeholders were read from the **deployed image**. **Eight legs; none
+> carries the grievance record except the complainant's own receipt** — §6c.
+>
+> **2. ⚠ Three paths were missing, and none of them is in server code.** This inventory was built by
+> tracing the code that *produces* grievance text to the code that *transmits* it — so it could only ever
+> find egress the **server** performs. Three paths leave from the **browser** instead, and were found by
+> the end-to-end test work rather than by this document:
+>
+> | | Path | What leaves | To |
+> |---|---|---|---|
+> | **E14** | Complainant webchat loads three scripts at runtime | the complainant's IP address, browser, and the site's origin | `cdn.socket.io` · `unpkg.com` · `cdn.jsdelivr.net` |
+> | **E15** | Complainant pins a location on the map | the complainant's IP address **and the street-level map area around the pin** | `tile.openstreetmap.org` |
+> | **E16** | An officer opens the QR-code page | **every package's full intake link, intake token included** | `api.qrserver.com` |
+>
+> None carries grievance text, which is why a text-flow trace missed them. ⭐ **E15 is the one that matters
+> for a complainant:** the map exists to capture *where* the grievance happened, which for a household
+> complaint is usually **where the complainant lives** — and the tiles for that spot are requested from a
+> foreign service, from the complainant's own IP address, before the grievance is even submitted. §6d.
+>
+> **3. E3 was measured, and the answer is that the path has never been exercised.** The monitor on the
+> staging host has reported *"No backup status file"* as **critical on eleven consecutive nights**, and
+> no restore drill has ever run. Staging holds synthetic data only, so nothing is at risk there — ⚠ but
+> **no deployed host has ever taken, shipped or restored a backup**, so every property this inventory
+> states about E3 (encryption fails closed, an off-box destination) is a property of a script, not of a
+> running system.
 
 ---
 
@@ -72,16 +103,16 @@ how alarming the destination sounds. The model call is the leak everyone designs
 the leak that actually happens.
 
 ⚠ **The `What it carries` and `Rank` columns are as of 2026-08-27, when this was a scope statement.**
-The `2026-09-03` column is what is true now; where the two disagree, the right-hand column wins.
+The right-hand column is what is true now; where the two disagree, the right-hand column wins.
 
-| # | Egress | What it carries | Verified at | Rank | 2026-09-03 |
+| # | Egress | What it carries | Verified at | Rank | Now (2026-09-15) |
 |---|---|---|---|---|---|
 | **E1** | **Application logs** | OTP codes, phone numbers, the full grievance narrative, the whole grievance dict | §3 | 🔴 **1 — happens continuously, today** | ✅ **closed at the boundary** — central filter + 11 sites pruned + OTP lines deleted |
 | **E2** | **Celery payloads → Redis** | `grievance_description` verbatim | §2 | 🔴 **2 — every intake; persistence unverified** | ✅ **cause removed** — id-only payloads, both tasks |
-| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged** — encryption fails closed, destination still unnamed (§5.4) |
+| **E3** | **Database backups** | Everything, incl. narratives, notes, voice recordings, photographs | `scripts/ops/backup_db.sh` | 🟠 **3 — off-box destination is operator-set** | 🟠 **unchanged, and never exercised** — encryption fails closed, destination still unnamed; ⚠ **no deployed host has ever run a backup** (staging: critical 11 nights running) |
 | **E4** | **Model provider** (crosses the border) | Raw narrative, officer notes, whole case timelines | §5 | 🟠 **4 — deliberate, and the only one already designed for** | 🟢 **pseudonymised, both surfaces** — 87.5% recall, residual named (§5) |
 | **E5** | **Admin recap emails → SMTP relay** | The **entire** grievance dict, including narrative and complainant contact | §6 | 🟠 **5 — every submission, to a configured list** | ✅ **closed at the boundary** (§6) |
-| **E13** | **Status-update emails → office list** | The **entire** grievance dict | §6 | ⚠ **not in the original twelve — found 2026-09-03** | 🔴 **open** — and its recipient list grows with deployment (§6) |
+| **E13** | **Status-update emails → office list** | The **entire** grievance dict | §6 | ⚠ **not in the original twelve — found 2026-09-03** | ✅ **closed 2026-09-03** behind the same shared boundary as E5 (§6b) |
 | **E6** | **XLSX quarterly reports → email** | `grievance_summary`, truncated to 500 chars | `ticketing/services/report_rows.py:459` | 🟡 **6 — quarterly, to named roles** | 🟢 **the summary now carries no names** — upstream, no report change |
 | **E7** | **Complainant recap email → SMTP relay** | Their own grievance data | `backend/actions/action_outro.py:153` | 🟡 **7 — consented-ish; see §6** | ⚪ **deliberately unchanged** — their own words back to them |
 | **E8** | **Public closure PDF** | Resolution text | `ticketing/api/routers/public_closure.py:38`, `:58` | 🟡 **8 — unauthenticated, non-expiring token** | 🟡 **unchanged** — out of scope, tracked as F-10 |
@@ -89,6 +120,9 @@ The `2026-09-03` column is what is true now; where the two disagree, the right-h
 | **E10** | **SMS → DOIT gateway** | Complainant phone + short message body | `backend/api/routers/messaging.py:95` | 🟢 **10 — in-country by design, no fallback** | 🟢 unchanged |
 | **E11** | **`POST /message` → orchestrator** | Officer replies | `ticketing/clients/orchestrator.py` | 🟢 **11 — internal** | 🟢 unchanged |
 | **E12** | **Observability** | — | — | ⚪ **none installed — verified** | ⚪ still none; **the rule is now written** (`13_security.md` §8.1) |
+| **E14** | **Webchat scripts → three foreign CDNs** | Complainant IP, browser, site origin | `channels/REST_webchat/index.html:21`, `:151`, `:152` | 🟡 **every complainant visit** | 🟡 **open** — integrity-pinned (SRI), origin-only referrer; vendoring is the fix (§6d) |
+| **E15** | **Location map → OpenStreetMap tiles** | Complainant IP **and the map area around the pin** | `channels/REST_webchat/modules/mapPicker.js:69` | 🟠 **every complainant who uses the map** | 🟠 **open** — the pin is often the complainant's home (§6d) |
+| **E16** | **Officer QR page → third-party QR renderer** | Each package's full intake URL, **token included** | `channels/ticketing-ui/app/qr-codes/page.tsx:11` | 🟡 **every view of the page** | 🟡 **open** — generate the QR locally (§6d) |
 
 **E12, verified rather than assumed:** `grep` over `requirements*.txt` and the UI `package.json` files
 finds **no** Langfuse, OpenTelemetry, Sentry, Datadog or New Relic. The source narrative's §3.4 assumes
@@ -465,6 +499,79 @@ that caught it.
 
 ---
 
+## 6c. ✅ The systematic email search — 2026-09-15
+
+**Method, because the last three legs were each found by accident.** Not by reading senders: every place
+mail physically leaves the process was found first — the SMTP client in `backend/services/messaging.py`,
+the Messaging API's `POST /api/messaging/send-email`, a Celery `send_email_task`, the ticketing messaging
+client, the `ops` alert client, and Keycloak's own mailer — and every caller of each was traced. Every
+template's placeholders were then read **from the template dictionary in the deployed image**
+(as deployed to staging on 2026-09-15), not from the source file, so a template assembled at import time could not hide.
+
+| Leg | Sender | Recipient | What it carries | Assessment |
+|---|---|---|---|---|
+| Admin recap, on submission | `action_outro.py` → `send_recap_email_to_admin` | configured admin list | id, **pseudonymised** summary, categories, location, timeline, portal link | ✅ E5 — behind the shared allow-list; nothing for a sensitive case |
+| Status-check follow-up | `form_status_check.py` → same | configured admin list | id, summary, categories, timeline, portal link | ✅ E5 — same boundary |
+| Status update | `grievance.py` → `build_admin_email` | office list derived from the municipality | id, status, summary, categories, timeline, portal link | ✅ E13 — same boundary |
+| Complainant receipt | `action_outro.py` → `send_recap_email_to_complainant` | the complainant | **their own** name, contact details, narrative and summary | ⚪ E7 — their own words, to them; deliberately unchanged |
+| Quarterly report | `ticketing/services/quarterly_report.py` | named reporting roles | XLSX with the stored summary | 🟢 E6 — the stored summary carries no names |
+| Officer password reset | `ticketing/services/auth_login.py` | the officer | the officer's own one-hour reset link | ⚪ no complainant data |
+| Monitor alerts and daily report | `ops/alerts.py`, `ops/reports.py` | configured ops address | check names, statuses, **counts** | ⚪ no complainant data — every activity row is a `count(*)` |
+| Officer invite / set password | Keycloak's realm mailer | the officer | Keycloak action link | ⚪ no complainant data |
+
+**Result: no fourth leg carries the grievance record.** The three that did are behind one control.
+
+⚠ **Two things the search surfaced that are not legs:**
+
+- **`send_email_task` is registered with Celery and enqueued by nothing** in the repository. It is not an
+  egress today, but it accepts an arbitrary body and is callable by name — **a leg waiting for a caller**,
+  and the next person to use it will bypass the allow-list unless they know it exists.
+- **The Messaging API's `send-email` accepts any body from any holder of its API key.** That is its job,
+  and it is why the allow-list lives in the callers rather than the gateway — but it means **the boundary
+  is a convention every future caller must follow**, not a property the gateway enforces.
+
+---
+
+## 6d. ⚠ E14–E16 — three paths that leave from the browser
+
+**Why this inventory could not find them.** Every row above E14 was found by tracing server code from the
+place grievance text is produced to the place it is sent. These three are performed by the **user's
+browser**, fetching resources the page tells it to fetch, and carry no grievance text — so a text-flow
+trace passes straight over them. They were found by the automated end-to-end test work, which stubs
+third-party hosts and therefore has to list them.
+
+### E14 — three foreign CDNs, on every complainant visit
+
+`socket.io`, `leaflet` and `exifr` load at runtime from `cdn.socket.io`, `unpkg.com` and
+`cdn.jsdelivr.net`. Each CDN receives the complainant's **IP address and browser**, and — under the
+`Referrer-Policy: strict-origin-when-cross-origin` the site now sends — the site's **origin only**, not the
+page URL or its query string. ✅ **Each script is integrity-pinned** (SRI hashes), so a compromised CDN
+cannot substitute code. ⚠ **Two costs remain:** an IP address is personal data, sent abroad before the
+complainant has consented to anything; and on the firewalled DOR production host, a blocked CDN leaves a
+page that **looks fine** with no real-time status, no map and no photo metadata — unverified there.
+**Fix:** vendor the three files and serve them from the platform, re-deriving the integrity hashes.
+
+### E15 — the location map sends the complainant's neighbourhood to OpenStreetMap
+
+When a complainant opens the map to pin where a grievance happened, the browser requests map tiles from
+`tile.openstreetmap.org` at street-level zoom **around the pin**. The tile coordinates identify the area
+viewed to within a few hundred metres, and the request comes from the **complainant's own IP address**.
+⭐ **For a household complaint the pin is usually the complainant's home**, so this is the one browser path
+that carries something close to an address — to a foreign service, before submission, and outside any
+redaction layer, which only ever sees text. **Fix options:** self-host tiles (a real operational cost), or
+use a tile proxy on the platform so the provider sees the platform's address rather than the
+complainant's. Not decided.
+
+### E16 — the officer QR page sends every intake token to a QR renderer
+
+The QR-codes page builds each image by requesting
+`api.qrserver.com/v1/create-qr-code/?data=<the package's full intake link>`. The link carries the
+package's **intake token**. No complainant data is involved, but the renderer learns every active intake
+link, and the page depends on a third-party service being reachable. **Fix:** generate the QR image in the
+browser or on the server — a small library, no external call.
+
+---
+
 ## 7. Scope statement for DPG-33 / DPG-34 — and what was built against it
 
 **Written 2026-08-27 as a scope statement; closed out 2026-09-03.** Each item keeps its original
@@ -520,7 +627,11 @@ and the reason is still physics, not effort.
 
 | | Item | Who |
 |---|---|---|
-| 🟠 | **Grep the templates for a fourth email leg.** Three carried the whole record and one was found only by fixing another; no systematic search has been done | engineering |
+| ⚪ | ~~Grep the templates for a fourth email leg~~ ✅ **done 2026-09-15** — eight legs, none carries the record beyond the three already closed (§6c) | — |
+| 🟠 | **E15 — the location map sends the area around the pin to a foreign tile service**, from the complainant's IP. Choose self-hosted tiles or a platform tile proxy | engineering + DOR |
+| 🟡 | **E14 — vendor the three webchat scripts**; **E16 — render QR codes locally** | engineering |
+| 🟡 | **Exercise the backup path on a deployed host** — no host has ever taken or restored one | engineering + DOR |
+| ⚪ | **`send_email_task` — delete it or put it behind the allow-list** before anything calls it | engineering |
 | ⚪ | ~~E5 — build the decided admin-email change~~ ✅ **done 2026-09-03** | — |
 | ⚪ | ~~E13 — the status-update email to the office list~~ ✅ **done 2026-09-03**, behind the same shared boundary | — |
 | 🟠 | **Name the backup destination and its jurisdiction**, and assign key custody | DOR |
