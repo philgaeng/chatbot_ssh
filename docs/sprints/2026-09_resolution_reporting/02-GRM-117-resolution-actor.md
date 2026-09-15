@@ -14,9 +14,9 @@ clicked Resolve, not the office that did the work.
 | ✓ | Question | Fires |
 |---|---|---|
 | ✔ | Changes user-visible behaviour | `G-PRODUCT` · `G-SPEC` · `G-VERIFY` |
-| ✔ | A UI surface changes shape | `G-DESIGN` — a new section in the resolve form; wireframe + six states in DESIGN §4 |
+| ✔ | A UI surface changes shape | `G-DESIGN` — a new section in the resolve form, absent on SEAH cases; wireframe + state contract in DESIGN §4 |
 | ✗ | Schema changes | — stored in the existing `ticket_events.payload` |
-| ✔ | PII · auth · SEAH · complainant channel · new egress | `G-SENSITIVE` — the field feeds a forwarded Excel; must be structurally unable to hold a name |
+| ✔ | PII · auth · SEAH · complainant channel · new egress | `G-SENSITIVE` — the field feeds a forwarded Excel; must be structurally unable to hold a name; must not exist on SEAH cases |
 | ✔ | API or event shape changes | `G-CONTRACT` — `RESOLVE` gains three optional fields; ticket detail gains three lists; payload gains four keys |
 | ✔ | Deployed | `G-RELEASE` |
 | ■ | always | `G-TEST` |
@@ -29,25 +29,35 @@ clicked Resolve, not the office that did the work.
 **Nothing.** Independent of `GRM-116` in code; if both are in flight, land `GRM-116` first — they
 edit the same form and the same `RESOLVE` branch.
 
+> **Revised 2026-09-15, before any build** (Q-06 answer): **no actor is asked for or recorded on a
+> case in a sensitive workflow** — DESIGN §3.1.3.
+
 ## The change
 
-1. **`RESOLUTION_EXTERNAL_ACTORS`** in `ticketing/constants/resolution.py` — the five keys of DESIGN
-   §3.2 (plus *Users' committee* if Q-06 adds it).
+1. **`RESOLUTION_EXTERNAL_ACTORS`** in `ticketing/constants/resolution.py` — the six keys of DESIGN
+   §3.2, *Users' committee* included (Q-06).
 2. **`resolve_self_offices(db, user_id, ticket)`** — the §3.2.1 derivation, in a service module
    (suggested `ticketing/services/resolution_actor.py`). Returns 0 … n `{organization_id, name}`;
    the fallback to `tickets.organization_id` happens here, not in the router.
 3. **Ticket detail** returns `resolution_self_offices`, `resolution_office_suggestions` (orgs linked
-   to the case's project, and to its package when it has one) and `resolution_external_actors`.
+   to the case's project, and to its package when it has one) and `resolution_external_actors` —
+   **all three empty for a sensitive workflow**.
 4. **`TicketActionRequest`** gains `resolution_actor_kind`, `resolution_actor_organization_id`,
-   `resolution_actor_external` — rules and 422s in DESIGN §5. Omitted kind → `self`.
+   `resolution_actor_external` — rules and 422s in DESIGN §5. Omitted kind → `self` on a standard
+   case; on a sensitive case, omitted means nothing is recorded and **any** actor field is a 422.
 5. **`RESOLVE`** writes `resolution_actor_kind`, `resolution_actor_organization_id`,
-   `resolution_actor_external`, `resolution_actor_label` into **both** events' payloads. Same on the
-   backfill path.
+   `resolution_actor_external`, `resolution_actor_label` into **both** events' payloads — standard
+   cases only. Same on the backfill path.
 6. **`format_resolution_note`** adds `Resolved by: <label>` under `Date:`.
 7. **Resolved case summary** — `resolution.actor_label` in `summary_json`; included in the findings
    LLM input bundle as read-only context (`08` §3.6.1).
-8. **UI** — the *Who took the action?* section in `ResolutionSheet.tsx`, with the six states of DESIGN
-   §4. Office search uses `GET /organizations?q=&active_only=true`, debounced.
+8. **UI** — the *Who took the action?* section in `ResolutionSheet.tsx`, with the states of DESIGN
+   §4; absent when the arrays are empty. Office search uses
+   `GET /organizations?q=&active_only=true&country=<the case's country>`, debounced. ⚠ **The country
+   filter is not optional:** once a second ministry shares the platform, the directory holds every
+   ministry's offices, and an unfiltered search would offer a Kathmandu customs office to a Jhapa road
+   engineer. Across ministries in one country it is deliberately **not** filtered — another
+   ministry's office taking the action is a real outcome to record.
 
 ## Files it may touch
 
@@ -67,7 +77,9 @@ edit the same form and the same `RESOLVE` branch.
   - unit, derivation: one position; two positions with one linked to the project; two unlinked (returns both); none (falls back to the ticket's org); an inactive position is ignored
   - integration: each kind stores the right four keys on both events; `organization` with an inactive or unknown org → 422; `external` with an unknown key → 422; `self` with several offices and none chosen → 422
   - integration: the thread note carries `Resolved by:`
-- **G-VERIFY** — e2e: resolve three cases, one per kind, and read *Resolved by* in the thread bubble.
+  - integration: a SEAH case — ticket detail's three arrays are empty; `RESOLVE` with a note alone writes none of the four keys; with any actor field → 422
+- **G-VERIFY** — e2e: resolve three standard cases, one per kind, and read *Resolved by* in the thread
+  bubble; open a SEAH case's resolve form and see no *Who took the action?*.
 
 ## Non-goals
 
