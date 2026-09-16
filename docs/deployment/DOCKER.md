@@ -1,7 +1,7 @@
 # Docker — Build & Run Reference
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/DOCKER.md` (worktree-era; paths and the Cognito-era build-args table updated). Architecture/service map: [`01_architecture.md`](01_architecture.md). Setup runbook: [`02_setup.md`](02_setup.md).
-**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-16 — the single-setting Keycloak realm targets (`GRM-137`); ⚠ the rest was backfilled from git 2026-09-04 and is still not re-verified against the code
 
 > **All commands must run from WSL (Ubuntu), never Git Bash or a Windows terminal.**
 > 1. UNC paths (`\\wsl.localhost\...`) break npm builds inside containers.
@@ -125,8 +125,14 @@ Each stream is schema-scoped (`include_object`) — see [`07_migrations_policy.m
 make wsl-seed                 # GRM demo tickets (mock_tickets --reset): DOR/ADB orgs, roles,
                               # KL Road standard + SEAH workflows, demo tickets
 make seed_seah_providers      # SEAH support centres from committed CSV
-make keycloak-setup           # grm realm + demo officers (auth stack)
+make keycloak-setup           # grm realm + demo officers (auth stack) — BOOTSTRAP, local only
 ```
+
+⛔ **`keycloak-setup` is a bootstrap, not an operation.** It rewrites demo officers and every
+client, so it has no `aws-`/`prod-` variant. To change one setting on a live realm there is a
+target per setting — `keycloak-smtp`, `keycloak-themes`, `keycloak-clients`,
+`keycloak-token-policy`, `keycloak-clear-invite-passwords` — each with an `aws-` and `prod-`
+prefix. See [`16_auth_keycloak.md`](16_auth_keycloak.md) §4a.
 
 ## Logs & debugging
 

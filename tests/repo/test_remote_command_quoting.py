@@ -41,6 +41,18 @@ SSH_TARGETS = [
     "prod-deploy-full",
     "prod-deploy-ops",
     "prod-seed-seah-providers",
+    # Keycloak realm administration (GRM-137). These pass a flag through $(call …,$(2)), which
+    # is a second place a stray quote could land — the macro argument, not just the macro body.
+    "aws-keycloak-smtp",
+    "aws-keycloak-themes",
+    "aws-keycloak-clients",
+    "aws-keycloak-token-policy",
+    "aws-keycloak-clear-invite-passwords",
+    "prod-keycloak-smtp",
+    "prod-keycloak-themes",
+    "prod-keycloak-clients",
+    "prod-keycloak-token-policy",
+    "prod-keycloak-clear-invite-passwords",
 ]
 
 

@@ -586,9 +586,39 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
+# Every flag main() understands. ⚠ The list is not decoration — see the guard in main().
+KNOWN_FLAGS = frozenset({
+    "--token-policy-only",
+    "--clients-only",
+    "--theme-only",
+    "--smtp-only",
+    "--clear-invite-passwords",
+    "--apply",
+})
+
+
 def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
     args = sys.argv[1:] if argv is None else argv
+
+    # ⛔ Refuse an unrecognised flag instead of falling through to the full bootstrap.
+    #
+    # Measured 2026-09-16 (GRM-138), by doing it: `--smtp-only` was run against a staging host
+    # whose image predated the flag. Every `if "--x" in args` missed, execution reached the
+    # bottom, and the FULL run rewrote demo officers, clients, token policy and the user profile
+    # on a live realm — reporting success. The blast radius of a typo, or of a target that is one
+    # deploy ahead of its host, was a realm reset announced as "setup complete".
+    unknown = [a for a in args if a.startswith("-") and a not in KNOWN_FLAGS]
+    if unknown:
+        logger.error(
+            "Unknown option(s): %s. Refusing to continue — an unrecognised flag would otherwise "
+            "fall through to the FULL bootstrap, which rewrites demo officers, clients and token "
+            "policy. If this host is behind, deploy it first. Known flags: %s",
+            ", ".join(unknown),
+            ", ".join(sorted(KNOWN_FLAGS)),
+        )
+        sys.exit(2)
+
     settings = get_settings()
     if not settings.keycloak_admin_url:
         logger.error("KEYCLOAK_ADMIN_URL not configured — cannot connect")
@@ -615,6 +645,14 @@ def main(argv: list[str] | None = None) -> None:
         # (bind-mounted); a Keycloak running `start` caches themes until it restarts.
         setup_realm_login_theme(_realm_admin())
         logger.info("Themes applied; nothing else was changed.")
+        return
+    if "--smtp-only" in args:
+        # Realm mail settings on a live realm. The full run below would also rewrite demo
+        # officers, clients and token policy — none of which changing a mailbox should touch.
+        # Added 2026-09-16: staging moved off a personal sender and this was the one setting
+        # with no single-setting door, so the alternative was the full run (GRM-137).
+        setup_realm_smtp(_realm_admin())
+        logger.info("Realm SMTP applied; nothing else was changed.")
         return
     if "--clear-invite-passwords" in args:
         # GRM-131. Without --apply this only counts, so an operator sees the size first.
