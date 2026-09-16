@@ -1,7 +1,7 @@
 # Auth — Keycloak (canonical auth ops doc)
 
 **Status:** As-built, July 2026 — promoted and refreshed from `docs/sprints/archive/claude-tickets/AUTH_MIGRATION.md` (the Cognito→Keycloak migration notes). Keycloak is the identity provider **everywhere** (dev auth profile, AWS staging, DOR prod); Cognito is fully retired.
-**Last updated:** 2026-09-16 — §1, §3: **the realm now uses a `grm` email theme** (a plain-language setup email, `GRM-133`); **a mail scanner opening a setup link does not use it up** (measured, `GRM-134`), and the auto-continue script now JS-escapes its URL; `--theme-only` added. The sender is still the personal address until the owner copies production's mail credentials (`info@grm-chatbot-nepal.org`). Earlier, 2026-09-15 — §3: ⚠ **setup emails are delivered, but filed as spam** (measured on staging, `GRM-133`), and a Microsoft link scanner opens their link first (`GRM-134`, effect unmeasured). Earlier the same day, §3: ⛔ **invited accounts no longer get a password** (`GRM-131`, measured: the documented demo password, given to every invitee, let anyone who knew the email take the account); a refused setup email removes the new account; `--clear-invite-passwords` repairs existing realms. Also §3: **the invite redirect must be on the `ticketing-ui` client's allowed list, or Keycloak sends no email** (`GRM-130`, measured on staging); the setup script now always allows the host's own invite address, and `--clients-only` applies that to a live realm. §5 redirect-URI item updated. Earlier the same day: §1 *Sessions*: **D-012 built (`GRM-111`)** — the setup script now writes a 5-min access token and an explicit 30-min idle window, the order is pinned by a test, the idle behaviour was measured on Keycloak, and officers get a warning before the idle window ends a session; rollout step and §5 item updated. Earlier the same day: §1 *Sessions*: ⚠ **renewal fails by timing, so officers are signed out at about the hour** (measured: refresh token 30 min, access token 60 min — `GRM-111`); the decided target (D-012: 5-min access token, 30-min idle, 8-h max) recorded, not yet built. Earlier, 2026-09-14: §1 *Sessions*: **used refresh tokens are now revoked** (`GRM-105`) — a second use is refused and, measured on Keycloak, ends the whole session; renewal is serialised across tabs so an officer's own tabs cannot trip that; the rollout order (UI first, realm policy second) and `--token-policy-only` added. §5: the token-lifespan item updated. Earlier the same day: §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
+**Last updated:** 2026-09-16 — §4a: **every single-setting realm flag now has a make target** (`GRM-137`), and `--smtp-only` was added so a live realm's mailbox can change without the full run. Also §1, §3: **the realm now uses a `grm` email theme** (a plain-language setup email, `GRM-133`); **a mail scanner opening a setup link does not use it up** (measured, `GRM-134`), and the auto-continue script now JS-escapes its URL; `--theme-only` added. The sender is still the personal address until the owner copies production's mail credentials (`info@grm-chatbot-nepal.org`). Earlier, 2026-09-15 — §3: ⚠ **setup emails are delivered, but filed as spam** (measured on staging, `GRM-133`), and a Microsoft link scanner opens their link first (`GRM-134`, effect unmeasured). Earlier the same day, §3: ⛔ **invited accounts no longer get a password** (`GRM-131`, measured: the documented demo password, given to every invitee, let anyone who knew the email take the account); a refused setup email removes the new account; `--clear-invite-passwords` repairs existing realms. Also §3: **the invite redirect must be on the `ticketing-ui` client's allowed list, or Keycloak sends no email** (`GRM-130`, measured on staging); the setup script now always allows the host's own invite address, and `--clients-only` applies that to a live realm. §5 redirect-URI item updated. Earlier the same day: §1 *Sessions*: **D-012 built (`GRM-111`)** — the setup script now writes a 5-min access token and an explicit 30-min idle window, the order is pinned by a test, the idle behaviour was measured on Keycloak, and officers get a warning before the idle window ends a session; rollout step and §5 item updated. Earlier the same day: §1 *Sessions*: ⚠ **renewal fails by timing, so officers are signed out at about the hour** (measured: refresh token 30 min, access token 60 min — `GRM-111`); the decided target (D-012: 5-min access token, 30-min idle, 8-h max) recorded, not yet built. Earlier, 2026-09-14: §1 *Sessions*: **used refresh tokens are now revoked** (`GRM-105`) — a second use is refused and, measured on Keycloak, ends the whole session; renewal is serialised across tabs so an officer's own tabs cannot trip that; the rollout order (UI first, realm policy second) and `--token-policy-only` added. §5: the token-lifespan item updated. Earlier the same day: §1: new *Sessions* section — sign-in, renewal and sign-out all run on the server (`GRM-104`: browser renewal could never work for the confidential client, measured against a real Keycloak); the client table corrected (`ticketing-ui` is not how officers sign in); the security trade of server-side renewal and the missing refresh-token revocation (`GRM-105`) stated. §5: the false "rotation ON" claim corrected. Earlier: 2026-09-04 · ⚠ backfilled from git; not re-verified against the code
 
 ## 1. Architecture
 
@@ -155,7 +155,7 @@ the lock turns every two-tab renewal race into a sign-out of every tab. So, per 
    rewrites demo officers, SMTP, clients and the theme:
 
    ```bash
-   docker compose … exec -T ticketing_api python -m ticketing.auth.keycloak_setup --token-policy-only
+   make keycloak-token-policy       # local · aws-keycloak-token-policy · prod-keycloak-token-policy
    ```
 
 3. Verify: `admin/realms/grm` reports `revokeRefreshToken: true`, `refreshTokenMaxReuse: 0`,
@@ -253,6 +253,47 @@ Notes: `$` in SMTP passwords must be `$$` in `env.local` (Compose escaping). The
 ## 4. Demo officer accounts
 
 Canonical source: **`ticketing/constants/demo_officers.py`** (`keycloak_demo_officers()`), seeded by `keycloak_setup`. All `@grm.local`, temporary password `GrmDemo2026!`, forced password change on first login. Includes `admin@grm.local` (super_admin), country/project admins, L1 site officers, L2 PIU, GRC chair/members, `seah@grm.local` / `seah-hq@grm.local`, `adb@grm.local`. Do **not** hardcode these emails elsewhere — import from the constants module. Demo accounts must not exist on DOR prod (`scripts/ops/prod_sync_remove_mock_data.sql` strips them during prod DB sync).
+
+## 4a. Changing one realm setting on a live host
+
+⛔ **Never run the bootstrap against staging or production.** `keycloak-setup` is idempotent, but
+"idempotent" means it rewrites everything back to what the code says — including **demo officers**,
+every client and the token policy. On a live realm that is not a no-op, it is a reset.
+
+Each setting therefore has its own target, on each host. Prefix with `aws-` for staging or `prod-`
+for DOR production; unprefixed is the local WSL stack.
+
+| Target | Applies | Use when |
+| --- | --- | --- |
+| `keycloak-smtp` | realm mail settings | the sending mailbox changed |
+| `keycloak-themes` | login + email themes | the setup-email template changed |
+| `keycloak-clients` | redirect + post-logout URIs | the UI hostname changed |
+| `keycloak-token-policy` | token lifespans | after the UI carrying the renewal lock is deployed (§3) |
+| `keycloak-clear-invite-passwords` | removes passwords from accounts still awaiting setup | `GRM-131`; **counts only** unless `APPLY=1` |
+
+```bash
+make aws-keycloak-smtp                              # staging: point the realm at the new mailbox
+make prod-keycloak-themes                           # production: pick up a new email template
+make aws-keycloak-clear-invite-passwords            # count first — changes nothing
+make aws-keycloak-clear-invite-passwords APPLY=1    # then apply
+```
+
+⚠ **`keycloak-themes` is not enough on its own.** Keycloak caches themes until it restarts, and the
+theme files reach the host with the deploy, not with this target. After changing a template,
+recreate the container as well — and note `keycloak` is **not** in `AWS_DEPLOY_SERVICES`, so a
+normal deploy leaves it running:
+
+```bash
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.aws.yml \
+  -f docker-compose.grm.yml --profile auth up -d --force-recreate --no-deps keycloak
+```
+
+> **Why these exist (`GRM-137`, 2026-09-16).** The script had grown `--token-policy-only`,
+> `--clients-only` and `--theme-only` precisely so a live realm could be changed one setting at a
+> time — and none of them had a make target, so each was reachable only by hand-writing a
+> `docker exec` against a container named by hand. `--smtp-only` did not exist at all, so the
+> documented way to change staging's sender was the full run. **A safety valve nobody can reach
+> is not a safety valve**; the flags existed and the ergonomics pointed at the dangerous path.
 
 ## 5. Production hardening checklist
 

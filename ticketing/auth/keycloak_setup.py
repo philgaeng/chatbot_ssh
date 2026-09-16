@@ -616,6 +616,14 @@ def main(argv: list[str] | None = None) -> None:
         setup_realm_login_theme(_realm_admin())
         logger.info("Themes applied; nothing else was changed.")
         return
+    if "--smtp-only" in args:
+        # Realm mail settings on a live realm. The full run below would also rewrite demo
+        # officers, clients and token policy — none of which changing a mailbox should touch.
+        # Added 2026-09-16: staging moved off a personal sender and this was the one setting
+        # with no single-setting door, so the alternative was the full run (GRM-137).
+        setup_realm_smtp(_realm_admin())
+        logger.info("Realm SMTP applied; nothing else was changed.")
+        return
     if "--clear-invite-passwords" in args:
         # GRM-131. Without --apply this only counts, so an operator sees the size first.
         apply = "--apply" in args

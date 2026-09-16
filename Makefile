@@ -425,6 +425,32 @@ set -e; \
 endef
 
 # $(1)=remote repo directory — upsert SEAH centres from committed CSV (idempotent).
+# ── Keycloak realm administration ─────────────────────────────────────────────
+#
+# The setup script runs inside ticketing_api, which already has the package and the realm
+# credentials from env.local. ⚠ **Every flag below exists so a LIVE realm can be changed one
+# setting at a time.** The bare run also rewrites demo officers and every client — a bootstrap
+# step, not an operation — which is why there is deliberately no aws-/prod- variant of
+# `keycloak-setup`.
+#
+# Added 2026-09-16 (GRM-137). `keycloak-setup` already existed — the BOOTSTRAP, and the only
+# one the docs ever mentioned. What had no target was every single-setting flag the script
+# grew for live realms: --theme-only, --clients-only, --token-policy-only and
+# --clear-invite-passwords were reachable only by hand-writing a docker exec against a named
+# container, and --smtp-only did not exist at all. So the documented path to change one realm
+# setting on staging was the full run, which rewrites demo officers.
+KEYCLOAK_ADMIN_CMD = python -m ticketing.auth.keycloak_setup
+# -T only: the image sets WORKDIR /app, so `python -m` resolves the package without PYTHONPATH.
+KEYCLOAK_EXEC_OPTS = -T
+# APPLY=1 turns the invite-password clean-up from a count into a change (GRM-131).
+KC_APPLY = $(if $(filter 1 true yes,$(APPLY)),--apply,)
+
+define REMOTE_KEYCLOAK_ADMIN
+set -e; \
+cd $(1) && \
+$(REMOTE_COMPOSE) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) $(2)
+endef
+
 define REMOTE_SEED_SEAH_PROVIDERS
 set -e; \
 cd $(1) && \
@@ -440,6 +466,12 @@ endef
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
 	seed_seah_providers seed_seah_providers_xlsx seed_seah_providers_dry_run \
 	aws-seed-seah-providers prod-seed-seah-providers \
+	keycloak-smtp keycloak-themes keycloak-clients keycloak-token-policy \
+	keycloak-clear-invite-passwords \
+	aws-keycloak-smtp aws-keycloak-themes aws-keycloak-clients aws-keycloak-token-policy \
+	aws-keycloak-clear-invite-passwords \
+	prod-keycloak-smtp prod-keycloak-themes prod-keycloak-clients prod-keycloak-token-policy \
+	prod-keycloak-clear-invite-passwords \
 	wsl-auth wsl-auth-ps wsl-keycloak-ps keycloak-setup wsl-seed wsl-seed-locations wsl-seed-full compose_seed_seah_catalog check_grm_ports \
 	compose_docker_wsl compose_docker_wsl_full compose_docker_wsl_chatbot chatbot-local \
 	compose_docker_wsl_ticketing compose_docker_wsl_down compose-down-all stop-all \
@@ -486,6 +518,17 @@ help:
 	@echo "  make prod-sync-db-from-aws CONFIRM=1  replace prod DB from AWS (VPN; downtime OK)"
 	@echo "  Override user/dir: PROD_SERVER_USER=... PROD_REMOTE_DIR=/path/to/nepal_chatbot"
 	@echo "  Or set PROD_SERVER_USER, PROD_HOST, PROD_REMOTE_DIR, PROD_SSH_KEY in env.local"
+	@echo ""
+	@echo "Keycloak realm (runs inside ticketing_api; prefix aws- or prod- for those hosts):"
+	@echo "  make keycloak-setup          BOOTSTRAP a fresh realm — LOCAL ONLY (also rewrites demo officers)"
+	@echo "  make keycloak-smtp           realm mail settings only"
+	@echo "  make keycloak-themes         login + email themes only (Keycloak caches themes until it restarts)"
+	@echo "  make keycloak-clients        redirect + post-logout URIs only (after a hostname change)"
+	@echo "  make keycloak-token-policy   token lifespans only"
+	@echo "  make keycloak-clear-invite-passwords [APPLY=1]   GRM-131; counts unless APPLY=1"
+	@echo "  e.g. make aws-keycloak-smtp · make prod-keycloak-themes"
+	@echo "  ⚠ There is no aws-/prod- keycloak-setup: on a live realm the full run rewrites"
+	@echo "     demo officers and every client. Change one setting at a time."
 	@echo ""
 	@echo "DB / optional:"
 	@echo "  make migrate_all              all Alembic streams (ticketing.* + public.* + ops.*)"
@@ -719,6 +762,61 @@ aws-seed-seah-providers:
 prod-seed-seah-providers:
 	@echo "VPN required. Seeding SEAH providers on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_SEED_SEAH_PROVIDERS,$(PROD_REMOTE_DIR))'
+
+# ── Keycloak: local (WSL) ─────────────────────────────────────────────────────
+# The bootstrap itself is `keycloak-setup`, further down beside the other wsl-* targets.
+# ⚠ It also rewrites demo officers, which is why it has no aws-/prod- variant.
+keycloak-smtp:
+	$(COMPOSE_WSL_AUTH) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) --smtp-only
+
+keycloak-themes:
+	$(COMPOSE_WSL_AUTH) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) --theme-only
+
+keycloak-clients:
+	$(COMPOSE_WSL_AUTH) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) --clients-only
+
+keycloak-token-policy:
+	$(COMPOSE_WSL_AUTH) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) --token-policy-only
+
+keycloak-clear-invite-passwords:
+	$(COMPOSE_WSL_AUTH) exec $(KEYCLOAK_EXEC_OPTS) ticketing_api $(KEYCLOAK_ADMIN_CMD) --clear-invite-passwords $(KC_APPLY)
+
+# ── Keycloak: AWS staging ─────────────────────────────────────────────────────
+aws-keycloak-smtp:
+	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--smtp-only)'
+
+aws-keycloak-themes:
+	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--theme-only)'
+
+aws-keycloak-clients:
+	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--clients-only)'
+
+aws-keycloak-token-policy:
+	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--token-policy-only)'
+
+aws-keycloak-clear-invite-passwords:
+	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--clear-invite-passwords $(KC_APPLY))'
+
+# ── Keycloak: DOR production (VPN + password SSH) ─────────────────────────────
+prod-keycloak-smtp:
+	@echo "VPN required. Applying realm SMTP on $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--smtp-only)'
+
+prod-keycloak-themes:
+	@echo "VPN required. Applying realm themes on $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--theme-only)'
+
+prod-keycloak-clients:
+	@echo "VPN required. Applying realm clients on $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--clients-only)'
+
+prod-keycloak-token-policy:
+	@echo "VPN required. Applying realm token policy on $(PROD_HOST) (password prompt)..."
+	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--token-policy-only)'
+
+prod-keycloak-clear-invite-passwords:
+	@echo "VPN required. Invite-password clean-up on $(PROD_HOST) — counts only unless APPLY=1..."
+	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--clear-invite-passwords $(KC_APPLY))'
 
 # Dev-only: wipe public schema then re-migrate both streams.
 reset_public_dev:

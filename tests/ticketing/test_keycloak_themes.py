@@ -80,3 +80,22 @@ def test_theme_only_changes_nothing_else() -> None:
     admin.update_client.assert_not_called()
     admin.create_user.assert_not_called()
     master.assert_not_called()
+
+
+def test_smtp_only_changes_nothing_else() -> None:
+    """GRM-137. --smtp-only exists so a live realm's mailbox can change without the full run,
+    which also rewrites demo officers, every client and the token policy. Before it existed,
+    changing staging's sender meant either that full run or a hand-written docker exec."""
+    admin = MagicMock()
+    smtp = {"host": "mail.example.org", "port": "587", "from": "info@example.org"}
+    with patch.object(ks, "_realm_admin", return_value=admin), patch.object(
+        ks, "get_settings", return_value=MagicMock(keycloak_admin_url="http://keycloak:8080")
+    ), patch.object(ks, "_master_admin") as master, patch(
+        "ticketing.auth.keycloak_smtp.resolved_keycloak_smtp_config", return_value=smtp
+    ):
+        ks.main(["--smtp-only"])
+
+    assert [c.args[1] for c in admin.update_realm.call_args_list] == [{"smtpServer": smtp}]
+    admin.update_client.assert_not_called()
+    admin.create_user.assert_not_called()
+    master.assert_not_called()
