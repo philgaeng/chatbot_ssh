@@ -1,0 +1,8 @@
+{"id":"gate-01","text":"धूलो","expect_skipped":true,"note":"One word, Devanagari. Nothing to summarise."}
+{"id":"gate-02","text":"dhulo dherai","expect_skipped":true,"note":"Two words, Romanised."}
+{"id":"gate-03","text":"too much dust","expect_skipped":true,"note":"Three words, English."}
+{"id":"gate-04","text":"   dust    ","expect_skipped":true,"note":"Whitespace-padded: the gate strips before measuring, so padding cannot lift an item over the floor."}
+{"id":"gate-05","text":"बाटो बिग्रियो, धूलो छ","expect_skipped":true,"note":"Just below the floor in Devanagari — a real but unusable complaint."}
+{"id":"gate-06","text":"a b c d e f g h i j k l m","expect_skipped":false,"note":"25 characters, only 13 of them non-whitespace. The gate counts stripped LENGTH, not non-whitespace characters — this fixture is the difference, and it is why the registry comment was corrected in this commit."}
+{"id":"gate-07","text":"road broken, dust, noise!","expect_skipped":false,"note":"Exactly at the floor: the first item that is classified."}
+{"id":"gate-08","text":"सडकमा धूलो धेरै भयो, सास फेर्न गाह्रो","expect_skipped":false,"note":"Comfortably above the floor in Devanagari — the shortest item in the general set is longer than this."}

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Contact/location slot validators (form_contact logic)."""
 
 from __future__ import annotations
@@ -220,7 +222,9 @@ def validate_address_confirmed(
     default_values: Dict[str, Any],
 ) -> Dict[Text, Any]:
     if slot_value is False:
-        dispatcher.utter_message(text="Please enter your correct village and address")
+        dispatcher.utter_message(
+            text=contact_utterance("validate_complainant_address_confirmed", language_code, 1)
+        )
         return {
             "complainant_village": None,
             "complainant_address": None,

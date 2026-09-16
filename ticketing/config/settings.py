@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Ticketing service configuration via pydantic-settings.
 All values loaded from env.local / .env — no hardcoded credentials.
@@ -24,13 +26,31 @@ class TicketingSettings(BaseSettings):
     # Canonical shared secret: chatbot ↔ ticketing + ticketing → chatbot backend.
     ticketing_secret_key: str = ""
 
+    # ── Environment + auth mode — fail-closed auth (HR-01) ──
+    # APP_ENV ∈ dev | staging | production. Default **production**.
+    # AUTH_MODE ∈ keycloak | bypass. Default **keycloak**.
+    #
+    # The dev bypass is honoured ONLY when APP_ENV=dev AND AUTH_MODE=bypass
+    # (`bypass_enabled`). In every other case the app refuses to boot (and
+    # per-request auth refuses to serve) when KEYCLOAK_ISSUER or
+    # TICKETING_SECRET_KEY are unset — production can never bypass. Set
+    # APP_ENV=dev + AUTH_MODE=bypass ONLY for the local dev stack (env.local) —
+    # never in the grm/aws/prod compose overlays. See docs/deployment/13_security.md
+    # "Fail-closed guarantees".
+    app_env: str = "production"
+    auth_mode: str = "keycloak"
+
     # ── Integration URLs ──
     backend_grievance_base_url: str = "http://localhost:5001"
     orchestrator_base_url: str = "http://localhost:8000"
     # Optional legacy alias; prefer TICKETING_SECRET_KEY everywhere.
     messaging_api_key: str = ""
-    # Same key as chatbot backend — used only to decrypt vault fields for reveal broker.
-    db_encryption_key: str = ""
+    # NOTE: db_encryption_key was removed by T3-04. Ticketing does not decrypt anything:
+    # the grievance API returns plaintext (backend decrypts server-side), so the key is
+    # owned solely by `backend` (base_manager.py:57, complainant_manager.py:43,
+    # scripts/database/init.py:203). Do not re-add it here — the accessor's absence is
+    # what makes "ticketing holds no PII key" a structural fact rather than a promise.
+    # Pinned by tests/ticketing/test_pii_boundary.py.
     # User-facing webchat URL — embedded in QR codes so complainants reach the chatbot.
     # Override via CHATBOT_WEBCHAT_URL env var in production.
     chatbot_webchat_url: str = "https://grm.facets-ai.com/chat"
@@ -63,20 +83,48 @@ class TicketingSettings(BaseSettings):
     # Set in prod, e.g. https://grm-chatbot.dor.gov.np — see 12_security_monitoring_service.md §3.2
     cors_allowed_origins: str = ""
 
-    # ── LLM (OpenAI — same key used by chatbot backend) ──
-    openai_api_key: str = ""
+    # ── LLM ──
+    # ⚠ Nothing here. Deliberately.
+    # Every LLM setting — endpoint, key, timeouts, retries, structured-output mode and **every
+    # model name** — is declared once in `backend/config/llm_config.py`, which both LLM surfaces
+    # read and neither owns (DPG-17). A ticketing-side `openai_api_key` lived here until
+    # 2026-08-18; keeping it would mean two places to look and two places to drift, and the
+    # drift is not hypothetical — the standard/SEAH model pair had already been copied into four
+    # modules. The legacy `OPENAI_API_KEY` env var is still honoured, as a deprecated alias
+    # resolved in the registry, so a stale `env.local` cannot authenticate one surface and
+    # silently break the other.
 
     # ── Archiving (docs/ARCHIVING_AND_RETENTION.md §7) ──
     archiving_dry_run: bool = False
 
     # ── Grievance sync: wait before backfill CREATE (seconds; webhook is primary path) ──
     ticketing_sync_backfill_grace_seconds: int = 180
+    # ── Grievance sync: rows fetched per page in the watermark-incremental scan (H2-04) ──
+    ticketing_sync_batch_size: int = 500
+    # ── Auth dependency: TTL (seconds) for the per-request onboarding-status sync cache
+    #    (H2-05). 0 disables caching (per-request behavior, escape hatch). ──
+    ticketing_auth_sync_ttl_seconds: int = 300
 
     model_config = SettingsConfigDict(
         env_file=("env.local", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
+
+    @property
+    def is_dev(self) -> bool:
+        """True only for the explicit local dev environment (APP_ENV=dev)."""
+        return (self.app_env or "").strip().lower() == "dev"
+
+    @property
+    def bypass_enabled(self) -> bool:
+        """Dev auth bypass — honoured ONLY when APP_ENV=dev AND AUTH_MODE=bypass.
+
+        This is the single flag the fail-closed guards key on (HR-01). Production
+        can never bypass: APP_ENV!=dev forces the keycloak/secret requirement even
+        if AUTH_MODE=bypass is (mis)set.
+        """
+        return self.is_dev and (self.auth_mode or "").strip().lower() == "bypass"
 
     @property
     def database_url(self) -> str:

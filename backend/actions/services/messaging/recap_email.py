@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Recap email preparation and delivery via Messaging API."""
 
 from __future__ import annotations
@@ -113,6 +115,25 @@ async def send_recap_email(
         logger.error("Failed to send system notification email: %s", exc)
 
 
+# ── The admin boundary (F-19) ────────────────────────────────────────────────
+# The control itself lives in `backend/services/admin_notifications.py`, NOT here. It has to be
+# shared: the same defect existed on three email paths across two packages (F-19 ×2 here, F-22 in
+# `backend/api/`), and a security control with two implementations has one that is out of date.
+# This module keeps only the delivery, which is what differs between the call sites.
+from backend.services.admin_notifications import (  # noqa: E402
+    ADMIN_SAFE_FIELDS,
+    build_admin_email,
+)
+
+__all__ = [
+    "prepare_recap_email",
+    "send_recap_email",
+    "send_recap_email_to_admin",
+    "send_recap_email_to_complainant",
+    "ADMIN_SAFE_FIELDS",
+]
+
+
 async def send_recap_email_to_admin(
     grievance_data: Dict[str, Any],
     body_name: str,
@@ -120,13 +141,38 @@ async def send_recap_email_to_admin(
     language_code: str,
     not_provided: str,
 ) -> None:
+    """Notify the admin list. Carries no complainant PII, and nothing at all for a sensitive case.
+
+    Everything that decides *what may be sent* is in `backend.services.admin_notifications`;
+    this function only delivers what that module allows.
+    """
     try:
-        await send_recap_email(
-            ADMIN_EMAILS,
-            grievance_data,
+        built = build_admin_email(
             body_name,
+            grievance_data,
             language_code=language_code,
             not_provided=not_provided,
+        )
+        if built is None or not ADMIN_EMAILS:
+            return
+        subject, body = built
+
+        context = {
+            "source_system": "chatbot",
+            "purpose": body_name,
+            "grievance_id": grievance_data.get("grievance_id"),
+            "channel": "email",
+        }
+        from backend.clients.messaging_api import send_email as send_email_via_api
+
+        def _deliver() -> None:
+            send_email_via_api(ADMIN_EMAILS, subject, body, context=context)
+
+        await asyncio.to_thread(_deliver)
+        logger.debug(
+            "Admin notification sent for grievance_id=%s template=%s",
+            grievance_data.get("grievance_id"),
+            body_name,
         )
     except Exception as exc:
         logger.error("Failed to send recap email to admin: %s", exc)

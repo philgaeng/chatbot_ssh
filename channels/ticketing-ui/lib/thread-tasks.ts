@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { TicketEvent, TicketTask } from "@/lib/api";
 import { isThreadTaskEvent } from "@/lib/mobile-constants";
 import { isSiteVisitTask } from "@/lib/field-visit";

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 File server API router (production). Same URL surface as legacy FileServerAPI in channels_api.py.
 Uses FileServerCore and Celery; accessible emit is wired from fastapi_app lifespan (Socket.IO ASGI).

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 import csv
 from typing import Any, Dict, List, Tuple
@@ -129,12 +131,40 @@ SMTP_CONFIG = {
     "FROM_DISPLAY": os.getenv("SMTP_FROM_DISPLAY", "GRM Ticketing"),
 }
 
-# Admin notification emails
+# Admin notification emails — recipients of the grievance recap mail.
+#
+# From the environment, not a literal. These are real personal addresses, and this
+# repository is public: a hardcoded recipient list is both a config value that cannot be
+# changed per deployment and a set of addresses published to anyone who clones. Set
+# ADMIN_EMAILS to a comma-separated list, or ADMIN_EMAIL for a single one; empty means
+# nobody is mailed, which is the right default for a fresh clone.
 ADMIN_EMAILS: List[str] = [
-    "philgaeng@gmail.com",
-    'philgaeng@project.com.ph'
-    # Add other admin emails
+    addr.strip()
+    for addr in (os.getenv("ADMIN_EMAILS") or os.getenv("ADMIN_EMAIL", "")).split(",")
+    if addr.strip()
 ]
+
+# ── GRM portal base URL ──────────────────────────────────────────────────────
+# Used to put a LINK into an admin notification instead of the record (F-19). Empty is a
+# safe default and the right one for a fresh clone: the notification then names the
+# grievance id and says to open the portal, rather than carrying a fabricated hostname.
+# ⚠ Never fall back to embedding the narrative because the link is missing.
+GRM_PORTAL_BASE_URL: str = (os.getenv("GRM_PORTAL_BASE_URL") or "").strip()
+
+# ── OTP lifetime ─────────────────────────────────────────────────────────────
+# Owner's decision, 2026-08-27 (D-62). Until then the OTP had NO expiry at all: the code
+# was six digits in a conversation slot compared with `==`, so its validity was bounded by
+# the session's lifetime rather than by a clock — which is not what anyone assumes when
+# they read "one-time password".
+#
+# ⚠ Ten minutes is a trade, not a security parameter to tighten by reflex. The people it
+# costs are complainants on a slow rural connection who wait for an SMS and then type six
+# digits; shortening it makes the resend path the normal path for exactly the users least
+# able to use it. Raise it before lowering it, and measure the resend rate first.
+#
+# Env-overridable so a deployment can adjust without a code change; the default is what a
+# fresh clone gets.
+OTP_VALIDITY_SECONDS: int = int(os.getenv("OTP_VALIDITY_SECONDS", "600"))
 
 ############################
 # MESSAGING TEMPLATES
@@ -205,106 +235,102 @@ EMAIL_TEMPLATES = {
         This is an automated notification. Please do not reply to this email.
     """
     },
-    "GRIEVANCE_STATUS_UPDATE_BODY": {"en": """
-        <h2>Grievance Status Update Notification</h2>
-        <p><strong>Grievance ID:</strong> {grievance_id}</p>
-        <p><strong>Complainant ID:</strong> {complainant_id}</p>
-        <p><strong>Status Updated to:</strong> {grievance_status}</p>
-        <p><strong>Updated on:</strong> {grievance_status_update_date}</p>
-        <p><strong>Expected Resolution Date:</strong> {grievance_timeline}</p>
-        
-        <h3>Complainant Information:</h3>
-        <p><strong>Name:</strong> {complainant_full_name}</p>
-        <p><strong>Phone:</strong> {complainant_phone}</p>
-        <p><strong>Municipality:</strong> {municipality}</p>
-        <p><strong>Village:</strong> {village}</p>
-        <p><strong>Address:</strong> {address}</p>
-        
-        <h3>Grievance Details:</h3>
-        <p><strong>Summary:</strong> {grievance_summary}</p>
-        <p><strong>Description:</strong> {grievance_details}</p>
-        <p><strong>Categories:</strong> {grievance_categories}</p>
-        
-        <p><em>This is an automated notification for office staff. Please do not reply to this email.</em></p>
-    """,
-    "ne": """
-        <h2>गुनासो स्थिति अपडेट सूचना</h2>
-        <p><strong>गुनासो ID:</strong> {grievance_id}</p>
-        <p><strong>गुनासो दर्ताकर्ता ID:</strong> {complainant_id}</p>
-        <p><strong>स्थिति अपडेट:</strong> {grievance_status}</p>
-        <p><strong>अपडेट मिति:</strong> {grievance_status_update_date}</p>
-        <p><strong>अनुमानित समाधान तिथि:</strong> {grievance_timeline}</p>
-        
-        <h3>गुनासो दर्ताकर्ता जानकारी:</h3>
-        <p><strong>नाम:</strong> {complainant_full_name}</p>
-        <p><strong>फोन:</strong> {complainant_phone}</p>
-        <p><strong>महानगरपालिका:</strong> {municipality}</p>
-        <p><strong>गाउँपालिका:</strong> {village}</p>
-        <p><strong>पत्ता:</strong> {address}</p>
-        
-        <h3>गुनासो विवरण:</h3>
-        <p><strong>सारांश:</strong> {grievance_summary}</p>
-        <p><strong>विवरण:</strong> {grievance_details}</p>
-        <p><strong>श्रेणी:</strong> {grievance_categories}</p>
-        
-        <p><em>यो कार्यालय कर्मचारीहरूको लागि स्वचालित सूचना हो। कृपया यस इमेलमा जवाफ नदिनुहोस्।</em></p>
-    """
-    },
-    "GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP": {
-        "en": """<html>
-<body>
-<h2>Grievance Follow-Up Request</h2>
-<p>The complainant has requested to follow up on their grievance:</p>
-
-<h3>Grievance Details</h3>
-<ul>
-<li><strong>Grievance ID:</strong> {grievance_id}</li>
-<li><strong>Timeline:</strong> {grievance_timeline}</li>
-<li><strong>Summary:</strong> {grievance_summary}</li>
-<li><strong>Description:</strong> {grievance_description}</li>
-<li><strong>Categories:</strong> {grievance_categories}</li>
-</ul>
-
-<h3>Complainant Information</h3>
-<ul>
-<li><strong>Name:</strong> {complainant_name}</li>
-<li><strong>Phone:</strong> {complainant_phone}</li>
-<li><strong>Email:</strong> {complainant_email}</li>
-<li><strong>Municipality:</strong> {complainant_municipality}</li>
-<li><strong>Village:</strong> {complainant_village}</li>
-<li><strong>Address:</strong> {complainant_address}</li>
-</ul>
-</body>
-</html>""",
-        "ne": """<html>
-<body>
-<h2>गुनासो फलोअप अनुरोध</h2>
-<p>उजुरीकर्ताले आफ्नो गुनासोको फलोअप गर्न अनुरोध गर्नुभएको छ:</p>
-
-<h3>गुनासो विवरण</h3>
-<ul>
-<li><strong>गुनासो आईडी:</strong> {grievance_id}</li>
-<li><strong>समयरेखा:</strong> {grievance_timeline}</li>
-<li><strong>सारांश:</strong> {grievance_summary}</li>
-<li><strong>विवरण:</strong> {grievance_description}</li>
-<li><strong>श्रेणीहरू:</strong> {grievance_categories}</li>
-</ul>
-
-<h3>उजुरीकर्ता जानकारी</h3>
-<ul>
-<li><strong>नाम:</strong> {complainant_name}</li>
-<li><strong>फोन:</strong> {complainant_phone}</li>
-<li><strong>इमेल:</strong> {complainant_email}</li>
-<li><strong>नगरपालिका:</strong> {complainant_municipality}</li>
-<li><strong>गाउँ:</strong> {complainant_village}</li>
-<li><strong>ठेगाना:</strong> {complainant_address}</li>
-</ul>
-</body>
-</html>"""
-    },
 }
 
-EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY']
+# ── Admin notification bodies (F-19, 2026-09-03) ─────────────────────────────
+# ⚠ THESE MUST NEVER REFERENCE A PII FIELD. Until 2026-09-03 there was no admin body at
+# all: `GRIEVANCE_RECAP_ADMIN_BODY` was ASSIGNED from `GRIEVANCE_RECAP_COMPLAINANT_BODY`,
+# so the admin list was mailed the complainant's own receipt — narrative, name, phone,
+# address and email — on every submission. Nobody decided that; a template written for
+# the one reader who already knows the whole story was reused, and the audience changed
+# without the content changing.
+#
+# The rule now, and `test_admin_email_boundary.py` enforces it by parsing these strings:
+# an admin body may reference ONLY the placeholders in `ADMIN_SAFE_FIELDS`
+# (backend/actions/services/messaging/recap_email.py). Adding {grievance_description} or
+# any complainant_* field here fails the build. The admin reads the case IN the platform,
+# behind authentication and with an audit trail, instead of holding a copy in a mailbox
+# with neither.
+#
+# English only, both language keys. Admin-facing copy is English by convention, and
+# machine-translating an internal notification is the wrong way to fill a language slot
+# (same reasoning as the OTP-expired message).
+_ADMIN_RECAP_BODY = """<html>
+<body>
+<h2>New grievance filed</h2>
+<p>A grievance has been submitted through the chatbot.</p>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>Filed on:</strong> {grievance_timestamp}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+<li><strong>Location:</strong> {grievance_location}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. The full record is not sent by email.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+_ADMIN_FOLLOW_UP_BODY = """<html>
+<body>
+<h2>Grievance follow-up request</h2>
+<p>The complainant has asked to follow up on their grievance.</p>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. Open the case in the platform for the complainant's contact details.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY'] = {"en": _ADMIN_RECAP_BODY, "ne": _ADMIN_RECAP_BODY}
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_CHECK_REQUEST_FOLLOW_UP'] = {
+    "en": _ADMIN_FOLLOW_UP_BODY,
+    "ne": _ADMIN_FOLLOW_UP_BODY,
+}
+
+# ⚠ F-22, 2026-09-03. The third of three email paths that each carried the whole record. This one
+# went to `office_emails`, which `get_office_emails_for_grievance` resolves from the grievance's
+# MUNICIPALITY — the PD office plus whichever office covers that location — and NOT from the case's
+# assigned cast. So a status update on a sensitive case mailed a survivor's narrative, name, phone
+# and address to a location-derived list, and unlike the other two that list grows with deployment.
+_OFFICE_STATUS_UPDATE_BODY = """<html>
+<body>
+<h2>Grievance status updated</h2>
+<ul>
+<li><strong>Grievance ID:</strong> {grievance_id}</li>
+<li><strong>New status:</strong> {grievance_status}</li>
+<li><strong>Updated on:</strong> {grievance_status_update_date}</li>
+<li><strong>Expected resolution date:</strong> {grievance_timeline}</li>
+<li><strong>Categories:</strong> {grievance_categories}</li>
+</ul>
+<h3>Summary</h3>
+<p>{grievance_summary}</p>
+<p><em>Names, phone numbers and addresses are replaced with placeholders in this
+summary. The complainant's contact details are in the platform, not in this email.</em></p>
+{portal_link_html}
+<p>This is an automated notification. Please do not reply to this email.</p>
+</body>
+</html>"""
+
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY'] = {
+    "en": _OFFICE_STATUS_UPDATE_BODY,
+    "ne": _OFFICE_STATUS_UPDATE_BODY,
+}
+# `build_admin_email` resolves the subject as f"{body_name}_SUBJECT". This one was authored as
+# GRIEVANCE_STATUS_UPDATE_SUBJECT — without the _BODY — because its old call site formatted both
+# by hand. Aliased rather than renamed: the old name is referenced elsewhere.
+EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_STATUS_UPDATE_SUBJECT']
 # prepare_recap_email resolves subject via f"{body_name}_SUBJECT"
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_ADMIN_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_ADMIN']
 EMAIL_TEMPLATES['GRIEVANCE_RECAP_COMPLAINANT_BODY_SUBJECT'] = EMAIL_TEMPLATES['GRIEVANCE_SUBJECT_COMPLAINANT']
@@ -488,16 +514,17 @@ REQUIRED_FIELDS = [k for k, v in FIELD_CONFIG.items() if v['required']]
 FIELD_CATEGORIES_MAPPING = {k: v['category'] for k, v in FIELD_CONFIG.items()}
 
 ############################
-# AWS CONFIGURATION
+# SMS TEST WHITELIST
 ############################
 
-# AWS SNS Configuration
-AWS_REGION = "ap-southeast-1"
-WHITELIST_PHONE_NUMBERS_OTP_TESTING = [
-    "+639175330841", 
-    "+639154345604"
-    # Add other whitelisted numbers
-]
+# Gates the DOIT gateway when SMS_WHITELIST_ONLY=true. **Nepal mobile format only** (97…/98…) —
+# anything else is ignored with a warning (messaging._normalized_whitelist).
+#
+# ⚠ Emptied 2026-08-24 with the removal of the AWS SNS path. It held two real Philippine mobile
+# numbers, committed to a public repository: real personal data of real people, and the reason
+# SMS_WHITELIST_ONLY=true crashed the DOIT send path. Empty means "send to nobody", which is the
+# safe reading of a whitelist.
+WHITELIST_PHONE_NUMBERS_OTP_TESTING: list[str] = []
 
 ############################
 # DATABASE CONFIGURATION
@@ -511,10 +538,14 @@ REDIS_DB = os.getenv('REDIS_DB', '0')
 
 # Database configuration from environment variables
 DB_CONFIG = {
+    # Every value comes from the environment, which compose interpolates from env.local
+    # with ${VAR:?}. The fallbacks are the identity the deployed volumes actually hold.
     'host': os.getenv('POSTGRES_HOST', 'localhost'),
-    'database': os.getenv('POSTGRES_DB', 'grievance_db'),
-    'user': os.getenv('POSTGRES_USER', 'nepal_grievance_admin'),
-    'password': os.getenv('POSTGRES_PASSWORD', 'K9!mP2$vL5nX8&qR4jW7'),
+    'database': os.getenv('POSTGRES_DB', 'app_db'),
+    'user': os.getenv('POSTGRES_USER', 'user'),
+    # No fallback, deliberately. A default password here is read by nothing when the
+    # environment is set and leaks a live credential into git when it is not.
+    'password': os.getenv('POSTGRES_PASSWORD', ''),
     'port': os.getenv('POSTGRES_PORT', '5432')
 }
 

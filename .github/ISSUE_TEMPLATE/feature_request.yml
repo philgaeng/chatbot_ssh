@@ -1,0 +1,65 @@
+name: ✨ Feature or change request
+description: Propose new behaviour, or a change to behaviour that is working as specified
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Substantial changes are worth discussing before they are built. If your proposal
+        conflicts with a locked decision in [CLAUDE.md](../../CLAUDE.md), read the reason
+        recorded alongside that decision first — they carry their rationale deliberately.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        Who is blocked, and by what? Describe the situation rather than the solution —
+        "an officer cannot tell which of their cases breach SLA today", not "add a column".
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Chatbot intake (orchestrator, webchat)
+        - Ticketing API / workflow engine
+        - Officer UI
+        - SEAH / sensitive workflows
+        - Ops, monitoring, deployment
+        - Documentation
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected
+    attributes:
+      label: Who this affects
+      description: >-
+        Complainants, officers, administrators, implementing agency, ADB? For anything
+        touching complainant-facing behaviour, say what it changes for someone with low
+        literacy, a feature phone, or no other channel for their grievance.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: sensitivity
+    attributes:
+      label: Sensitivity check
+      options:
+        - label: This proposal would change what data leaves the platform (logs, model providers, exports, backups)
+          required: false
+        - label: This proposal would change who can see sensitive-workflow (SEAH) cases
+          required: false
+        - label: Neither of the above applies
+          required: false

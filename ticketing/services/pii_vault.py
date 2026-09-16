@@ -1,19 +1,26 @@
-"""
-PII masking and vault decrypt helpers for the ticketing API broker.
+# SPDX-License-Identifier: Apache-2.0
 
-The grievance GET endpoint may return pgcrypto hex ciphertext when fields were
-not decrypted server-side. Officers must never see ciphertext in the default UI.
+"""
+PII masking helpers for the ticketing API broker.
+
+Since T3-04 the grievance backend decrypts complainant PII server-side
+(`get_grievance_by_id`), so `GET /api/grievance/{id}` returns plaintext and ticketing
+holds no decryption key. This module no longer decrypts anything: it shapes the officer
+card and the reveal payload, and it fails closed if ciphertext ever turns up.
+
+History, because the shape here is otherwise puzzling: this module used to carry its own
+pgcrypto decrypt (`decrypt_ciphertext` / `reveal_field`) using ticketing's own
+DB_ENCRYPTION_KEY. That was a client-side workaround for a server-side omission — the
+backend returned hex — and it is what made the "ticketing has a second PII path" reading
+look true. It never had one: it decrypted a ciphertext already handed to it by the API.
+T3-04 fixed the cause in `backend/services/database_services/grievance_manager.py` and
+deleted the workaround. See docs/sprints/archive/2026-08_tier3_structural/03-pii-boundary-spec.md.
 """
 from __future__ import annotations
 
 import logging
 import re
 from typing import Any
-
-from sqlalchemy import text
-
-from ticketing.config.settings import get_settings
-from ticketing.models.base import engine
 
 logger = logging.getLogger(__name__)
 
@@ -40,45 +47,25 @@ def looks_like_ciphertext(value: Any) -> bool:
 
 
 def scrub_pii_value(value: Any) -> Any:
-    """Return None when value is vault ciphertext (UI shows a standard mask)."""
+    """
+    Defense in depth — an assertion, not a masking behaviour.
+
+    Before T3-04 this silently mapped ciphertext to None, which is how the review's
+    prescribed order (drop ticketing's key first) would have produced "—" on every
+    officer contact card with no error and no failing test.
+
+    The backend now decrypts, so ciphertext reaching here means something upstream
+    regressed: the backend stopped decrypting, or lost DB_ENCRYPTION_KEY. Fail closed —
+    an officer must never be shown hex — but say so loudly rather than degrading in
+    silence. The value itself is never logged.
+    """
     if looks_like_ciphertext(value):
+        logger.error(
+            "pii_vault: ciphertext reached the officer card. Since T3-04 the backend "
+            "decrypts server-side, so this means get_grievance_by_id stopped decrypting "
+            "or the backend lost DB_ENCRYPTION_KEY. Returning None (fail closed)."
+        )
         return None
-    return value
-
-
-def decrypt_ciphertext(hex_value: str) -> str | None:
-    """Decrypt a single pgcrypto hex field using DB_ENCRYPTION_KEY (same DB as chatbot)."""
-    settings = get_settings()
-    key = (settings.db_encryption_key or "").strip()
-    if not key or not looks_like_ciphertext(hex_value):
-        return None
-    try:
-        with engine.connect() as conn:
-            row = conn.execute(
-                text("SELECT pgp_sym_decrypt(decode(:ct, 'hex'), :key) AS decrypted"),
-                {"ct": hex_value.strip(), "key": key},
-            ).mappings().first()
-        if not row:
-            return None
-        decrypted = row.get("decrypted")
-        if decrypted is None:
-            return None
-        if isinstance(decrypted, memoryview):
-            return decrypted.tobytes().decode("utf-8", errors="replace")
-        if isinstance(decrypted, bytes):
-            return decrypted.decode("utf-8", errors="replace")
-        return str(decrypted)
-    except Exception as exc:
-        logger.warning("decrypt_ciphertext failed: %s", exc)
-        return None
-
-
-def reveal_field(value: Any) -> Any:
-    """Plain text for vault reveal; decrypt ciphertext when possible."""
-    if value is None:
-        return None
-    if isinstance(value, str) and looks_like_ciphertext(value):
-        return decrypt_ciphertext(value) or None
     return value
 
 
@@ -99,8 +86,8 @@ def grievance_pii_masked(grievance: dict[str, Any]) -> dict[str, Any]:
 
 
 def _officer_card_identity(value: Any) -> Any:
-    """Decrypt for standard GRM card; treat placeholders as empty."""
-    plain = reveal_field(value)
+    """Normalise one identity field for the standard GRM card; placeholders => empty."""
+    plain = scrub_pii_value(value)
     if plain is None:
         return None
     s = str(plain).strip()
@@ -115,11 +102,9 @@ def grievance_pii_for_officer_card(
     mask_sensitive_contact: bool,
 ) -> dict[str, Any]:
     """
-    Officer complainant card: standard GRM shows decrypted contact fields;
-    SEAH keeps name/phone/email/address out of the default API (vault reveal only).
-
-    Grievance GET often returns pgcrypto ciphertext on joined complainant columns;
-    decrypt here so the portal matches what PATCH /api/complainant sees.
+    Officer complainant card: standard GRM shows the contact fields as the backend
+    returned them; SEAH keeps name/phone/email/address out of the default API (vault
+    reveal only).
     """
     if mask_sensitive_contact:
         data = grievance_pii_masked(grievance)
@@ -144,11 +129,18 @@ def grievance_pii_for_officer_card(
 
 
 def grievance_reveal_content(grievance: dict[str, Any]) -> dict[str, Any]:
-    """Decrypted content for time-limited reveal overlay."""
+    """
+    Content for the time-limited reveal overlay.
+
+    `grievance_description` is passed through unscrubbed: it is not one of the backend's
+    ENCRYPTED_FIELDS (those are the four complainant contact columns) and is stored as
+    plaintext, so it was never ciphertext to begin with — the old `reveal_field` call on
+    it was always a no-op.
+    """
     return {
-        "grievance_description": reveal_field(grievance.get("grievance_description")),
-        "complainant_name": reveal_field(grievance.get("complainant_full_name")),
-        "phone_number": reveal_field(grievance.get("complainant_phone")),
-        "email": reveal_field(grievance.get("complainant_email")),
-        "address": reveal_field(grievance.get("complainant_address")),
+        "grievance_description": grievance.get("grievance_description"),
+        "complainant_name": scrub_pii_value(grievance.get("complainant_full_name")),
+        "phone_number": scrub_pii_value(grievance.get("complainant_phone")),
+        "email": scrub_pii_value(grievance.get("complainant_email")),
+        "address": scrub_pii_value(grievance.get("complainant_address")),
     }

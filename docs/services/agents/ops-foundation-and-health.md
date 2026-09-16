@@ -1,5 +1,8 @@
 # Agent: Ops foundation & health monitoring
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 **Copy this entire file into a new Cursor agent session. Build in phase order — A0 first (everything else depends on it).**
 
 ## Mission
@@ -74,7 +77,7 @@ Stand up the **platform monitoring layer** for the self-hosted Nepal GRM stack, 
 
 ## Phase A2 — host watchdog (L0)
 
-10. `scripts/ops/grm-watchdog.sh` per spec §6.1: supervise + restart unhealthy/exited containers (incl. `ops`), check Redis, check both heartbeats (`health:beat:last_run`, `ops:scheduler:last_tick`), worker `inspect ping`, **host disk/RAM** (L0 owns `disk_check`/`memory_check`), restart-storm guard, structured log to `logs/watchdog.log`. **(A2.1–A2.4)**
+10. `scripts/ops/host_watchdog.sh` per spec §6.1: supervise + restart unhealthy/exited containers (incl. `ops`), check Redis, check both heartbeats (`health:beat:last_run`, `ops:scheduler:last_tick`), worker `inspect ping`, **host disk/RAM** (L0 owns `disk_check`/`memory_check`), restart-storm guard, structured log to `logs/watchdog.log`. **(A2.1–A2.4)**
 11. Cron installer mirroring `install_tls_renew_cron.sh` (every 2–5 min). **(A2.5)**
 
 **A2 acceptance:** stop `ops` → watchdog restarts it on stale tick; storm guard halts after >3 restarts/15min + alerts.
@@ -94,7 +97,7 @@ Stand up the **platform monitoring layer** for the self-hosted Nepal GRM stack, 
 
 ## Phase A5 — backups & maintenance
 
-17. `scripts/ops/pg-backup.sh` (host cron, daily 02:00 Asia/Kathmandu): `docker compose exec -T db pg_dump -F c | gzip`, **encrypt** (gpg/age), **off-box** copy, prune (7d/4w/3-6m). **(A5.1)** Document `DB_ENCRYPTION_KEY` separate backup. **(A5.2)**
+17. `scripts/ops/backup_db.sh` (host cron, daily 02:00 Asia/Kathmandu): `docker compose exec -T db pg_dump -F c | gzip`, **encrypt** (gpg/age), **off-box** copy, prune (7d/4w/3-6m). **(A5.1)** Document `DB_ENCRYPTION_KEY` separate backup. **(A5.2)**
 18. Uploads backup job (tar + encrypt + off-box, weekly). **(A5.3)**
 19. `ops.checks.backup_status_check` (daily) + `ops.checks.restore_drill` (weekly: restore latest dump into scratch DB, assert table counts). **(A5.4)**
 20. `ops/maintenance.py`: prune_logs, prune_health_checks (>90d), prune_uploads_orphans, vacuum_analyze, os_update_check (report-only). **(A5.5)**

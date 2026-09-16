@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 In-process workflow engine for GRM Ticketing.
 
@@ -180,7 +182,15 @@ def resolve_workflow(
             )
             if wf:
                 return wf
-            for wf_id in (project.standard_workflow_id, project.seah_workflow_id):
+            # Legacy fallback must respect the track: a SEAH grievance resolves to the SEAH
+            # workflow first, a standard one to the standard workflow first. (Was is_seah-blind
+            # — always returned standard first — latent while project_workflows had bindings.)
+            legacy_order = (
+                (project.seah_workflow_id, project.standard_workflow_id)
+                if is_seah
+                else (project.standard_workflow_id, project.seah_workflow_id)
+            )
+            for wf_id in legacy_order:
                 if wf_id:
                     legacy = db.get(WorkflowDefinition, wf_id)
                     if legacy:
@@ -206,23 +216,53 @@ def resolve_workflow(
 
 # ── GRC helpers ───────────────────────────────────────────────────────────────
 
+GRC_ROLE_KEYS = ("grc_chair", "grc_member")
+
+
+def get_grc_members_for_ticket(db: Session, ticket) -> list[str]:
+    """The GRC members to notify when a hearing is convened on ``ticket``.
+
+    **Changed 2026-08-04** (DECISION-organization-membership). This used to select officers by
+    ``UserRole.organization_id == ticket.organization_id`` — the single organization stamped on
+    the grievance. That stamp is gone as a concept: a grievance belongs to every organization
+    named on its project, so "the committee of *the* organization" no longer identifies anyone.
+
+    A GRC is convened **for a project**, so its members are resolved the way every other
+    assignment on this system is: the GRC roles, scoped to the ticket's project / location /
+    lot. Same predicate as `auto_assign_officer`, so a committee that can be assigned work can
+    also be summoned to hear it — no second, divergent notion of "who is on the GRC".
+
+    SEAH suppression is the caller's job (an ordinary GRC member must not learn a sensitive
+    case exists) — see `escalation.convene_grc`.
+    """
+    seen: list[str] = []
+    for role_key in GRC_ROLE_KEYS:
+        for uid in _scope_candidates(
+            role_key,
+            ticket.organization_id,  # ignored by the predicate; kept for call compatibility
+            ticket.location_code,
+            ticket.project_code,
+            db,
+            ticket.package_id,
+        ):
+            if uid not in seen:
+                seen.append(uid)
+    return seen
+
+
 def get_grc_member_user_ids(
     organization_id: str,
     location_code: Optional[str],
     db: Session,
 ) -> list[str]:
-    """
-    Return user_ids of all officers with grc_member or grc_chair role
-    for the given org + location. Used to notify all GRC members on convening.
-    """
+    """Legacy org+location GRC lookup. Superseded by :func:`get_grc_members_for_ticket`;
+    kept only for callers that have no ticket in hand."""
     from sqlalchemy import select
     from ticketing.models.user import Role, UserRole
 
-    grc_keys = {"grc_chair", "grc_member"}
-
     # Get role IDs for GRC keys
     roles = db.execute(
-        select(Role).where(Role.role_key.in_(grc_keys))
+        select(Role).where(Role.role_key.in_(set(GRC_ROLE_KEYS)))
     ).scalars().all()
     role_ids = [r.role_id for r in roles]
     if not role_ids:
@@ -373,6 +413,7 @@ def _scope_country_fallback_candidates(
     Never used for field roles — see assignment_tier='field'.
     """
     from ticketing.models.officer_scope import OfficerScope
+    from ticketing.services.officer_admin import officer_is_active
     from ticketing.services.project_routing import (
         load_project_ref,
         officer_scope_project_code_match,
@@ -385,6 +426,8 @@ def _scope_country_fallback_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                if not officer_is_active(db, uid):  # R3: deactivated officers out of the pool
+                    continue
                 result.append(uid)
 
     base = (
@@ -456,6 +499,7 @@ def _scope_candidates(
     from ticketing.models.officer_scope import OfficerScope
     from ticketing.models.package import PackageLocation, ProjectPackage
     from ticketing.models.project import Project
+    from ticketing.services.officer_admin import officer_is_active
 
     seen: set[str] = set()
     result: list[str] = []
@@ -464,6 +508,11 @@ def _scope_candidates(
         for uid in uids:
             if uid not in seen:
                 seen.add(uid)
+                # R3 (BUILD-REVIEW M2): a soft-deactivated officer is out of the assignment
+                # pool — the system assignment path never passes through enrich_user, so it
+                # must exclude them here or tickets auto-route to someone who can't log in.
+                if not officer_is_active(db, uid):
+                    continue
                 result.append(uid)
 
     base = (OfficerScope.role_key == role_key,)
@@ -659,7 +708,19 @@ def auto_assign_officer(
         ).all()
     )
 
-    return min(candidates, key=lambda uid: active_counts.get(uid, 0))
+    # OC-04 §5.4 prefer-own-office: among the *already-filtered* candidates, rank first the
+    # officers whose office territory covers the ticket location, then least-loaded. A
+    # preference, never a filter — the candidate set (and province fallback) is unchanged.
+    from ticketing.services.chart_behaviors import territory_covering_user_ids
+
+    covering = territory_covering_user_ids(db, candidates, location_code)
+
+    # (not-covering flag, load, user_id) — ties broken deterministically by user_id so the
+    # choice never depends on undefined Postgres row order (would be flaky otherwise).
+    return min(
+        candidates,
+        key=lambda uid: (0 if uid in covering else 1, active_counts.get(uid, 0), uid),
+    )
 
 
 def auto_assign_for_workflow_step(
@@ -739,3 +800,41 @@ def get_teammates(
         ticket_package_id=ticket_package_id,
     )
     return [uid for uid in candidates if uid != exclude_user_id]
+
+
+# ── Step supervisor / assignee helpers (H2-02: moved out of the tickets router) ──
+
+def _find_supervisor_user_id(db: Session, ticket: Ticket) -> Optional[str]:
+    """First in-scope holder of the current step's supervisor role, if any."""
+    step = get_current_step(ticket, db)
+    if not step or not step.supervisor_role:
+        return None
+    candidates = _scope_candidates(
+        role_key=step.supervisor_role,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        db=db,
+    )
+    return candidates[0] if candidates else None
+
+
+def is_step_assignee_eligible(db: Session, ticket: Ticket, assign_to_user_id: str) -> bool:
+    """True when the user is in the current step's role + jurisdiction pool.
+
+    Pure predicate (no HTTP) — the router maps False to a 422. When the ticket has
+    no current step there is nothing to validate against, so it returns True.
+    """
+    step = get_current_step(ticket, db)
+    if not step:
+        return True
+    eligible = get_teammates(
+        role_key=step.assigned_role_key,
+        organization_id=ticket.organization_id,
+        location_code=ticket.location_code,
+        project_code=ticket.project_code,
+        exclude_user_id=None,
+        db=db,
+        ticket_package_id=ticket.package_id,
+    )
+    return assign_to_user_id in eligible

@@ -1,5 +1,8 @@
 # Agent brief: Composer input mode (buttons vs text)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 **Goal:** Reduce user confusion when quick-reply buttons are shown by disabling and visually de-emphasizing the textarea unless free text is expected (e.g. Skip-able form fields).
 
 **Spec:** `docs/rest_chatbot/03_frontend_spec.md` §10–§11  
@@ -216,7 +219,7 @@ Optional: `.composer-mode-buttons .quick-replies` light panel background.
 
 ### Step 7 — Manual test checklist
 
-Run REST webchat locally (see `docs/claude-tickets/DOCKER.md` or project docker docs for orchestrator + static channel).
+Run REST webchat locally (see `docs/deployment/DOCKER.md` or project docker docs for orchestrator + static channel).
 
 - [ ] Fresh load → intro buttons → textarea disabled, grey, hint says use buttons
 - [ ] File a grievance → reach contact field with Skip → textarea blue, can type

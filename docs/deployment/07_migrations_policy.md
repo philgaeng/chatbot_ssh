@@ -1,5 +1,8 @@
 # Database Migration Policy
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## Scope
 
 This project follows a Docker-first runtime. **Schema changes must be traceable in git** so every worktree and branch can see what ran, in what order, against which part of the database.

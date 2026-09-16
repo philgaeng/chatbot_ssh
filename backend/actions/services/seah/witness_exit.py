@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Support-service messaging when a SEAH witness exits without filing."""
 from __future__ import annotations
 

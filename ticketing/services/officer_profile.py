@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Officer self-service profile — stored in Keycloak (not ticketing.* PII tables)."""
 from __future__ import annotations
 

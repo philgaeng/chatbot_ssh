@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """add project_packages, package_locations, officer_scopes.package_id + seed KL Road lots
 
 Revision ID: b8c2d4e6f1a3

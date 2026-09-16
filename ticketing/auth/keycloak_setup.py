@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Idempotent Keycloak realm setup for GRM ticketing.
 
@@ -13,6 +15,7 @@ import logging
 import os
 import sys
 from typing import Any
+from urllib.parse import urlsplit
 
 from keycloak import KeycloakAdmin, KeycloakOpenIDConnection
 from keycloak.exceptions import KeycloakGetError, KeycloakPostError
@@ -26,10 +29,39 @@ REALM = "grm"
 CLIENT_UI = "ticketing-ui"   # public, PKCE, browser
 CLIENT_API = "ticketing-api"  # confidential, for JWKS endpoint + service account
 
-# Realm token lifespans (seconds). Officer invite emails use actionTokenGeneratedByAdminLifespan.
-SSO_SESSION_MAX_LIFESPAN = 28800  # 8h
-ACCESS_TOKEN_LIFESPAN = 3600  # 1h
+# Realm token lifespans (seconds) — D-012. Officer invite emails use actionTokenGeneratedByAdminLifespan.
+# ⚠ THE ORDER IS THE POLICY: access token < idle window, with room for the UI's renewal lead
+# (`isAccessTokenExpiringSoon(token, 60)` in lib/api.ts). A refresh token lives only as long as the
+# idle window, and the UI renews on the officer's next request near the access token's end — so an
+# access token that outlives the idle window can never be renewed. Until `GRM-111` the realm ran a
+# 60-min access token inside Keycloak's DEFAULT 30-min idle window (this file never set it), and every
+# officer was signed out at about the hour whatever they did. Measured on Keycloak 2026-09-15 with the
+# timers scaled down: renewal after the access token expired, inside the idle window → 200; after the
+# idle window → 400 "Token is not active".
+SSO_SESSION_MAX_LIFESPAN = 28800  # 8h — the longest an officer stays signed in, working or not
+SSO_SESSION_IDLE_TIMEOUT = 1800  # 30 min without a renewal ends the session (shared office computers)
+ACCESS_TOKEN_LIFESPAN = 300  # 5 min — so a working officer renews every few minutes
 ACTION_TOKEN_ADMIN_LIFESPAN = 604800  # 7d — execute-actions / resend-invite links
+
+# Refresh-token rotation (`GRM-105`). A refresh token is good for ONE renewal; presenting it again is
+# refused. ⚠ Measured on Keycloak 2026-09-14: a refused reuse ENDS THE WHOLE SESSION, not just that
+# token — so a stolen token replayed after the officer renewed (or before) signs BOTH out, which is
+# the property we want: a theft becomes visible instead of running alongside the real session.
+# ⚠ The same fact makes two tabs renewing at once end the session for every tab. The officer UI
+# serialises renewal across tabs (`navigator.locks` in `oidc-auth.ts`), and that build MUST be
+# deployed before this policy is applied to a realm — see 16_auth_keycloak.md § Sessions.
+REVOKE_REFRESH_TOKEN = True
+REFRESH_TOKEN_MAX_REUSE = 0
+
+# Security-event retention (seconds). Keycloak stores **no** login or admin events unless the realm
+# asks for it, and both default to off — so nothing was recorded, and a login that happened before
+# this was switched on cannot be recovered. The ops daily report already queried
+# `keycloak.event_entity` for officer logins and login failures (`ops/reports.py:45,55`), which means
+# it reported 0 rather than "not recorded" for as long as storage was off.
+# 90 days: long enough that a disclosure arriving weeks later is still investigable (backups roll at
+# 14), short enough to stay data-minimising. The retention decision in
+# `docs/dpg/privacy-assessment.md` §5.1 may override it.
+EVENTS_EXPIRATION = 7776000  # 90d
 
 DEMO_OFFICERS: list[dict[str, str]] = keycloak_demo_officers()
 
@@ -152,8 +184,11 @@ def setup_realm(master: KeycloakAdmin) -> None:
             "enabled": True,
             "displayName": "GRM Ticketing",
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "ssoSessionIdleTimeout": SSO_SESSION_IDLE_TIMEOUT,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
+            "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
+            "refreshTokenMaxReuse": REFRESH_TOKEN_MAX_REUSE,
             "bruteForceProtected": True,
         })
         logger.info("Created realm '%s'", REALM)
@@ -162,21 +197,56 @@ def setup_realm(master: KeycloakAdmin) -> None:
 
 
 def setup_realm_token_lifespans(admin: KeycloakAdmin) -> None:
-    """Apply token lifespans, including 7-day officer invite / execute-actions links."""
+    """Apply the realm's token policy: lifespans (incl. 7-day invite links) and refresh-token rotation.
+
+    ⚠ It used to set lifespans only, so a realm created before rotation was added kept Keycloak's
+    default — `revokeRefreshToken` OFF — however often this ran. Updating is what reaches an
+    existing realm; the create payload alone never would. ⚠ The idle timeout was never set either, and
+    that default is what signed officers out at the hour (`GRM-111`).
+    """
     admin.update_realm(
         REALM,
         {
             "ssoSessionMaxLifespan": SSO_SESSION_MAX_LIFESPAN,
+            "ssoSessionIdleTimeout": SSO_SESSION_IDLE_TIMEOUT,
             "accessTokenLifespan": ACCESS_TOKEN_LIFESPAN,
             "actionTokenGeneratedByAdminLifespan": ACTION_TOKEN_ADMIN_LIFESPAN,
+            "revokeRefreshToken": REVOKE_REFRESH_TOKEN,
+            "refreshTokenMaxReuse": REFRESH_TOKEN_MAX_REUSE,
         },
     )
     logger.info(
-        "Realm '%s' token lifespans updated (access=%ss, sso=%ss, admin invite link=%ss)",
+        "Realm '%s' token policy updated (access=%ss, sso idle=%ss, sso max=%ss, admin invite link=%ss, "
+        "revoke refresh token=%s, max reuse=%s)",
         REALM,
         ACCESS_TOKEN_LIFESPAN,
+        SSO_SESSION_IDLE_TIMEOUT,
         SSO_SESSION_MAX_LIFESPAN,
         ACTION_TOKEN_ADMIN_LIFESPAN,
+        REVOKE_REFRESH_TOKEN,
+        REFRESH_TOKEN_MAX_REUSE,
+    )
+
+
+def setup_realm_event_logging(admin: KeycloakAdmin) -> None:
+    """Persist login and admin events — the evidence a breach investigation reads.
+
+    `enabledEventTypes` is deliberately left unset, which stores every type: a responder cannot
+    know in advance which event turns out to matter.
+    """
+    admin.update_realm(
+        REALM,
+        {
+            "eventsEnabled": True,
+            "eventsExpiration": EVENTS_EXPIRATION,
+            "adminEventsEnabled": True,
+            "adminEventsDetailsEnabled": True,
+        },
+    )
+    logger.info(
+        "Realm '%s' event storage enabled (login + admin, expiration=%ss)",
+        REALM,
+        EVENTS_EXPIRATION,
     )
 
 
@@ -203,9 +273,14 @@ def setup_realm_smtp(admin: KeycloakAdmin) -> None:
 
 
 def setup_realm_login_theme(admin: KeycloakAdmin) -> None:
-    """GRM login theme: skip execute-actions interstitial; link back to officer UI login."""
-    admin.update_realm(REALM, {"loginTheme": "grm", "emailTheme": "keycloak"})
-    logger.info("Realm '%s' login theme set to 'grm'", REALM)
+    """GRM login + email themes (`deployment/keycloak/themes/grm`).
+
+    Login: skip the execute-actions interstitial; link back to the officer UI login.
+    Email: a plain-language setup email. Keycloak's default ("Update Your Account") was filed as
+    spam on staging (GRM-133).
+    """
+    admin.update_realm(REALM, {"loginTheme": "grm", "emailTheme": "grm"})
+    logger.info("Realm '%s' login and email themes set to 'grm'", REALM)
 
 
 def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
@@ -299,35 +374,58 @@ def _get_client_uuid(admin: KeycloakAdmin, client_id: str) -> str | None:
     return None
 
 
+# Hosts the officer UI is served from. `ticketing-ui` allows redirects back to these (and to nothing
+# else), which the invite email needs: Keycloak refuses to send it when `KEYCLOAK_INVITE_REDIRECT_URI`
+# is not allowed — `400 Invalid redirect uri`, and no email.
+# ⚠ Staging's UI moved to the apex `nepal-gms-chatbot.facets-ai.com` while this list still named only
+# the old `grm-auth.` subdomain, so every appoint/resend there failed (measured 2026-09-15). That is
+# why `_ui_origins()` also allows this host's own configured invite address: the env that picks the
+# redirect is the same env that allows it, and a new hostname cannot drift out of this list again.
+UI_ORIGINS = [
+    "http://localhost:3001",
+    "http://localhost:3002",
+    # EC2: dedicated auth subdomain (Pattern B). Avoids Next.js basePath
+    # surgery and keeps the demo UI at the original hostname intact.
+    "https://grm-auth.nepal-gms-chatbot.facets-ai.com",
+    "https://nepal-gms-chatbot.facets-ai.com",
+    "https://grm-chatbot.dor.gov.np",
+    "https://grm.stage.facets-ai.com",
+    "https://grm.facets-ai.com",
+]
+
+
+def _ui_origins() -> list[str]:
+    """`UI_ORIGINS` plus the origin of this deployment's `KEYCLOAK_INVITE_REDIRECT_URI`."""
+    origins = list(UI_ORIGINS)
+    parsed = urlsplit((get_settings().keycloak_invite_redirect_uri or "").strip())
+    if parsed.scheme in ("http", "https") and parsed.netloc:
+        own = f"{parsed.scheme}://{parsed.netloc}"
+        if own not in origins:
+            origins.append(own)
+    return origins
+
+
+def redirect_uri_allowed(uri: str, allowed: list[str]) -> bool:
+    """Keycloak's rule for an absolute redirect: an exact match, or a prefix match on a `*` pattern."""
+    return any(
+        uri.startswith(pattern[:-1]) if pattern.endswith("*") else uri == pattern
+        for pattern in allowed
+    )
+
+
 def _post_logout_redirect_uris() -> str:
     """Keycloak stores post-logout URIs as a '##'-joined string, not a list."""
-    return "##".join([
-        "http://localhost:3001/login",
-        "http://localhost:3002/login",
-        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/login",
-        "https://grm-chatbot.dor.gov.np/login",
-        "https://grm.stage.facets-ai.com/login",
-        "https://grm.facets-ai.com/login",
-    ])
+    return "##".join(f"{origin}/login" for origin in _ui_origins())
 
 
 def setup_clients(admin: KeycloakAdmin) -> str:
     """Create ticketing-ui and ticketing-api clients. Returns ticketing-ui internal UUID.
 
     Idempotent: re-runs update the existing client's redirectUris and
-    post.logout.redirect.uris so adding a new deployment hostname only needs
-    a code change + re-run of this script.
+    post.logout.redirect.uris. This host's own invite address is always allowed; another
+    hostname needs a `UI_ORIGINS` entry + a re-run (`--clients-only` on a live realm).
     """
-    redirect_uris = [
-        "http://localhost:3001/*",
-        "http://localhost:3002/*",
-        # EC2: dedicated auth subdomain (Pattern B). Avoids Next.js basePath
-        # surgery and keeps the demo UI at the original hostname intact.
-        "https://grm-auth.nepal-gms-chatbot.facets-ai.com/*",
-        "https://grm-chatbot.dor.gov.np/*",
-        "https://grm.stage.facets-ai.com/*",
-        "https://grm.facets-ai.com/*",
-    ]
+    redirect_uris = [f"{origin}/*" for origin in _ui_origins()]
     post_logout_uris = _post_logout_redirect_uris()
     ui_payload = {
         "clientId": CLIENT_UI,
@@ -388,6 +486,42 @@ def setup_token_mappers(admin: KeycloakAdmin, ui_uuid: str) -> None:
         else:
             admin.add_mapper_to_client(ui_uuid, payload=mapper)
             logger.info("Created mapper '%s'", mapper["name"])
+
+
+def delete_password_credentials(admin: KeycloakAdmin, user_id: str) -> int:
+    """Remove every password on an account; the setup email then sets the only one. Returns the count."""
+    removed = 0
+    for cred in admin.get_credentials(user_id):
+        if cred.get("type") == "password":
+            admin.delete_credential(user_id, cred["id"])
+            removed += 1
+    return removed
+
+
+def clear_invite_passwords(admin: KeycloakAdmin, *, apply: bool) -> dict[str, int]:
+    """GRM-131 clean-up for accounts invited before the fix.
+
+    An account still waiting on `UPDATE_PASSWORD` never had a password its officer chose; before
+    2026-09-15 it carried the documented demo password, which Keycloak's browser login accepts and
+    then lets the typist replace (measured). Demo officers are left alone — their password is the
+    point of them, and production strips them. Reports counts only: no usernames reach the log.
+    """
+    demo = {o["username"] for o in DEMO_OFFICERS}
+    counts = {"setup_pending": 0, "with_password": 0, "cleared": 0, "demo_skipped": 0}
+    for user in admin.get_users({}):
+        if "UPDATE_PASSWORD" not in (user.get("requiredActions") or []):
+            continue
+        if user.get("username") in demo:
+            counts["demo_skipped"] += 1
+            continue
+        counts["setup_pending"] += 1
+        if not any(c.get("type") == "password" for c in admin.get_credentials(user["id"])):
+            continue
+        counts["with_password"] += 1
+        if apply:
+            delete_password_credentials(admin, user["id"])
+            counts["cleared"] += 1
+    return counts
 
 
 def _demo_user_payload(officer: dict[str, str], attributes: dict[str, list[str]]) -> dict[str, Any]:
@@ -452,19 +586,92 @@ def setup_demo_users(admin: KeycloakAdmin) -> None:
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 
-def main() -> None:
+# Every flag main() understands. ⚠ The list is not decoration — see the guard in main().
+KNOWN_FLAGS = frozenset({
+    "--token-policy-only",
+    "--clients-only",
+    "--theme-only",
+    "--smtp-only",
+    "--clear-invite-passwords",
+    "--apply",
+})
+
+
+def main(argv: list[str] | None = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s  %(message)s")
+    args = sys.argv[1:] if argv is None else argv
+
+    # ⛔ Refuse an unrecognised flag instead of falling through to the full bootstrap.
+    #
+    # Measured 2026-09-16 (GRM-138), by doing it: `--smtp-only` was run against a staging host
+    # whose image predated the flag. Every `if "--x" in args` missed, execution reached the
+    # bottom, and the FULL run rewrote demo officers, clients, token policy and the user profile
+    # on a live realm — reporting success. The blast radius of a typo, or of a target that is one
+    # deploy ahead of its host, was a realm reset announced as "setup complete".
+    unknown = [a for a in args if a.startswith("-") and a not in KNOWN_FLAGS]
+    if unknown:
+        logger.error(
+            "Unknown option(s): %s. Refusing to continue — an unrecognised flag would otherwise "
+            "fall through to the FULL bootstrap, which rewrites demo officers, clients and token "
+            "policy. If this host is behind, deploy it first. Known flags: %s",
+            ", ".join(unknown),
+            ", ".join(sorted(KNOWN_FLAGS)),
+        )
+        sys.exit(2)
+
     settings = get_settings()
     if not settings.keycloak_admin_url:
         logger.error("KEYCLOAK_ADMIN_URL not configured — cannot connect")
         sys.exit(1)
 
     logger.info("Connecting to Keycloak at %s", settings.keycloak_admin_url)
+    if "--token-policy-only" in args:
+        # ⭐ For a live realm. The full run also refreshes demo officers, SMTP, clients and the
+        # theme — none of which a token-policy change should touch on staging or production.
+        setup_realm_token_lifespans(_realm_admin())
+        logger.info("Token policy applied; nothing else was changed.")
+        return
+    if "--clients-only" in args:
+        # For a live realm whose UI hostname changed: redirect + post-logout URIs, nothing else.
+        grm = _realm_admin()
+        setup_clients(grm)
+        ui_uuid = _get_client_uuid(grm, CLIENT_UI)
+        if ui_uuid:
+            logger.info("%s redirectUris now: %s", CLIENT_UI, grm.get_client(ui_uuid).get("redirectUris"))
+        logger.info("Clients applied; nothing else was changed.")
+        return
+    if "--theme-only" in args:
+        # Login + email themes on a live realm. The theme files must already be on the host
+        # (bind-mounted); a Keycloak running `start` caches themes until it restarts.
+        setup_realm_login_theme(_realm_admin())
+        logger.info("Themes applied; nothing else was changed.")
+        return
+    if "--smtp-only" in args:
+        # Realm mail settings on a live realm. The full run below would also rewrite demo
+        # officers, clients and token policy — none of which changing a mailbox should touch.
+        # Added 2026-09-16: staging moved off a personal sender and this was the one setting
+        # with no single-setting door, so the alternative was the full run (GRM-137).
+        setup_realm_smtp(_realm_admin())
+        logger.info("Realm SMTP applied; nothing else was changed.")
+        return
+    if "--clear-invite-passwords" in args:
+        # GRM-131. Without --apply this only counts, so an operator sees the size first.
+        apply = "--apply" in args
+        counts = clear_invite_passwords(_realm_admin(), apply=apply)
+        logger.info(
+            "Accounts waiting on setup: %(setup_pending)s · holding a password: %(with_password)s · "
+            "cleared: %(cleared)s · demo officers skipped: %(demo_skipped)s",
+            counts,
+        )
+        if not apply and counts["with_password"]:
+            logger.info("Nothing was changed. Re-run with --apply to remove those passwords.")
+        return
     master = _master_admin()
     setup_realm(master)
 
     grm = _realm_admin()
     setup_realm_token_lifespans(grm)
+    setup_realm_event_logging(grm)
     setup_realm_smtp(grm)
     setup_realm_login_theme(grm)
     setup_user_profile_policy(grm)

@@ -1,5 +1,9 @@
 # Services — agent runbooks (health / security / monitoring)
 
+**Audience:** internal — excluded from the public repository (lifecycle §10.4).
+
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+
 Self-contained build runbooks for the **platform ops layer** (specs [`11_health_and_monitoring_service.md`](../11_health_and_monitoring_service.md) + [`12_security_monitoring_service.md`](../12_security_monitoring_service.md)).
 
 **How to use:** copy **one** runbook into a fresh agent session and run it in phase order. Build **A before B** (B reuses the `ops` module + Alembic stream from A).

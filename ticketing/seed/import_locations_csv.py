@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Import locations from a flat CSV file into ticketing.locations + location_translations.
 

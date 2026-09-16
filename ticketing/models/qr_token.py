@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.qr_tokens — opaque scan tokens that link a QR code to a package.
 

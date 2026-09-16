@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Merge SEAH contact-provided and party payload slots during contact intake."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Celery: send one email per quarterly report assignment for the completed quarter.
 

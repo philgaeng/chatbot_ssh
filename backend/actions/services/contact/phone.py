@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Phone validation for contact and OTP forms."""
 
 from __future__ import annotations
@@ -9,6 +11,7 @@ from rasa_sdk.executor import CollectingDispatcher
 
 from backend.actions.services.contact.utterances import contact_utterance
 from backend.config.constants import DEFAULT_VALUES
+from backend.services.db_debug_log import mask_phone_for_log
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +25,7 @@ def validate_complainant_phone(
     action_name: str,
     skip_value: str = DEFAULT_VALUES["SKIP_VALUE"],
 ) -> Dict[str, Any]:
-    logger.info("%s - Validating phone: %s", action_name, slot_value)
+    logger.info("%s - Validating phone: %s", action_name, mask_phone_for_log(slot_value))
 
     if skip_value in slot_value:
         logger.info("%s - Phone collection skipped", action_name)
@@ -33,11 +36,11 @@ def validate_complainant_phone(
 
     if not helpers.is_valid_phone(slot_value):
         dispatcher.utter_message(text=contact_utterance("validate_complainant_phone", language_code, 1))
-        logger.info("%s - Invalid phone format: %s", action_name, slot_value)
+        logger.info("%s - Invalid phone format: %s", action_name, mask_phone_for_log(slot_value))
         return {"complainant_phone": None, "complainant_phone_valid": False}
 
     if helpers.is_philippine_phone(slot_value):
-        dispatcher.utter_message(text="You entered a PH number for validation.")
+        dispatcher.utter_message(text=contact_utterance("validate_complainant_phone", language_code, 2))
         logger.info("%s - Philippine phone detected", action_name)
         return {
             "complainant_phone": helpers.is_philippine_phone(slot_value),

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Assemble officer + public closure documents (spec §3)."""
 
 from __future__ import annotations
@@ -11,20 +13,19 @@ from typing import Any, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
+from backend.config.llm_config import findings_task, model_for
 from ticketing.clients.grievance_api import get_grievance_detail
 from ticketing.config.settings import get_settings
-from ticketing.constants.resolution import resolution_category_label
+from ticketing.services.resolution_catalog import event_action_label
 from ticketing.models.package import ProjectPackage
 from ticketing.models.project import Project
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.ticket_resolved_summary import TicketResolvedSummary
 from ticketing.models.workflow import WorkflowStep
 from ticketing.services.overdue_episodes import load_episodes_for_tickets, overdue_days_display
-from ticketing.services.pii_vault import grievance_pii_masked, reveal_field
+from ticketing.services.pii_vault import grievance_pii_masked
 from ticketing.services.report_rows import _fetch_auxiliary_maps, build_report_row, normalize_complaint_category
 
-_MODEL_STANDARD = "gpt-4o-mini"
-_MODEL_SEAH = "gpt-4o"
 _PHONE_NOTE_RE = re.compile(r"\b(call|calls|called|phone|voic(?:e|ing))\b", re.IGNORECASE)
 
 
@@ -147,7 +148,10 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
 
     original = ""
     if grievance:
-        original = reveal_field(grievance.get("grievance_description")) or ""
+        # T3-04: was reveal_field(...), which decrypted ticketing-side. It was always a
+        # no-op here — grievance_description is not one of the backend's ENCRYPTED_FIELDS
+        # (those are the four complainant contact columns) and is stored plaintext.
+        original = grievance.get("grievance_description") or ""
     if not original:
         original = ticket.grievance_summary or ""
 
@@ -181,7 +185,9 @@ def assemble_summary_input(db: Session, ticket_id: str) -> dict[str, Any]:
         "resolution_ev": resolution_ev,
         "resolution": {
             "category": category,
-            "category_label": resolution_category_label(category) if category else "",
+            "category_label": event_action_label(db, res_payload),
+            # GRM-117: the office or outside body that took the action — an organization name, no PII.
+            "actor_label": res_payload.get("resolution_actor_label") or "",
             "text": resolution_text,
         },
         "original_complaint": original,
@@ -281,6 +287,7 @@ def build_summary_json(
             ),
             "category": data["resolution"]["category"],
             "category_label": data["resolution"]["category_label"],
+            "actor_label": data["resolution"]["actor_label"],
             "text": data["resolution"]["text"],
         },
         "findings_summary": findings,
@@ -293,7 +300,13 @@ def build_summary_json(
             "is_seah": ticket.is_seah,
         },
         "llm": {
-            "model": _MODEL_SEAH if ticket.is_seah else _MODEL_STANDARD,
+            # ⚠ A **persisted provenance field**: this is the archival record of which model
+            # produced this case summary. It used to be computed from a private copy of the
+            # model names living in this module — a different module from the one that made the
+            # call. Change the client's mapping, miss this file, and every resolved case records
+            # a model that did not run it. A grievance mechanism publishing false provenance is
+            # an honesty failure, so it resolves through the same registry as the call itself.
+            "model": model_for(findings_task(ticket.is_seah)).model,
             "generated_at": _now().isoformat(),
         },
     }
@@ -472,6 +485,7 @@ def build_closure_display_context(
         resolved_at_map=aux[3],
         escalated_ids=aux[4],
         resolution_cat_map=aux[5],
+        resolution_extra_map=aux[6],
         date_from=_now().date(),
         date_to=_now().date(),
     )

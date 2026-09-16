@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Resolve project workflow from intake_route (story_main) + optional classification re-route."""
 from __future__ import annotations
 
@@ -229,26 +231,3 @@ def workflow_is_seah(workflow: WorkflowDefinition | None) -> bool:
     if workflow is None:
         return False
     return (workflow.workflow_type or "").lower() == "seah"
-
-
-def uncovered_classifications(
-    db: Session,
-    bindings: list[ProjectWorkflow],
-) -> list[str]:
-    """Catalog classifications not covered by any non-default binding (for go-live warn)."""
-    all_cls = {normalize_classification(c) for c in list_catalog_classifications(db)}
-    covered: set[str] = set()
-    for row in bindings:
-        if row.is_default:
-            continue
-        covered |= _binding_classifications(row)
-    missing_norm = all_cls - covered
-    if not missing_norm:
-        return []
-    catalog = load_grievance_categories_catalog(db)
-    display: dict[str, str] = {}
-    for entry in catalog.get("categories") or []:
-        raw = (entry.get("classification") or "").strip()
-        if raw:
-            display[normalize_classification(raw)] = raw
-    return sorted({display.get(n, n) for n in missing_norm})

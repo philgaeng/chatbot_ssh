@@ -49,7 +49,17 @@ else
   log "ERROR: pg_dump failed"
 fi
 
-# ── optional encryption (asymmetric preferred, else symmetric) ───────────────
+# ── encryption (asymmetric preferred, else symmetric) ───────────────────────
+# ⚠ **This section used to be optional, and that was the defect** (D-19/F-4). The contact columns
+# stay ciphertext inside the dump, but the grievance narrative, every officer note, and every voice
+# recording and photograph in the uploads tar do not — so an unencrypted backup is a complete copy
+# of the most sensitive material this system holds, sitting on disk and, with BACKUP_REMOTE set,
+# copied off the box. It was produced by default, and only encrypted if an operator happened to set
+# one of two variables.
+#
+# Now: no recipient and no passphrase means **no backup is kept**, unless the operator says in so
+# many words that they accept it (BACKUP_ALLOW_UNENCRYPTED=1). Losing a backup is recoverable on the
+# next run; an unencrypted copy of a survivor's report is not.
 ENCRYPTED=false
 if [[ "$DUMP_OK" == true ]]; then
   if [[ -n "${BACKUP_GPG_RECIPIENT:-}" ]] && command -v gpg >/dev/null 2>&1; then
@@ -57,7 +67,7 @@ if [[ "$DUMP_OK" == true ]]; then
       rm -f "$DUMP_FILE"; DUMP_FILE="${DUMP_FILE}.gpg"; ENCRYPTED=true
       log "encrypted (gpg recipient $BACKUP_GPG_RECIPIENT)"
     else
-      log "WARN: gpg asymmetric encryption failed; keeping plaintext dump"
+      log "ERROR: gpg asymmetric encryption failed"
     fi
   elif [[ -n "${BACKUP_PASSPHRASE:-}" ]] && command -v gpg >/dev/null 2>&1; then
     if printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 \
@@ -65,7 +75,20 @@ if [[ "$DUMP_OK" == true ]]; then
       rm -f "$DUMP_FILE"; DUMP_FILE="${DUMP_FILE}.gpg"; ENCRYPTED=true
       log "encrypted (symmetric AES256)"
     else
-      log "WARN: gpg symmetric encryption failed; keeping plaintext dump"
+      log "ERROR: gpg symmetric encryption failed"
+    fi
+  fi
+
+  # ── refuse to keep an unencrypted copy unless it was asked for explicitly ──
+  if [[ "$ENCRYPTED" != true ]]; then
+    if [[ "${BACKUP_ALLOW_UNENCRYPTED:-0}" == "1" ]]; then
+      log "WARN: keeping an UNENCRYPTED dump because BACKUP_ALLOW_UNENCRYPTED=1. It contains the "
+      log "WARN: grievance narratives and officer notes in the clear."
+    else
+      rm -f "$DUMP_FILE"
+      DUMP_OK=false
+      log "ERROR: no backup kept — the dump could not be encrypted and BACKUP_ALLOW_UNENCRYPTED is not set."
+      log "ERROR: set BACKUP_GPG_RECIPIENT (preferred) or BACKUP_PASSPHRASE, or accept the risk explicitly."
     fi
   fi
 fi
@@ -78,6 +101,30 @@ if [[ -n "$UPLOADS_VOLUME" ]]; then
   log "archiving uploads volume $UPLOADS_VOLUME -> $UPLOADS_TAR"
   docker run --rm -v "$UPLOADS_VOLUME":/data:ro -v "$BACKUP_DIR":/backup alpine \
     tar czf "/backup/uploads_${STAMP}.tar.gz" -C /data . || log "WARN: uploads tar failed"
+
+  # ⚠ The uploads tar holds the voice recordings and photographs attached to grievances — the most
+  # directly identifying material in the system, and none of it is encrypted at rest. Same rule as
+  # the dump (D-19/F-4).
+  if [[ -f "$UPLOADS_TAR" ]]; then
+    if [[ -n "${BACKUP_GPG_RECIPIENT:-}" ]] && command -v gpg >/dev/null 2>&1; then
+      if gpg --batch --yes --trust-model always -r "$BACKUP_GPG_RECIPIENT" \
+           -o "${UPLOADS_TAR}.gpg" -e "$UPLOADS_TAR"; then
+        rm -f "$UPLOADS_TAR"; UPLOADS_TAR="${UPLOADS_TAR}.gpg"
+        log "uploads archive encrypted (gpg recipient $BACKUP_GPG_RECIPIENT)"
+      fi
+    elif [[ -n "${BACKUP_PASSPHRASE:-}" ]] && command -v gpg >/dev/null 2>&1; then
+      if printf '%s' "$BACKUP_PASSPHRASE" | gpg --batch --yes --passphrase-fd 0 \
+           --cipher-algo AES256 -o "${UPLOADS_TAR}.gpg" -c "$UPLOADS_TAR"; then
+        rm -f "$UPLOADS_TAR"; UPLOADS_TAR="${UPLOADS_TAR}.gpg"
+        log "uploads archive encrypted (symmetric AES256)"
+      fi
+    fi
+    if [[ "$UPLOADS_TAR" != *.gpg && "${BACKUP_ALLOW_UNENCRYPTED:-0}" != "1" ]]; then
+      rm -f "$UPLOADS_TAR"; UPLOADS_TAR=""
+      log "ERROR: uploads archive discarded — it could not be encrypted and "
+      log "ERROR: BACKUP_ALLOW_UNENCRYPTED is not set. It contains voice notes and photographs."
+    fi
+  fi
 fi
 
 # ── prune old backups ───────────────────────────────────────────────────────

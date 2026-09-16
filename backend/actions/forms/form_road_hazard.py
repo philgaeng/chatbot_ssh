@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """CB-09: road hazard fast-path intake (subtype picker, preset category, map + photos)."""
 
 from __future__ import annotations

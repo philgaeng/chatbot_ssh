@@ -1,5 +1,8 @@
 # Ticketing System – Overview (as-built, June 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 > All design questions from the original spec have been resolved. This document is the stable vision statement.
 > For settled decisions → `00_ticketing_decisions.md`. For schema → `04_ticketing_schema.md`. For API → `03_ticketing_api_integration.md`.
 
@@ -36,10 +39,10 @@ The ticketing system is **independent** of the chatbot: it integrates via REST A
 
 | Principle | Meaning |
 |---|---|
-| **Ticketing is independent** | Deployable and usable without any chatbot. Chatbot opts in by calling `POST /api/v1/tickets`. |
-| **API-only integration** | Chatbot → Ticketing: create ticket, link conversation. Ticketing → Chatbot: reply via orchestrator `POST /message`. Messaging via Messaging API. |
+| **Ticketing is independent** | Deployable and usable without any chatbot. Chatbot opts in by calling `POST /api/v1/tickets`. **Aspirational, not as-built** — ticketing reads an enumerated set of `public.*` tables (below), and the chatbot's intake location validation reads `ticketing.locations` directly. Neither side is currently removable. |
+| **API-first integration** | Chatbot → Ticketing: create ticket, link conversation. Ticketing → Chatbot: reply via orchestrator `POST /message`. Messaging via Messaging API. **Exception, documented and gated:** ticketing reads/writes a closed set of `public.*` tables via its own session → [`03_ticketing_api_integration.md`](03_ticketing_api_integration.md) §3b + CLAUDE.md §Data rules rule 1. |
 | **Settings-driven** | Workflows, roles, organizations, locations, packages are DB-driven. No hard-coded business rules. |
-| **PII isolation** | No PII in `ticketing.*` ever. Fetched on-demand via `GET /api/grievance/{id}`. |
+| **PII isolation** | No **complainant PII columns** in `ticketing.*` ever; `public.complainants` is not a PII source for ticketing. PII fetched on-demand via `GET /api/grievance/{id}`. **Pinned by `tests/ticketing/test_boundary_policy.py`.** Scope note: this covers *PII*, not grievance *content* — `grievance_summary` is cached (free text, may carry self-disclosed PII) and `grievance_description` is read directly, by design (CLAUDE.md §Data rules rules 4/5). |
 | **Audit trail** | Every state change written to `ticket_events` (append-only). |
 | **SEAH invisibility** | SEAH tickets filtered at DB query level; never exposed to standard roles via any endpoint. |
 

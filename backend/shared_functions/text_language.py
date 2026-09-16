@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Detect en/ne for location validation (lightweight; not Facebook fastText)."""
 
 from __future__ import annotations

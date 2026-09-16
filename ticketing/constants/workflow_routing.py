@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Intake routes (chatbot story_main) and seed defaults for project workflow routing."""
 from __future__ import annotations
 

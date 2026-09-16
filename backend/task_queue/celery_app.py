@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from celery import Celery
 from kombu import Exchange, Queue
 from .settings import (

@@ -27,9 +27,11 @@ if [ "$ENV_SOURCE" != "default" ]; then
     # Map environment variables to config variables
     DB_HOST="${POSTGRES_HOST:-localhost}"
     DB_PORT="${POSTGRES_PORT:-5432}"
-    DB_NAME="${POSTGRES_DB:-grievance_db}"
-    DB_USER="${POSTGRES_USER:-nepal_grievance_admin}"
-    DB_PASSWORD="${POSTGRES_PASSWORD:-K9!mP2$vL5nX8&qR4jW7}"
+    DB_NAME="${POSTGRES_DB:-app_db}"
+    DB_USER="${POSTGRES_USER:-user}"
+    # No fallback: the value comes from the env file sourced above (env.local),
+    # which is the same source every compose service interpolates from.
+    DB_PASSWORD="${POSTGRES_PASSWORD:-}"
     
     # Encryption configuration
     DB_ENCRYPTION_KEY="${DB_ENCRYPTION_KEY:-}"
@@ -38,9 +40,11 @@ else
     # Fallback to default values
     DB_HOST="localhost"
     DB_PORT="5432"
-    DB_NAME="grievance_db"
-    DB_USER="nepal_grievance_admin"
-    DB_PASSWORD="K9!mP2$vL5nX8&qR4jW7"
+    DB_NAME="app_db"
+    DB_USER="user"
+    # No env file was found, so there is no password to use. Connecting will fail
+    # with a clear authentication error rather than a committed credential.
+    DB_PASSWORD=""
     
     # Default encryption settings
     DB_ENCRYPTION_KEY=""

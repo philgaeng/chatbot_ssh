@@ -14,6 +14,13 @@ import pytest
 from sqlalchemy import select
 
 from ticketing.constants.assignment import COUNTRY_L1_FALLBACK_ROLE
+from ticketing.constants.demo_officers import (
+    DEMO_OFFICER_SPECS,
+    OFFICER_SITE_L1,
+    OFFICER_SITE_L1_2,
+    OFFICER_SITE_L1_3,
+    OFFICER_SITE_L1_4,
+)
 from ticketing.engine.workflow_engine import (
     _location_and_ancestors,
     _province_code_for_location,
@@ -35,6 +42,7 @@ from tests.ticketing.conftest import (
     ORG_DOR,
     PROJECT_KL_ROAD,
     ROLE_L1,
+    ROLE_L1_SUPERVISOR,
     WORKFLOW_SEAH_KEY,
     WORKFLOW_STANDARD_KEY,
     _uid,
@@ -42,7 +50,66 @@ from tests.ticketing.conftest import (
 
 SEEDED_SITE_L1 = "l1-officer@grm.local"
 
+# Every L1 the demo seed staffs in Province 1 — the province-fallback pool.
+# Morang: l1-officer, l1-officer-4 · Jhapa: l1-officer-2 · Sunsari: l1-officer-3.
+#
+# NEVER assert a specific officer out of this pool. `auto_assign_officer` ranks by
+# (territory-covering, active ticket count, user_id), so *which* member wins is decided
+# by live ticket load — data, not the code under test. These tests previously named a
+# hardcoded pair (l1-officer, l1-officer-2); that pair is 2 of 4 and only wins while the
+# other two happen to be no less loaded. It held on a freshly-seeded DB by luck of the
+# user_id tie-break, and broke on any developer DB that had accumulated tickets (D-44).
+# The property under test is the *scope* the fallback widens to, so assert the pool.
+#
+
+
+def _is_in_province_1(location_code: str | None) -> bool:
+    """P1 itself, or any descendant of it. Not `startswith("P1")` — that would also
+    swallow a future P10/P12."""
+    loc = location_code or ""
+    return loc == "P1" or loc.startswith("P1_")
+
+
+# DERIVED from DEMO_OFFICER_SPECS, not enumerated — and that distinction is the point.
+# T3-08 published this as "sourced from ticketing.constants.demo_officers … so the next
+# roster change updates the expectation instead of rotting it". It wasn't: it was a
+# hand-typed frozenset of four names. Only the *constants* came from demo_officers; the
+# *membership* was manual. A fifth Province-1 L1 added to DEMO_OFFICER_SPECS would not
+# have appeared here, so the test would have rotted by the exact b8cab274 mechanism
+# (roster 2→4) that D-45 diagnosed and this fix exists to prevent. Computing it from the
+# seed's own roster is what makes the published claim true.
+PROVINCE_L1_POOL = frozenset(
+    spec.email
+    for spec in DEMO_OFFICER_SPECS
+    if spec.role_key == ROLE_L1 and _is_in_province_1(spec.user_role_location)
+)
+
 pytestmark = pytest.mark.integration
+
+
+def test_province_l1_pool_derivation_is_not_vacuous():
+    """
+    Guard the guard. The three assertions downstream are `assigned in PROVINCE_L1_POOL`,
+    so a derivation that silently produced an empty set would make them fail confusingly
+    — and one that over-matched would let them pass for the wrong reason.
+
+    Deliberately does NOT pin a count: the whole point is that the pool tracks the roster.
+    It pins the property — every seeded P1 L1 is in, and nothing that isn't an L1 is.
+    """
+    assert PROVINCE_L1_POOL, "derivation produced an empty pool — the filter is broken"
+
+    # The four the seed staffs today (Morang x2, Jhapa, Sunsari).
+    assert {
+        OFFICER_SITE_L1,
+        OFFICER_SITE_L1_2,
+        OFFICER_SITE_L1_3,
+        OFFICER_SITE_L1_4,
+    } <= PROVINCE_L1_POOL
+
+    # No L2 / admin / SEAH officer leaked in via a P1 location.
+    for spec in DEMO_OFFICER_SPECS:
+        if spec.email in PROVINCE_L1_POOL:
+            assert spec.role_key == ROLE_L1, f"{spec.email} is not an L1 but is in the L1 pool"
 
 
 def _first_step(db, workflow_key: str) -> WorkflowStep:
@@ -117,7 +184,7 @@ class TestWorkflowResolution:
 
 
 class TestGeographicScoping:
-    def test_province_fallback_when_no_local_l1(self, db):
+    def test_province_fallback_when_no_local_l1(self, db, without_seeded_jhapa_l1):
         """
         Real-world edge case (B-GR-20260519-KOJH-F6D0):
         Birtamod/Jhapa ticket, only Morang L1 in Koshi → Morang officer assigned.
@@ -132,7 +199,7 @@ class TestGeographicScoping:
         assert assigned in candidates
         assert assigned is not None
 
-    def test_district_officer_covers_municipality_via_includes_children(self, ctx):
+    def test_district_officer_covers_municipality_via_includes_children(self, ctx, without_seeded_jhapa_l1):
         """Officer at P1_JHA + includes_children matches P1_JHA_BIR (ancestor path)."""
         jhapa_officer = _uid("jhapa-l1")
         ctx.add_scope(
@@ -145,7 +212,7 @@ class TestGeographicScoping:
         )
         assert assigned == jhapa_officer
 
-    def test_local_district_excludes_cross_district_province_fallback(self, ctx):
+    def test_local_district_excludes_cross_district_province_fallback(self, ctx, without_seeded_jhapa_l1):
         """
         When a Jhapa-scoped L1 exists, Morang L1 must NOT enter via province fallback.
         """
@@ -205,10 +272,17 @@ class TestNoMatchAndExclusions:
             ROLE_L1, ORG_DOR, LOC_P2_PAR_BIR, PROJECT_KL_ROAD, db
         ) is None
 
-    def test_simulated_create_falls_back_to_supervisor_when_no_l1(self, db):
-        """Madhesh ticket with no L1 → workflow supervisor (L2) is assigned."""
-        assigned = _simulate_create_assignment(db, location_code=LOC_P2_PAR_BIR)
-        assert assigned is not None
+    def test_simulated_create_falls_back_to_supervisor_when_no_l1(self, ctx):
+        """Madhesh ticket with no L1 → workflow supervisor (L2) is assigned. The seed's L2
+        covers Province 1 only, so stage a supervisor covering the P2 location (self-
+        contained, not dependent on incidental seed coverage)."""
+        supervisor = _uid("p2-supervisor")
+        ctx.add_scope(
+            supervisor, role_key=ROLE_L1_SUPERVISOR,
+            location_code=LOC_P2_PAR_BIR, project_code=PROJECT_KL_ROAD,
+        )
+        assigned = _simulate_create_assignment(ctx.db, location_code=LOC_P2_PAR_BIR)
+        assert assigned == supervisor
 
     def test_organization_does_not_exclude_matching_jurisdiction(self, ctx):
         """Assignment is by role + geography/project — not officer employer org."""
@@ -255,7 +329,7 @@ class TestNoMatchAndExclusions:
 
 
 class TestLoadBalancing:
-    def test_least_loaded_among_two_officers_same_district(self, ctx):
+    def test_least_loaded_among_two_officers_same_district(self, ctx, without_seeded_jhapa_l1):
         busy = _uid("busy-l1")
         idle = _uid("idle-l1")
         for uid in (busy, idle):
@@ -272,7 +346,7 @@ class TestLoadBalancing:
         )
         assert assigned == idle
 
-    def test_tie_break_is_stable_when_load_equal(self, ctx):
+    def test_tie_break_is_stable_when_load_equal(self, ctx, without_seeded_jhapa_l1):
         """When load is equal, the same officer is picked on repeated calls (SQL row order)."""
         a = "test-tie-officer-aaa-fixed"
         b = "test-tie-officer-bbb-fixed"
@@ -293,7 +367,15 @@ class TestLoadBalancing:
 
 
 class TestPackageRouting:
-    def test_package_scoped_officer_when_ticket_has_package_id(self, ctx, jhapa_lot_package_id):
+    def test_package_scoped_officer_when_ticket_has_package_id(
+        self, ctx, jhapa_lot_package_id, without_seeded_package_l1s
+    ):
+        """A package-scoped officer wins over every other path when the ticket names a lot.
+
+        ⚠ Takes `without_seeded_package_l1s` because the seed now staffs every lot (D-26). The
+        assertion is that *this* officer is picked, so the test must be the only one holding the
+        lot — otherwise it is really asserting load-ranking, and would pass or fail on the seed.
+        """
         pkg_officer = _uid("pkg-l1")
         ctx.add_scope(
             pkg_officer,
@@ -328,7 +410,7 @@ class TestPackageRouting:
             ctx.db,
             ticket_package_id=jhapa_lot_package_id,
         )
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
 
     def test_location_linked_package_officer_without_ticket_package_id(self, ctx, jhapa_lot_package_id):
         """
@@ -350,8 +432,14 @@ class TestPackageRouting:
 
 
 class TestSupervisorFallback:
-    def test_l1_falls_back_to_supervisor_when_no_l1_officer(self, ctx, db, kl_road_project):
-        """No package L1 → assign workflow step supervisor (L2) instead."""
+    def test_l1_falls_back_to_supervisor_when_no_l1_officer(
+        self, ctx, db, kl_road_project, without_seeded_package_l1s
+    ):
+        """No package L1 → assign workflow step supervisor (L2) instead.
+
+        ⚠ "No package L1" is the precondition, and since D-26 the seed provides one for every
+        lot — so the fixture has to remove them. Without it this test was passing on an accident.
+        """
         from ticketing.models.package import ProjectPackage
 
         pkg = db.execute(
@@ -363,7 +451,7 @@ class TestSupervisorFallback:
         l2_officer = _uid("l2-supervisor")
         ctx.add_scope(
             l2_officer,
-            role_key="pd_piu_safeguards_focal",
+            role_key=ROLE_L1_SUPERVISOR,
             location_code=None,
             package_id=pkg.package_id,
         )
@@ -374,7 +462,7 @@ class TestSupervisorFallback:
             PROJECT_KL_ROAD,
             ctx.db,
             ticket_package_id=pkg.package_id,
-            supervisor_role="pd_piu_safeguards_focal",
+            supervisor_role=ROLE_L1_SUPERVISOR,
         )
         assert assigned == l2_officer
 
@@ -424,10 +512,10 @@ class TestCountryFallback:
         assigned = auto_assign_for_workflow_step(
             ROLE_L1, ORG_DOR, LOC_P1_JHA_BIR, PROJECT_KL_ROAD, ctx.db
         )
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
         assert assigned != national
 
-    def test_country_fallback_not_used_when_local_district_exists(self, ctx):
+    def test_country_fallback_not_used_when_local_district_exists(self, ctx, without_seeded_jhapa_l1):
         national = _uid("national-fallback")
         jhapa = _uid("jhapa-local")
         ctx.add_scope(
@@ -465,9 +553,9 @@ class TestEndToEndSimulation:
     def test_full_standard_intake_jhapa_birtamod(self, db):
         """Regression anchor for B-GR-20260519-KOJH-F6D0 allocation path."""
         assigned = _simulate_create_assignment(db, location_code=LOC_P1_JHA_BIR)
-        assert assigned in (SEEDED_SITE_L1, "l1-officer-2@grm.local")
+        assert assigned in PROVINCE_L1_POOL
 
-    def test_full_intake_with_local_jhapa_officer(self, ctx):
+    def test_full_intake_with_local_jhapa_officer(self, ctx, without_seeded_jhapa_l1):
         jhapa_officer = _uid("jhapa-e2e")
         ctx.add_scope(
             jhapa_officer,

@@ -93,7 +93,7 @@ def test_officer_invite_setup_pending(kc_user, onboarding, expected):
 
 def test_provision_admin_scope_creates_keycloak_user_when_missing():
     db = MagicMock()
-    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["org_admin"]
 
     with patch(
         "ticketing.services.officer_admin.keycloak_configured",
@@ -109,17 +109,17 @@ def test_provision_admin_scope_creates_keycloak_user_when_missing():
         "ticketing.services.officer_admin._upsert_officer_onboarding",
     ) as upsert_ob:
         status = provision_admin_scope_keycloak(
-            db, "Anish@dor.gov.np", "country_admin", "DOR"
+            db, "Anish@dor.gov.np", "org_admin", "DOR"
         )
 
     assert status == "invited"
-    create_user.assert_called_once_with("anish@dor.gov.np", "country_admin", "DOR")
+    create_user.assert_called_once_with("anish@dor.gov.np", "org_admin", "DOR")
     upsert_ob.assert_called_once_with(db, "anish@dor.gov.np", "invited")
 
 
 def test_provision_admin_scope_resends_for_pending_keycloak_user():
     db = MagicMock()
-    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["org_admin"]
     kc_user = {"id": "kc-1", "enabled": True, "requiredActions": ["UPDATE_PASSWORD"]}
 
     with patch(
@@ -134,18 +134,18 @@ def test_provision_admin_scope_resends_for_pending_keycloak_user():
         "ticketing.services.officer_admin._keycloak_send_or_create_setup_email",
     ) as send_setup:
         status = provision_admin_scope_keycloak(
-            db, "anishshrestha.dor@gmail.com", "country_admin", "DOR"
+            db, "anishshrestha.dor@gmail.com", "org_admin", "DOR"
         )
 
     assert status == "invited"
     send_setup.assert_called_once_with(
-        db, "anishshrestha.dor@gmail.com", "country_admin", "DOR"
+        db, "anishshrestha.dor@gmail.com", "org_admin", "DOR"
     )
 
 
 def test_provision_admin_scope_skips_email_for_active_user():
     db = MagicMock()
-    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["org_admin"]
     kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
 
     with patch(
@@ -164,7 +164,7 @@ def test_provision_admin_scope_skips_email_for_active_user():
         "ticketing.services.officer_admin._upsert_officer_onboarding",
     ) as upsert_ob:
         status = provision_admin_scope_keycloak(
-            db, "anishshrestha.dor@gmail.com", "country_admin", "DOR"
+            db, "anishshrestha.dor@gmail.com", "org_admin", "DOR"
         )
 
     assert status == "active"
@@ -175,7 +175,7 @@ def test_provision_admin_scope_skips_email_for_active_user():
 def test_provision_admin_scope_promotes_stale_invited_db_row():
     """DB still says invited after Keycloak onboarding — sync to active, no resend."""
     db = MagicMock()
-    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["org_admin"]
     kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
     ob = MagicMock()
     ob.status = "invited"
@@ -197,17 +197,17 @@ def test_provision_admin_scope_promotes_stale_invited_db_row():
         "ticketing.services.officer_admin._upsert_officer_onboarding",
     ) as upsert_ob:
         status = provision_admin_scope_keycloak(
-            db, "philgaeng@gmail.com", "country_admin", "DOR"
+            db, "officer@example.test", "org_admin", "DOR"
         )
 
     assert status == "active"
     resend.assert_not_called()
-    upsert_ob.assert_called_once_with(db, "philgaeng@gmail.com", "active")
+    upsert_ob.assert_called_once_with(db, "officer@example.test", "active")
 
 
 def test_provision_admin_scope_force_invite_for_active_user():
     db = MagicMock()
-    db.execute.return_value.scalars.return_value.all.return_value = ["country_admin"]
+    db.execute.return_value.scalars.return_value.all.return_value = ["org_admin"]
     kc_user = {"id": "kc-1", "enabled": True, "requiredActions": [], "emailVerified": True}
 
     with patch(
@@ -224,7 +224,7 @@ def test_provision_admin_scope_force_invite_for_active_user():
         status = provision_admin_scope_keycloak(
             db,
             "anishshrestha.dor@gmail.com",
-            "country_admin",
+            "org_admin",
             "DOR",
             force_invite=True,
         )

@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { OfficerRosterEntry, OfficerRosterScope, PackageItem, ProjectItem } from "@/lib/api";
 import { isCountryJurisdictionRole } from "@/lib/jurisdiction";
 
-const ADMIN_ROLE_KEYS = new Set(["super_admin", "country_admin", "project_admin"]);
+// SH-7 4-tier ladder (country_admin retired → org_admin).
+const ADMIN_ROLE_KEYS = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 type RoleChoice = { key: string; label: string };
 
@@ -48,7 +51,7 @@ function scopeOnProject(
 
 /**
  * Coverage column on Settings → Projects → Staffing.
- * Project-wide: KL_ROAD. Package lot: KL_ROAD/01. Location codes appended when set.
+ * Project-wide: KL_ROAD. Package package: KL_ROAD/01. Location codes appended when set.
  */
 export function projectStaffingCoverageLine(
   officer: OfficerRosterEntry,

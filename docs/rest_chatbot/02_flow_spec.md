@@ -1,5 +1,8 @@
 # REST Chatbot Flow Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Flow Engine
 
 Primary flow controller:
@@ -80,6 +83,31 @@ High-level path:
 6. `action_submit_grievance` persists grievance + sends recap
 7. `grievance_review` confirms categories/summary
 8. `done` with grievance outro
+
+#### Where the AI classification sits in that sequence (DPG-15b, verified 2026-08-19)
+
+This ordering is load-bearing and was traced from the code rather than assumed, because a whole
+ticket was drafted on the wrong version of it:
+
+| Step | What happens to the classification |
+|---|---|
+| 3 · `form_grievance` submits details | The grievance row is written (`pending`), then the classification is **enqueued**. Intake never waits |
+| 4 · `contact_form` | runs in the background |
+| 5 · `otp_form` | still running — this step includes an **SMS round-trip** |
+| 6 · `action_submit_grievance` | The grievance is persisted and **the ticket is dispatched to ticketing** with whatever summary exists at that moment |
+| 7 · `grievance_review` | ⏱ **the only wait**: polls up to `CLASSIFICATION_WAIT_SECONDS` (30 s), then renders one of three messages — ready, not ready yet, or will not arrive |
+
+Three consequences worth keeping in view:
+
+- **The wait is already last.** Steps 4–5 give the classification (measured at 14–20.5 s) a long
+  head start, so in the normal path step 7 finds it finished.
+- ⚠ **Except on the short path.** `complainant_consent is False` makes `form_otp` require **no
+  slots at all**, so steps 4–5 can collapse to seconds. The complainant most likely to reach the
+  review before the classification does is the one who declined to share contact details.
+- **A late classification is not lost.** It lands in the grievance row, and
+  `ticketing/tasks/grievance_sync.py` back-fills the summary, categories and location onto the
+  ticket **every two minutes** — so the officer sees it, and so does the complainant's later status
+  check, whether or not step 7 ever showed it.
 
 ### 5.2 Status Check Flow
 

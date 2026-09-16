@@ -1,21 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Grievance API router. Same URL surface and behaviour as Flask backend.
 """
 
+import hmac
+import json
 import logging
 import os
-from typing import Any, Dict, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from backend.clients.messaging_api import send_email as send_email_via_api
 from backend.clients.messaging_api import send_sms as send_sms_via_api
-from backend.config.constants import EMAIL_TEMPLATES, DIC_SMS_TEMPLATES
+from backend.config.constants import DIC_SMS_TEMPLATES
+from backend.services.admin_notifications import build_admin_email
 from backend.services.database_services.grievance_manager import GrievanceDbManager
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# T3-06 step 2 — read audit for GET /api/grievance/{id}.
+#
+# Its own logger name so the trail can be filtered/shipped without dragging along
+# the rest of the router's chatter, and grepped as one stream. Deliberately NOT a
+# public.* table: a log line is reversible, a new table is a migration-stream
+# commitment (CLAUDE.md §Migration traceability). Revisit if the trail needs to be
+# queryable or retained — see PROGRESS.md T3-06.
+#
+# Emits at INFO because LOG_LEVEL=INFO is the deployed default (env.local:23);
+# a .debug record would be invisible in production, which is how
+# grievance_manager.py:172 already fails to be an audit trail.
+audit_logger = logging.getLogger("audit.grievance_read")
 
 grievance_manager = GrievanceDbManager()
 
@@ -33,6 +52,114 @@ class GrievanceClassificationPatchBody(BaseModel):
     grievance_classification_status: str = Field(..., max_length=64)
     grievance_summary: Optional[str] = None
     grievance_categories: Optional[Any] = None
+
+
+class GrievanceRecord(BaseModel):
+    """
+    One row of ``get_grievance_by_id`` (T3-06 step 1).
+
+    Fields are ``Any`` rather than ``str`` on purpose. ``_parse_field_from_database``
+    (base_manager.py) runs ``json.loads`` over *every* string column, so a TEXT value
+    that happens to parse ("5", "2024", a JSON array) reaches this model as int/list.
+    ``grievance_categories``/``follow_up_question`` arrive as lists for that reason.
+    Pinning those as ``str`` would turn ordinary data into a 500 under Pydantic v2,
+    which rejects int->str. Only the psycopg2-native types (datetime, bool) are pinned.
+
+    ``extra="allow"`` is load-bearing: the query is ``SELECT g.*`` plus a complainant
+    and grievance_parties join, so the shape is defined by the tables. A model that
+    omits a column would silently drop it from the API response — verified. Adding a
+    column here is safe; removing one is an API change.
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    # --- public.grievances (SELECT g.*) ---
+    grievance_id: Optional[str] = None
+    complainant_id: Optional[str] = None
+    grievance_categories: Any = None
+    grievance_categories_alternative: Any = None
+    follow_up_question: Any = None
+    grievance_summary: Any = None
+    grievance_description: Any = None
+    grievance_claimed_amount: Any = None
+    grievance_location: Any = None
+    language_code: Any = None
+    grievance_classification_status: Any = None
+    grievance_creation_date: Optional[datetime] = None
+    grievance_modification_date: Optional[datetime] = None
+    is_temporary: Optional[bool] = None
+    source: Any = None
+    grievance_sensitive_issue: Optional[bool] = None
+    grievance_high_priority: Optional[bool] = None
+    grievance_timeline: Any = None
+    case_sensitivity: Any = None
+    vault_payload_ref: Any = None
+    vault_last_updated_at: Optional[datetime] = None
+    is_archived: Optional[bool] = None
+    archived_at: Optional[datetime] = None
+
+    # --- public.complainants (LEFT JOIN via grievance_parties) ---
+    # NOTE: the four ENCRYPTED_FIELDS below (full_name/phone/email/address) are served
+    # as PLAINTEXT. T3-04 landed the server-side decrypt in grievance_manager.py:190
+    # (`_decrypt_sensitive_data` on the JOIN result), which is what let ticketing drop its
+    # client-side decrypt and its DB_ENCRYPTION_KEY. This comment said the opposite until
+    # 2026-08-18 — it described the pre-T3-04 defect and was never updated when the fix
+    # landed. Corrected while writing docs/dpg/privacy-assessment.md, which cites this
+    # boundary. Caveat that survives: _encrypt_field/_decrypt_field return the value
+    # UNCHANGED when DB_ENCRYPTION_KEY is unset or the pgcrypto call raises
+    # (base_manager.py:243, :255), so "plaintext here" is guaranteed, but "ciphertext at
+    # rest" is conditional on the key being present.
+    complainant_full_name: Any = None
+    complainant_phone: Any = None
+    complainant_email: Any = None
+    complainant_address: Any = None
+    complainant_province: Any = None
+    complainant_district: Any = None
+    complainant_municipality: Any = None
+    complainant_ward: Any = None
+    complainant_village: Any = None
+    location_geo: Any = None
+    contact_id: Any = None
+    country_code: Any = None
+    location_code: Any = None
+    location_resolution_status: Any = None
+    level_1_name: Any = None
+    level_2_name: Any = None
+    level_3_name: Any = None
+    level_4_name: Any = None
+    level_5_name: Any = None
+    level_6_name: Any = None
+    level_1_code: Any = None
+    level_2_code: Any = None
+    level_3_code: Any = None
+    level_4_code: Any = None
+    level_5_code: Any = None
+    level_6_code: Any = None
+
+    # --- public.grievance_parties ---
+    party_role: Any = None
+    is_primary_reporter: Optional[bool] = None
+
+
+class GrievanceDetailData(BaseModel):
+    """``data`` block of GET /api/grievance/{id}."""
+
+    model_config = ConfigDict(extra="allow")
+
+    grievance: GrievanceRecord
+    current_status: Optional[Dict[str, Any]] = None
+    status_history: List[Dict[str, Any]] = Field(default_factory=list)
+    files: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class GrievanceDetailResponse(BaseModel):
+    """Envelope of GET /api/grievance/{id} — preserves the Flask response structure."""
+
+    model_config = ConfigDict(extra="allow")
+
+    status: str
+    message: str
+    data: GrievanceDetailData
 
 
 class ComplainantPatchBody(BaseModel):
@@ -74,6 +201,59 @@ def _identity_value_missing(value: Any) -> bool:
     return False
 
 
+def _principal_for_key(x_api_key: Optional[str]) -> str:
+    """
+    Name the caller behind an api key. Never returns or logs the key itself.
+
+    The audit trail needs a principal, not a secret. Keys are compared with
+    compare_digest so this cannot be used as a timing oracle.
+    """
+    if not x_api_key or not x_api_key.strip():
+        return "anonymous"
+    # Compare as bytes, not str: hmac.compare_digest raises TypeError on non-ASCII
+    # str input, and x_api_key is caller-controlled (Starlette decodes headers as
+    # latin-1, so "x-api-key: café" reaches here intact). Unreachable while the
+    # auth dependency rejects first, but this helper is also the natural place to
+    # identify a *rejected* caller — see the audit followup — and it must not raise
+    # there. Real keys are ASCII (secrets.token_urlsafe), so encoding is a no-op for
+    # them; non-ASCII input now falls through to "unrecognized-key" instead of a 500.
+    presented = x_api_key.strip().encode("utf-8")
+    for name, env_var in (("ticketing", "TICKETING_SECRET_KEY"), ("messaging", "MESSAGING_API_KEY")):
+        configured = os.environ.get(env_var, "").strip().encode("utf-8")
+        if configured and hmac.compare_digest(presented, configured):
+            return name
+    return "unrecognized-key"
+
+
+def _audit_grievance_read(
+    grievance_id: str,
+    principal: str,
+    client_host: Optional[str],
+    outcome: str,
+) -> None:
+    """
+    Record one read of a grievance record.
+
+    Emitted at INFO so it survives the deployed LOG_LEVEL. JSON payload so the
+    trail is parseable if it is ever shipped to a collector; the key itself is
+    never included, only the principal it resolves to.
+    """
+    audit_logger.info(
+        "grievance_read %s",
+        json.dumps(
+            {
+                "event": "grievance_read",
+                "grievance_id": grievance_id,
+                "principal": principal,
+                "client": client_host or "unknown",
+                "outcome": outcome,
+                "at": datetime.now(timezone.utc).isoformat(),
+            },
+            sort_keys=True,
+        ),
+    )
+
+
 def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> None:
     valid = {
         k.strip()
@@ -83,7 +263,20 @@ def _ticketing_auth_check(x_api_key: Optional[str] = Header(default=None)) -> No
         )
         if k and k.strip()
     }
-    if valid and (not x_api_key or x_api_key not in valid):
+    if not valid:
+        # Fail-closed (HR-01): an empty key list must NOT silently skip the check.
+        # Only the dev bypass (APP_ENV=dev AUTH_MODE=bypass) may run without a key.
+        if (
+            os.environ.get("APP_ENV", "production").strip().lower() == "dev"
+            and os.environ.get("AUTH_MODE", "keycloak").strip().lower() == "bypass"
+        ):
+            return
+        raise HTTPException(
+            status_code=503,
+            detail="Grievance API key auth not configured "
+            "(set TICKETING_SECRET_KEY/MESSAGING_API_KEY, or APP_ENV=dev AUTH_MODE=bypass for local dev)",
+        )
+    if not x_api_key or x_api_key not in valid:
         raise HTTPException(status_code=401, detail="Invalid API key")
 
 
@@ -110,39 +303,49 @@ def _send_status_update_notifications(
         if created_by:
             base_context["office_user"] = created_by
 
+        # ⚠ F-22. This email used to carry the whole record — narrative, name, phone,
+        # municipality, village, address — to `office_emails`, which is resolved from the
+        # grievance's MUNICIPALITY and not from the case's assigned cast. Everything that
+        # decides what may be sent now lives in `backend.services.admin_notifications`,
+        # shared with the two chatbot-side paths that had the same defect (F-19): one
+        # allow-list and one sensitivity gate, not three copies drifting apart.
         email_data: Dict[str, Any] = {
             "grievance_id": grievance_id,
-            "complainant_id": grievance.get("complainant_id"),
             "grievance_status": status_code,
             "grievance_timeline": grievance.get("grievance_timeline"),
-            "complainant_full_name": grievance.get("complainant_full_name"),
-            "complainant_phone": complainant_phone,
-            "municipality": grievance.get("complainant_municipality"),
-            "village": grievance.get("complainant_village"),
-            "address": grievance.get("complainant_address"),
-            "grievance_details": grievance.get("grievance_description"),
             "grievance_summary": grievance.get("grievance_summary"),
             "grievance_categories": grievance.get("grievance_categories"),
             "grievance_status_update_date": grievance.get("grievance_status_update_date", "N/A"),
+            # Read from the stored row, never inferred. `build_admin_email` treats an ABSENT
+            # key as sensitive, so a query that stops returning this column fails closed.
+            "grievance_sensitive_issue": grievance.get("grievance_sensitive_issue"),
         }
 
         if office_emails:
-            email_subject = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_SUBJECT"]["en"].format(**email_data)
-            email_body = EMAIL_TEMPLATES["GRIEVANCE_STATUS_UPDATE_BODY"]["en"].format(**email_data)
-            try:
-                send_email_via_api(
-                    office_emails,
-                    email_subject,
-                    email_body,
-                    context={**base_context, "channel": "email"},
-                )
+            built = build_admin_email(
+                "GRIEVANCE_STATUS_UPDATE_BODY", email_data, language_code="en", not_provided="N/A"
+            )
+            if built is None:
                 logger.info(
-                    "Status update email sent to %d office staff for %s",
-                    len(office_emails),
+                    "Status update email not sent for %s: suppressed at the staff boundary",
                     grievance_id,
                 )
-            except Exception as email_err:
-                logger.error("Failed to send status update email for %s: %s", grievance_id, email_err)
+            else:
+                email_subject, email_body = built
+                try:
+                    send_email_via_api(
+                        office_emails,
+                        email_subject,
+                        email_body,
+                        context={**base_context, "channel": "email"},
+                    )
+                    logger.info(
+                        "Status update email sent to %d office staff for %s",
+                        len(office_emails),
+                        grievance_id,
+                    )
+                except Exception as email_err:
+                    logger.error("Failed to send status update email for %s: %s", grievance_id, email_err)
 
         if complainant_phone:
             sms_data = {
@@ -187,8 +390,18 @@ def get_available_statuses():
 
 
 @router.post("/api/grievance/{grievance_id}/status")
-def update_grievance_status(grievance_id: str, body: UpdateStatusBody):
-    """Update the status of a specific grievance. Same behaviour as Flask."""
+def update_grievance_status(
+    grievance_id: str,
+    body: UpdateStatusBody,
+    _: None = Depends(_ticketing_auth_check),
+):
+    """
+    Update the status of a specific grievance. Same behaviour as Flask.
+
+    T3-06: authenticated. Unauthenticated, this endpoint mutated grievance state and
+    fired SMS + email to the complainant (_send_status_update_notifications), letting
+    an anonymous caller drive a complainant's notification stream.
+    """
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
@@ -233,12 +446,26 @@ def update_grievance_status(grievance_id: str, body: UpdateStatusBody):
         )
 
 
-@router.get("/api/grievance/{grievance_id}")
-def get_grievance(grievance_id: str):
-    """Get detailed information about a specific grievance. Same response as Flask."""
+@router.get("/api/grievance/{grievance_id}", response_model=GrievanceDetailResponse)
+def get_grievance(
+    grievance_id: str,
+    request: Request,
+    x_api_key: Optional[str] = Header(default=None),
+    _: None = Depends(_ticketing_auth_check),
+):
+    """
+    Get detailed information about a specific grievance. Same response as Flask.
+
+    T3-06: authenticated. This returns the full record including grievance_description
+    and complainant contact fields; it was previously readable by anyone who could
+    reach the port.
+    """
+    principal = _principal_for_key(x_api_key)
+    client_host = request.client.host if request.client else None
     try:
         grievance = grievance_manager.get_grievance_by_id(grievance_id)
         if not grievance:
+            _audit_grievance_read(grievance_id, principal, client_host, "not_found")
             return JSONResponse(
                 status_code=404,
                 content={"status": "ERROR", "message": f"Grievance {grievance_id} not found"},
@@ -254,12 +481,16 @@ def get_grievance(grievance_id: str):
             "status_history": status_history,
             "files": files,
         }
+        # Audited after retrieval succeeds so the record reflects what was actually
+        # disclosed, but before returning so no disclosure can go unrecorded.
+        _audit_grievance_read(grievance_id, principal, client_host, "success")
         return {
             "status": "SUCCESS",
             "message": "Grievance retrieved successfully",
             "data": response_data,
         }
     except Exception as e:
+        _audit_grievance_read(grievance_id, principal, client_host, "error")
         print(f"Error retrieving grievance: {str(e)}")
         return JSONResponse(
             status_code=500,

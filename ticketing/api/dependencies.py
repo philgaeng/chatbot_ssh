@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 FastAPI dependency injection for GRM Ticketing.
 
@@ -7,7 +9,7 @@ Auth:
       • Resolve identity (Keycloak JWT, dev bypass, or internal x-api-key header)
       • Always load ticketing.admin_scopes for the user (country/project admin matrix)
       • Sync Keycloak onboarding status when user_id is an email
-  - require_admin / require_super_admin / require_country_admin: use get_authenticated_user
+  - require_admin / require_super_admin / require_org_admin: use get_authenticated_user
 """
 from __future__ import annotations
 
@@ -28,12 +30,13 @@ from ticketing.services.admin_access import (
     SettingsAction,
     admin_workflow_tracks,
     can_access_platform_settings,
+    can_configure_sensitive_workflows,
     can_create_operational_role,
     can_manage_structure,
     can_see_seah_extended,
     can_view_archived,
     is_any_admin,
-    is_country_admin,
+    is_org_admin,
     is_project_admin,
     is_super_admin,
     load_admin_scopes,
@@ -64,9 +67,17 @@ def verify_api_key(x_api_key: str = Header(...)) -> str:
     """
     settings = get_settings()
     if not settings.ticketing_secret_key:
-        import warnings
-        warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev mode)", stacklevel=2)
-        return x_api_key
+        # Fail-closed (HR-01): only the explicit dev bypass (APP_ENV=dev AUTH_MODE=bypass)
+        # may run without a shared secret. Anywhere else, refuse to serve rather than
+        # accept any API key.
+        if settings.bypass_enabled:
+            import warnings
+            warnings.warn("TICKETING_SECRET_KEY not set — API key check disabled (dev bypass)", stacklevel=2)
+            return x_api_key
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ticketing auth not configured (TICKETING_SECRET_KEY unset)",
+        )
     if x_api_key != settings.ticketing_secret_key:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -85,6 +96,9 @@ class CurrentUser:
     location_code: str | None = None
     keycloak_sub: str | None = None
     admin_scopes: list[AdminScopeRow] = field(default_factory=list)
+    # Track-derived SEAH access (DESIGN-cast-model §3.1): True when the officer is cast on a
+    # SEAH-track workflow. Computed once per request in enrich_user; augments SEAH_ROLES.
+    seah_track_member: bool = False
 
     def matches_assignee(self, assignee_id: str | None) -> bool:
         """True when assignee_id is this officer (email, Keycloak sub, or legacy mock id)."""
@@ -128,8 +142,8 @@ class CurrentUser:
     def is_super_admin(self) -> bool:
         return is_super_admin(self)
 
-    def is_country_admin(self, track: Literal["standard", "seah"] | None = None) -> bool:
-        return is_country_admin(self, track)
+    def is_org_admin(self, track: Literal["standard", "seah"] | None = None) -> bool:
+        return is_org_admin(self, track)
 
     def is_project_admin(
         self,
@@ -152,7 +166,14 @@ class CurrentUser:
 
     @property
     def can_see_seah(self) -> bool:
+        """May open **sensitive grievances** — cast membership only (DECISION §3)."""
         return can_see_seah_extended(self)
+
+    @property
+    def can_configure_sensitive(self) -> bool:
+        """May **administer** sensitive workflows (author / list / bind / staff). Grants no
+        case access — see :attr:`can_see_seah`. DECISION-sensitive-workflows §3."""
+        return can_configure_sensitive_workflows(self)
 
     @property
     def can_view_archived(self) -> bool:
@@ -172,7 +193,9 @@ def _resolve_user_identity(
     """Resolve officer identity from JWT, dev bypass, or trusted internal headers."""
     settings = get_settings()
 
-    if not settings.keycloak_issuer:
+    if settings.bypass_enabled:
+        # Dev bypass (APP_ENV=dev AUTH_MODE=bypass): resolve the mock super-admin, or
+        # the roster officer injected by the Next proxy via x-internal-* headers.
         org = (x_internal_organization_id or "").strip() or "DOR"
         uid = x_internal_user_id or BYPASS_DEFAULT_OFFICER
         return CurrentUser(
@@ -180,6 +203,15 @@ def _resolve_user_identity(
             role_keys=(x_internal_role or "super_admin").split(","),
             organization_id=org,
             keycloak_sub=uid,
+        )
+
+    if not settings.keycloak_issuer:
+        # Fail-closed (HR-01): keycloak mode with no issuer must refuse to serve,
+        # never authenticate everyone as super_admin. (Startup already blocks boot;
+        # this is defense in depth.)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Ticketing auth not configured (KEYCLOAK_ISSUER unset)",
         )
 
     # Prefer JWT when the browser sent one — stale demo bypass cookies must not
@@ -205,9 +237,13 @@ def _resolve_user_identity(
 
     if x_internal_user_id and settings.ticketing_secret_key:
         if x_api_key == settings.ticketing_secret_key:
+            # Least-privilege identity (HR-01): a header-injected caller gets NO roles
+            # by default — no more silent super_admin. Callers that need capability
+            # (the dev-bypass Next proxy) always send an explicit x-internal-role.
+            role_keys = [r.strip() for r in (x_internal_role or "").split(",") if r.strip()]
             return CurrentUser(
                 user_id=x_internal_user_id,
-                role_keys=(x_internal_role or "super_admin").split(","),
+                role_keys=role_keys,
                 organization_id="DOR",
                 keycloak_sub=x_internal_user_id,
             )
@@ -228,6 +264,20 @@ def enrich_user(db: Session, user: CurrentUser) -> CurrentUser:
             user.role_keys = effective
         elif not user.role_keys:
             user.role_keys = load_user_role_keys(db, user.user_id)
+    # Frame-11 (officer lifecycle): a soft-deactivated officer keeps their history but
+    # loses ALL GRM access — strip operational roles and admin scopes at the choke point
+    # every authenticated request passes through.
+    if user.user_id:
+        from ticketing.services.officer_admin import officer_is_active
+
+        if not officer_is_active(db, user.user_id):
+            user.role_keys = []
+            user.admin_scopes = []
+    # Track-derived SEAH membership (DESIGN-cast-model §3.1) — computed after role_keys are
+    # finalized (so a deactivated officer, now role-less, is not a track member).
+    from ticketing.services.seah_visibility import user_is_seah_track_member
+
+    user.seah_track_member = user_is_seah_track_member(db, user.role_keys)
     return user
 
 
@@ -249,11 +299,25 @@ def get_current_user(
         x_internal_organization_id,
         x_api_key,
     )
-    if user.user_id and "@" in user.user_id:
-        from ticketing.services.officer_admin import sync_officer_onboarding_status
+    # The onboarding sync is a Keycloak admin operation. Skip it under the dev bypass
+    # (AUTH_MODE=bypass / APP_ENV=dev has no Keycloak running) so bypass auth doesn't
+    # 500 trying to reach a server that isn't there.
+    if (
+        not get_settings().bypass_enabled
+        and user.user_id
+        and "@" in user.user_id
+    ):
+        # H2-05: throttle the onboarding-status sync to once per TTL per officer. On a cache
+        # hit we skip it entirely — no officer_onboarding read, no Keycloak round-trip, no
+        # write — since the sync is idempotent and any status write invalidates the entry.
+        from ticketing.services import auth_sync_cache
 
-        if sync_officer_onboarding_status(db, user.user_id):
-            db.commit()
+        if not auth_sync_cache.is_fresh(user.user_id):
+            from ticketing.services.officer_admin import sync_officer_onboarding_status
+
+            if sync_officer_onboarding_status(db, user.user_id):
+                db.commit()
+            auth_sync_cache.mark_synced(user.user_id)
     return enrich_user(db, user)
 
 
@@ -274,6 +338,29 @@ def require_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -
     return current_user
 
 
+def require_admin_or_bypass(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> CurrentUser:
+    """Admin-gated under real auth; open to any authenticated identity in dev bypass.
+
+    The officer roster (names / emails / jurisdictions) stays admin-only under Keycloak.
+    In bypass mode (APP_ENV=dev + AUTH_MODE=bypass) it is a demo convenience: the officer
+    switcher must be able to render the roster while acting as a *non-admin* officer,
+    otherwise switching away from admin is a one-way door — the switcher can no longer load
+    the list that would switch you back (D-65, 2026-07-16). `bypass_enabled` is dev-only
+    (HR-01 pins it to APP_ENV=dev + AUTH_MODE=bypass), so this never widens access under
+    real auth.
+    """
+    if get_settings().bypass_enabled:
+        return current_user
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin role required",
+        )
+    return current_user
+
+
 def require_super_admin(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:
     if not current_user.is_super_admin:
         raise HTTPException(
@@ -283,13 +370,13 @@ def require_super_admin(current_user: CurrentUser = Depends(get_authenticated_us
     return current_user
 
 
-def require_country_admin(
+def require_org_admin(
     track: Literal["standard", "seah"] | None = None,
 ):
     def _dep(current_user: CurrentUser = Depends(get_authenticated_user)) -> CurrentUser:
         if current_user.is_super_admin:
             return current_user
-        if current_user.is_country_admin(track):
+        if current_user.is_org_admin(track):
             return current_user
         detail = "Country admin required"
         if track:

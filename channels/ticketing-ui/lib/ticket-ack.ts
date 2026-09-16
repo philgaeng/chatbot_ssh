@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { performAction } from "@/lib/api";
 import type { TicketDetail } from "@/lib/api";
 

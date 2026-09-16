@@ -1,6 +1,7 @@
 # Messaging Rules – WhatsApp and SMS (Staff Notifications)
 
 **Status (June 2026):** Active policy + **project-level officer SMS** (implemented — see agent runbook).  
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Related:** [../services/05_messaging_service.md](../services/05_messaging_service.md), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [13_projects_and_packages.md](13_projects_and_packages.md), [Escalation_rules.md](Escalation_rules.md)  
 **Implementation:** [`agents/officer_sms_project_messaging.md`](agents/officer_sms_project_messaging.md)
 
@@ -88,7 +89,7 @@ Country managers configure officer SMS **per project** under Settings → **Proj
 
 ### 5.1 Who configures
 
-| Action | `super_admin` | `country_admin` | `project_admin` |
+| Action | `super_admin` | `org_admin` | `project_admin` |
 |--------|---------------|-----------------|-----------------|
 | View Messaging section | ✅ | ✅ | ✅ read-only |
 | Edit Messaging | ✅ | ✅ (country scope) | ❌ |
@@ -110,7 +111,7 @@ Copy hint: *“Officers receive a link-only SMS when assigned at checked levels.
 
 ### 5.3 Granularity
 
-- **One config block per project** — same L1–Ln toggles apply to **all** workflow streams on that project (safeguards, hazards, CA, SEAH, custom slots).
+- **One config block per project** — the same L1–Ln toggles apply to **every workflow linked to that project** ([12 §1](12_workflows_configuration.md)).
 - Not per-slot and not on the workflow definition template.
 
 ### 5.4 Relationship to global `notification_rules`
@@ -246,7 +247,7 @@ Use `notify_officer_assignment.delay(...)` after DB commit.
 | Method | Path | Notes |
 |--------|------|-------|
 | `GET` | `/api/v1/projects/{id}/messaging` | Return `officer_messaging` + computed `max_levels` |
-| `PATCH` | `/api/v1/projects/{id}/messaging` | `country_admin` / `super_admin`; validate levels ⊆ 1…max_levels |
+| `PATCH` | `/api/v1/projects/{id}/messaging` | `org_admin` / `super_admin`; validate levels ⊆ 1…max_levels |
 
 Optional: include `officer_messaging` on `GET /projects/{id}` response for fewer round-trips.
 
@@ -272,6 +273,6 @@ Optional: include `officer_messaging` on `GET /projects/{id}` response for fewer
 
 - WhatsApp 1:1 delivery
 - SMS to supervisor / informed / observer tiers
-- Per workflow-stream overrides on the same project
+- Per-workflow overrides on the same project
 - SLA-breach SMS without reassignment
 - Complainant SMS (separate path — orchestrator + `complainant_notifications` settings)

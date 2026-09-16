@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Celery tasks: LLM translation and findings generation.
 
@@ -9,17 +11,21 @@ Two tasks:
                                   stores summary_en → Ticket.ai_summary_en
                                   and full findings → TicketContextCache.findings_json
 
-LLM provider: OpenAI via ticketing/clients/llm_client.py
-  Standard tickets: gpt-4o-mini  (cost-optimised, temperature=0)
-  SEAH tickets:     gpt-4o        (more careful reasoning)
-Key: OPENAI_API_KEY in env.local
+LLM provider: whatever `LLM_BASE_URL` points at, via ticketing/clients/llm_client.py.
+  Standard tickets: the `ticket_findings` model      (cost-optimised, temperature=0)
+  SEAH tickets:     the `ticket_findings_seah` model (more careful reasoning)
+Both names — and the endpoint, and the key — are declared once in backend/config/llm_config.py
+and resolved with `model_for(findings_task(is_seah))`. This module names no model: it used to
+name two, in two places, and one of them fed a persisted provenance field.
 
-DO NOT import from backend/services/ — keep ticketing independent.
+The service-layer boundary stands: no imports from backend/services/. `backend/config/` is
+configuration shared by both surfaces, not the chatbot's service layer (DPG-17).
 """
 
 import logging
 from datetime import datetime, timezone
 
+from backend.config.llm_config import findings_task, model_for
 from ticketing.tasks.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
@@ -109,7 +115,7 @@ def generate_findings(self, ticket_id: str) -> dict:
     Steps:
       1. Build PII-clean context via context_builder.build_and_store()
          → writes to ticketing.ticket_context_cache.context_json
-      2. Call LLM with the context (gpt-4o-mini standard / gpt-4o SEAH)
+      2. Call LLM with the context (the ticket_findings / ticket_findings_seah model)
          → returns {summary_en, key_findings, recommended_action, urgency, languages_detected}
       3. Store full findings_json in ticket_context_cache
       4. Store summary_en in Ticket.ai_summary_en (backward-compat with frontend)
@@ -160,7 +166,9 @@ def generate_findings(self, ticket_id: str) -> dict:
             "generate_findings: ok ticket_id=%s urgency=%s model=%s tokens≈%d",
             ticket_id,
             findings.get("urgency"),
-            "gpt-4o" if ticket.is_seah else "gpt-4o-mini",
+            # Resolved, not re-derived: this line used to restate the ternary as a literal, so
+            # the log could disagree with the call it was logging.
+            model_for(findings_task(ticket.is_seah)).model,
             cache.token_estimate,
         )
         return {
@@ -194,7 +202,6 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
     import time
 
     from ticketing.clients.llm_client import generate_resolved_case_summary_llm
-    from ticketing.clients import llm_client as _llm
     from ticketing.models.base import SessionLocal
     from ticketing.models.ticket import Ticket
     from ticketing.models.ticket_context_cache import TicketContextCache
@@ -245,8 +252,22 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
             is_seah=ticket.is_seah,
             primary_language=data["primary_language"],
         )
+        # D-36: a missing narrative is worth one more attempt before it becomes permanent — the
+        # usual cause is transient provider trouble, and the ladder costs the complainant nothing
+        # because nobody is waiting on this task. After that, publish what we have.
+        if llm_out is None and self.request.retries < 2:
+            logger.warning(
+                "generate_resolved_case_summary: no LLM narrative for ticket_id=%s, retrying "
+                "(attempt %s)", ticket_id, self.request.retries + 1,
+            )
+            raise self.retry(countdown=30 * (self.request.retries + 1))
+
         llm_out = with_investigation_activity_preamble(data, llm_out)
-        model = _llm._MODEL_SEAH if ticket.is_seah else _llm._MODEL_STANDARD
+        # ⚠ This reached into the client module's privates (`_llm._MODEL_SEAH`) rather than
+        # restating the literal, so `grep "gpt-"` could not find it — DPG-12's own acceptance
+        # grep would have passed with this line untouched. It feeds the same `generation_model`
+        # provenance column as the summary builder, so the two must agree by construction.
+        model = model_for(findings_task(ticket.is_seah)).model
         status = "complete" if llm_out else "llm_failed"
 
         summary_json = build_summary_json(db, data, llm_out)
@@ -276,7 +297,15 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
         row.summary_text_en = summary_json.get("findings_summary", {}).get("combined_digest_en")
         db.commit()
 
-        if status == "complete" and row.closure_public_url:
+        # ⚠ **The complainant is notified whenever there is something to read — not only when the
+        # model succeeded** (D-36). This gate was `status == "complete"`, so an unavailable model
+        # meant the person was told their case was resolved and never received the outcome, and
+        # nothing ever retried the document. The deterministic record — dates, duration, who
+        # resolved it, the resolution category and **the officer's own resolution text** — is built
+        # either way; only the AI narrative is missing, and that is not worth withholding a closure
+        # document over. `generation_status` still records the difference for the officer view.
+        publishable = bool((public_json or {}).get("resolution_text_public"))
+        if publishable and row.closure_public_url:
             notify_complainant.delay(
                 ticket_id,
                 (
@@ -284,6 +313,11 @@ def generate_resolved_case_summary(self, ticket_id: str, force: bool = False) ->
                     f"Read the outcome here: {row.closure_public_url}"
                 ),
                 "RESOLVED_CLOSURE",
+            )
+        elif not publishable:
+            logger.error(
+                "generate_resolved_case_summary: nothing publishable for ticket_id=%s "
+                "(status=%s) — the complainant was NOT notified", ticket_id, status,
             )
 
         return {"ticket_id": ticket_id, "status": status, "token": row.closure_public_token}

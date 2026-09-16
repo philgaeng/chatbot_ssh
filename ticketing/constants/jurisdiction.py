@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Default jurisdiction mode per GRM role (how officer scopes are validated and matched).
 
@@ -17,13 +19,16 @@ VALID_JURISDICTION_MODES = frozenset({JURISDICTION_FIELD, JURISDICTION_COUNTRY, 
 # Default when ticketing.roles.jurisdiction_mode is null (seed backfill uses these).
 ROLE_JURISDICTION_DEFAULTS: dict[str, str] = {
     "super_admin": JURISDICTION_GLOBAL,
-    "country_admin": JURISDICTION_COUNTRY,
+    "org_admin": JURISDICTION_COUNTRY,
     "local_admin": JURISDICTION_FIELD,
     "adb_national_project_director": JURISDICTION_COUNTRY,
     "country_l1_fallback": JURISDICTION_COUNTRY,
     "adb_hq_safeguards": JURISDICTION_COUNTRY,
     "adb_hq_project": JURISDICTION_COUNTRY,
     "adb_hq_exec": JURISDICTION_COUNTRY,
+    "donor_consultant": JURISDICTION_COUNTRY,
+    "donor_national": JURISDICTION_COUNTRY,
+    "donor_hq": JURISDICTION_COUNTRY,
 }
 
 

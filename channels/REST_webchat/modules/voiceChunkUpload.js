@@ -50,9 +50,16 @@ async function withRetry(fn) {
 
 /**
  * Upload one recording slice. Returns server payload including upload_id.
+ *
+ * `getUploadId` is a resolver, not a value, and the body is rebuilt on every attempt:
+ * chunk 0 mints the upload_id, so an id that was still null when the call started can
+ * land while a later chunk is between retries. A body captured once would re-send the
+ * id-less version forever and 400 on every attempt. Mirrors `authedFetch` in
+ * channels/ticketing-ui/lib/api.ts, which rebuilds multipart bodies in the thunk for
+ * the same reason.
  */
 export async function uploadVoiceChunk({
-  uploadId,
+  getUploadId,
   chunkIndex,
   blob,
   fileName,
@@ -62,18 +69,21 @@ export async function uploadVoiceChunk({
   flaskSessionId,
   rasaSessionId,
 }) {
-  const formData = new FormData();
-  formData.append("chunk_index", String(chunkIndex));
-  if (uploadId) formData.append("upload_id", uploadId);
-  if (fileName) formData.append("file_name", fileName);
-  if (mimeType) formData.append("mime_type", mimeType);
-  if (grievanceId) formData.append("grievance_id", grievanceId);
-  if (complainantId) formData.append("complainant_id", complainantId);
-  if (flaskSessionId) formData.append("flask_session_id", flaskSessionId);
-  if (rasaSessionId) formData.append("rasa_session_id", rasaSessionId);
-  formData.append("chunk", blob, `chunk_${chunkIndex}.bin`);
+  return withRetry(() => {
+    const formData = new FormData();
+    const uploadId = getUploadId?.();
+    formData.append("chunk_index", String(chunkIndex));
+    if (uploadId) formData.append("upload_id", uploadId);
+    if (fileName) formData.append("file_name", fileName);
+    if (mimeType) formData.append("mime_type", mimeType);
+    if (grievanceId) formData.append("grievance_id", grievanceId);
+    if (complainantId) formData.append("complainant_id", complainantId);
+    if (flaskSessionId) formData.append("flask_session_id", flaskSessionId);
+    if (rasaSessionId) formData.append("rasa_session_id", rasaSessionId);
+    formData.append("chunk", blob, `chunk_${chunkIndex}.bin`);
 
-  return withRetry(() => postVoiceChunk(formData));
+    return postVoiceChunk(formData);
+  });
 }
 
 /**

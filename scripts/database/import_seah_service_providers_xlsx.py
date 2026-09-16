@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Import SEAH service providers from the KL Road Excel workbook into Postgres.
 
 Usage (from repo root):

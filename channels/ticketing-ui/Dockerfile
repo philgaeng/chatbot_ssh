@@ -14,16 +14,19 @@ COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 
-# Build args injected at build time (NEXT_PUBLIC_* are inlined by the compiler)
+# Build args injected at build time (NEXT_PUBLIC_* are inlined by the compiler).
+# Canonical auth config (CL-03): NEXT_PUBLIC_AUTH_MODE mirrors AUTH_MODE and
+# NEXT_PUBLIC_OIDC_ISSUER mirrors KEYCLOAK_ISSUER (see lib/auth/runtime-config.ts).
+# Default keycloak — a build with no args is a real-auth build (secure default).
 # Note: TICKETING_API_URL is a runtime env var (not NEXT_PUBLIC_), set via
 # Docker Compose 'environment' — no need to bake it into the image.
-ARG NEXT_PUBLIC_BYPASS_AUTH=false
+ARG NEXT_PUBLIC_AUTH_MODE=keycloak
 ARG NEXT_PUBLIC_OIDC_ISSUER=
 ARG NEXT_PUBLIC_OIDC_CLIENT_ID=ticketing-ui
 ARG NEXT_PUBLIC_REDIRECT_SIGN_IN=
 ARG NEXT_PUBLIC_REDIRECT_SIGN_OUT=
 
-ENV NEXT_PUBLIC_BYPASS_AUTH=$NEXT_PUBLIC_BYPASS_AUTH
+ENV NEXT_PUBLIC_AUTH_MODE=$NEXT_PUBLIC_AUTH_MODE
 ENV NEXT_PUBLIC_OIDC_ISSUER=$NEXT_PUBLIC_OIDC_ISSUER
 ENV NEXT_PUBLIC_OIDC_CLIENT_ID=$NEXT_PUBLIC_OIDC_CLIENT_ID
 ENV NEXT_PUBLIC_REDIRECT_SIGN_IN=$NEXT_PUBLIC_REDIRECT_SIGN_IN

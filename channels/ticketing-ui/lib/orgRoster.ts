@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { OrganizationItem, PackageItem, ProjectItem } from "@/lib/api";
 
 export type OrgProjectLink = {

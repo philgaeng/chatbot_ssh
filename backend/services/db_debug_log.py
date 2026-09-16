@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Safe one-line summaries for service / DB DEBUG and INFO logs.
 
@@ -115,3 +117,32 @@ def text_len_for_log(label: str, text: Optional[str]) -> str:
     if not isinstance(text, str):
         text = str(text)
     return f"{label}_chars={len(text)}"
+
+
+def text_prefix_for_log(label: str, text: Optional[str], chars: int = 8) -> str:
+    """First ``chars`` characters of free text, plus its length — enough to find the record.
+
+    The owner's rule (2026-08-27): *"prune the logs by just logging the first 8 characters so
+    someone can find it."* **It applies to free text only** — a grievance narrative, a summary, an
+    officer note. A prefix of a *bounded identifier* is not a redaction: 8 characters of a 10-digit
+    phone leaves 8 of 10 digits, and 8 characters of a 6-digit OTP leaves the whole OTP.
+
+    So the rule is per field type, and this function is the free-text half:
+      * free text        → this function
+      * phone            → ``mask_phone_for_log`` (last 4 only)
+      * OTP              → never logged, at any length
+      * whole grievance  → ``grievance_row_summary``
+
+    ⚠ Eight characters of a narrative is still narrative, and can read *"Ram Baha"*. That is a
+    bounded, deliberate trade for findability — the same one ``_grievance_ref`` makes in
+    ``LLM_services.py`` — not an anonymisation. Do not describe it as one.
+    """
+    if text is None:
+        return f"{label}=None"
+    if not isinstance(text, str):
+        text = str(text)
+    if not text:
+        return f"{label}=''"
+    head = text[:chars]
+    suffix = "…" if len(text) > chars else ""
+    return f"{label}={head!r}{suffix} ({len(text)} chars)"

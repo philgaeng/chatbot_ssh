@@ -30,3 +30,34 @@ deployment_environment_urls.local.yaml
 dev-scripts/
 # Certbot/Let's Encrypt on prod — root-owned; never part of image build context
 deployment/certbot
+
+# ── Env files never enter the build context (Q-18 / A-8, 2026-09-06) ──────────
+# The root Dockerfile is `COPY . /app`, so before this every image built on a host
+# holding env.local baked it into a layer. Measured: nepal_chatbot-backend:latest
+# carried /app/env.local, 3318 bytes, mode 600, with 9 secrets in it — AWS keys,
+# DB_ENCRYPTION_KEY, POSTGRES_PASSWORD, SMTP_PASSWORD, TICKETING_SECRET_KEY and more.
+#
+# ⭐ **Removing it changes nothing at runtime, and that was verified, not assumed.**
+# Every service built from this Dockerfile declares `env_file: env.local` in compose,
+# which injects each key as a real environment variable — measured across backend,
+# ticketing_api, ops, celery_llm and grm_celery: 43–57 keys each, **0 missing**. The
+# `load_dotenv()` calls in backend/config/constants.py and friends do not override an
+# existing environment variable, so the baked copy was never the source of any value.
+#
+# Two reasons this had to land before QA-02 publishes anything:
+#   1. A published image cannot be unpublished — a dirty one means rotating 9 secrets.
+#   2. It also closes a hole in a claim: CLAUDE.md says ticketing "decrypts nothing,
+#      and cannot: there is no accessor" (T3-04). True of the code — verified, its
+#      settings expose nothing encryption-related — and false of the filesystem, since
+#      DB_ENCRYPTION_KEY sat in /app/env.local inside the ticketing image. A pinning
+#      test over the code structurally cannot see that.
+#
+# ⚠ **Deliberately narrow — a `.env.*` glob would be wrong here.** `.env.shared`,
+# `.env.open` and `.env.openai` are committed, value-free and *used*: `.env.shared`'s own
+# header says "NEVER put a credential in this file", and `.env.open`/`.env.openai` are read
+# by `tests/backend/test_llm_config_pins.py`. Excluding them buys no secrecy and risks
+# breaking a test that runs inside a container. Only real env files are listed.
+.env
+.env.local
+env.local
+env.*.local

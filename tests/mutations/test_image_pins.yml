@@ -1,0 +1,34 @@
+# Mutation records for tests/repo/test_image_pins.py  (QA-02, sprint 2026-09_qa_automation)
+#
+# The file's original rule is DPG-02's: "a floating tag is a licence you did not choose".
+# QA-02 added first-party images, which are outside that rule — these two records pin the
+# split so it cannot quietly become a hole. Both were RUN against the current tree.
+# Runner: scripts/ops/run_mutations.py
+
+- id: QA-02-a-ui-image-key-dropped
+  target: docker-compose.grm.yml
+  find: "    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/ui:${UI_IMAGE_TAG:-${IMAGE_TAG:-local}}\n"
+  replace: ""
+  tests: tests/repo/test_image_pins.py
+  expect: kills
+  min_failures: 1
+  why: >
+    A service losing its `image:` key silently goes back to building on the deploy host — which
+    is the 2026-09-04 outage, and the Next.js build is the one that caused it.
+    ⭐ **This record is why the test names both images instead of counting them.** The first
+    draft asserted `len(first_party) >= 2`; ten services share the `app` reference, so dropping
+    one `image:` line left nine and the count-based test PASSED while a service had regressed.
+    Naming app and ui separately is the difference between a test and a decoration.
+
+- id: QA-02-b-exclusion-widened-to-a-hostname
+  target: tests/repo/test_image_pins.py
+  find: 'FIRST_PARTY_PREFIX = "${IMAGE_REGISTRY"'
+  replace: 'FIRST_PARTY_PREFIX = "ghcr.io"'
+  tests: tests/repo/test_image_pins.py
+  expect: kills
+  min_failures: 1
+  why: >
+    The exclusion must key on a compose variable this repo defines, never on a registry
+    hostname. Anyone can publish to ghcr.io, so a hostname-based exclusion would excuse every
+    third-party image pulled from there — reopening the exact licence hole DPG-02 closed, and
+    doing it in the file that exists to keep it shut.

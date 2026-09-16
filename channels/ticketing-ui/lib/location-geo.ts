@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Parse complainant map-pin coordinates and build Google Maps links. */
 
 export interface MapCoordinates {

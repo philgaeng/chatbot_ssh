@@ -1,9 +1,14 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Workflow management endpoints — full CRUD for the no-code workflow editor.
 
 Read endpoints: any authenticated officer
-Mutating endpoints: matrix-aware admin (country_admin by track, super_admin)
-SEAH workflows: additionally gated by can_see_seah
+Mutating endpoints: matrix-aware admin (org_admin by track, super_admin)
+Sensitive (SEAH) workflows: additionally gated by ``can_configure_sensitive`` — the
+**configure** capability. This is deliberately *not* ``can_see_seah`` (case access, cast-only):
+an admin administers the sensitive catalog without being able to open a single sensitive
+grievance. See `DECISION-sensitive-workflows.md` §3.
 """
 import re
 import uuid
@@ -14,11 +19,32 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import get_db, get_authenticated_user, CurrentUser
+from ticketing.models.admin_audit_log import AdminAuditLog
+from ticketing.models.organization import Organization
+from ticketing.models.project import Project
+from ticketing.models.project_workflow import ProjectWorkflow
 from ticketing.services.admin_access import (
     SettingsAction,
+    apply_catalog_scope,
+    can_admin_org,
     can_mutate_workflow,
+    catalog_owner_for,
+    is_super_admin,
     require_settings_write,
     workflow_track_from_type,
+)
+from ticketing.services.org_tree import ancestor_org_ids
+from ticketing.services.resolution_catalog import (
+    ResolutionCatalogError,
+    actions_unusable_by,
+    copy_workflow_actions,
+    is_sensitive_workflow,
+    selected_codes,
+)
+from ticketing.services.role_scope import (
+    require_named_jobs,
+    unnamed_jobs,
+    validate_step_roles,
 )
 from ticketing.api.schemas.workflow import (
     SaveAsTemplateBody,
@@ -28,6 +54,7 @@ from ticketing.api.schemas.workflow import (
     WorkflowCreate,
     WorkflowDefinitionResponse,
     WorkflowListResponse,
+    WorkflowOrganizationUpdate,
     WorkflowStepCreate,
     WorkflowStepResponse,
     WorkflowStepUpdate,
@@ -84,8 +111,10 @@ def _require_workflow_write(current_user: CurrentUser, workflow_type: str) -> No
 
 
 def _require_seah(current_user: CurrentUser) -> None:
-    if not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="SEAH admin access required")
+    """Configure-side gate for the sensitive-workflow catalog — not case access.
+    DECISION-sensitive-workflows §3."""
+    if not current_user.can_configure_sensitive:
+        raise HTTPException(status_code=403, detail="Sensitive-workflow admin access required")
 
 
 def _load_workflow(workflow_id: str, db: Session, current_user: CurrentUser) -> WorkflowDefinition:
@@ -99,8 +128,8 @@ def _load_workflow(workflow_id: str, db: Session, current_user: CurrentUser) -> 
     ).scalar_one_or_none()
     if not wf:
         raise HTTPException(status_code=404, detail="Workflow not found")
-    if workflow_track_from_type(wf.workflow_type) == "seah" and not current_user.can_see_seah:
-        raise HTTPException(status_code=403, detail="SEAH admin access required")
+    if workflow_track_from_type(wf.workflow_type) == "seah" and not current_user.can_configure_sensitive:
+        raise HTTPException(status_code=403, detail="Sensitive-workflow admin access required")
     return wf
 
 
@@ -111,15 +140,23 @@ def list_workflows(
     workflow_type: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     is_template: Optional[bool] = Query(None),
+    for_organization_id: Optional[str] = Query(
+        None,
+        description=(
+            "GRM-122: only workflows/templates owned by this organization or one ABOVE it — what a "
+            "new workflow of that organization may start from. Must be inside the caller's reach."
+        ),
+    ),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowListResponse:
     q = select(WorkflowDefinition).options(
         selectinload(WorkflowDefinition.steps),
         selectinload(WorkflowDefinition.assignments),
+        selectinload(WorkflowDefinition.owner_organization),
     )
-    # Hide SEAH workflows from non-SEAH users
-    if not current_user.can_see_seah:
+    # Hide sensitive workflow definitions from admins without the configure capability
+    if not current_user.can_configure_sensitive:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     if workflow_type:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) == workflow_type.lower())
@@ -127,6 +164,17 @@ def list_workflows(
         q = q.where(WorkflowDefinition.status == status)
     if is_template is not None:
         q = q.where(WorkflowDefinition.is_template == is_template)
+    if for_organization_id:
+        # Ancestor-aware on purpose — unlike apply_catalog_scope, which omits what is owned above
+        # the viewer: a PD-ADB workflow may start from DOR's template (DESIGN §3.1.1).
+        if not can_admin_org(db, current_user, for_organization_id):
+            raise HTTPException(status_code=403, detail="You can only create workflows for organizations you manage.")
+        q = q.where(WorkflowDefinition.owner_organization_id.in_(
+            ancestor_org_ids(db, for_organization_id, include_self=True)
+        ))
+    else:
+        # SH-7 §S5: org-scoped catalog — a scoped org_admin sees global + own-subtree-owned only.
+        q = apply_catalog_scope(q, db, current_user, WorkflowDefinition.owner_organization_id)
 
     workflows = db.execute(q.order_by(WorkflowDefinition.display_name)).scalars().all()
     return WorkflowListResponse(
@@ -144,7 +192,7 @@ def list_workflow_routing_options(
     from ticketing.services.workflow_routing import list_catalog_classifications
 
     intake_routes = list(INTAKE_ROUTE_CATALOG)
-    if not current_user.can_see_seah:
+    if not current_user.can_configure_sensitive:
         intake_routes = [r for r in intake_routes if r["key"] != "seah_intake"]
     return {
         "classifications": list_catalog_classifications(db),
@@ -160,7 +208,7 @@ def list_templates(
     """Returns built-in template definitions + admin-created templates."""
     built_ins = []
     for key, tpl in BUILT_IN_TEMPLATES.items():
-        if key == "default_seah" and not current_user.can_see_seah:
+        if key == "default_seah" and not current_user.can_configure_sensitive:
             continue
         built_ins.append({
             "workflow_id": f"__builtin_{key}",
@@ -189,7 +237,7 @@ def list_templates(
         selectinload(WorkflowDefinition.steps),
         selectinload(WorkflowDefinition.assignments),
     ).where(WorkflowDefinition.is_template.is_(True))
-    if not current_user.can_see_seah:
+    if not current_user.can_configure_sensitive:
         q = q.where(func.lower(WorkflowDefinition.workflow_type) != "seah")
     db_templates = db.execute(q).scalars().all()
 
@@ -209,7 +257,30 @@ def get_workflow(
     current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> WorkflowDefinitionResponse:
     wf = _load_workflow(workflow_id, db, current_user)
-    return WorkflowDefinitionResponse.model_validate(wf)
+    out = WorkflowDefinitionResponse.model_validate(wf)
+    out.used_by_projects = list(db.execute(
+        select(Project.name)
+        .join(ProjectWorkflow, ProjectWorkflow.project_id == Project.project_id)
+        .where(ProjectWorkflow.workflow_id == workflow_id)
+        .distinct()
+        .order_by(Project.name)
+    ).scalars())
+    return out
+
+
+def _owner_for_new_workflow(db: Session, current_user: CurrentUser, requested: Optional[str], track: str) -> str:
+    """GRM-122: the organization a new workflow or template belongs to. A platform admin must choose
+    one; an org_admin's defaults to its own and may be any organization inside its reach."""
+    if requested:
+        if db.get(Organization, requested) is None:
+            raise HTTPException(status_code=422, detail=f"Organization '{requested}' not found")
+        if not is_super_admin(current_user) and not can_admin_org(db, current_user, requested, track):
+            raise HTTPException(status_code=403, detail="You can only create workflows for organizations you manage.")
+        return requested
+    default = None if is_super_admin(current_user) else catalog_owner_for(current_user, track)
+    if not default:
+        raise HTTPException(status_code=422, detail="Choose the organization this workflow belongs to.")
+    return default
 
 
 # ── Create ────────────────────────────────────────────────────────────────────
@@ -241,6 +312,11 @@ def create_workflow(
         version=1,
         is_template=payload.is_template,
         updated_by_user_id=current_user.user_id,
+        # GRM-116/GRM-122: every workflow and template belongs to an organization — it decides which
+        # resolution actions it can offer. Chosen by a platform admin; an org_admin's own by default.
+        owner_organization_id=_owner_for_new_workflow(
+            db, current_user, payload.owner_organization_id, workflow_track_from_type(normalized_type)
+        ),
     )
     db.add(wf)
 
@@ -267,6 +343,9 @@ def create_workflow(
                         "informed_roles": s.informed_roles,
                         "observer_roles": s.observer_roles,
                         "informed_pii_access": s.informed_pii_access,
+                        "tier_labels": dict(s.tier_labels or {}),
+                        "required_tiers": list(s.required_tiers or []),
+                        "staff_per_package": bool(s.staff_per_package),
                         "stakeholders": s.stakeholders,
                         "expected_actions": s.expected_actions,
                     }
@@ -289,9 +368,27 @@ def create_workflow(
             informed_roles=s.get("informed_roles") or [],
             observer_roles=s.get("observer_roles") or [],
             informed_pii_access=bool(s.get("informed_pii_access")),
+            tier_labels=s.get("tier_labels") or {},
+            required_tiers=s.get("required_tiers") or [],
+            staff_per_package=bool(s.get("staff_per_package")),
             stakeholders=s.get("stakeholders"),
             expected_actions=s.get("expected_actions"),
         ))
+
+    # GRM-116: a copy of a database workflow or template gets a COPY of its resolution actions —
+    # never inherited, so a later change to the source does not reach it. From a built-in template or
+    # from scratch it starts with none, and cannot be published until it has one.
+    clone_src = (
+        payload.clone_from_id
+        if payload.clone_from_id and not payload.clone_from_id.startswith("__builtin_")
+        and db.get(WorkflowDefinition, payload.clone_from_id)
+        else None
+    )
+    if clone_src:
+        try:
+            copy_workflow_actions(db, clone_src, wf)
+        except ResolutionCatalogError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     db.commit()
     db.refresh(wf)
@@ -321,6 +418,69 @@ def update_workflow(
     return WorkflowDefinitionResponse.model_validate(wf)
 
 
+# ── Organization (GRM-122) ────────────────────────────────────────────────────
+
+@router.patch(
+    "/workflows/{workflow_id}/organization",
+    response_model=WorkflowDefinitionResponse,
+    summary="Change the organization a workflow or template belongs to",
+)
+def change_workflow_organization(
+    workflow_id: str,
+    payload: WorkflowOrganizationUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+) -> WorkflowDefinitionResponse:
+    """Move a workflow or template to another organization (GRM-122, DESIGN §3.1.1).
+
+    Refused while its resolution-action list holds an action the new organization could not use —
+    one line per action, so the admin knows what to remove. Moving **down** (DOR → PD-ADB) never
+    hits this; sideways, up or to another ministry can. The caller must manage both organizations.
+    """
+    wf = _load_workflow(workflow_id, db, current_user)  # sensitive workflows: configure capability
+    _require_workflow_write(current_user, wf.workflow_type)
+    track = workflow_track_from_type(wf.workflow_type)
+
+    target = db.get(Organization, payload.organization_id)
+    if target is None:
+        raise HTTPException(status_code=422, detail=f"Organization '{payload.organization_id}' not found")
+    current = wf.owner_organization_id
+    if not is_super_admin(current_user) and (
+        not can_admin_org(db, current_user, target.organization_id, track)
+        or (current is not None and not can_admin_org(db, current_user, current, track))
+    ):
+        raise HTTPException(status_code=403, detail="You can only move workflows between organizations you manage.")
+    if current == target.organization_id:
+        return WorkflowDefinitionResponse.model_validate(wf)
+
+    blocked = actions_unusable_by(db, wf.workflow_id, target.organization_id)
+    if blocked:
+        owners = {
+            o.organization_id: o.name
+            for o in db.execute(
+                select(Organization).where(Organization.organization_id.in_({a.owner_organization_id for a in blocked}))
+            ).scalars()
+        }
+        raise HTTPException(
+            status_code=422,
+            detail="\n".join(
+                f"Remove '{a.label}' first — it belongs to {owners.get(a.owner_organization_id, a.owner_organization_id)}."
+                for a in blocked
+            ),
+        )
+
+    wf.owner_organization_id = target.organization_id
+    wf.updated_by_user_id = current_user.user_id
+    db.add(AdminAuditLog(
+        actor_user_id=current_user.user_id,
+        action="workflow_organization_changed",
+        payload={"workflow_id": wf.workflow_id, "from_organization_id": current, "to_organization_id": target.organization_id},
+    ))
+    db.commit()
+    db.refresh(wf)
+    return WorkflowDefinitionResponse.model_validate(wf)
+
+
 # ── Publish ───────────────────────────────────────────────────────────────────
 
 @router.post("/workflows/{workflow_id}/publish", response_model=WorkflowDefinitionResponse, summary="Publish workflow")
@@ -333,12 +493,65 @@ def publish_workflow(
     _require_workflow_write(current_user, wf.workflow_type)
     if wf.status == "archived":
         raise HTTPException(status_code=422, detail="Cannot publish an archived workflow")
+    # GRM-116: only a published workflow can be bound to a project, so this is what guarantees a case
+    # never meets an empty list on a non-sensitive workflow — the empty list stays the resolve form's
+    # signal for a sensitive one.
+    if not is_sensitive_workflow(wf) and not selected_codes(db, wf.workflow_id):
+        raise HTTPException(
+            status_code=422,
+            detail="Add at least one resolution action before publishing.",
+        )
     active_steps = [s for s in wf.steps if not s.is_deleted]
     missing = [s.display_name for s in active_steps if not s.assigned_role_key]
     if missing:
         raise HTTPException(
             status_code=422,
             detail=f"Cannot publish: steps missing assigned role: {', '.join(missing)}",
+        )
+    # Every job at every level must be named before the workflow can be used by a project —
+    # the names are what officers read, and a project cannot supply them (doc 12 §6.2).
+    unnamed = [
+        f"{s.display_name}: {', '.join(unnamed_jobs(s))}"
+        for s in active_steps
+        if unnamed_jobs(s)
+    ]
+    if unnamed:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot publish: name every job at each level first — "
+                + "; ".join(unnamed[:5])
+            ),
+        )
+    # One role key may back only ONE slot in a workflow (2026-08-09). A cast assignment is
+    # stored as a role_key with no step or tier beside it, so two slots sharing a key are
+    # indistinguishable in the data: officers staffed into the earlier slot surface against the
+    # later one, and — worse — assignment and go-live resolve by role_key, so being "kept
+    # informed" at one level silently makes someone a candidate Actor at another.
+    from ticketing.services.cast_staffing import duplicate_slot_keys
+
+    dupes = duplicate_slot_keys(active_steps)
+    if dupes:
+        detail = "; ".join(f"{key} is used at {' and '.join(slots)}" for key, slots in sorted(dupes.items()))
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Cannot publish: one job cannot be filled by the same role at two levels, "
+                "because officers assigned to one would appear at the other. "
+                f"Give each its own job: {detail}"
+            ),
+        )
+
+    # SH-2: every step's role references must exist and match the workflow track —
+    # publish is the full-workflow gate that also catches legacy/wrong-track bindings.
+    for s in active_steps:
+        validate_step_roles(
+            db,
+            workflow_type=wf.workflow_type,
+            assigned_role_key=s.assigned_role_key,
+            supervisor_role=s.supervisor_role,
+            informed_roles=s.informed_roles,
+            observer_roles=s.observer_roles,
         )
     wf.status = "published"
     wf.version = (wf.version or 0) + 1
@@ -380,6 +593,9 @@ def save_as_template(
         is_template=True,
         template_source_id=workflow_id,
         updated_by_user_id=current_user.user_id,
+        # A template takes the workflow's organization (GRM-122's rule, needed here so its copied
+        # resolution actions stay usable — an ownerless template could list none).
+        owner_organization_id=src.owner_organization_id,
     )
     db.add(tpl)
     for s in sorted(src.steps, key=lambda x: x.step_order):
@@ -394,8 +610,15 @@ def save_as_template(
                 informed_roles=s.informed_roles or [],
                 observer_roles=s.observer_roles or [],
                 informed_pii_access=s.informed_pii_access,
+                tier_labels=dict(s.tier_labels or {}),
+                required_tiers=list(s.required_tiers or []),
+                staff_per_package=bool(s.staff_per_package),
                 stakeholders=s.stakeholders, expected_actions=s.expected_actions,
             ))
+    try:
+        copy_workflow_actions(db, workflow_id, tpl)  # GRM-116 — a copy, never inherited
+    except ResolutionCatalogError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     db.commit()
     db.refresh(tpl)
     return WorkflowDefinitionResponse.model_validate(tpl)
@@ -462,6 +685,11 @@ def add_step(
     wf = _load_workflow(workflow_id, db, current_user)
     _require_workflow_write(current_user, wf.workflow_type)
 
+    tier_toggle_mode = any(
+        f in payload.model_fields_set
+        for f in ("supervisor_enabled", "participants_enabled", "observers_enabled")
+    )
+
     # Append at the end
     max_order = db.execute(
         select(WorkflowStep.step_order)
@@ -475,16 +703,45 @@ def add_step(
         step_order=max_order + 1,
         step_key=payload.step_key or _slug(payload.display_name),
         display_name=payload.display_name,
-        assigned_role_key=payload.assigned_role_key,
+        assigned_role_key=payload.assigned_role_key or "",
         response_time_hours=payload.response_time_hours,
         resolution_time_days=payload.resolution_time_days,
         supervisor_role=payload.supervisor_role,
         informed_roles=payload.informed_roles or [],
         observer_roles=payload.observer_roles or [],
         informed_pii_access=payload.informed_pii_access,
+        actor_can_reassign=payload.actor_can_reassign,
+        tier_labels={k: v.model_dump() for k, v in (payload.tier_labels or {}).items()},
+        required_tiers=list(payload.required_tiers or []),
+        staff_per_package=bool(payload.staff_per_package),
         stakeholders=payload.stakeholders,
         expected_actions=payload.expected_actions,
     )
+    # Tier-toggle editor (DESIGN-cast-model §3.5): derive tier fields from on/off toggles,
+    # minting synthetic per-step-tier keys (+ their plumbing role rows) for enabled empty slots.
+    if tier_toggle_mode:
+        from ticketing.services.cast_staffing import set_step_tier_keys
+
+        set_step_tier_keys(
+            db, wf, step,
+            supervisor=bool(payload.supervisor_enabled),
+            participants=bool(payload.participants_enabled),
+            observers=bool(payload.observers_enabled),
+        )
+
+    # SH-2: role references must exist and match the workflow track (final state).
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=step.assigned_role_key or None,
+        supervisor_role=step.supervisor_role,
+        informed_roles=step.informed_roles,
+        observer_roles=step.observer_roles,
+    )
+    # Every enabled job carries the author's name (doc 12 §6.2). Checked on the FINAL state,
+    # after the toggles above decided which jobs this level has.
+    require_named_jobs(step)
+
     db.add(step)
     db.commit()
     db.refresh(step)
@@ -507,6 +764,18 @@ def update_step(
         raise HTTPException(status_code=404, detail="Step not found")
 
     fields_set = payload.model_fields_set
+
+    # SH-2: validate any role field being SET here (existing refs untouched by this
+    # PATCH aren't re-checked — publish gates the whole workflow).
+    validate_step_roles(
+        db,
+        workflow_type=wf.workflow_type,
+        assigned_role_key=payload.assigned_role_key if "assigned_role_key" in fields_set else None,
+        supervisor_role=payload.supervisor_role if "supervisor_role" in fields_set else None,
+        informed_roles=payload.informed_roles if "informed_roles" in fields_set else None,
+        observer_roles=payload.observer_roles if "observer_roles" in fields_set else None,
+    )
+
     if "display_name" in fields_set:
         step.display_name = payload.display_name
     if "step_key" in fields_set:
@@ -525,10 +794,42 @@ def update_step(
         step.observer_roles = payload.observer_roles or []
     if "informed_pii_access" in fields_set:
         step.informed_pii_access = bool(payload.informed_pii_access)
+    if "actor_can_reassign" in fields_set:
+        step.actor_can_reassign = bool(payload.actor_can_reassign)
+    if "tier_labels" in fields_set:
+        step.tier_labels = {k: v.model_dump() for k, v in (payload.tier_labels or {}).items()}
+    if "required_tiers" in fields_set:
+        step.required_tiers = list(payload.required_tiers or [])
+    if "staff_per_package" in fields_set:
+        step.staff_per_package = bool(payload.staff_per_package)
     if "stakeholders" in fields_set:
         step.stakeholders = payload.stakeholders
     if "expected_actions" in fields_set:
         step.expected_actions = payload.expected_actions
+
+    # Tier-toggle editor (DESIGN-cast-model §3.5): re-derive tier fields from on/off toggles.
+    # An omitted toggle keeps the tier's current state (partial update never clobbers).
+    if any(f in fields_set for f in ("supervisor_enabled", "participants_enabled", "observers_enabled")):
+        from ticketing.services.cast_staffing import set_step_tier_keys
+
+        supervisor = (
+            bool(payload.supervisor_enabled) if "supervisor_enabled" in fields_set
+            else step.supervisor_role is not None
+        )
+        participants = (
+            bool(payload.participants_enabled) if "participants_enabled" in fields_set
+            else bool(step.informed_roles)
+        )
+        observers = (
+            bool(payload.observers_enabled) if "observers_enabled" in fields_set
+            else bool(step.observer_roles)
+        )
+        set_step_tier_keys(db, wf, step, supervisor=supervisor, participants=participants, observers=observers)
+
+    # Every enabled job carries the author's name (doc 12 §6.2) — checked on the final state,
+    # so enabling a job and forgetting to name it is refused rather than silently falling back
+    # to the bound role's name.
+    require_named_jobs(step)
 
     db.commit()
     db.refresh(step)

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Form loop driver: required_slots -> extract -> validate -> apply -> ask or complete.
 """

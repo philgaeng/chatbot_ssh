@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Daily ops report (spec 11 §11) — run by the ops scheduler at 07:00 Asia/Kathmandu.
 
@@ -28,19 +30,33 @@ def _safe_scalar(db, sql: str, default=0):
         return val if val is not None else default
     except Exception as exc:
         logger.warning("report query failed (%s): %s", sql[:40], exc)
+        # ⚠ Roll back, or this row's failure blanks every row after it. Postgres aborts the
+        # whole transaction on any error, so without this the next query raises
+        # InFailedSqlTransaction, and so does the one after that — one bad column name
+        # rendered the ENTIRE report as `n/a` (2026-08-24). The degradation is meant to be
+        # per-row; it was per-report.
+        try:
+            db.rollback()
+        except Exception:  # pragma: no cover — nothing useful to do if rollback itself fails
+            pass
         return f"n/a ({type(exc).__name__})"
 
 
 def _activity_rows(db) -> list[tuple[str, object]]:
+    # ⚠ Every column below was checked against the live schema on 2026-08-24. Until then
+    # these queries named columns that do not exist (`grievances.created_at`,
+    # `tickets.status`, `ticket_overdue_episodes.created_at`, `ticket_files.created_at`),
+    # so no activity row had ever returned a number on any deployment. If you add a row,
+    # run it — `\d ticketing.<table>` — do not infer the column name from the model.
     win = "now() - interval '24 hours'"
     rows: list[tuple[str, object]] = []
-    rows.append(("Grievances submitted (24h)", _safe_scalar(db, f"SELECT count(*) FROM public.grievances WHERE created_at > {win}")))
+    rows.append(("Grievances submitted (24h)", _safe_scalar(db, f"SELECT count(*) FROM public.grievances WHERE grievance_creation_date > {win}")))
     rows.append(("Tickets created (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.tickets WHERE created_at > {win}")))
-    rows.append(("Tickets resolved (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.tickets WHERE updated_at > {win} AND status = 'resolved'")))
-    rows.append(("Currently open tickets", _safe_scalar(db, "SELECT count(*) FROM ticketing.tickets WHERE status NOT IN ('resolved','closed','archived')")))
+    rows.append(("Tickets resolved (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.tickets WHERE updated_at > {win} AND status_code = 'RESOLVED'")))
+    rows.append(("Currently open tickets", _safe_scalar(db, "SELECT count(*) FROM ticketing.tickets WHERE status_code NOT IN ('RESOLVED','CLOSED') AND NOT is_archived")))
     # SLA breaches + files (best-effort; degrade to n/a if tables differ).
-    rows.append(("SLA-breach episodes (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.ticket_overdue_episodes WHERE created_at > {win}")))
-    rows.append(("Files uploaded (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.ticket_files WHERE created_at > {win}")))
+    rows.append(("SLA-breach episodes (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.ticket_overdue_episodes WHERE started_at > {win}")))
+    rows.append(("Files uploaded (24h)", _safe_scalar(db, f"SELECT count(*) FROM ticketing.ticket_files WHERE uploaded_at > {win}")))
     rows.append(("Officer logins (24h)", _safe_scalar(db, f"SELECT count(*) FROM keycloak.event_entity WHERE type = 'LOGIN' AND to_timestamp(event_time/1000) > {win}")))
     return rows
 

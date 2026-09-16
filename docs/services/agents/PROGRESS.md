@@ -6,6 +6,7 @@
 **Runbooks:** [`ops-foundation-and-health.md`](ops-foundation-and-health.md) · [`security-monitoring-and-hardening.md`](security-monitoring-and-hardening.md)
 
 **Status legend:** ☐ todo · ◐ in progress · ☑ done · ⊘ skipped/won't-do (note why)
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ---
 

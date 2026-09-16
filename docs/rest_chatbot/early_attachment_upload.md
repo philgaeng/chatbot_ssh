@@ -1,5 +1,8 @@
 # Early attachment upload — spec & progress
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 **Goal:** Users can attach images, documents, and audio at any point in the REST webchat flow. IDs and DB stubs are created on first upload when needed; existing IDs are reused when a flow starts.
 
 ## Locked decisions

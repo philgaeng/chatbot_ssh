@@ -1,6 +1,8 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   EMPTY_TICKET_LIST_FILTERS,
@@ -13,6 +15,7 @@ import {
 import { useAuth } from "@/app/providers/AuthProvider";
 import { StatusBadge, PriorityBadge, IntakeRouteBadge, UrgencyDot, CountBubble } from "@/components/ui/Badge";
 import { SlaCountdown } from "@/components/ui/SlaCountdown";
+import { ErrorCard } from "@/components/ui/ErrorCard";
 import { TicketListFiltersBar } from "@/components/tickets/TicketListFiltersBar";
 
 function TicketRow({ ticket }: { ticket: TicketListItem }) {
@@ -56,6 +59,8 @@ export default function AllTicketsPage() {
   const [tickets, setTickets] = useState<TicketListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const seqRef = useRef(0);
   const [filters, setFilters] = useState<TicketListFilterValues>(EMPTY_TICKET_LIST_FILTERS);
   const [debouncedQ, setDebouncedQ] = useState("");
 
@@ -69,14 +74,28 @@ export default function AllTicketsPage() {
     [filters, debouncedQ],
   );
 
-  useEffect(() => {
+  function load() {
     if (!isAuthenticated) return;
+    const seq = ++seqRef.current;
     setLoading(true);
+    setError(null);
     listTickets({ page_size: 100, ...apiFilters })
-      .then((r) => { setTickets(r.items); setTotal(r.total); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [isAuthenticated, apiFilters]);
+      .then((r) => {
+        if (seq !== seqRef.current) return; // stale response — a newer load has started
+        setTickets(r.items);
+        setTotal(r.total);
+      })
+      .catch((e) => {
+        if (seq !== seqRef.current) return;
+        console.error(e);
+        setError(e instanceof Error ? e.message : "Couldn't load tickets.");
+      })
+      .finally(() => {
+        if (seq === seqRef.current) setLoading(false);
+      });
+  }
+
+  useEffect(load, [isAuthenticated, apiFilters]);
 
   return (
     <div className="p-6">
@@ -98,6 +117,8 @@ export default function AllTicketsPage() {
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+        ) : error ? (
+          <ErrorCard message="Couldn't load tickets." onRetry={load} />
         ) : tickets.length === 0 ? (
           <div className="p-8 text-center text-gray-400 text-sm">
             {ticketListFiltersActive(filters) ? "No tickets match your filters." : "No tickets found."}

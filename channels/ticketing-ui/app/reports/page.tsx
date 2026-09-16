@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -681,7 +683,7 @@ export default function ReportsPage() {
                 {savingLibrary ? "Saving…" : "Save overview to report library"}
               </button>
               {librarySaved && (
-                <span className="text-xs text-green-600">✓ Saved — assign roles in Quarterly email tab</span>
+                <span className="text-xs text-green-600">✓ Saved — assign recipients in Quarterly email tab</span>
               )}
             </div>
           )}
@@ -810,7 +812,7 @@ export default function ReportsPage() {
                 </button>
                 {librarySaved && (
                   <span className="text-xs text-green-600 font-medium self-center">
-                    ✓ Saved — assign roles in Quarterly email tab
+                    ✓ Saved — assign recipients in Quarterly email tab
                   </span>
                 )}
               </>

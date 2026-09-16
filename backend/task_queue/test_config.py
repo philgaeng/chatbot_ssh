@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Test configuration for the Nepal Chatbot Queue System.
 

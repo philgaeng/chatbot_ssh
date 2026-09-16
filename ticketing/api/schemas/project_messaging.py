@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pydantic schemas for project-level officer messaging config."""
 from __future__ import annotations
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """LLM classification trigger and retrieve-time polling."""
 
 from __future__ import annotations
@@ -13,8 +15,23 @@ from rasa_sdk.executor import CollectingDispatcher
 from backend.config.classification_status import LLM_FAILED, LLM_SKIPPED
 from backend.config.database_constants import GRIEVANCE_CLASSIFICATION_STATUS
 
-CLASSIFICATION_POLL_MAX_SECONDS = 20.0
+# ⚠ **Kept as a name, not as the number.** The deadline is `CLASSIFICATION_WAIT_SECONDS` in
+# `backend/config/llm_config.py` (DPG-15b) — 30 s, down from the 20 s literal that used to live
+# here. It was lowered rather than raised: the review step runs *after* submission, so the
+# grievance is already filed and the classification reaches the officer through the two-minute
+# ticketing sync whether or not the complainant ever sees it. A longer wait buys silence.
+CLASSIFICATION_POLL_MAX_SECONDS = 30.0        # fallback only; the registry is the source
 CLASSIFICATION_POLL_INTERVAL_SECONDS = 0.5
+
+
+def classification_wait_seconds() -> float:
+    """How long the conversation waits for a classification, from the registry."""
+    try:
+        from backend.config.llm_config import get_llm_settings
+
+        return float(get_llm_settings().classification_wait_seconds)
+    except Exception:  # pragma: no cover - configuration must never break intake
+        return CLASSIFICATION_POLL_MAX_SECONDS
 
 
 def grievance_has_classification_content(
@@ -39,7 +56,7 @@ async def load_grievance_for_classification(
         logger.error("retrieve_classification: missing grievance_id")
         return None
 
-    deadline = time.monotonic() + CLASSIFICATION_POLL_MAX_SECONDS
+    deadline = time.monotonic() + classification_wait_seconds()
     grievance_data: Optional[Dict[str, Any]] = None
 
     while True:
@@ -135,7 +152,18 @@ async def trigger_async_classification(
             or form.district,
             "flask_session_id": session_id,
             "session_id": session_id,
-            "values": {"grievance_description": grievance_description},
+            # ⚠ The grievance narrative is DELIBERATELY ABSENT (DPG-34 step 3). It used to
+            # travel here as `"values": {"grievance_description": ...}`, which serialised the
+            # text into Redis on every intake — and Redis snapshots to disk (D-63), so the
+            # broker held narratives at rest, unencrypted, in a store nothing backs up and no
+            # retention policy names.
+            #
+            # The task reads it from Postgres by `grievance_id` instead. Safe because
+            # `create_or_update_grievance` in `intake_submit.py` is a HARD write on the submit
+            # path and runs BEFORE this trigger — the row is always there.
+            #
+            # ⚠ Do not "helpfully" put the text back to save a query. Removing the store is the
+            # point; a redacted copy would still be a copy.
         }
         form.logger.info(
             "classification_trigger_prepare grievance_id=%s session_id=%s "

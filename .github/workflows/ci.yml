@@ -1,0 +1,636 @@
+name: CI
+
+# HR-05 (2026-07 hardening sprint) — docs/sprints/2026-07_hardening/03-ci-pipeline-spec.md
+#
+# Five independent gates, run in parallel:
+#   backend-tests  — Postgres 15 service, all three Alembic streams, pytest
+#                    (ticketing/orchestrator/actions/backend, @integration included,
+#                     @live_llm excluded — it costs money; see the fifth job)
+#   ui-checks      — channels/ticketing-ui: tsc --noEmit, eslint, next build
+#   webchat-checks — channels/webchat
+#   docs-links     — relative markdown link check under docs/ (excludes archive/) AND the
+#                    root-level *.md, where CLAUDE.md lives — see the job for why both
+#   dpg-platform-independence — DPG-24: the LLM paths, live, against the OPEN configuration.
+#                    ⚠ NOT a required status check, deliberately — see its header.
+#
+# ⚠ **The sixth gate lives in `images.yml`, not here** — `e2e` needs this commit's images to
+# exist before it can pull them, and `needs:` in that workflow is the only way to express that.
+# Putting it here raced the build and skipped (measured 2026-09-07, run 34063394930). It is a
+# required-check context like any other; the workflow it sits in does not change that.
+#
+# ⚠ This comment said "three" and named three of four until 2026-08-20; `webchat-checks` had been
+# added without it. A header that undercounts its own jobs is how a gate goes unnoticed.
+#
+# `dev/**` is included in the push triggers because the 2026-07 hardening sprint
+# works off a single shared `dev/hardening` branch (see CLAUDE.md git workflow).
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "integration/**"
+      - "dev/**"
+      # `dpg/**` added 2026-08-18. DPG-01 wired tests/repo into the pytest step below —
+      # the SPDX walker and the licence-classifier pins, whose whole purpose is to fail
+      # when a commit breaks a compliance claim. But the DPG sprint works off `dpg/sprint*`
+      # branches, which matched none of the patterns above, so those pins ran on nobody's
+      # machine but the author's for nine commits. Same defect as the 27 test files CI never
+      # collected (docs/sprints/2026-08-llm/followups/ci-untested-root-test-files.md): a gate
+      # that does not run is decoration. Adding the sprint's own branch prefix is the fix;
+      # the general lesson is that wiring a test into CI is two edits, not one.
+      - "dpg/**"
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    # 10 → 15 on 2026-08-19: the job itself runs in ~3 min, so the old budget was ample until a
+    # hung apt step spent all of it. The step now has its own 4-minute limit, so this headroom
+    # cannot mask a hang — it only stops a slow-but-working runner from failing a good build.
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: grievance_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        # Keep in lockstep with docker-compose.yml (licence pin — see the comment there).
+        image: redis:8.10
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      # Read by backend/config/constants.py (DB_CONFIG), ticketing/config/settings.py
+      # (TicketingSettings) and ops/config.py (OpsSettings) — all three streams and the
+      # app code share these POSTGRES_* names, so one set of values wires everything.
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: grievance_db_test
+      # Dev bypass (no live Keycloak in CI) — matches tests/ticketing/_host_env.py default.
+      # APP_ENV=dev + AUTH_MODE=bypass is the single-flag scheme the fail-closed guards
+      # key on (CL-03); KEYCLOAK_ISSUER empty is fine because bypass ignores it.
+      KEYCLOAK_ISSUER: ""
+      TICKETING_SECRET_KEY: ci-test-secret
+      APP_ENV: dev
+      AUTH_MODE: bypass
+      # pgcrypto passphrase for the four ENCRYPTED_FIELDS on public.complainants. Any value
+      # works — it is a symmetric passphrase, and nothing in CI reads production data.
+      #
+      # Required, not optional: without it `_encrypt_field` returns its input unchanged
+      # (`if not self.encryption_key: return encrypted_value`), so T3-04's decryption tests
+      # would encrypt nothing, decrypt nothing, and **pass vacuously** — plaintext in,
+      # plaintext out, assertion satisfied. That is D-09's exact failure mode, which T3-04
+      # exists to close. `test_the_fixture_really_is_encrypted` is the guard that caught it
+      # here (it failed on the first real CI run, doing precisely its job); the fix is to
+      # give CI the key, not to relax the guard.
+      DB_ENCRYPTION_KEY: ci-test-pgcrypto-passphrase
+      # Redis (backend app / celery import requires REDIS_HOST — task_queue/config.py).
+      REDIS_HOST: localhost
+      REDIS_PORT: "6379"
+      REDIS_DB: "0"
+      # Dummy SMTP so EmailClient.__init__ (messaging.py) resolves a profile instead of
+      # raising "SMTP is not configured"; orchestrator flow tests mock the actual send.
+      SMTP_SERVER: localhost
+      SMTP_PORT: "1025"
+      SMTP_USERNAME: ci
+      SMTP_PASSWORD: ci
+      SMTP_FROM: ci@example.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history, not the default shallow depth-1 clone. tests/repo/test_doc_headers.py
+          # checks that no commit changed a spec's body without touching its header, which needs
+          # `git log -- <file>` to see more than the tip. ⚠ On a shallow clone that test SKIPS
+          # rather than passes (it says so) — but a skipped rule enforces nothing, so give it
+          # the history it needs here rather than discovering the gap later.
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10" # matches Dockerfile (python:3.10-slim)
+          cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements.grm.txt
+            requirements-dev.txt
+
+      # requirements.txt installs pyvips, but pyvips is a binding — without the system
+      # libvips it imports far enough to raise OSError("cannot load library
+      # libvips.so.42"), which is NOT an ImportError, so test_image_compression.py's
+      # `pytest.importorskip("pyvips")` guard does not catch it and the file fails to
+      # COLLECT. That took the whole job down.
+      #
+      # Found the first time this branch was ever pushed. T3-08 added tests/backend to CI
+      # and verified it "on a clean migrate+seed matching CI's steps" — but locally, where
+      # pyvips is not installed at all, so the same 4 tests skipped cleanly and the gap was
+      # invisible. Local simulation of CI is not CI: same lesson as D-25/D-35 (repo-level
+      # reasoning vs infrastructure reality), arriving from a third direction.
+      #
+      # Installing the library rather than broadening the skip guard is deliberate. The
+      # Dockerfile treats libvips as REQUIRED (it fails the build if HEIF support is
+      # missing), so image compression is a real production path — and these 4 tests have
+      # never run in CI. Skipping them would be the quarantine pattern T3-08 removed.
+      # Package names copied from the Dockerfile rather than guessed. The runtime library
+      # is `libvips42` on older Debian but `libvips42t64` since the time64 transition
+      # (verified in the backend image: `dpkg -S` says libvips42t64 owns libvips.so.42), so
+      # naming the runtime package directly would break on some runners and not others.
+      # `libvips-dev` keeps a stable name across both and pulls the runtime in.
+      # The Dockerfile keeps ownership of the HEIF assertion — it is the image that has to
+      # serve HEIF uploads.
+      # ⚠ This step ate three consecutive runs on 2026-08-19 (32266510148, 32266858967,
+      # 32269200562). Each hung here and was killed by the job's 10-minute budget, which GitHub
+      # reports as **cancelled** — indistinguishable in the UI from a human pressing stop, and
+      # reached before a single test ran. The run three hours earlier finished the whole job in
+      # 2m51s, so this is a slow or unreachable apt mirror, not a slow step.
+      #
+      # `timeout-minutes` on the step turns a hang into a clear, fast failure that names the
+      # cause instead of silently consuming the job. `Acquire::Retries` handles the ordinary
+      # flake without a human. Neither hides a real outage — they make one legible.
+      - name: Install system libraries (libvips — mirrors the Dockerfile)
+        timeout-minutes: 6
+        run: |
+          # The runners default to azure.archive.ubuntu.com. When that CDN is unreachable — as it
+          # was for ~45 minutes on 2026-08-19 — apt logs `Ign:` for every line, retries, and only
+          # then falls back to archive.ubuntu.com. The fallback WORKS; it is the time spent
+          # failing over that killed three runs. Pointing at the mirror that answers skips the
+          # wait entirely, and costs nothing when Azure is healthy.
+          #
+          # ⚠ The first attempt at this rewrite silently did nothing. It passed three paths to one
+          # `sed -i`, and `/etc/apt/sources.list` does not exist on a noble runner — sed aborts on
+          # the missing file before touching the others, and `2>/dev/null || true` swallowed the
+          # error. The run failed identically and the log looked the same, which is the worst
+          # possible outcome for a workaround. Hence the loop, and hence the echo below: a
+          # workaround that cannot be seen working is a workaround you get to debug twice.
+          for f in /etc/apt/sources.list /etc/apt/sources.list.d/*.list /etc/apt/sources.list.d/*.sources; do
+            if [ -f "$f" ]; then
+              sudo sed -i 's|azure.archive.ubuntu.com|archive.ubuntu.com|g' "$f"
+            fi
+          done
+          #
+          # ⚠ And the sources files are not where the hostname lives. The echo below is what
+          # finally showed it: the runner's sources say `mirror+file:/etc/apt/apt-mirrors.txt`,
+          # a MIRRORLIST — so rewriting the sources matched nothing at all, twice, while apt went
+          # on reading the dead Azure URL out of that file. This is the line that actually does
+          # the work.
+          if [ -f /etc/apt/apt-mirrors.txt ]; then
+            echo 'https://archive.ubuntu.com/ubuntu/' | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+          fi
+          echo "--- apt mirrorlist after the rewrite ---"
+          cat /etc/apt/apt-mirrors.txt 2>/dev/null || echo "(no mirrorlist on this runner)"
+          grep -rhoE 'https?://[a-z0-9.-]*archive\.ubuntu\.com' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/ 2>/dev/null | sort -u || true
+          sudo apt-get -o Acquire::Retries=3 update
+          sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends \
+            libvips-dev \
+            libvips-tools \
+            libheif1 \
+            libde265-0
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements.grm.txt -r requirements-dev.txt
+
+      - name: Run migrations (public -> ticketing -> ops)
+        run: |
+          python -m alembic -c migrations/public/alembic.ini upgrade head
+          python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+          python -m alembic -c ops/migrations/alembic.ini upgrade head
+
+      # CL-01 self-consistency gate: the freshly-migrated public schema must
+      # equal the committed canonical baseline (migrations/public/expected_public_schema.sql).
+      # Guards against public.* drifting from its own baseline again. pg_dump is
+      # pinned to 15 (matches the postgres:15 service) via `docker run` so the
+      # dump text is stable regardless of the runner's client version.
+      # NOTE: real-CI verification pending (no gh access in the authoring
+      # environment); validated locally against scratch DBs.
+      - name: Public schema self-consistency gate
+        env:
+          PGHOST: localhost
+          PGPORT: "5432"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGDATABASE: grievance_db_test
+        run: bash scripts/ci/check_public_schema_baseline.sh check
+
+      - name: Seed KL Road locations + demo workflows
+        # tests/ticketing/conftest.py and the `pytest.mark.integration` tests
+        # (test_officer_assignment.py, test_project_routing.py, test_entity_codes.py)
+        # read the KL_ROAD project/workflow/location rows seeded here — same commands
+        # as the dev/SSH startup runbook, docs/deployment/03_operations.md §2 step 4.
+        #
+        # `--reset` makes every run start from a pristine seed. That is what makes the
+        # @integration tests deterministic in CI: assignment ranks by active ticket load,
+        # so a DB carrying tickets from previous runs would pick different (still valid)
+        # officers. Keep the reset.
+        run: |
+          python -m ticketing.seed.import_locations_json \
+            --country NP \
+            --en backend/dev-resources/location_dataset/en_cleaned.json \
+            --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+            --max-level 3
+          python -m ticketing.seed.mock_tickets --reset
+
+      - name: Run pytest (repo, ticketing, orchestrator, actions, backend)
+        # DPG-01 (2026-08-17) — tests/repo ADDED, and it must stay in this list. This step names
+        # its test paths explicitly, so a directory that is not named here never runs: 21 test
+        # files sitting directly in tests/ are invisible to CI for exactly that reason (logged in
+        # docs/sprints/2026-08-llm/PROGRESS.md). tests/repo holds repo-wide pins — the SPDX
+        # licence-header walker today, the hard-coded-model grep pin next — whose whole purpose is
+        # to fail when someone adds a file that breaks a compliance claim. A pin CI does not run is
+        # the quarantine pattern T3-08 dismantled, wearing a different hat.
+        #
+        # T3-08 (2026-07-15) — the `-m "not integration"` quarantine is GONE, and
+        # tests/backend is included. Both were measured, not assumed:
+        #
+        #   before: 364 passed /   3 skipped / 390 deselected  — 3m16s
+        #   after:  897 passed /   7 skipped /   0 deselected  — 3m32s
+        #
+        # ⇒ +533 tests gated for +16s. The quarantine's stated reasons were fixed by the
+        # seed/test reconciliation (4f0140dd) and never re-enabled: verified green on a
+        # clean migrate+seed matching this job's steps exactly, stable over three
+        # consecutive runs, with tests/ticketing alone at 563/5/0. Closes
+        # docs/sprints/2026-07_schema_and_legacy_cleanup/followups/
+        # integration-seed-reconciliation.md.
+        #
+        # This job seeds precisely so the @integration tests can run (see the seed step
+        # above, which names them). Deselecting them meant paying the seeding cost and
+        # gating nothing with it — which is how test_officer_assignment.py rotted
+        # unnoticed when b8cab274 grew the L1 roster (D-44).
+        #
+        # DO NOT re-add `-m "not integration"` to silence a red build. These tests
+        # require the seeded DB above; if one fails, the seed and the test have drifted
+        # apart, and that is the bug. `pytest.ini` documents the marker's contract.
+        #
+        # DPG-24 (2026-08-20) — `-m "not live_llm"` is ADDED, and it is not the pattern above
+        # wearing a new hat. `live_llm` tests make REAL calls to a third-party provider: they cost
+        # money and they go red when someone else's service does. This job must stay free, offline,
+        # hermetic and *blocking*, so it does not run them.
+        #
+        # ⚠ The half that stops this being a quarantine is the `dpg-platform-independence` job
+        # below, which selects exactly this marker and runs on **every commit**. If you ever find
+        # `live_llm` deselected in BOTH places, the tests have become decoration — delete them
+        # instead, so the absence is visible. (T3-08 dismantled precisely that arrangement once;
+        # `pytest.ini` carries the full note.)
+        run: |
+          PYTHONPATH=. python -m pytest tests/repo tests/ticketing tests/orchestrator tests/actions tests/backend -q --maxfail=20 --strict-markers -m "not live_llm"
+
+  ui-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: channels/ticketing-ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20" # matches channels/ticketing-ui/Dockerfile (node:20-alpine)
+          cache: "npm"
+          cache-dependency-path: channels/ticketing-ui/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint . --max-warnings=-1
+
+      # HR-06: vitest seed (lib/user-messages.test.ts, lib/queueTiles.test.ts) — pure
+      # logic only, no DOM/env needed. Runs in well under a second locally.
+      - name: Unit tests
+        run: npm test
+
+      # Verified locally (no backend env vars, no .env.local): completes in ~20s,
+      # well under the ~5 min budget in spec §1 — safe to keep in CI.
+      - name: Build
+        run: npm run build
+
+      # QA-02 scope 4. The UI bakes its auth mode at build time, so one commit makes two
+      # images and only one of them has a login. This refuses a `-bypass` reference in any
+      # compose file that describes a real environment. Defence in depth — HR-01 already makes
+      # production fail closed on AUTH_MODE=bypass — but a test-only image reaching a real
+      # environment is worth two checks, and this one fails in CI rather than at 3am.
+      # Lives in ui-checks because it is a property of the UI image; costs milliseconds.
+      - name: No bypass UI image in a deployable stack
+        working-directory: .
+        run: bash scripts/ci/check_no_bypass_image.sh
+
+  webchat-checks:
+    # T3-03 (2026-08 tier3-structural sprint) — docs/sprints/archive/2026-08_tier3_structural/
+    # 02-webchat-voice-spec.md. The webchat has no build step (static ES modules served
+    # as-is); this job exists solely to run the module unit tests, which guard the
+    # voice-chunk upload ordering. That class of bug is client-side only — a server test
+    # structurally cannot catch a regression in it. Runs in well under a second.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: channels/REST_webchat
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: channels/REST_webchat/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+  docs-links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check relative markdown links and repo paths
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import sys
+          from urllib.parse import unquote
+
+          # ── Why this checks two things, in two different scopes ───────────────────────
+          #
+          # It used to walk docs/ only, and to look only at `](path)` markdown links. Both
+          # limits let the same break through on 2026-08-19: CLAUDE.md — the binding project
+          # instruction file — had pointed at `docs/deployment/COMMIT_STRATEGY.md` ever since
+          # the doc reorganisation renamed that file. In two places, one of them the recovery
+          # procedure for commits that land on `main` by accident, which is a thing you look
+          # up precisely when you are already in trouble. It was out of scope on both counts:
+          # CLAUDE.md sits at the repo root, and the reference is a backticked path, not a
+          # markdown link.
+          #
+          # So: markdown links across docs/ AND the root files; backticked repo paths across
+          # the root files only.
+          #
+          # ⚠ The backtick check is deliberately NOT extended to docs/, and not because of the
+          # count (112, measured 2026-08-19 and logged as a followup). It is that a backticked
+          # path in prose does not always mean "go read this". A post-mortem legitimately names
+          # the file it just described deleting; a spec legitimately names one it proposes
+          # creating. Both would be flagged and both flags would be wrong. Markdown links carry
+          # that distinction on their own — nobody links to a file they just deleted — so the
+          # link check is safe everywhere. Root-level files are instructions rather than
+          # history, which is why the stricter check holds there.
+
+          DOCS_ROOT = "docs"
+          LINK_RE = re.compile(r"\]\(([^)#\s]+)\)")
+          REPO_DIRS = "docs|backend|ticketing|scripts|channels|ops|deployment|tests|migrations"
+          PATH_RE = re.compile(
+              r"`((?:" + REPO_DIRS + r")/[^`\s]+?\.(?:md|py|sh|ts|tsx|yml|yaml|json|sql|ini|txt))`"
+          )
+          # Template placeholders are not paths: `docs/sprints/<sprint>/followups/<slug>.md`
+          PLACEHOLDER = re.compile(r"[<>{}*]")
+
+          broken = []
+          checked_links = 0
+          checked_paths = 0
+
+          def docs_files():
+              for dirpath, dirnames, filenames in os.walk(DOCS_ROOT):
+                  dirnames[:] = [d for d in dirnames if "archive" not in d]
+                  if "archive" in dirpath:
+                      continue
+                  for fname in filenames:
+                      if fname.endswith(".md"):
+                          yield os.path.join(dirpath, fname)
+
+          def root_files():
+              for fname in sorted(os.listdir(".")):
+                  if fname.endswith(".md") and os.path.isfile(fname):
+                      yield fname
+
+          # (1) relative markdown links — docs/ and the root files
+          for fpath in list(docs_files()) + list(root_files()):
+              dirpath = os.path.dirname(fpath) or "."
+              with open(fpath, encoding="utf-8") as f:
+                  text = f.read()
+              for match in LINK_RE.finditer(text):
+                  target = match.group(1)
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  target = unquote(target)
+                  checked_links += 1
+                  if not os.path.exists(os.path.normpath(os.path.join(dirpath, target))):
+                      broken.append((fpath, target, "link"))
+
+          # (2) backticked repo paths — root files only, see the note above
+          for fpath in root_files():
+              with open(fpath, encoding="utf-8") as f:
+                  text = f.read()
+              for match in PATH_RE.finditer(text):
+                  target = match.group(1)
+                  if PLACEHOLDER.search(target):
+                      continue
+                  checked_paths += 1
+                  if not os.path.exists(target):
+                      broken.append((fpath, target, "path"))
+
+          print(f"checked {checked_links} relative link(s) under {DOCS_ROOT}/ and the root *.md")
+          print(f"checked {checked_paths} backticked repo path(s) in the root *.md")
+          if broken:
+              print(f"Found {len(broken)} broken reference(s):")
+              for fpath, target, kind in broken:
+                  print(f"  [{kind}] {fpath} -> {target}")
+              sys.exit(1)
+          print("All references resolve OK.")
+          PY
+
+  # ── DPG-24 — platform independence, demonstrated rather than asserted ──────────────────────
+  #
+  # THE GATE: the product's own LLM paths — both surfaces — calling a real provider through the
+  # OPEN configuration, on every commit. Indicator 4 asks that the proprietary dependency be
+  # replaceable. A green run here is that claim executing, which is stronger evidence than any
+  # document, because it cannot silently rot.
+  #
+  # ⚠ NEVER MAKE THIS A REQUIRED STATUS CHECK (Q-17, decided).
+  # It calls a live third-party API, so it is flaky by construction: a provider outage reddens it
+  # and nothing in this repository is wrong. A gate that blocks merges on someone else's uptime
+  # gets routed around within a week, and then it gates nothing while still looking like a gate.
+  # It runs on every commit, it is read, and it is not required. If you are here because the job
+  # is red and you want to unblock a merge: you already can — that is the design.
+  #
+  # ⚠ AND DO NOT LET IT NORMALISE RED. CI on `integration/stage` went green on 2026-08-19 for the
+  # first time since 08-08 (D-26), and the lesson recorded there is that a permanently red build is
+  # indistinguishable from one nobody watches. This job is allowed to go red on a provider outage;
+  # it is not allowed to sit red for a week. If it does, the answer is to fix it or delete it —
+  # not to stop looking.
+  #
+  # ⚠ WHY CI MAY ROUTE FREELY WHILE PRODUCTION PINS A PROVIDER.
+  # The Hugging Face router selects a partner per request unless the model id names one
+  # (the `model:provider` suffix form). Production MUST pin, because otherwise the company processing a
+  # given grievance is not knowable in advance and DPG-04 cannot assess it
+  # (docs/dpg/privacy-assessment.md F-17). This job need not, and should not: it sends ONLY
+  # DPG-20's synthetic benchmark data and a fixed probe string — no complainant text, ever — so
+  # automatic routing is safe here and the multi-vendor fan-out is exactly the independence
+  # evidence indicator 4 wants.
+  #   ⚠ THE INVARIANT: if this job ever gains access to production data, the routing policy must
+  #   change with it. The split is safe because of the DATA, not because of the environment.
+  #
+  # ⚠ COST — the only recurring line in the whole DPG plan, against a time-boxed envelope.
+  # Q-19 (2026-08-20) funds Sprint 2 to a few hundred USD, owner-paid, covering the first demo
+  # months — and that envelope is SHARED with the pilot's own classification traffic. This job
+  # outlives those months. Therefore:
+  #   * the live subset is small and FIXED — a handful of round-trips, never the benchmark suite
+  #     (scripts/ops/llm_benchmark.py is where the expensive thing lives, and it is not in CI);
+  #   SPEND CEILING: ⚠ **THERE IS NO SPENDING-LIMIT CONTROL TO SET.** This line used to say "a hard token cap
+  #     must be set on the Hugging Face account before this job's first run". Checked against
+  #     Hugging Face's own pricing documentation on 2026-08-20: a configurable spending limit is a
+  #     **Team/Enterprise organization** feature, and the account this job uses is a personal free
+  #     account (verified via whoami-v2: type=user, isPro=false, no orgs). The instruction was
+  #     unactionable as written.
+  #     **What actually bounds the spend, and it is structural rather than configured:**
+  #       – free tier is ~$0.10 of included credits per month; past that every request returns 402;
+  #       – extra usage is **pre-paid**, so the balance you load IS the ceiling. Load $20 and $20 is
+  #         the most that can ever be spent. Do not enable auto-recharge if it is ever offered.
+  #     ⚠ **And the consequence for THIS job:** on the free tier the credits are exhausted within a
+  #     few runs, after which every live test skips and the guard below correctly fails the job. So
+  #     a small pre-paid balance is not optional if this job is to run per-commit — otherwise take
+  #     the documented degraded cadence (nightly + release tags) and say so in the badge;
+  #   * measured monthly spend belongs in this header once there is a month of it.
+  #   MEASURED SPEND: ⚠ not yet measured — this job has never run in CI. What IS measured, from
+  #   running the same suite by hand on 2026-08-20: 5 live tests, ~7 requests, all small. The
+  #   expensive thing (scripts/ops/llm_benchmark.py) is deliberately not in CI. Record the real
+  #   monthly figure HERE once there is a month of it — not in a document nobody opens with the
+  #   workflow.
+  #   WHO PAYS AFTER THE DEMO MONTHS: ⚠ UNRESOLVED, stated plainly rather than left to be
+  #   discovered. Q-19's envelope is time-boxed and personally expensed; this job is not
+  #   time-boxed. If the answer is still unresolved when the envelope ends, reduce the cadence to
+  #   nightly + release tags and say so in the badge and here — weaker evidence, still honest.
+  #   ⚠ What is NOT acceptable is a job that exists, never runs, and is cited as evidence.
+  #
+  # ⚠ FORK PRs GET NO SECRETS, so the job SKIPS rather than fails. A red X on every external
+  # contribution is the wrong signal for a public-good repository, and it is also just wrong: a
+  # contributor's patch did not break anything.
+  dpg-platform-independence:
+    runs-on: ubuntu-latest
+    # Generous relative to the work (a handful of calls) because the failure mode is a hung
+    # third-party request, not slow tests. The step has its own tighter budget below, so this
+    # ceiling cannot mask a hang — the same lesson the apt-mirror outage taught backend-tests.
+    timeout-minutes: 15
+    env:
+      # ── The open configuration, as a reviewer would set it ────────────────────────────────
+      # Repo VARIABLES, not literals, so swapping a model after DPG-23 reports is a settings
+      # change rather than a code change — and so this file never becomes a second place where a
+      # model name lives. backend/config/llm_config.py is the only one (DPG-17), and that is
+      # pinned by tests/backend/test_llm_config_pins.py.
+      LLM_BASE_URL: ${{ vars.DPG_LLM_BASE_URL || 'https://router.huggingface.co/v1' }}
+      LLM_API_KEY: ${{ secrets.HF_TOKEN }}
+      ASR_BASE_URL: ${{ vars.DPG_ASR_BASE_URL || 'https://router.huggingface.co/v1' }}
+      ASR_API_KEY: ${{ secrets.HF_TOKEN }}
+      # Empty ⇒ the registry default, which is today's PROPRIETARY model — so leaving these unset
+      # would make the job pass against OpenAI while reporting that open weights work. That is the
+      # most embarrassing false green available here, and
+      # test_the_endpoint_the_test_reached_is_the_one_the_registry_names is the assertion that
+      # catches it. Set the repo variables.
+      MODEL_CLASSIFY: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_EXTRACT: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TRANSLATE: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_DETECT: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TICKET_FINDINGS: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_TICKET_FINDINGS_SEAH: ${{ vars.DPG_MODEL_CLASSIFY }}
+      MODEL_ASR: ${{ vars.DPG_MODEL_ASR }}
+      # ⚠ One model for every text task, one for transcription — the owner's decision (Q-21,
+      # 2026-08-18, re-confirmed 08-20). If a per-task split is ever justified by measurement, it
+      # gets its own variable AND the measurement that justified it.
+      LLM_MAX_RETRIES: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip cleanly when there is no token (fork PRs)
+        id: gate
+        run: |
+          if [ -z "${{ secrets.HF_TOKEN }}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=DPG platform-independence::Skipped — no HF_TOKEN available."
+            echo "This is expected on pull requests from forks, which never receive secrets."
+            echo "It is NOT a failure: nothing in the contribution is wrong, and a red X here"
+            echo "would be the wrong signal on a public-good repository."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.run == 'true'
+        with:
+          python-version: "3.10"
+          cache: pip
+
+      - name: Install the LLM client only
+        if: steps.gate.outputs.run == 'true'
+        # Deliberately NOT `-r requirements.txt`. This job needs the OpenAI SDK, pydantic and
+        # pytest — not pyvips, not psycopg2, not Rasa. backend-tests already proves the full
+        # install works; paying for it twice buys a slower job and a second thing that can break
+        # for reasons unrelated to the gate.
+        run: |
+          python -m pip install --upgrade pip
+          pip install "openai==1.70.0" "pydantic>=2" pydantic-settings pytest
+
+      - name: The LLM paths, live, against the open configuration
+        if: steps.gate.outputs.run == 'true'
+        # Its own timeout: a hung third-party request must fail fast and say why, rather than
+        # silently consuming the job budget. That is the D-26 apt-mirror lesson applied to the
+        # most hang-prone step in this workflow.
+        timeout-minutes: 8
+        # ⚠ THE `-q ... || true` IS NOT SLOPPINESS — read the guard below before touching it.
+        #
+        # These tests SKIP (not fail) when the provider refuses on quota — a 402/429 says the
+        # account is out of budget this minute, which is not a defect in this repository, and a job
+        # that reddens on it teaches everyone to ignore the job (D-26: a permanently red build is
+        # indistinguishable from one nobody watches).
+        #
+        # ⚠ But a run that skipped EVERYTHING must not be reported as evidence — that is the
+        # quarantine pattern wearing a green tick. So the exit code is captured, and the job fails
+        # if **nothing actually passed**. Skips are tolerated; an empty gate is not.
+        run: |
+          set -o pipefail
+          PYTHONPATH=. python -m pytest \
+            tests/backend/test_llm_live.py \
+            tests/ticketing/test_ticketing_llm_live.py \
+            -m live_llm -v --strict-markers | tee live.log || true
+
+          if grep -qE '[0-9]+ (passed|xpassed)' live.log; then
+            echo "::notice title=DPG platform-independence::the open configuration answered — $(grep -oE '[0-9]+ passed' live.log | head -1)"
+          else
+            echo "::error title=DPG platform-independence::NOTHING PASSED. Every live test skipped"
+            echo "or failed, so this run is not evidence of anything. Most likely the provider"
+            echo "refused on quota for the whole window — check the account before re-running."
+            exit 1
+          fi
+
+          if grep -qE '[0-9]+ failed' live.log; then
+            echo "::error title=DPG platform-independence::a live test FAILED — that is a real"
+            echo "finding, not a quota problem: quota refusals skip. Read the failure."
+            exit 1
+          fi
+
+      - name: Say which endpoint this actually proved
+        if: steps.gate.outputs.run == 'true' && always()
+        # The evidence is worth nothing if the log does not say what it ran against. Host only —
+        # never the key.
+        run: |
+          echo "::notice title=DPG platform-independence::endpoint=${LLM_BASE_URL} model=${MODEL_CLASSIFY:-<registry default — SET THE REPO VARIABLE>}"

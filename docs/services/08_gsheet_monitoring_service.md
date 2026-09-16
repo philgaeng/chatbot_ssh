@@ -1,5 +1,16 @@
 # GSheet Monitoring Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
+> **RETIRED (CL-02, July 2026).** The Google Sheets monitoring channel
+> (`channels/monitoring-gsheet/`) and its backend (`GET /gsheet-get-grievances`,
+> `backend/api/routers/gsheet.py`, `backend/api/gsheet_monitoring_api.py`, the
+> `GSHEET_BEARER_TOKEN` secret, and the nginx `/gsheet-get-grievances` proxy) were
+> removed. The endpoint was already dead (`db_manager.gsheet.get_grievances_for_gsheet`
+> had no implementation). Monitoring is now served by the ticketing UI. This spec is
+> kept for historical reference only.
+
 ## 1) Scope
 
 Read-only monitoring API used by Google Sheets and office-monitoring consumers.

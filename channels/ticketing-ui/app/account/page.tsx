@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { useEffect, useState } from "react";
@@ -65,7 +67,7 @@ export default function AccountPage() {
     <div className="p-8 max-w-lg">
       <h1 className="text-xl font-semibold text-gray-900 mb-1">Account settings</h1>
       <p className="text-sm text-gray-500 mb-6">
-        Your name, phone, and position are stored with your login (Keycloak). GRM roles are assigned by an admin.
+        Your name, phone, and position are stored with your login (Keycloak). GRM responsibilities are assigned by an admin.
       </p>
 
       {error && (
@@ -139,7 +141,7 @@ export default function AccountPage() {
 
         {profile && profile.role_labels.length > 0 && (
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">GRM roles</label>
+            <label className="block text-xs font-medium text-gray-500 mb-1">GRM responsibilities</label>
             <div className="text-sm text-gray-700 bg-slate-50 border border-gray-200 rounded-lg px-3 py-2">
               {profile.role_labels.join(", ")}
             </div>

@@ -1,5 +1,8 @@
 # GRM Integration Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Scope
 
 External/system integration orchestration layer for syncing chatbot grievance data with GRM systems.

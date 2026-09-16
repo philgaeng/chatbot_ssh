@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Extract orchestrator config (flow.yaml, slots.yaml) from Rasa YAMLs.
 

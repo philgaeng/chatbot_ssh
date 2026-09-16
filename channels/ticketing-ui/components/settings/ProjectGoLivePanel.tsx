@@ -1,126 +1,130 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { getProjectGoLive, type GoLiveReport } from "@/lib/api";
+/**
+ * <ProjectGoLivePanel> — the console's "Overview & go-live" pane (ui/04).
+ *
+ * The report is owned by <ProjectEditor> because the rail needs it too — one fetch, two
+ * consumers, so the dots and the checklist can never disagree.
+ *
+ * **The checks are listed in the rail's own order** (2026-08-07, Philippe). A check's `section`
+ * is the pane that fixes it, so reading down this list is reading down the rail, and a red dot
+ * beside "Staffing" has its checks where the eye already is. This pane used to group by a
+ * *second* taxonomy — "Routing / Organizations & packages / Officers / Geography / Project details" —
+ * which answered a different question than the nav and put "Package locations" under a heading
+ * three away from Packages. Two orders on one screen, and neither of them the one you navigate
+ * by. The headings went with it: with the order right they only named what the rail already says.
+ *
+ * A blocked check carries the words "Blocks go-live" as well as the red mark (ui/05 §2 rule 6).
+ */
+import type { GoLiveCheck, GoLiveReport } from "@/lib/api";
+import { SECTION_ORDER, sectionOfCheck } from "@/components/settings/projects/projectSections";
 
-const GROUP_LABELS: Record<string, string> = {
-  routing: "Routing",
-  commercial: "Commercial",
-  officers: "Officers",
-  geography: "Geography",
-  metadata: "Metadata",
-};
-
-function statusDot(status: string) {
-  if (status === "pass") return "bg-green-500";
-  if (status === "fail") return "bg-red-500";
-  if (status === "warn") return "bg-amber-400";
-  return "bg-gray-300";
+/** Rail position of the pane that fixes this check; unplaceable checks sink to the bottom. */
+function railRank(c: GoLiveCheck): number {
+  const section = sectionOfCheck(c);
+  const i = section ? SECTION_ORDER.indexOf(section) : -1;
+  return i < 0 ? SECTION_ORDER.length : i;
 }
 
 export function ProjectGoLivePanel({
-  projectId,
+  report,
+  loading,
+  error,
+  onRefresh,
   onJumpSection,
 }: {
-  projectId: string;
+  report: GoLiveReport | null;
+  loading: boolean;
+  error: string;
+  onRefresh: () => void;
   onJumpSection?: (section: string) => void;
 }) {
-  const [report, setReport] = useState<GoLiveReport | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const r = await getProjectGoLive(projectId);
-      setReport(r);
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to load go-live status");
-      setReport(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [projectId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
   if (loading) {
     return (
-      <div className="mb-6 rounded-lg border border-gray-200 bg-slate-50/80 px-4 py-3 text-sm text-gray-500 animate-pulse">
+      <div className="rounded-lg border border-gray-200 bg-slate-50/80 px-4 py-3 text-sm text-gray-500 animate-pulse">
         Checking go-live readiness…
       </div>
     );
   }
-
   if (error) {
     return (
-      <div className="mb-6 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-        {error}
-      </div>
+      <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
     );
   }
-
   if (!report) return null;
 
-  const groups = [...new Set(report.checks.map((c) => c.group))];
+  const blockers = report.checks.filter((c) => c.severity === "block" && c.status === "fail");
+  // Stable sort: checks that fix in the same pane keep the order the service reports them in.
+  const ordered = [...report.checks].sort((a, b) => railRank(a) - railRank(b));
 
   return (
-    <div className="mb-6 rounded-lg border border-gray-200 bg-white overflow-hidden max-w-3xl">
-      <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2 bg-slate-50/60">
-        <div>
-          <h3 className="text-sm font-semibold text-gray-800">Go-live status</h3>
-          <p className="text-xs text-gray-500 mt-0.5">
-            {report.summary.pass} passed · {report.summary.warn} warnings
-            {report.summary.fail > 0 ? ` · ${report.summary.fail} blocking` : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-3 text-xs">
-          <span className={report.can_activate ? "text-green-700 font-medium" : "text-red-700 font-medium"}>
-            {report.can_activate ? "Can activate" : "Cannot activate yet"}
-          </span>
-          <span className={report.can_accept_tickets ? "text-green-700 font-medium" : "text-red-700 font-medium"}>
-            {report.can_accept_tickets ? "Tickets OK" : "Tickets blocked"}
-          </span>
-          <button type="button" onClick={() => void load()} className="text-blue-600 hover:underline">
-            Refresh
-          </button>
-        </div>
+    <div>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <p className="text-sm text-gray-600 max-w-xl">
+          {blockers.length === 0
+            ? "Everything needed to accept grievances is in place."
+            : blockers.length === 1
+              ? "One check must pass before this project can accept grievances."
+              : `${blockers.length} checks must pass before this project can accept grievances.`}
+        </p>
+        <button type="button" onClick={onRefresh} className="text-xs text-blue-600 hover:underline shrink-0">
+          Check again
+        </button>
       </div>
 
-      <div className="divide-y divide-gray-100">
-        {groups.map((group) => (
-          <div key={group} className="px-4 py-2.5">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-              {GROUP_LABELS[group] ?? group}
-            </p>
-            <ul className="space-y-1.5">
-              {report.checks
-                .filter((c) => c.group === group)
-                .map((c) => (
-                  <li key={c.id} className="flex items-start gap-2 text-sm">
-                    <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${statusDot(c.status)}`} />
-                    <span className="flex-1 text-gray-700">
-                      <span className="font-medium">{c.label}</span>
-                      <span className="text-gray-500"> — {c.message}</span>
+      <ul className="space-y-1.5">
+        {ordered.map((c) => {
+          const blocked = c.severity === "block" && c.status === "fail";
+          const ok = c.status === "pass";
+          const target = sectionOfCheck(c);
+          return (
+            <li
+              key={c.id}
+              className={`flex items-start gap-3 rounded-md border px-3 py-2.5 ${
+                blocked ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"
+              }`}
+            >
+              <span
+                className={`mt-0.5 grid h-[18px] w-[18px] shrink-0 place-items-center rounded-full text-[11px] font-bold ${
+                  ok
+                    ? "bg-green-600 text-white"
+                    : blocked
+                      ? "bg-red-600 text-white"
+                      : "border border-gray-300 bg-white text-gray-400"
+                }`}
+                aria-hidden
+              >
+                {ok ? "✓" : blocked ? "✕" : "○"}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13.5px] font-semibold text-gray-900">
+                  {c.label}
+                  {blocked && (
+                    <span className="ml-2 text-[11px] font-bold text-red-600 uppercase tracking-wide">
+                      Blocks go-live
                     </span>
-                    {c.section && onJumpSection && (
-                      <button
-                        type="button"
-                        onClick={() => onJumpSection(c.section!)}
-                        className="text-xs text-blue-600 hover:underline shrink-0"
-                      >
-                        Fix
-                      </button>
-                    )}
-                  </li>
-                ))}
-            </ul>
-          </div>
-        ))}
-      </div>
+                  )}
+                  {!blocked && !ok && (
+                    <span className="ml-2 text-[11px] font-normal text-gray-400">— optional</span>
+                  )}
+                </span>
+                <span className="block text-xs text-gray-600">{c.message}</span>
+              </span>
+              {target && onJumpSection && !ok && (
+                <button
+                  type="button"
+                  onClick={() => onJumpSection(target)}
+                  className="text-xs font-semibold text-blue-600 hover:underline shrink-0 px-1"
+                >
+                  Fix →
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

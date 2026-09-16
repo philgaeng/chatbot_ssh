@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Create ticketing.tickets from chatbot intake — shared by POST /api/v1/tickets and sync backfill.
 """
@@ -9,6 +11,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ticketing.api.schemas.ticket import TicketCreate
@@ -21,6 +24,18 @@ from ticketing.services.grievance_content import _coerce_categories
 from ticketing.services.project_routing import load_project_by_code, resolve_ticket_organization
 
 logger = logging.getLogger(__name__)
+
+# HR-03: name of the partial unique index that enforces one active ticket per grievance_id.
+_GRIEVANCE_UNIQUE_INDEX = "uq_tickets_grievance_id_active"
+
+
+def _is_grievance_unique_violation(exc: IntegrityError) -> bool:
+    """True when ``exc`` is the active-ticket-per-grievance uniqueness violation."""
+    orig = getattr(exc, "orig", None)
+    constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
+    if constraint == _GRIEVANCE_UNIQUE_INDEX:
+        return True
+    return _GRIEVANCE_UNIQUE_INDEX in str(orig or exc)
 
 
 class TicketIntakeError(Exception):
@@ -259,15 +274,28 @@ def create_or_refresh_ticket_from_intake(
             ),
             False,
         )
-    return (
-        create_ticket_from_intake(
-            db,
-            payload,
-            source=source,
-            created_by_user_id=created_by_user_id,
-        ),
-        True,
-    )
+    try:
+        return (
+            create_ticket_from_intake(
+                db,
+                payload,
+                source=source,
+                created_by_user_id=created_by_user_id,
+            ),
+            True,
+        )
+    except DuplicateTicketError:
+        # HR-03: a concurrent intake won the race between our read and insert.
+        # Fall back to the refresh path so this call is an idempotent no-op that
+        # returns the surviving ticket (created=False).
+        return (
+            refresh_ticket_routing_from_intake(
+                db,
+                payload,
+                source=f"{source}_refresh",
+            ),
+            False,
+        )
 
 
 def create_ticket_from_intake(
@@ -361,7 +389,6 @@ def create_ticket_from_intake(
         is_deleted=False,
         sla_breached=False,
     )
-    db.add(ticket)
 
     event_payload = {"workflow_key": workflow.workflow_key, "source": source}
     if source == "sync_backfill":
@@ -388,10 +415,41 @@ def create_ticket_from_intake(
         created_at=_now(),
         case_sensitivity="seah" if ticket_is_seah else "standard",
     )
-    db.add(event)
 
-    if first_step:
-        _apply_step_tier_roles(db, ticket, first_step)
+    # HR-03: add + flush this ticket inside a SAVEPOINT so a concurrent insert racing the
+    # read-then-guard above surfaces the unique-index violation here (instead of at the
+    # caller's commit). The objects are added *inside* begin_nested() on purpose:
+    # begin_nested() first flushes any already-pending rows (e.g. earlier tickets in a
+    # batch sync) to establish a clean savepoint, then this ticket's INSERT happens within
+    # the savepoint and can be rolled back to it — preserving that prior batch work. On
+    # violation we re-fetch the surviving ticket and raise DuplicateTicketError so the
+    # retry/race becomes an idempotent no-op for callers.
+    try:
+        with db.begin_nested():
+            db.add(ticket)
+            db.add(event)
+            if first_step:
+                _apply_step_tier_roles(db, ticket, first_step)
+            db.flush()
+    except IntegrityError as exc:
+        if not _is_grievance_unique_violation(exc):
+            raise
+        winner = db.execute(
+            select(Ticket).where(
+                Ticket.grievance_id == payload.grievance_id,
+                Ticket.is_deleted.is_(False),
+            )
+        ).scalar_one_or_none()
+        if winner is None:
+            # Uniqueness fired but no surviving row is visible — nothing safe to return.
+            raise
+        logger.info(
+            "ticket_intake race resolved: grievance_id=%s kept ticket_id=%s (source=%s)",
+            payload.grievance_id,
+            winner.ticket_id,
+            source,
+        )
+        raise DuplicateTicketError(payload.grievance_id, winner.ticket_id) from exc
 
     logger.info(
         "ticket_intake created ticket_id=%s grievance_id=%s source=%s assigned=%s package=%s",

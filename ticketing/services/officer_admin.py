@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Officer admin helpers: jurisdiction validation, Keycloak sync, audit logging.
 """
@@ -17,11 +19,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ticketing.config.settings import get_settings
+from ticketing.services import auth_sync_cache
 from ticketing.models.admin_audit_log import AdminAuditLog
 from ticketing.models.officer_onboarding import OfficerOnboarding
 from ticketing.models.officer_scope import OfficerScope
+from ticketing.models.organization import Organization
 from ticketing.models.package import ProjectPackage
-from ticketing.models.project import Project
+from ticketing.models.project import Project, ProjectOrganization
 from ticketing.models.user import Role, UserRole
 from ticketing.services.officer_jurisdiction import scope_requires_field_jurisdiction
 class JurisdictionInput(BaseModel):
@@ -86,6 +90,25 @@ def validate_jurisdiction(
     ).scalar_one_or_none()
     if not role:
         raise HTTPException(status_code=404, detail=f"Role not found: {data.role_key}")
+
+    # SH-3 (OC-06 F6/O4): the invite/add-scope paths never checked that the org exists
+    # or is a participant on the scoped project — so an out-of-jurisdiction or non-existent
+    # org could be bound as an enforcement scope. Close both here (covers both callers).
+    if not db.get(Organization, org_id):
+        raise HTTPException(status_code=422, detail=f"Organization '{org_id}' not found")
+
+    if data.project_id:
+        linked = db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == data.project_id,
+                ProjectOrganization.organization_id == org_id,
+            )
+        ).first()
+        if not linked:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Organization '{org_id}' is not linked to project '{data.project_id}'",
+            )
 
     # organization_id is the officer's employer (contractor, CSC, etc.) — not rewritten
     # to the project implementing agency; auto-assign matches role + package/project only.
@@ -236,9 +259,17 @@ def keycloak_invite_preflight() -> dict[str, Any]:
     missing = [k for k in required if not str(smtp.get(k, "")).strip()]
     smtp_configured = len(missing) == 0
     email_action_supported = hasattr(admin, "send_update_account")
-    ok = bool(realm_data.get("enabled", True)) and smtp_configured and email_action_supported
+    redirect_problem = _invite_redirect_problem(admin)
+    ok = (
+        bool(realm_data.get("enabled", True))
+        and smtp_configured
+        and email_action_supported
+        and redirect_problem is None
+    )
 
-    if not smtp_configured:
+    if redirect_problem:
+        hint = redirect_problem
+    elif not smtp_configured:
         env_missing = missing_smtp_env_fields()
         if env_missing:
             hint = f"Keycloak realm SMTP not configured. Missing env: {', '.join(env_missing)}. {SMTP_SETUP_HINT}"
@@ -307,6 +338,43 @@ def _keycloak_invite_email_options() -> tuple[str, str]:
     if not redirect_uri:
         redirect_uri = "http://localhost:3002/login"
     return client_id, redirect_uri
+
+
+def _invite_redirect_hint(redirect_uri: str) -> str:
+    return (
+        f"Setup emails cannot be sent: Keycloak does not allow this site's sign-in address "
+        f"({redirect_uri}). Run: python -m ticketing.auth.keycloak_setup --clients-only"
+    )
+
+
+def _invite_redirect_problem(admin) -> str | None:
+    """
+    Keycloak refuses execute-actions email ('400 Invalid redirect uri') when the invite
+    redirect is not in the client's redirectUris. Returns the hint when it would, else None.
+    """
+    from ticketing.auth.keycloak_setup import redirect_uri_allowed
+
+    client_id, redirect_uri = _keycloak_invite_email_options()
+    client = next((c for c in admin.get_clients() if c.get("clientId") == client_id), None)
+    if client is None:
+        return f"Setup emails cannot be sent: Keycloak client {client_id!r} does not exist."
+    if not redirect_uri_allowed(redirect_uri, client.get("redirectUris") or []):
+        return _invite_redirect_hint(redirect_uri)
+    return None
+
+
+def _invite_email_error(exc: Exception) -> HTTPException:
+    """Map a failed Keycloak invite call to an error an admin can act on."""
+    err = str(exc)
+    if "invalid redirect uri" in err.lower():
+        return HTTPException(
+            status_code=503, detail=_invite_redirect_hint(_keycloak_invite_email_options()[1])
+        )
+    if "sender address" in err.lower() or "execute actions email" in err.lower():
+        from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+
+        return HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
+    return HTTPException(status_code=500, detail=f"Keycloak error: {err}")
 
 
 def _names_from_email(email: str) -> tuple[str, str]:
@@ -409,6 +477,8 @@ def _upsert_officer_onboarding(db: Session, email: str, status: str) -> None:
         ob.updated_at = datetime.now(timezone.utc)
     else:
         db.add(OfficerOnboarding(user_id=normalized, status=status))
+    # H2-05: onboarding status changed → the officer's next request must re-sync immediately.
+    auth_sync_cache.invalidate(normalized)
 
 
 def keycloak_onboarding_complete(email: str) -> bool:
@@ -464,8 +534,10 @@ def activate_officer_onboarding(db: Session, email: str) -> bool:
             return False
         row.status = "active"
         row.updated_at = now
+        auth_sync_cache.invalidate(normalized)  # H2-05: bust cache on activation
         return True
     db.add(OfficerOnboarding(user_id=normalized, status="active", updated_at=now))
+    auth_sync_cache.invalidate(normalized)  # H2-05: bust cache on activation
     return True
 
 
@@ -580,6 +652,12 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
         admin.update_user(user_id=kc_user["id"], payload={"enabled": True})
 
     try:
+        if "UPDATE_PASSWORD" in (kc_user.get("requiredActions") or []):
+            # Setup never finished, so any password on the account is one the officer did not
+            # choose — before GRM-131, the documented demo password. Only the email may set it.
+            from ticketing.auth.keycloak_setup import delete_password_credentials
+
+            delete_password_credentials(admin, kc_user["id"])
         admin.update_user(
             user_id=kc_user["id"],
             payload={"requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS)},
@@ -588,12 +666,7 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
     except HTTPException:
         raise
     except Exception as exc:
-        err = str(exc)
-        if "sender address" in err.lower() or "execute actions email" in err.lower():
-            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
-
-            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
-        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+        raise _invite_email_error(exc)
 
     sent_to = (kc_user.get("email") or email).strip().lower()
     if db is not None:
@@ -603,12 +676,27 @@ def keycloak_resend_invite_email(user_id: str, db=None) -> str:
 
 def keycloak_create_user(
     email: str,
-    role_key: str,
+    role_key: Optional[str],
     organization_id: str,
-    temp_password: Optional[str] = None,
 ) -> None:
+    """
+    Create the officer's Keycloak account and send the setup email.
+
+    ⚠ GRM-131: the account is created WITHOUT a password — the setup email sets the first one.
+    Until 2026-09-15 every account got the documented demo password as a temporary one, and
+    measured on Keycloak, its browser login accepts a temporary password and lets whoever typed it
+    choose the new one: anyone who knew an invitee's email could take the account first.
+    And if the email is refused, the account just created is deleted, so a failed invite leaves
+    nothing behind.
+    """
+    from ticketing.auth.keycloak_setup import delete_password_credentials
+
     admin = _keycloak_admin()
     first_name, last_name = _names_from_email(email)
+    # Position-based invites carry no operational role (DESIGN-cast-model): the account is
+    # provisioned with an empty grm_roles claim; Cast staffing fills it in later via
+    # sync_officer_keycloak_roles once officer_scopes exist.
+    grm_roles = [role_key] if role_key else []
     create_payload = {
         "username": email,
         "email": email,
@@ -617,28 +705,14 @@ def keycloak_create_user(
         "enabled": True,
         "emailVerified": False,
         "attributes": {
-            "grm_roles": [role_key],
+            "grm_roles": grm_roles,
             "organization_id": [organization_id],
             "phone_number": ["9800000000"],
         },
-        "credentials": [{
-            "type": "password",
-            "value": temp_password or "GrmDemo2026!",
-            "temporary": True,
-        }],
         "requiredActions": list(KEYCLOAK_ONBOARDING_ACTIONS),
     }
     try:
         admin.create_user(create_payload)
-        kc_user = _keycloak_find_user(admin, email)
-        if not kc_user:
-            raise HTTPException(
-                status_code=500,
-                detail=(
-                    "Keycloak user was created but could not be reloaded for invite email dispatch."
-                ),
-            )
-        _keycloak_send_invite_email(admin, kc_user, email)
     except Exception as exc:
         err = str(exc)
         if "409" in err or "already exists" in err.lower():
@@ -649,6 +723,8 @@ def keycloak_create_user(
                     detail=f"User {email!r} already exists in Keycloak",
                 )
             if existing:
+                # A disabled account coming back: its old password must not come back with it.
+                delete_password_credentials(admin, existing["id"])
                 admin.update_user(
                     user_id=existing["id"],
                     payload={
@@ -659,20 +735,37 @@ def keycloak_create_user(
                         "emailVerified": False,
                         "attributes": create_payload["attributes"],
                         "requiredActions": create_payload["requiredActions"],
-                        "credentials": create_payload["credentials"],
                     },
                 )
-                _keycloak_send_invite_email(admin, existing, email)
+                try:
+                    _keycloak_send_invite_email(admin, existing, email)
+                except HTTPException:
+                    raise
+                except Exception as send_exc:
+                    raise _invite_email_error(send_exc)
                 return
             raise HTTPException(
                 status_code=409,
                 detail=f"User {email!r} already exists in Keycloak",
             )
-        if "sender address" in err.lower() or "execute actions email" in err.lower():
-            from ticketing.auth.keycloak_smtp import INVITE_EMAIL_FAILURE_HINT
+        raise _invite_email_error(exc)
 
-            raise HTTPException(status_code=503, detail=INVITE_EMAIL_FAILURE_HINT)
-        raise HTTPException(status_code=500, detail=f"Keycloak error: {err}")
+    kc_user = _keycloak_find_user(admin, email)
+    if not kc_user:
+        raise HTTPException(
+            status_code=500,
+            detail="Keycloak user was created but could not be reloaded for invite email dispatch.",
+        )
+    try:
+        _keycloak_send_invite_email(admin, kc_user, email)
+    except Exception as exc:
+        try:
+            admin.delete_user(kc_user["id"])
+        except Exception as cleanup_exc:
+            logger.error("Invite email failed and the new Keycloak account was not removed: %s", cleanup_exc)
+        if isinstance(exc, HTTPException):
+            raise
+        raise _invite_email_error(exc)
 
 
 def keycloak_update_user_attributes(
@@ -707,3 +800,108 @@ def keycloak_delete_user(user_id: str) -> bool:
         return False
     admin.delete_user(kc_user["id"])
     return True
+
+
+def keycloak_set_user_enabled(user_id: str, enabled: bool) -> bool:
+    """Enable/disable the realm user (soft deactivate). Returns True if Keycloak changed."""
+    if not keycloak_configured():
+        return False
+    admin = _keycloak_admin()
+    kc_user = _keycloak_find_user(admin, user_id)
+    if not kc_user:
+        return False
+    admin.update_user(user_id=kc_user["id"], payload={"enabled": bool(enabled)})
+    return True
+
+
+# ── Frame-11: officer soft-deactivation lifecycle ──────────────────────────────
+
+def _lifecycle_user_key(user_id: str) -> str:
+    """Normalize an officer id for the officer_onboarding PK (lowercase emails)."""
+    uid = (user_id or "").strip()
+    return uid.lower() if "@" in uid else uid
+
+
+def officer_exists_in_db(db: Session, user_id: str) -> bool:
+    """True when the officer has any GRM footprint (roster / scope / admin / onboarding)."""
+    from ticketing.models.admin_scope import AdminScope
+
+    normalized = _lifecycle_user_key(user_id)
+    if db.get(OfficerOnboarding, normalized):
+        return True
+    checks = (
+        select(UserRole.user_id).where(func.lower(UserRole.user_id) == normalized).limit(1),
+        select(OfficerScope.user_id).where(func.lower(OfficerScope.user_id) == normalized).limit(1),
+        select(AdminScope.user_id).where(func.lower(AdminScope.user_id) == normalized).limit(1),
+    )
+    return any(db.execute(stmt).scalar_one_or_none() is not None for stmt in checks)
+
+
+def officer_is_active(db: Session, user_id: str) -> bool:
+    """
+    True unless the officer has been soft-deactivated.
+
+    Absence of an officer_onboarding row means active by default (legacy / seed officers
+    predate the lifecycle flag).
+    """
+    ob = db.get(OfficerOnboarding, _lifecycle_user_key(user_id))
+    if ob is None:
+        return True
+    return bool(ob.is_active)
+
+
+def set_officer_active(db: Session, user_id: str, active: bool) -> OfficerOnboarding:
+    """
+    Flip the officer's GRM access flag (soft deactivate / reactivate).
+
+    Keeps user_roles / officer_scopes / ticket history intact and preserves the
+    officer_onboarding `status` (invited|active). Best-effort disables/enables the
+    Keycloak account when the auth stack is configured.
+    """
+    from datetime import datetime, timezone
+
+    normalized = _lifecycle_user_key(user_id)
+    now = datetime.now(timezone.utc)
+    ob = db.get(OfficerOnboarding, normalized)
+    if ob is None:
+        ob = OfficerOnboarding(
+            user_id=normalized,
+            status="active",
+            is_active=active,
+            deactivated_at=None if active else now,
+            updated_at=now,
+        )
+        db.add(ob)
+    else:
+        ob.is_active = active
+        ob.deactivated_at = None if active else now
+        ob.updated_at = now
+
+    try:
+        keycloak_set_user_enabled(normalized, active)
+    except Exception as exc:  # best-effort — DB flag is the source of truth
+        logger.warning("Keycloak enable=%s skipped for %s: %s", active, normalized, exc)
+    return ob
+
+
+def open_cases_for_officer(db: Session, user_id: str) -> list[tuple[str, str, str]]:
+    """
+    Open (non-deleted, non-terminal) tickets still assigned to this officer.
+
+    Returns [(ticket_id, grievance_id, status_code)] — used by the deactivate/delete
+    open-case guard so the UI can drive "reassign N cases first".
+    """
+    from ticketing.models.ticket import Ticket
+    from ticketing.services.archiving import RESOLVED_STATUSES
+
+    normalized = (user_id or "").strip()
+    stmt = select(Ticket.ticket_id, Ticket.grievance_id, Ticket.status_code).where(
+        Ticket.is_deleted.is_(False),
+        Ticket.status_code.notin_(tuple(RESOLVED_STATUSES)),
+    )
+    if "@" in normalized:
+        stmt = stmt.where(func.lower(Ticket.assigned_to_user_id) == normalized.lower())
+    else:
+        stmt = stmt.where(Ticket.assigned_to_user_id == normalized)
+    rows = db.execute(stmt.order_by(Ticket.created_at)).all()
+    return [(tid, gid, sc) for tid, gid, sc in rows]

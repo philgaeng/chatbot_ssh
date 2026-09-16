@@ -1,5 +1,8 @@
 # File Processing Service Spec
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## 1) Scope
 
 Shared file upload, storage, processing-status, and task-status bridge for webchat and related channels.
@@ -174,7 +177,7 @@ Prod attachments: **private encrypted object storage (~50 GB)**, not root disk.
 - DB `file_attachments`: store final `s3_key` (or path during local-dev), `file_size`, optional JSON `processing_metadata`:
   - `original_bytes`, `compressed_bytes`, `width`, `height`, `compression_status` (`compressed` | `skipped` | `failed`)
 
-### 6.7 Code layout (to implement)
+### 6.7 Code layout (implemented — `backend/services/image_compression.py`)
 
 | Piece | Location |
 |-------|----------|

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Load orchestrator config from flow.yaml and slots.yaml.
 """

@@ -1,6 +1,7 @@
 # Health & Monitoring Service Spec
 
-**Status:** Proposed (build target). Adapts the Stratcon `CELERY_REDIS_TASK_QUEUE_SPEC §16/§18` health + daily-report model to the **self-hosted Nepal GRM stack**.
+**Status:** As-built (implemented June 2026 — item-level status and remaining gaps in [`agents/PROGRESS.md`](agents/PROGRESS.md)). Adapts the Stratcon `CELERY_REDIS_TASK_QUEUE_SPEC §16/§18` health + daily-report model to the **self-hosted Nepal GRM stack**.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 **Deployment reality:** single Ubuntu host, **2 vCPU / 8 GiB RAM**, Docker Compose, self-hosted **Postgres 15** and **Redis 7** in containers. **No Supabase, no managed DB, no managed backups** — we own backups, restore drills, and DB health.
 **Architecture decision:** monitoring/health/backup/security/reporting is a **cross-cutting platform concern**, so it lives in its own **`ops/` module** running in a dedicated, lightweight **`ops` container** with a **broker-independent scheduler (APScheduler)** — *not* on Celery. This is deliberate: a monitor must not share fate with the things it watches. Celery-based health tasks depend on Redis (broker + result backend) and would go blind exactly when Redis/a worker is down. The `ops` scheduler instead writes results **directly to Postgres** and alerts via the **Messaging API over HTTP**, so it keeps working through a broker outage. GRM *business* tasks (SLA watchdog, escalation, grievance-sync, quarterly report) stay on GRM Celery where they belong.
 **Related:** [`13_security.md`](../deployment/13_security.md) · [`12_security_monitoring_service.md`](12_security_monitoring_service.md) · [`07_task_queue_service.md`](07_task_queue_service.md) · [`05_messaging_service.md`](05_messaging_service.md) · [`03_operations.md`](../deployment/03_operations.md) · [`10_production_server_spec.md`](../deployment/10_production_server_spec.md)
@@ -261,7 +262,7 @@ Two independent heartbeats, by design:
 - **GRM beat heartbeat** — a `health.heartbeat` task on `grm_celery_beat` sets `SET health:beat:last_run <iso8601> EX 180`. Proves the *business* scheduler is alive. Read by `grm_beat_liveness_check` (ops) and the watchdog.
 - **Ops scheduler tick** — APScheduler writes `ops:scheduler:last_tick` (status file + PG) every minute. Proves the *monitor* is alive. Read by the `ops` container healthcheck and the watchdog.
 
-### 6.1 `scripts/ops/grm-watchdog.sh` (host cron, every 2–5 min)
+### 6.1 `scripts/ops/host_watchdog.sh` (host cron, every 2–5 min)
 
 The host-side actor — independent of Docker healthchecks and of Redis/Celery, with native Docker + host visibility. Responsibilities:
 
@@ -319,7 +320,7 @@ All email goes through the existing **Messaging API** (`POST /api/messaging/send
 
 Because there is **no managed DB**, backup/restore is our responsibility.
 
-### 9.1 DB backup — `scripts/ops/pg-backup.sh` (cron, daily 02:00 Asia/Kathmandu)
+### 9.1 DB backup — `scripts/ops/backup_db.sh` (cron, daily 02:00 Asia/Kathmandu)
 
 ```bash
 # pg_dump custom format from the db container, gzip, off-box copy, prune
@@ -442,7 +443,7 @@ OPS_DB_PASSWORD=                         # set strong value in env.local
 - [ ] Add `apscheduler` to `requirements.grm.txt`.
 
 **L0 — host watchdog**
-- [ ] `scripts/ops/grm-watchdog.sh` + restart-storm guard + cron installer; supervises all containers incl. `ops`; owns host `disk_check`/`memory_check`.
+- [ ] `scripts/ops/host_watchdog.sh` + restart-storm guard + cron installer; supervises all containers incl. `ops`; owns host `disk_check`/`memory_check`.
 - [ ] Watchdog reads/restarts on stale `health:beat:last_run` (GRM beat) **and** `ops:scheduler:last_tick` (ops).
 
 **L1 — container healthchecks**
@@ -462,7 +463,7 @@ OPS_DB_PASSWORD=                         # set strong value in env.local
 - [ ] UptimeRobot HTTP(s) monitors on public `/health` + UI URL (5-min, email on down/recovery). **No** UptimeRobot Heartbeat/Cron (paid).
 
 **Backups / maintenance**
-- [ ] `scripts/ops/pg-backup.sh` (encrypt + off-box + prune) + host cron (needs `docker exec`).
+- [ ] `scripts/ops/backup_db.sh` (encrypt + off-box + prune) + host cron (needs `docker exec`).
 - [ ] `DB_ENCRYPTION_KEY` backed up separately and documented.
 - [ ] Uploads backup job.
 - [ ] `ops.checks.backup_status_check` + weekly `ops.checks.restore_drill`.

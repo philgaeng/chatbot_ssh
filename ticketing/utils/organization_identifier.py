@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Derive human-readable organization_id values and allocate unique PKs."""
 
 from __future__ import annotations
@@ -10,6 +12,21 @@ from sqlalchemy.orm import Session
 _TOKEN_RE = re.compile(r"[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|\d+")
 
 
+def ascii_alnum(s: str, *, keep_underscore: bool = False) -> str:
+    """ASCII [A-Za-z0-9] (optionally underscore) from ``s``, dropping everything else.
+
+    SH-6 (OC-06 F1): organization_id is **ASCII-only** — Nepali is carried in the org
+    name / display_name_ne, never in the id. Both the derived-id and explicit-id paths
+    route through this, so a Devanagari name can no longer mint a Devanagari id
+    (``str.isalnum()`` is True for Devanagari; ``str.isascii()`` gates it out). A pure
+    Devanagari name derives to empty, and the caller asks for an explicit id.
+    """
+    return "".join(
+        c for c in s
+        if (c.isascii() and c.isalnum()) or (keep_underscore and c == "_")
+    )
+
+
 def _split_name_tokens(name: str) -> list[str]:
     parts = re.split(r"[\s_\-/]+", name.strip())
     tokens: list[str] = []
@@ -18,12 +35,12 @@ def _split_name_tokens(name: str) -> list[str]:
             continue
         found = _TOKEN_RE.findall(part)
         if not found:
-            alnum = "".join(c for c in part if c.isalnum())
+            alnum = ascii_alnum(part)
             if alnum:
                 tokens.append(alnum)
             continue
         for seg in found:
-            alnum = "".join(c for c in seg if c.isalnum())
+            alnum = ascii_alnum(seg)
             if alnum:
                 tokens.append(alnum)
     return tokens
@@ -69,7 +86,7 @@ def allocate_unique_organization_id(db: Session, base: str) -> str:
     """
     from ticketing.models.organization import Organization
 
-    clean = "".join(c for c in base.upper() if c.isalnum() or c == "_")
+    clean = ascii_alnum(base.upper(), keep_underscore=True)
     if not clean:
         clean = "ORG"
     max_len = 64

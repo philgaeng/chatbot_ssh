@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 TaskManager Module - Centralized Task Management with Automatic Service Configuration
 
@@ -99,6 +101,68 @@ MAP_TASK_TO_TYPE = {
     'trigger_rasa_action': TASK_TYPE_DEFAULT,
     'operation_failed': TASK_TYPE_DEFAULT,
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retry-exception resolution (D-45)
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ The previous resolution was `getattr(__builtins__, name, Exception)`, and it was wrong twice
+# over. Inside an imported module `__builtins__` is a **dict**, not a module, so `getattr` misses
+# even the real builtins — and every miss fell back to `Exception`. So had the config ever been
+# applied, `retry_on: ['ConnectionError']` would have meant *retry on absolutely anything*,
+# including permanent failures like a malformed payload, which retrying cannot fix.
+#
+# Names are therefore resolved explicitly, and an unknown name is **dropped with a warning** rather
+# than widened to Exception. A retry rule nobody can read is worse than no retry rule.
+def _retry_exception_registry() -> Dict[str, type]:
+    registry: Dict[str, type] = {
+        'Exception': Exception,          # deliberate, and only where the config says so
+        'ConnectionError': ConnectionError,
+        'TimeoutError': TimeoutError,
+        'IOError': OSError,              # IOError is an alias of OSError since Python 3.3
+        'OSError': OSError,
+        'FileNotFoundError': FileNotFoundError,
+    }
+    try:                                  # provider-specific, optional at import time
+        from openai import APIConnectionError, APITimeoutError, RateLimitError
+
+        registry.update({
+            'RateLimitError': RateLimitError,
+            'APIConnectionError': APIConnectionError,
+            'APITimeoutError': APITimeoutError,
+        })
+    except Exception:                     # pragma: no cover - openai absent in some contexts
+        pass
+    try:
+        from sqlalchemy.exc import OperationalError
+
+        # The closest real class to the configured "DeadlockError": psycopg2 raises deadlocks as
+        # OperationalError. Mapped deliberately rather than silently, so the config stays honest.
+        registry['DeadlockError'] = OperationalError
+        registry['OperationalError'] = OperationalError
+    except Exception:                     # pragma: no cover
+        pass
+    return registry
+
+
+def _resolve_retry_exceptions(names, task_type: str) -> tuple:
+    """Turn configured exception NAMES into classes, dropping (loudly) anything unrecognised."""
+    registry = _retry_exception_registry()
+    resolved, unknown = [], []
+    for name in names or []:
+        cls = registry.get(name)
+        if cls is None:
+            unknown.append(name)
+        else:
+            resolved.append(cls)
+    if unknown:
+        logging.getLogger(__name__).warning(
+            "TASK_CONFIG[%s].retries.retry_on names %s, which resolve to no known exception "
+            "class — they are IGNORED. Add them to _retry_exception_registry() if they are real; "
+            "do not let them fall back to Exception, which would retry permanent failures.",
+            task_type, unknown,
+        )
+    return tuple(resolved)
+
 
 TASK_CONFIG = {
     TASK_TYPE_LLM: {'service': 'llm_processor', 
@@ -758,7 +822,13 @@ class TaskManager:
         # Extract config from TASK_CONFIG
         config = TASK_CONFIG[task_type]  # Get full config from TASK_CONFIG
         queue_config = config.get('queue', {})
-        retry_config = config.get('retry', {})
+        # ⚠ **This read `config.get('retry', {})` until 2026-08-19, and TASK_CONFIG spells it
+        # `retries`** — so `retry_config` was always empty and NONE of the settings below were ever
+        # applied, for any task type. Every task silently ran on Celery's defaults: a 180-second
+        # retry delay instead of the 1–2 s configured, and **no `autoretry_for` at all**, which is
+        # why nothing in this queue has ever retried automatically. Found by reading the countdown
+        # Celery actually chose while making a terminal status reachable (D-45/D-34).
+        retry_config = config.get('retries', {})
                 
                 
         def decorator(func: Callable):
@@ -813,10 +883,15 @@ class TaskManager:
             if retry_config:
                 celery_options.update({
                     'max_retries': retry_config.get('max_retries', 3),
+                    # Used by an explicit `self.retry()` that names no countdown.
                     'default_retry_delay': retry_config.get('initial_delay', 1),
-                    'retry_backoff': retry_config.get('backoff_factor', 2),
+                    # Celery reads a number here as the delay FACTOR: the first autoretry waits
+                    # this long, the next twice that, and so on up to retry_backoff_max.
+                    'retry_backoff': retry_config.get('initial_delay', 1),
                     'retry_backoff_max': retry_config.get('max_delay', 60),
-                    'autoretry_for': tuple(getattr(__builtins__, exc, Exception) for exc in retry_config.get('retry_on', ['Exception']))
+                    'autoretry_for': _resolve_retry_exceptions(
+                        retry_config.get('retry_on', []), task_type
+                    ),
                 })
             
             # Add priority if available (Celery uses 0-9, with 9 being highest)

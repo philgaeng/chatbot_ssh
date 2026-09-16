@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 GRM Ticketing System — FastAPI application entrypoint.
 Port: TICKETING_PORT (default 5002)
@@ -19,8 +21,12 @@ from ticketing.api.routers import auth as auth_router
 from ticketing.api.routers import tickets, workflows, users
 from ticketing.api.routers import settings as settings_router
 from ticketing.api.routers import reports
+from ticketing.api.routers import resolution_actions as resolution_actions_router
 from ticketing.api.routers import locations as locations_router
 from ticketing.api.routers import project_types as project_types_router
+from ticketing.api.routers import position_types as position_types_router
+from ticketing.api.routers import officer_positions as officer_positions_router
+from ticketing.api.routers import cast as cast_router
 from ticketing.api.routers import tasks as tasks_router
 from ticketing.api.routers import viewers as viewers_router
 from ticketing.api.routers import scan as scan_router
@@ -37,8 +43,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+def _assert_auth_configured(settings) -> None:
+    """Fail-closed startup guard (HR-01).
+
+    Unless the dev bypass is explicitly enabled (APP_ENV=dev AND AUTH_MODE=bypass)
+    the service refuses to boot when the auth prerequisites are missing — a missing
+    env var must never silently degrade to the demo-super-admin / disabled-API-key
+    fallbacks on a government PII system. Production can never bypass.
+    """
+    if settings.bypass_enabled:
+        return
+    missing = []
+    if not settings.keycloak_issuer:
+        missing.append("KEYCLOAK_ISSUER")
+    if not settings.ticketing_secret_key:
+        missing.append("TICKETING_SECRET_KEY")
+    if missing:
+        raise RuntimeError(
+            f"Refusing to start: APP_ENV={settings.app_env!r} AUTH_MODE={settings.auth_mode!r} "
+            f"but required auth config is unset: {', '.join(missing)}. "
+            "Configure these, or set APP_ENV=dev AUTH_MODE=bypass for the local bypass stack."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Fail-closed auth guard — must run before serving any request (HR-01).
+    _assert_auth_configured(get_settings())
     # Ensure the ticketing schema exists (idempotent)
     ensure_ticketing_schema()
     logger.info("GRM Ticketing Service started on port %s", get_settings().ticketing_port)
@@ -52,7 +83,8 @@ app = FastAPI(
         "Grievance Redress Mechanism Ticketing System\n"
         "ADB Nepal KL Road Project (Loan 52097-003)\n\n"
         "**Inbound** (chatbot → ticketing): `POST /api/v1/tickets` requires `x-api-key` header.\n"
-        "**Officer UI** endpoints: proto uses mock auth; production requires Cognito JWT."
+        "**Officer UI** endpoints: dev bypass (APP_ENV=dev AUTH_MODE=bypass) uses a mock "
+        "super-admin; deployed envs require a Keycloak JWT (AUTH_MODE=keycloak)."
     ),
     version="1.0.0",
     lifespan=lifespan,
@@ -83,11 +115,15 @@ app.add_middleware(
 app.include_router(auth_router.router,       prefix="/api/v1", tags=["Auth"])
 app.include_router(tickets.router,          prefix="/api/v1", tags=["Tickets"])
 app.include_router(workflows.router,        prefix="/api/v1", tags=["Workflows"])
+app.include_router(resolution_actions_router.router, prefix="/api/v1", tags=["Resolution actions"])
 app.include_router(users.router,            prefix="/api/v1", tags=["Users & Roles"])
 app.include_router(settings_router.router,  prefix="/api/v1", tags=["Settings"])
 app.include_router(reports.router,          prefix="/api/v1", tags=["Reports"])
 app.include_router(locations_router.router, prefix="/api/v1", tags=["Locations & Projects"])
 app.include_router(project_types_router.router, prefix="/api/v1", tags=["Project types"])
+app.include_router(position_types_router.router, prefix="/api/v1", tags=["Position types"])
+app.include_router(officer_positions_router.router, prefix="/api/v1", tags=["Officer positions"])
+app.include_router(cast_router.router,      prefix="/api/v1", tags=["Cast staffing"])
 app.include_router(tasks_router.router,     prefix="/api/v1", tags=["Tasks"])
 app.include_router(viewers_router.router,   prefix="/api/v1", tags=["Viewers"])
 app.include_router(scan_router.router,      prefix="/api/v1", tags=["QR Tokens"])

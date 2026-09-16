@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance category options for officer classification UI (TP-14)."""
 from __future__ import annotations
 

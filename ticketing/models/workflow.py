@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.workflow_definitions, ticketing.workflow_steps, ticketing.workflow_assignments
 """
@@ -35,6 +37,15 @@ class WorkflowDefinition(Base):
     is_template: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     template_source_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     updated_by_user_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The organization this workflow or template belongs to (doc 11 §3.3). Every one has one since
+    # GRM-116's migration: it decides which resolution actions the workflow can offer, and who may
+    # change it. Chosen on create and changed in Settings (GRM-122). SET NULL on org delete leaves a
+    # workflow that can offer no action — GRM-120 decides that rule.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )
@@ -51,6 +62,14 @@ class WorkflowDefinition(Base):
     assignments: Mapped[list["WorkflowAssignment"]] = relationship(
         "WorkflowAssignment", back_populates="workflow", lazy="select"
     )
+    owner_organization: Mapped["Organization | None"] = relationship(  # noqa: F821
+        "Organization", foreign_keys=[owner_organization_id], lazy="select", viewonly=True
+    )
+
+    @property
+    def owner_name(self) -> str | None:
+        """The owning organization's name, for the workflow list and editor (GRM-122)."""
+        return self.owner_organization.name if self.owner_organization else None
 
 
 class WorkflowStep(Base):
@@ -83,6 +102,25 @@ class WorkflowStep(Base):
     observer_roles: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
     # informed_pii_access: if True, Informed-tier users can see complainant PII
     informed_pii_access: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # tier_labels: {tier: {label, description}} — the AUTHOR'S name for each job at this level
+    # ("Escalation Lead"), shown read-only wherever the job appears (staffing, case view) instead
+    # of a generic tier word. Absent tier → fall back to the bound role's display name, then the
+    # generic word. doc 12 §6.2 / doc 13 §5A.1.
+    tier_labels: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    # required_tiers: which NON-ACTOR tiers the author marks mandatory ⊆ {supervisor, informed,
+    # observer}. The actor is always required and is never listed. Drives the go-live staffing
+    # gate (doc 13 §5A.5 / §7 A4).
+    required_tiers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    # staff_per_package: is this level staffed lot by lot, or once for the whole project?
+    # Decided by the WORKFLOW AUTHOR (so, from a project's side, by its type — a typed project
+    # cannot deviate). Typically the lower levels are per lot and the upper ladder is
+    # project-wide. False = staffed once for the project, which is what every step did before
+    # this column existed (migration `p2r4t6v8`). Drives the staffing screen's shape and the
+    # go-live staffing gate, which no longer has to guess which was meant.
+    staff_per_package: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # actor_can_reassign: per-step self-serve toggle (DESIGN-cast-model §3.4) — when on, the
+    # Actor is a reassignment authority for this step (chain: Dispatcher → Supervisor → Actor → PA)
+    actor_can_reassign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # stakeholders: legacy display field (human-readable names, not role keys) — kept for UI compat
     stakeholders: Mapped[list | None] = mapped_column(JSON, nullable=True)
     expected_actions: Mapped[list | None] = mapped_column(JSON, nullable=True)

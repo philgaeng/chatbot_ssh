@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.roles and ticketing.user_roles
 
@@ -34,6 +36,9 @@ ROLE_KEYS = [
     "adb_national_project_director",
     "adb_hq_safeguards",
     "adb_hq_project",
+    "donor_consultant",
+    "donor_national",
+    "donor_hq",
     "seah_national_officer",
     "seah_hq_officer",
     "adb_hq_exec",
@@ -41,6 +46,11 @@ ROLE_KEYS = [
 
 # SEAH-only roles — tickets with is_seah=True are only visible to these roles
 SEAH_ROLES = {"seah_national_officer", "seah_hq_officer"}
+
+# Donor observer/informed tier (doc 13 / DECISION 2026-07-10 §3). Generalizes the legacy
+# adb_* observers. These are NOT SEAH roles: on the SEAH track every donor tier is
+# suppressed at the final step (a donor must receive nothing that reveals a SEAH case).
+DONOR_ROLES = {"donor_consultant", "donor_national", "donor_hq"}
 
 # Roles that can see both standard and SEAH
 BOTH_WORKFLOWS_ROLES = {"super_admin", "adb_hq_exec"}
@@ -61,8 +71,24 @@ class Role(Base):
     permissions: Mapped[dict] = mapped_column(JSON, nullable=False, default=list)
     # admin | operational — split catalog vs admin ladder
     role_kind: Mapped[str] = mapped_column(String(16), nullable=False, default="operational")
-    # system (seed/TOR) | custom (country_admin created)
+    # system (seed/TOR) | custom (org_admin created)
     role_origin: Mapped[str] = mapped_column(String(16), nullable=False, default="system")
+    # Permission-template family (ticketing.constants.role_archetypes): field_actor | supervisor
+    # | grc_committee | grc_member | observer | informed | seah_handler. Already chosen at custom-
+    # role creation (was discarded); persisted here to group the role pickers by function. NULL for
+    # admin-ladder roles and pre-archetype custom rows.
+    archetype: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Actor affiliation (org_category vocab: government | local_government | donor | third_party) —
+    # soft-narrows the position-type role picker by the office types it is used at. NULL = neutral
+    # (custom rows, admin ladder): never demoted, always shown as typical.
+    actor_category: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Org-scoped catalog (doc 11 §3.3, SH-7): available at this org node + descendants;
+    # NULL = global (super-owned / system-seeded). Mirrors position_types.owner_organization_id.
+    owner_organization_id: Mapped[str | None] = mapped_column(
+        String(64),
+        ForeignKey("ticketing.organizations.organization_id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_now
     )

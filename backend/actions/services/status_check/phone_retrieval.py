@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Load grievances by complainant phone for status-check slot updates."""
 
 from __future__ import annotations

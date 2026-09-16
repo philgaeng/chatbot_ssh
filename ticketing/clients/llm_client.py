@@ -1,11 +1,28 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 LLM client for the ticketing service.
 
-Uses OpenAI gpt-4 — same provider as the chatbot backend (backend/services/LLM_services.py).
-DO NOT import from backend/services/ — keep ticketing independent. Replicate the pattern here.
+**This module constructs a client. It chooses no model and no endpoint.** Both come from
+`backend/config/llm_config.py` — the one registry both LLM surfaces read (DPG-17) — via
+`model_for()` and `findings_task()`.
 
-API key: OPENAI_API_KEY in env.local (already present, used by chatbot).
-Init: get_settings().openai_api_key
+⚠ **The instruction this docstring used to give produced the problem it was warning about.** It
+said: *"Uses OpenAI gpt-4 … DO NOT import from backend/services/ — keep ticketing independent.
+Replicate the pattern here."* The boundary is real and stays: ticketing does not import the
+chatbot's **service layer**, and it keeps its own client, its own lifecycle, its own deployment
+unit. But *"replicate the pattern"* was read as *"replicate the model names"*, and they were then
+replicated four more times — into `resolved_summary_builder` (which writes one into a **persisted
+provenance field**), into a log line, and once by reaching into this module's privates from
+`tasks/llm.py`, which made it invisible to `grep "gpt-"`.
+
+So the rule is now precise: **two factories, one config.** `backend/config/` is not the service
+layer — ticketing already imports `backend/config/smtp_config.py` on the live officer-invite path,
+and the registry imports nothing first-party, so it stays copy-portable if ticketing is ever
+extracted (pinned: `tests/backend/test_llm_config_pins.py`).
+
+Auth: `LLM_API_KEY`, with `OPENAI_API_KEY` honoured as a deprecated alias (one warning), resolved
+in the registry so **both** surfaces treat a stale `env.local` identically.
 """
 
 import json
@@ -14,8 +31,17 @@ import re
 from typing import Optional
 
 from openai import OpenAI
+from pydantic import ValidationError
 
-from ticketing.config.settings import get_settings
+from backend.config.llm_config import (
+    LLMParseError,
+    LLMTruncatedError,
+    findings_task,
+    llm_endpoint,
+    parse_response,
+    request_for,
+)
+from ticketing.clients.llm_schemas import CaseFindings, ResolvedCaseSummary
 
 logger = logging.getLogger(__name__)
 
@@ -26,15 +52,100 @@ _client: Optional[OpenAI] = None
 
 
 def _get_client() -> OpenAI:
-    """Return a cached OpenAI client, initialising on first call."""
+    """Return a cached OpenAI-compatible client, built from the shared registry on first call."""
     global _client
     if _client is None:
-        settings = get_settings()
+        endpoint = llm_endpoint()
+        logger.info("Building ticketing LLM client for %s", endpoint.host)
         _client = OpenAI(
-            api_key=settings.openai_api_key,
-            timeout=30.0,
+            base_url=endpoint.base_url,
+            api_key=endpoint.api_key,
+            timeout=endpoint.timeout,
+            max_retries=endpoint.max_retries,
         )
     return _client
+
+
+def call_llm(
+    task: str,
+    messages: list[dict],
+    *,
+    schema: type | None = None,
+    schema_name: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+    timeout: float | None = None,
+    redact: bool = True,
+):
+    """
+    One entry point for the ticketing surface. Same contract as the chatbot surface's, and
+    deliberately a **separate function**: the service-layer boundary means this file keeps its own
+    client, and a client is the one thing the shared layer cannot hold.
+
+    What is shared is the *shaping* — `request_for()` and `parse_response()` in
+    `backend/config/llm_config.py` — so the two surfaces cannot ask the same provider for
+    different things. Two factories, one config; two callers, one contract.
+    """
+    # ── Redaction, at the chokepoint, OPT-OUT (DPG-33 step 1) ────────────────────────────
+    # Same default and the same reason as the chatbot surface: a new call site is pseudonymised
+    # without knowing this exists, and turning it off is a visible decision in the diff.
+    #
+    # ⚠ This surface carries the sharper payload. `generate_case_findings` sends **the whole case
+    # timeline including officer notes**, and on a sensitive workflow that is a SEAH case file.
+    # Step 3 of DPG-33 is about this: the prompt already asks the model not to echo names, but a
+    # prompt instruction does nothing about what is SENT — it only acts on what comes back. That
+    # instruction stays as defence in depth; this is the control.
+    if redact:
+        messages = _redact_messages(messages, task=task)
+
+    request = request_for(
+        task,
+        messages,
+        schema=schema.model_json_schema() if schema is not None else None,
+        schema_name=schema_name,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+        timeout=timeout,
+    )
+    return parse_response(_get_client().chat.completions.create(**request), schema)
+
+
+def _redact_messages(messages: list[dict], *, task: str) -> list[dict]:
+    """Pseudonymise every message body before it leaves the process.
+
+    Returns NEW message dicts; the caller's list is untouched.
+
+    ⚠ **This imports from `backend.services`, which the module docstring's independence rule
+    normally forbids.** The exemption is the same one `backend/config/llm_config.py` already
+    holds and is narrower than it looks: `pii_service` is a **pure function library** — no
+    session, no client, no I/O, no first-party imports beyond a constants module. Duplicating a
+    redaction implementation per surface is the failure mode this sprint exists to avoid: two
+    recognisers drift, and the weaker one becomes the border.
+    """
+    from backend.services.pii_service import redact_for_model
+
+    out: list[dict] = []
+    spans_total = 0
+    for message in messages:
+        content = message.get("content")
+        if not isinstance(content, str) or not content:
+            out.append(message)
+            continue
+        result = redact_for_model(content)
+        spans_total += len(result.mapping)
+        out.append({**message, "content": result.text})
+
+    if spans_total:
+        logger.info(
+            "call_llm(%s): %d placeholder(s) substituted before transmission", task, spans_total
+        )
+    return out
+
+
+def reset_client() -> None:
+    """Drop the cached client so the next call re-reads configuration (tests, config reload)."""
+    global _client
+    _client = None
 
 
 # ---------------------------------------------------------------------------
@@ -70,7 +181,7 @@ def _looks_non_english(text: str) -> bool:
 
 def translate_to_english(text: str) -> Optional[str]:
     """
-    Translate *text* to English using gpt-4.
+    Translate *text* to English using the configured translation model.
 
     Returns the translated string, or None on error (caller logs and skips).
     If the text already looks like English, returns it unchanged without an API call.
@@ -82,19 +193,17 @@ def translate_to_english(text: str) -> Optional[str]:
         logger.debug("translate_to_english: text looks English, skipping API call")
         return text
 
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model="gpt-4",
-            messages=[
+        translated = call_llm(
+            "ticket_translate",
+            [
                 {"role": "system", "content": _TRANSLATE_SYSTEM},
                 {"role": "user", "content": text},
             ],
             temperature=0.2,
-            max_tokens=1024,
+            max_output_tokens=1024,
         )
-        translated = response.choices[0].message.content or ""
-        return translated.strip() or None
+        return (translated or "").strip() or None
     except Exception as exc:
         logger.error("translate_to_english failed: %s", exc, exc_info=True)
         return None
@@ -132,12 +241,13 @@ Rules:
 - key_findings: minimum 1, maximum 5 items.
 """
 
-# Model selection: cost vs. quality tradeoff
-# Standard cases: gpt-4o-mini — indistinguishable quality for structured extraction,
-#   ~15x cheaper than gpt-4o.
-# SEAH cases: gpt-4o — more careful reasoning for sensitive investigations.
-_MODEL_STANDARD = "gpt-4o-mini"
-_MODEL_SEAH = "gpt-4o"
+# Model selection: a cost vs. quality tradeoff, and it survives — as two registry keys.
+#   ticket_findings       standard cases: quality indistinguishable for structured extraction,
+#                         at roughly a fifteenth of the cost
+#   ticket_findings_seah  SEAH cases: more careful reasoning for sensitive investigations
+# The keys are resolved by findings_task(is_seah); the models behind them are declared in
+# backend/config/llm_config.py and nowhere else. The two module constants that used to live here
+# were copied into three other modules — see this module's docstring.
 
 
 def generate_case_findings(
@@ -157,51 +267,34 @@ def generate_case_findings(
     if not context:
         return None
 
-    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
+    task_key = findings_task(is_seah)
     # Compact JSON — minimise tokens
     user_content = json.dumps(context, separators=(",", ":"), ensure_ascii=False)
 
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        findings = call_llm(
+            task_key,
+            [
                 {"role": "system", "content": _FINDINGS_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
-            temperature=0.0,   # deterministic output
-            max_tokens=400,
-            response_format={"type": "json_object"},
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if not raw:
-            logger.error("generate_case_findings: empty response from LLM (model=%s)", model)
-            return None
+            schema=CaseFindings,
+            schema_name="case_findings",
+            temperature=0.0,           # deterministic — dropped for models that refuse it
+            max_output_tokens=400,     # the reasoning budget is added by the model's profile
+        ).model_dump()
 
-        findings = json.loads(raw)
-
-        # Validate required keys are present
-        required = {"summary_en", "key_findings", "recommended_action", "urgency"}
-        missing = required - findings.keys()
-        if missing:
-            logger.warning(
-                "generate_case_findings: LLM response missing keys %s — filling defaults",
-                missing,
-            )
-            findings.setdefault("summary_en", "")
-            findings.setdefault("key_findings", [])
-            findings.setdefault("recommended_action", "")
-            findings.setdefault("urgency", "MEDIUM")
-        findings.setdefault("languages_detected", ["en"])
-
+        # ⚠ The "missing keys → fill defaults" branch this replaced is now the schema's own
+        # defaults: strict mode requires every declared property, and `CaseFindings` supplies a
+        # value for each on the weaker rungs. The behaviour is preserved; the branch is not.
         logger.info(
-            "generate_case_findings: ok model=%s urgency=%s keys=%d",
-            model, findings.get("urgency"), len(findings.get("key_findings", [])),
+            "generate_case_findings: ok task=%s urgency=%s keys=%d",
+            task_key, findings.get("urgency"), len(findings.get("key_findings", [])),
         )
         return findings
 
-    except json.JSONDecodeError as exc:
-        logger.error("generate_case_findings: invalid JSON from LLM: %s", exc)
+    except (LLMTruncatedError, LLMParseError, ValidationError) as exc:
+        logger.error("generate_case_findings: unusable reply from LLM: %s", exc)
         return None
     except Exception as exc:
         logger.error("generate_case_findings failed: %s", exc, exc_info=True)
@@ -249,37 +342,28 @@ def generate_resolved_case_summary_llm(
     if not bundle:
         return None
 
-    model = _MODEL_SEAH if is_seah else _MODEL_STANDARD
     payload = {**bundle, "primary_language": primary_language}
     user_content = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
 
-    client = _get_client()
     try:
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
+        # ⚠ Complainant-facing: the two `*_public` fields are what a person reads at the end of
+        # their grievance. This is the path where a truncated reply used to arrive as an empty one
+        # and be recorded as `llm_failed`, which nothing retries (D-36/D-40) — so the complainant
+        # was told the case was resolved and never received the document. `parse_response` refuses
+        # a truncated reply instead of parsing it.
+        return call_llm(
+            findings_task(is_seah),
+            [
                 {"role": "system", "content": _RESOLVED_SUMMARY_SYSTEM},
                 {"role": "user", "content": user_content},
             ],
+            schema=ResolvedCaseSummary,
+            schema_name="resolved_case_summary",
             temperature=0.0,
-            max_tokens=1200,
-            response_format={"type": "json_object"},
-        )
-        raw = (response.choices[0].message.content or "").strip()
-        if not raw:
-            return None
-        out = json.loads(raw)
-        for key in (
-            "field_reports_digest_en",
-            "other_notes_digest_en",
-            "combined_digest_en",
-            "resolution_text_public",
-            "findings_summary_public",
-        ):
-            out.setdefault(key, "")
-        return out
-    except json.JSONDecodeError as exc:
-        logger.error("generate_resolved_case_summary_llm: invalid JSON: %s", exc)
+            max_output_tokens=1200,
+        ).model_dump()
+    except (LLMTruncatedError, LLMParseError, ValidationError) as exc:
+        logger.error("generate_resolved_case_summary_llm: unusable reply: %s", exc)
         return None
     except Exception as exc:
         logger.error("generate_resolved_case_summary_llm failed: %s", exc, exc_info=True)

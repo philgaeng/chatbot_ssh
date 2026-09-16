@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -12,7 +14,6 @@ import {
   type PackageItem,
 } from "@/lib/api";
 import {
-  DEFAULT_ROUTING_ORG_ROLE,
   collectOrganizationScopeAssignments,
   isDonorAllProjectsOrg,
   organizationsForScopeFilter,
@@ -21,7 +22,7 @@ import {
   orgRoleKeysForOrganization,
   packagesForOrganizationOnProject,
   projectsForOrganization,
-  routingOrganizationId,
+  leadOrganizationId,
   scopeOptionsFromAssignments,
   type OrgScopeAssignment,
 } from "@/lib/officerJurisdiction";
@@ -126,7 +127,7 @@ export function useOfficerJurisdictionState(
           setOrgId("");
         } else {
           const project = projects.find((p) => p.project_id === selProject);
-          const routed = routingOrganizationId(project);
+          const routed = leadOrganizationId(project);
           if (!routed) {
             setOrgId("");
           } else if (scopeFilter) {
@@ -320,7 +321,7 @@ export function useOfficerJurisdictionState(
     projectFirst,
     orgsOnProject,
     orgsOnProjectFiltered,
-    routingOrgId: routingOrganizationId(selectedProject),
+    routingOrgId: leadOrganizationId(selectedProject),
     allProjects: projects,
     reset,
     hasJurisdiction,
@@ -437,8 +438,8 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
     <>
       {countryRole && orgId && (
         <p className="text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded px-3 py-2">
-          <span className="font-medium">Country-wide role:</span> this officer sees all projects where{" "}
-          <span className="font-mono">{orgId}</span> is a project actor. Optionally pick one project below to narrow.
+          <span className="font-medium">Country-wide scope:</span> this officer sees all projects where{" "}
+          <span className="font-mono">{orgId}</span> is named on a project. Optionally pick one project below to narrow.
         </p>
       )}
       {isDonorOrg && orgId && !countryRole && (
@@ -469,7 +470,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
               type="checkbox"
               checked={inclChildren}
               onChange={(e) => setInclChildren(e.target.checked)}
-              className="accent-purple-500"
+              className="accent-blue-600"
             />
             include sub-locations
           </label>
@@ -534,7 +535,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
             onChange={setScopeFilter}
             options={scopeOptions}
             disabled={catalogLoading}
-            hint="Organizations appear under each scope they hold on this project (project actor or package role)."
+            hint="Organizations appear under each scope they hold on this project — named on the project, or on one package."
           />
         )}
         <div className="flex items-center gap-2">
@@ -556,7 +557,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
                   : orgPickerList.length === 0
                     ? scopeFilter
                       ? "No organizations with this scope on project"
-                      : "No orgs on project — add under Project actors or packages"
+                      : "No organizations on this project — add them under Partner organizations"
                     : "Organization *"}
               </option>
               {orgPickerList.map((o) => (
@@ -569,14 +570,13 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
         </div>
         {selProject && orgPickerList.length === 0 && (
           <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-3 py-2">
-            Link organizations to this project first (Projects & packages → Project actors or package contractors), then invite officers.
+            Link organizations to this project first (Projects & packages → Partner organizations), then invite officers.
           </p>
         )}
         {selProject && routingOrgId && orgId === routingOrgId && (
           <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-3 py-2">
-            Organization defaults to the project&apos;s{" "}
-            <span className="font-mono">{DEFAULT_ROUTING_ORG_ROLE.replace(/_/g, " ")}</span>{" "}
-            (same org used for ticket routing). Change only if this officer works for another project actor.
+            Organization defaults to the first one named on this project. Change it if this
+            officer works for a different one.
           </p>
         )}
         {locationAndPackage}
@@ -651,7 +651,7 @@ export function OfficerJurisdictionFields(props: FieldsProps) {
       <p className="text-xs text-gray-500">
         {countryRole ? (
           <>
-            For this role, <strong>organization</strong> is enough for country-wide access. Add a project, package, or
+            For this responsibility, <strong>organization</strong> is enough for country-wide access. Add a project, package, or
             location only if you want to narrow coverage.
           </>
         ) : (

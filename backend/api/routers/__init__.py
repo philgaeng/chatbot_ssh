@@ -1,3 +1,5 @@
-from backend.api.routers import grievance, files, voice_grievance, gsheet
+# SPDX-License-Identifier: Apache-2.0
 
-__all__ = ["grievance", "files", "voice_grievance", "gsheet"]
+from backend.api.routers import grievance, files
+
+__all__ = ["grievance", "files"]

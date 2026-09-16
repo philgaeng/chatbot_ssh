@@ -1,18 +1,21 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
-  getTicket, getSla, performAction, markSeen, replyToComplainant, getGrievancePii,
-  listTicketFiles, listOfficers, listOfficerRoster, patchTicket,
+  replyToComplainant, getGrievancePii,
+  listTicketFiles, listOfficers, patchTicket,
   listOfficerAttachments, uploadOfficerAttachment,
   complainantFilePath, officerAttachmentPath,
-  generateFindings, listTicketTasks, completeTask, createTask,
-  type TicketDetail, type SlaStatus, type GrievancePii, type TicketFile,
+  generateFindings,
+  type TicketDetail, type GrievancePii, type TicketFile,
   type OfficerBrief, type OfficerAttachment, type RevealSession, type TicketTask, type TicketEvent,
 } from "@/lib/api";
 import { useAuth } from "@/app/providers/AuthProvider";
-import { assigneeIsCurrentUser, canonicalUserId } from "@/lib/auth/token-storage";
+import { useTicketThread } from "@/lib/useTicketThread";
+import { assigneeIsCurrentUser } from "@/lib/auth/token-storage";
 import { RevealModal, RevealOverlay } from "@/components/ui/VaultReveal";
 import { StatusBadge, PriorityBadge, IntakeRouteBadge } from "@/components/ui/Badge";
 
@@ -28,37 +31,18 @@ import { ReassignmentRequestCard, type ReassignmentReasonCode } from "@/componen
 import { CallReportComposeCard } from "@/components/thread/CallReportComposeCard";
 import { ResolutionSheet }                    from "@/components/ResolutionSheet";
 import { ActionNotice }                       from "@/components/ActionNotice";
-import { hasImageAttachment }                 from "@/lib/attachments";
-import {
-  canAssignTicket,
-  canSupervisorAssign,
-  getReassignMode,
-} from "@/lib/officer-permissions";
 import {
   formatUserFacingError,
-  MSG_IMAGE_BEFORE_ESCALATE,
-  MSG_IMAGE_BEFORE_RESOLVE,
   MSG_SUPERVISOR_ONLY_ASSIGN,
-  type ActionNoticeState,
 } from "@/lib/user-messages";
-import type { ResolutionCategoryCode }        from "@/lib/resolution";
-import {
-  formatCallReportNote,
-  isSiteVisitTask,
-  parseInspectAssignCommand,
-  type CallReportFormData,
-  type FieldVisitFormData,
-} from "@/lib/field-visit";
-import { submitStructuredFieldReport } from "@/lib/submit-field-report";
+import { isSiteVisitTask } from "@/lib/field-visit";
 import { formatGrievanceCategories } from "@/lib/format-grievance";
-import { ensureTicketAcknowledged } from "@/lib/ticket-ack";
 import { shouldRenderTaskCardInThread } from "@/lib/thread-tasks";
 import { ComplainantContactFields } from "@/components/tickets/ComplainantContactFields";
 import { ComplainantEditForm } from "@/components/tickets/ComplainantEditForm";
 import {
-  SYSTEM_EVENT_TYPES, TASK_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, COMPLAINANT_EVENT_TYPES, getTaskTypeInfo, AUTHORITY_ROLES,
+  SYSTEM_EVENT_TYPES, NOTIFICATION_ONLY_EVENT_TYPES, getTaskTypeInfo,
   isThreadTaskEvent,
-  type HashCommand,
 } from "@/lib/mobile-constants";
 import {
   IconAcknowledge, IconEscalateAction, IconResolve, IconGrcConvene,
@@ -718,41 +702,44 @@ export default function TicketDetailPage() {
   const router = useRouter();
   const { user, roleKeys, canSeeSeah, isAdmin, effectiveLang } = useAuth();
 
-  // ── Core data ──────────────────────────────────────────────────────────
-  const [ticket, setTicket] = useState<TicketDetail | null>(null);
-  const [sla, setSla]       = useState<SlaStatus | null>(null);
-  const [tasks, setTasks]   = useState<TicketTask[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState<string | null>(null);
+  // ── Shared thread orchestration (H2-06) ──────────────────────────────────
+  const {
+    ticket, sla, tasks, loading, error,
+    activeFilter, setActiveFilter, noteText, setNoteText, submitting,
+    actionNotice, setActionNotice, threadEndRef,
+    escalationOpen, setEscalationOpen, resolutionOpen, setResolutionOpen,
+    reassignOpen, setReassignOpen, callReportOpen, setCallReportOpen,
+    fieldReportOpen, fieldReportLinkedTask, fieldReportSubmitting, attachUploading,
+    currentUserId, isAssigned, viewerIds, viewerTiers, filteredEvents,
+    mentionParticipants, pendingTaskCount, hasResolutionRecord, canManageViewers,
+    userCanAssign, userCanSupervisorAssign, reassignMode, rosterIds,
+    reload, ensureAcknowledged, performSimpleAction,
+    openEscalationFlow, submitEscalation, openResolveFlow, submitResolve, resolutionError,
+    submitReassignment, submitCallReport, submitNote, handleHashCommand,
+    handleCompleteTask, closeFieldReport, submitFieldReportForm, handleAttachFile,
+  } = useTicketThread({ ticketId: id, user, roleKeys, isAdmin });
 
-  // ── Thread ─────────────────────────────────────────────────────────────
-  const [activeFilter, setActiveFilter] = useState<FilterChip>("all");
-  const [noteText, setNoteText]         = useState("");
-  const [submitting, setSubmitting]     = useState(false);
-  const threadEndRef = useRef<HTMLDivElement>(null);
-  const [filesRefreshKey, setFilesRefreshKey] = useState(0);
-  const fieldVisitSubmitLock = useRef(false);
-  const [complainantFiles, setComplainantFiles] = useState<TicketFile[]>([]);
-  const [officerFiles, setOfficerFiles]         = useState<OfficerAttachment[]>([]);
-  const [rosterIds, setRosterIds]               = useState<string[]>([]);
-  const [actionNotice, setActionNotice]       = useState<ActionNoticeState | null>(null);
-  const [escalationOpen, setEscalationOpen]   = useState(false);
-  const [reassignOpen, setReassignOpen]         = useState(false);
-  const [callReportOpen, setCallReportOpen]     = useState(false);
+  // Aliases so the JSX below (unchanged) keeps its original names; the hook renamed
+  // a few (`reload`, `submitNote`, `performSimpleAction`) and unified the desktop's
+  // two loading flags into one `submitting`.
+  const load = reload;
+  const actLoading = submitting;
+  const handleSimpleAction = performSimpleAction;
+  const handleNoteOrReport = submitNote;
 
-  // ── Top bar actions ────────────────────────────────────────────────────
-  const [actLoading, setActLoading]     = useState(false);
-  const [resolutionOpen, setResolutionOpen] = useState(false);
+  // ── Desktop-only UI state ────────────────────────────────────────────────
   const [showReply, setShowReply]       = useState(false);
   const [replyText, setReplyText]       = useState("");
+  const [replySending, setReplySending] = useState(false);
   const [showAssign, setShowAssign]     = useState(false);
   const [officers, setOfficers]         = useState<OfficerBrief[]>([]);
   const [assignSelected, setAssignSelected] = useState("");
   const [savingAssign, setSavingAssign] = useState(false);
   const [showAssignTask, setShowAssignTask] = useState(false);
   const [grcHearingDate, setGrcHearingDate] = useState("");
+  const [filesRefreshKey, setFilesRefreshKey] = useState(0);
 
-  // ── Translation panel ──────────────────────────────────────────────────
+  // ── Translation panel (desktop side overlay) ─────────────────────────────
   const PANEL_KEY = "grm_translation_panel_open";
   const [panelOpen, setPanelOpen] = useState<boolean>(() => {
     if (typeof window === "undefined") return false;
@@ -770,48 +757,19 @@ export default function TicketDetailPage() {
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [panelOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [panelOpen]);
 
   // ── Vault reveal ───────────────────────────────────────────────────────
   const [revealModalOpen, setRevealModalOpen] = useState(false);
   const [revealSession, setRevealSession]     = useState<RevealSession | null>(null);
 
-  // ── Data loading ───────────────────────────────────────────────────────
-  const refreshFiles = useCallback(async () => {
-    const [cf, of_] = await Promise.all([
-      listTicketFiles(id).catch(() => [] as TicketFile[]),
-      listOfficerAttachments(id).catch(() => [] as OfficerAttachment[]),
-    ]);
-    setComplainantFiles(cf);
-    setOfficerFiles(of_);
-  }, [id]);
-
-  const load = useCallback(async () => {
-    try {
-      const [t, s, tk] = await Promise.all([
-        getTicket(id),
-        getSla(id),
-        listTicketTasks(id).catch(() => [] as TicketTask[]),
-      ]);
-      setTicket(t);
-      setSla(s);
-      setTasks(tk);
-      setAssignSelected(t.assigned_to_user_id ?? "");
-      setFilesRefreshKey((k) => k + 1);
-      await refreshFiles();
-      markSeen(id).catch(() => {});
-    } catch (e) {
-      setError(formatUserFacingError(e).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [id, refreshFiles]);
-
-  useEffect(() => { load(); }, [load]);
-
+  // Keep the assign dropdown default + the FilesPanel refetch key in sync with each
+  // reload (the hook owns the reload; both are desktop-only view concerns that used
+  // to live inside the page's own `load`).
   useEffect(() => {
-    listOfficerRoster().then((r) => setRosterIds(r.map((o) => o.user_id))).catch(() => {});
-  }, []);
+    if (ticket) setAssignSelected(ticket.assigned_to_user_id ?? "");
+    setFilesRefreshKey((k) => k + 1);
+  }, [ticket]);
 
   useEffect(() => {
     if (showAssign && officers.length === 0) {
@@ -819,193 +777,42 @@ export default function TicketDetailPage() {
     }
   }, [showAssign]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Derived ────────────────────────────────────────────────────────────
-  const currentUserId = canonicalUserId(user);
-  const isAssigned    = isAdmin || !ticket?.assigned_to_user_id
-    || assigneeIsCurrentUser(ticket.assigned_to_user_id, user);
-
+  // ── Desktop-only derived ─────────────────────────────────────────────────
   const status       = ticket?.status_code ?? "";
   const isClosed     = ["RESOLVED", "CLOSED"].includes(status);
   const isOpen       = status === "OPEN";
   const isEscalated  = status === "ESCALATED";
   const isGrcHearing = status === "GRC_HEARING_SCHEDULED";
+  // GRM-084: convening is for whoever holds the case at the GRC step — the same rule the server
+  // applies (assigned officer or admin), and the actions around it already sit inside `isAssigned`.
+  // It used to also require the legacy `grc_chair` role key, which the cast model never issues, so
+  // the GRC chair could not convene and only the super admin could.
   const stepKey      = ticket?.current_step?.step_key ?? "";
-  const isGrcChair   = roleKeys.includes("grc_chair") || roleKeys.includes("super_admin");
+  const isGrcStep    = stepKey === "LEVEL_3_GRC";
 
   const slaBreached = (ticket?.sla_breached ?? false) || (sla?.breached ?? false);
   const slaHours    = sla?.remaining_hours ?? null;
   const timeLabel   = slaTimeLabel(slaHours, slaBreached, sla?.resolution_time_days);
   const slaCls      = slaColorCls(slaHours, slaBreached);
 
-  const viewerIds         = useMemo(() => new Set((ticket?.viewers ?? []).map((v) => v.user_id)), [ticket]);
-  const viewerTiers       = useMemo(() => {
-    const m = new Map<string, "informed" | "observer">();
-    (ticket?.viewers ?? []).forEach(v => m.set(v.user_id, v.tier as "informed" | "observer"));
-    return m;
-  }, [ticket]);
-
-  const filteredEvents = useMemo(() => {
-    if (!ticket) return [];
-    switch (activeFilter) {
-      case "all":         return ticket.events;
-      case "mine":        return ticket.events.filter((e) => e.created_by_user_id === currentUserId);
-      case "owner":       return ticket.events.filter((e) => e.created_by_user_id === ticket.assigned_to_user_id);
-      case "supervisor":  return ticket.events.filter((e) => e.actor_role && AUTHORITY_ROLES.has(e.actor_role) && e.created_by_user_id !== ticket.assigned_to_user_id);
-      case "observers":   return ticket.events.filter((e) => e.created_by_user_id && viewerIds.has(e.created_by_user_id));
-      case "tasks":       return ticket.events.filter((e) => isThreadTaskEvent(e.event_type));
-      case "complainant": return ticket.events.filter((e) => COMPLAINANT_EVENT_TYPES.has(e.event_type));
-      case "system":      return ticket.events.filter((e) => SYSTEM_EVENT_TYPES.has(e.event_type));
-      default:            return ticket.events;
-    }
-  }, [ticket, activeFilter, currentUserId, viewerIds]);
-
-  const pendingTaskCount  = useMemo(() => tasks.filter((t) => t.status === "PENDING").length, [tasks]);
-  const canManageViewers  = useMemo(() => !!ticket && ticket.assigned_to_user_id === currentUserId, [ticket, currentUserId]);
-  const hasResolutionRecord = useMemo(() => {
-    if (!ticket) return false;
-    return ticket.events.some((event) => {
-      if (event.event_type === "RESOLUTION_RECORDED") return true;
-      if (event.event_type === "NOTE_ADDED") {
-        const payload = (event.payload ?? {}) as Record<string, unknown>;
-        if (payload.is_resolution_record === true) return true;
-      }
-      if (event.event_type !== "RESOLVED") return false;
-      const payload = (event.payload ?? {}) as Record<string, unknown>;
-      return typeof payload.resolution_category === "string" && payload.resolution_category.trim().length > 0;
-    });
-  }, [ticket]);
-
-  const mentionParticipants = useMemo(() => {
-    if (!ticket) return [];
-    const ids = new Set<string>();
-    if (ticket.assigned_to_user_id) ids.add(ticket.assigned_to_user_id);
-    (ticket.viewers ?? []).forEach((v) => ids.add(v.user_id));
-    ids.delete(currentUserId);
-    const list = Array.from(ids).map((uid) => ({ user_id: uid, label: `@${uid}` }));
-    list.unshift({ user_id: "all", label: "@all" });
-    return list;
-  }, [ticket, currentUserId]);
-
-  const hasImages = useMemo(
-    () => hasImageAttachment(complainantFiles, officerFiles),
-    [complainantFiles, officerFiles],
-  );
-
-  const userCanSupervisorAssign = useMemo(
-    () => !!ticket && canSupervisorAssign(roleKeys, ticket, isAdmin),
-    [ticket, roleKeys, isAdmin],
-  );
-  const userCanAssign = useMemo(
-    () => !!ticket && canAssignTicket(roleKeys, ticket, isAdmin, currentUserId),
-    [ticket, roleKeys, isAdmin, currentUserId],
-  );
-  const reassignMode = useMemo(
-    () => (ticket ? getReassignMode(roleKeys, ticket, currentUserId, isAdmin) : null),
-    [ticket, roleKeys, currentUserId, isAdmin],
-  );
-
-  // ── Actions ────────────────────────────────────────────────────────────
-  const ensureAcknowledged = useCallback(async () => {
-    await ensureTicketAcknowledged(ticket, isAssigned, id, load);
-  }, [ticket, isAssigned, id, load]);
-
-  const handleSimpleAction = useCallback(async (
-    action_type: string,
-    extra?: Record<string, string>,
-  ) => {
-    setActLoading(true);
-    setActionNotice(null);
-    try {
-      if (action_type !== "ACKNOWLEDGE") await ensureAcknowledged();
-      await performAction(id, { action_type, ...extra });
-      await load();
-    } catch (e) {
-      console.error("Action failed", e);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setActLoading(false);
-    }
-  }, [id, load, ensureAcknowledged]);
-
-  const openEscalationFlow = useCallback(() => {
-    if (!hasImages) {
-      setActionNotice({ message: MSG_IMAGE_BEFORE_ESCALATE, kind: "validation" });
-      return;
-    }
-    setEscalationOpen(true);
-  }, [hasImages]);
-
-  const submitEscalation = useCallback(async (data: {
-    escalationDate: string;
-    personsInvolved: string[];
-    notes: string;
-  }) => {
-    setActLoading(true);
-    setActionNotice(null);
-    try {
-      await ensureAcknowledged();
-      await performAction(id, {
-        action_type: "ESCALATE",
-        escalation_date: data.escalationDate,
-        persons_involved: data.personsInvolved,
-        escalation_notes: data.notes,
-      });
-      setEscalationOpen(false);
-      await load();
-    } catch (e) {
-      console.error("Escalation failed", e);
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setActLoading(false);
-    }
-  }, [id, load, ensureAcknowledged]);
-
-  const openResolveFlow = useCallback(() => {
-    if (!hasImages) {
-      setActionNotice({ message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" });
-      return;
-    }
-    setResolutionOpen(true);
-  }, [hasImages]);
-
-  const submitResolve = useCallback(async (category: ResolutionCategoryCode, note: string) => {
-    setActLoading(true);
-    setActionNotice(null);
-    try {
-      await ensureAcknowledged();
-      await performAction(id, {
-        action_type: "RESOLVE",
-        resolution_category: category,
-        note,
-      });
-      setResolutionOpen(false);
-      await load();
-    } catch (e) {
-      console.error("Resolve failed", e);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setActLoading(false);
-    }
-  }, [id, load, ensureAcknowledged]);
-
+  // ── Desktop-only handlers (reply to complainant + explicit assign dropdown) ─
   const sendReply = useCallback(async () => {
     if (!replyText.trim()) return;
-    setActLoading(true);
+    setReplySending(true);
     setActionNotice(null);
     try {
       await ensureAcknowledged();
       await replyToComplainant(id, replyText);
       setReplyText("");
       setShowReply(false);
-      await load();
+      await reload();
     } catch (e) {
       console.error("Reply failed", e);
       setActionNotice(formatUserFacingError(e));
     } finally {
-      setActLoading(false);
+      setReplySending(false);
     }
-  }, [replyText, id, load, ensureAcknowledged]);
+  }, [replyText, id, reload, ensureAcknowledged, setActionNotice]);
 
   const handleAssign = useCallback(async () => {
     if (!assignSelected || assignSelected === ticket?.assigned_to_user_id) return;
@@ -1018,213 +825,14 @@ export default function TicketDetailPage() {
     try {
       await patchTicket(id, { assign_to_user_id: assignSelected });
       setShowAssign(false);
-      await load();
+      await reload();
     } catch (e) {
       console.error("Assign failed", e);
       setActionNotice(formatUserFacingError(e));
     } finally {
       setSavingAssign(false);
     }
-  }, [assignSelected, ticket?.assigned_to_user_id, userCanAssign, id, load]);
-
-  const handleNote = useCallback(async () => {
-    if (!noteText.trim() || submitting) return;
-    setSubmitting(true);
-    const text = noteText.trim();
-    setNoteText("");
-    try {
-      await ensureAcknowledged();
-      await performAction(id, { action_type: "NOTE", note: text });
-      await load();
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      console.error("Note failed", e);
-      setNoteText(text);
-    } finally {
-      setSubmitting(false);
-    }
-  }, [noteText, submitting, id, load, ensureAcknowledged]);
-
-  // ── Report mode + field visit + attach ─────────────────────────────────
-  const [fieldReportOpen, setFieldReportOpen] = useState(false);
-  const [fieldReportLinkedTask, setFieldReportLinkedTask] = useState<TicketTask | null>(null);
-  const [fieldReportSubmitting, setFieldReportSubmitting] = useState(false);
-  const [attachUploading, setAttachUploading] = useState(false);
-
-  const openFieldReport = useCallback((linkedTask?: TicketTask | null) => {
-    setFieldReportLinkedTask(linkedTask ?? null);
-    setFieldReportOpen(true);
-    requestAnimationFrame(() => {
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
-  }, []);
-
-  const closeFieldReport = useCallback(() => {
-    setFieldReportOpen(false);
-    setFieldReportLinkedTask(null);
-  }, []);
-
-  const handleCompleteTask = useCallback(async (task: TicketTask) => {
-    if (isSiteVisitTask(task.task_type) && task.status === "PENDING") {
-      openFieldReport(task);
-      return;
-    }
-    try {
-      await completeTask(id, task.task_id);
-      await load();
-    } catch (e) {
-      console.error("Complete task failed", e);
-      setActionNotice(formatUserFacingError(e, "task"));
-    }
-  }, [id, load, openFieldReport]);
-
-  const submitFieldReportForm = useCallback(async (data: FieldVisitFormData) => {
-    if (fieldVisitSubmitLock.current) return;
-    fieldVisitSubmitLock.current = true;
-    setFieldReportSubmitting(true);
-    try {
-      await submitStructuredFieldReport({
-        ticketId: id,
-        data,
-        linkedTask: fieldReportLinkedTask,
-        ensureAcknowledged,
-      });
-      closeFieldReport();
-      await load();
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      console.error("Field report failed", e);
-      setActionNotice(formatUserFacingError(e, "field_report"));
-      throw e;
-    } finally {
-      fieldVisitSubmitLock.current = false;
-      setFieldReportSubmitting(false);
-    }
-  }, [id, fieldReportLinkedTask, load, ensureAcknowledged, closeFieldReport]);
-
-  const handleAttachFile = useCallback(async (file: File) => {
-    setAttachUploading(true);
-    setActionNotice(null);
-    try {
-      await ensureAcknowledged();
-      await uploadOfficerAttachment(id, file, "");
-      await refreshFiles();
-      await load();
-    } catch (e) {
-      console.error("Upload failed", e);
-      setActionNotice(formatUserFacingError(e, "upload"));
-    } finally {
-      setAttachUploading(false);
-    }
-  }, [ensureAcknowledged, id, load, refreshFiles]);
-
-  const submitReassignment = useCallback(async (reasonCode: ReassignmentReasonCode, notes: string) => {
-    setActLoading(true);
-    setActionNotice(null);
-    try {
-      await performAction(id, {
-        action_type: "REASSIGNMENT_REQUESTED",
-        reassignment_reason_code: reasonCode,
-        reassignment_notes: notes,
-      });
-      setReassignOpen(false);
-      await load();
-    } catch (e) {
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setActLoading(false);
-    }
-  }, [id, load]);
-
-  const submitCallReport = useCallback(async (data: CallReportFormData) => {
-    setActLoading(true);
-    setActionNotice(null);
-    try {
-      await ensureAcknowledged();
-      await performAction(id, {
-        action_type: "NOTE",
-        note: formatCallReportNote(data),
-        is_call_report: true,
-      });
-      setCallReportOpen(false);
-      await load();
-    } catch (e) {
-      setActionNotice(formatUserFacingError(e));
-      throw e;
-    } finally {
-      setActLoading(false);
-    }
-  }, [id, load, ensureAcknowledged]);
-
-  const handleHashCommand = useCallback(async (cmd: HashCommand) => {
-    if (cmd.kind === "call_report") {
-      setCallReportOpen(true);
-      return;
-    }
-    if (cmd.kind === "reassign_request" && reassignMode === "supervisor") {
-      setReassignOpen(true);
-      return;
-    }
-    if (cmd.kind === "action" && cmd.action === "ESCALATE") {
-      openEscalationFlow();
-      return;
-    }
-    if (cmd.kind === "action" && cmd.action) {
-      await handleSimpleAction(cmd.action);
-      return;
-    }
-    if (cmd.kind === "task" && cmd.taskKey) {
-      // instant self-assign task
-      try {
-        await createTask(id, { task_type: cmd.taskKey, assigned_to_user_id: currentUserId });
-        await load();
-      } catch (e) { console.error("Create task failed", e); }
-      return;
-    }
-    if (cmd.kind === "assign" && !userCanAssign) {
-      setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
-    }
-    // #assign / peer #reassign handled inline in ComposeBar (text becomes "#assign @…")
-  }, [id, currentUserId, load, openFieldReport, openEscalationFlow, handleSimpleAction, userCanAssign, reassignMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handleNoteOrReport = useCallback(async () => {
-    const text = noteText.trim();
-    if (!text || submitting) return;
-    setSubmitting(true);
-
-    const assignMatch = text.match(/^#assign\s+@([A-Za-z0-9][A-Za-z0-9._@-]*)/);
-    const inspectAssignee = parseInspectAssignCommand(text);
-
-    setNoteText("");
-    try {
-      if (inspectAssignee !== undefined) {
-        const assignee = inspectAssignee ?? currentUserId;
-        await createTask(id, {
-          task_type: "SITE_VISIT",
-          assigned_to_user_id: assignee,
-        });
-      } else if (assignMatch) {
-        if (!userCanAssign) {
-          setActionNotice({ message: MSG_SUPERVISOR_ONLY_ASSIGN, kind: "validation" });
-          setNoteText(text);
-          return;
-        }
-        await patchTicket(id, { assign_to_user_id: assignMatch[1] });
-      } else {
-        await ensureAcknowledged();
-        await performAction(id, { action_type: "NOTE", note: text });
-      }
-      await load();
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    } catch (e) {
-      console.error("Submit failed", e);
-      setNoteText(text);
-      setActionNotice(formatUserFacingError(e));
-    } finally {
-      setSubmitting(false);
-    }
-  }, [noteText, submitting, id, load, ensureAcknowledged, currentUserId, userCanAssign]);
+  }, [assignSelected, ticket?.assigned_to_user_id, userCanAssign, id, reload, setActionNotice]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   if (loading) return (
@@ -1296,7 +904,7 @@ export default function TicketDetailPage() {
                   </button>
                 </>
               )}
-              {isGrcChair && stepKey === "LEVEL_3_GRC" && !isGrcHearing && (
+              {isGrcStep && !isGrcHearing && (
                 <>
                   <input type="date" value={grcHearingDate} onChange={(e) => setGrcHearingDate(e.target.value)}
                     className="text-sm border border-gray-300 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-purple-400"
@@ -1425,9 +1033,9 @@ export default function TicketDetailPage() {
                 className="text-xs text-gray-500 hover:text-gray-700 px-3 py-1.5">
                 Cancel
               </button>
-              <button onClick={sendReply} disabled={!replyText.trim() || actLoading}
+              <button onClick={sendReply} disabled={!replyText.trim() || replySending}
                 className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 hover:bg-blue-700 disabled:opacity-50 transition font-medium">
-                {actLoading ? "Sending…" : "→ Send Reply"}
+                {replySending ? "Sending…" : "→ Send Reply"}
               </button>
             </div>
           </div>
@@ -1700,6 +1308,12 @@ export default function TicketDetailPage() {
         onClose={() => setResolutionOpen(false)}
         onSubmit={submitResolve}
         submitting={actLoading}
+        options={ticket?.resolution_options ?? []}
+        selfOffices={ticket?.resolution_self_offices ?? []}
+        officeSuggestions={ticket?.resolution_office_suggestions ?? []}
+        externalActors={ticket?.resolution_external_actors ?? []}
+        countryCode={ticket?.country_code ?? null}
+        error={resolutionError}
       />
 
     </div>

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Helpers for Modify grievance – Add missing info (Flow B).
 

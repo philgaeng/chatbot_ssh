@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Thin validate_* delegates for ContactFormValidationAction (imported into form_contact)."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Example usage of the HelpersRepo for keyword detection and location validation.
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Human-readable canonical location_code values for Nepal per docs/ticketing_system/LOCATION_CODES.md.
 

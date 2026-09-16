@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import logging
 import os
@@ -12,6 +14,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.events import SlotSet, Restarted, FollowupAction, ActiveLoop
 from rasa_sdk.types import DomainDict
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction, SKIP_VALUE
+from backend.services.db_debug_log import text_prefix_for_log
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.grievance_intake.classification import (
     load_grievance_for_classification,
@@ -88,7 +91,12 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
             follow_up_question = grievance_data.get('follow_up_question', '')
             grievance_classification_status_db = grievance_data.get('grievance_classification_status')
             sensitive_categories = self.detect_sensitive_categories(grievance_categories)
-            self.logger.debug(f"Sensitive categories: {sensitive_categories}, grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_alternative: {grievance_categories_alternative}")
+            self.logger.debug(
+                "Sensitive categories: %s, grievance_categories: %s, %s, alternative: %s",
+                sensitive_categories, grievance_categories,
+                text_prefix_for_log("grievance_summary", grievance_summary),
+                grievance_categories_alternative,
+            )
 
             from backend.config.classification_status import LLM_SKIPPED
             from backend.actions.forms.form_road_hazard import is_road_hazard_intake
@@ -192,10 +200,15 @@ class ActionRetrieveClassificationResults(BaseActionSubmit):
                             ]
 
                 # Pending/empty after poll — manual add path; do not skip consent with empty slots.
+                # ⚠ DPG-15b: this branch used to render NOTHING. The complainant had just waited
+                # out the poll and was then shown a blank summary with no explanation, which is
+                # indistinguishable from the product being broken. Three states, three messages:
+                # ready (utterance 1), will not arrive (2), and not ready yet (3) — this one.
                 self.logger.warning(
                     "Classification results not yet available after poll; manual review "
                     f"(db_status={grievance_classification_status_db})"
                 )
+                dispatcher.utter_message(text=self.get_utterance(3))
                 return [SlotSet('grievance_classification_status', self.GRIEVANCE_CLASSIFICATION_STATUS['LLM_generated']),
                         SlotSet('grievance_summary_temp', grievance_summary or ''),
                         SlotSet('grievance_categories', grievance_categories or []),
@@ -233,7 +246,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         grievance_summary_status = tracker.get_slot("grievance_summary_status")
         grievance_cat_modify = tracker.get_slot("grievance_cat_modify")
         grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
-        self.logger.debug(f"form_grievance_complainant_review - Values of slots: grievance_categories: {grievance_categories}, grievance_summary: {grievance_summary}, grievance_categories_status: {grievance_categories_status}, grievance_summary_status: {grievance_summary_status}, grievance_cat_modify: {grievance_cat_modify}, grievance_summary_temp: {grievance_summary_temp}")
+        self.logger.debug(
+            "form_grievance_complainant_review - slots: categories=%s, %s, categories_status=%s, "
+            "summary_status=%s, cat_modify=%s, %s",
+            grievance_categories,
+            text_prefix_for_log("grievance_summary", grievance_summary),
+            grievance_categories_status, grievance_summary_status, grievance_cat_modify,
+            text_prefix_for_log("grievance_summary_temp", grievance_summary_temp),
+        )
 
 
         # Voice-only intake: classification skipped; officer handles summary/categories.
@@ -339,7 +359,10 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
         elif slot_value == False:
             grievance_summary_temp = tracker.get_slot("grievance_summary_temp")
             self.logger.debug(f"validate_grievance_classification_consent: User doesn't want to review")
-            self.logger.debug(f"validate_grievance_classification_consent: grievance_summary_temp = {grievance_summary_temp}")
+            self.logger.debug(
+                "validate_grievance_classification_consent: %s",
+                text_prefix_for_log("grievance_summary_temp", grievance_summary_temp),
+            )
             
             result = {
                 "grievance_classification_consent": slot_value,
@@ -492,7 +515,14 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
             #if no category is selected or the slot_value is SKIP_VALUE, return slot_confirmed as this means the user is happy with the current selection and the SKIP_VALUE for the grievance_cat_modify slot
             try:
                 if not selected_category or slot_value == self.SKIP_VALUE:
-                    message = self.get_utterance(1)
+                    # Keyed on this form's name(), which is where the copy for this branch
+                    # was authored ("No category selected. skipping this step."). The old
+                    # introspection derived "validate_grievance_cat_modify" — the calling
+                    # function's name — which exists nowhere, so this raised ValueError
+                    # and the except below laundered it into a SKIP_VALUE (T3-01).
+                    message = self.get_utterance(
+                        1, key="validate_form_grievance_complainant_review"
+                    )
                     dispatcher.utter_message(text=message)
                     return {"grievance_categories_status": None,
                         "grievance_cat_modify": self.SKIP_VALUE,
@@ -523,7 +553,21 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     "grievance_categories_status": None,
                     "grievance_cat_modify": "Done",
                 }
-            except Exception as e:
+            # Narrowed from `except Exception` (T3-01). The bare catch turned *any*
+            # failure into a SKIP_VALUE, which is how a missing utterance key silently
+            # became "user skipped the category step": the confirmation message was never
+            # dispatched and the form returned the wrong slots, with no error anywhere.
+            # ValueError from the utterance layer is a bug in our mapping, not a user
+            # outcome — it must surface. ValueError/KeyError from list mutation below
+            # (`.remove()` on a category that isn't present) is the recoverable case this
+            # catch actually existed for, so it stays handled — but only there.
+            except (ValueError, KeyError) as e:
+                if isinstance(e, ValueError) and "Error getting utterance" in str(e):
+                    self.logger.error(
+                        f"validate_grievance_cat_modify: utterance lookup failed — "
+                        f"this is a mapping bug, not a user skip: {e}"
+                    )
+                    raise
                 self.logger.error(f"Error in validate_grievance_cat_modify: {e}")
                 return {"grievance_categories_status": self.LLM_GENERATED,
                         "grievance_cat_modify": self.SKIP_VALUE}
@@ -596,7 +640,10 @@ class ValidateFormGrievanceComplainantReview(BaseFormValidationAction):
                     "grievance_summary_temp": self.SKIP_VALUE}
         
             if slot_value:
-                self.logger.info(f"validate_grievance_summary_temp: {slot_value}")
+                self.logger.info(
+                    "validate_grievance_summary_temp: %s",
+                    text_prefix_for_log("value", slot_value),
+                )
                 return {"grievance_summary_status": None,
                         "grievance_summary_temp": slot_value,
                         "grievance_summary": slot_value}

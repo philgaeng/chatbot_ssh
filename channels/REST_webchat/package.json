@@ -1,0 +1,14 @@
+{
+  "name": "rest-webchat",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "Static ES-module webchat client. Served as plain files (no bundler) — this package exists only to run the module unit tests.",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.9"
+  }
+}

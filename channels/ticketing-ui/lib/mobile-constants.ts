@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Shared constants for the mobile-first thread UI (UI_SPEC.md §2.3).
  * Used by both /m/* routes and the desktop thread view.
@@ -155,16 +157,21 @@ export function systemEventLabel(eventType: string, payload?: Record<string, unk
     }
     case "PRIORITY_CHANGED":      return `Priority changed to ${payload?.new_priority ?? "—"}`;
     case "RESOLVED": {
+      // GRM-116: the label is snapshotted on the event. Events written before that carry only a
+      // code, and could only ever carry one of these five — so this map is frozen, never extended:
+      // every new action's label arrives on its event.
+      const snapshot = payload?.resolution_category_label as string | undefined;
+      if (snapshot) return `Case resolved — ${snapshot}`;
       const cat = payload?.resolution_category as string | undefined;
       if (cat) {
-        const labels: Record<string, string> = {
+        const legacyLabels: Record<string, string> = {
           CLASSIFIED: "Grievance classified",
           DEMAND_REJECTED: "Complainant demand rejected",
           ACCEPTED_MONETARY: "Grievance accepted — monetary compensation",
           ACCEPTED_RELOCATION: "Grievance accepted — relocation",
           ACCEPTED_OTHER: "Grievance accepted — other remedy",
         };
-        return `Case resolved — ${labels[cat] ?? cat}`;
+        return `Case resolved — ${legacyLabels[cat] ?? cat}`;
       }
       return "Case resolved";
     }

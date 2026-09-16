@@ -1,4 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import base64
+import logging
 import smtplib
 from contextlib import contextmanager
 from email.mime.application import MIMEApplication
@@ -6,17 +9,13 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.utils import formataddr
 
-import boto3
 import requests
-from botocore.exceptions import ClientError
 from typing import Any, Text, Dict, List, Optional, Protocol
 from backend.config.constants import (
     WHITELIST_PHONE_NUMBERS_OTP_TESTING,
-    AWS_REGION,
 )
 from backend.config.sms_config import (
     SmsConfig,
-    format_philippines_e164,
     normalize_nepal_mobile,
     resolve_sms_config,
     sms_config_summary,
@@ -140,10 +139,9 @@ class SmsTransport(Protocol):
 
 
 def _build_sms_client(config: SmsConfig) -> SmsTransport:
+    # One transport. The AWS SNS branch was removed 2026-08-24 — see sms_config's module docstring.
     if config.provider == "doit":
         return DoitSmsClient(config)
-    if config.provider == "aws_sns":
-        return SnsSmsClient(config)
     return DisabledSmsClient()
 
 
@@ -163,8 +161,28 @@ class DisabledSmsClient:
         return normalize_nepal_mobile(phone_number)
 
 
+def _normalized_whitelist() -> set[str]:
+    """Whitelist entries in DOIT's 10-digit format, skipping any that are not Nepali.
+
+    ⚠ Skipping rather than raising is deliberate. Until 2026-08-24 this was an inline set
+    comprehension over `normalize_nepal_mobile`, and the list held **Philippine** numbers left over
+    from the AWS SNS demo path — so `SMS_WHITELIST_ONLY=true` on the DOIT gateway raised
+    `ValueError` out of `send_sms`, uncaught, rather than declining to send. A malformed entry must
+    not be able to take down the send path.
+    """
+    normalized: set[str] = set()
+    for raw in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
+        try:
+            normalized.add(normalize_nepal_mobile(raw))
+        except ValueError:
+            logging.getLogger(__name__).warning(
+                "SMS whitelist entry is not a Nepal mobile number — ignored"
+            )
+    return normalized
+
+
 class DoitSmsClient:
-    """Nepal DOIT government SMS gateway (sms.doit.gov.np)."""
+    """Nepal DOIT government SMS gateway (sms.doit.gov.np). The only SMS transport."""
 
     def __init__(self, config: SmsConfig) -> None:
         self.config = config
@@ -228,9 +246,7 @@ class DoitSmsClient:
             self.logger.error("DOIT SMS invalid number %s: %s", mask_phone_for_log(phone_number), exc)
             return False
 
-        if self.config.whitelist_only and mobile not in {
-            normalize_nepal_mobile(p) for p in WHITELIST_PHONE_NUMBERS_OTP_TESTING
-        }:
+        if self.config.whitelist_only and mobile not in _normalized_whitelist():
             self.logger.warning(
                 "Phone number %s not in whitelist. DOIT SMS not sent.",
                 mask_phone_for_log(mobile),
@@ -266,83 +282,6 @@ class DoitSmsClient:
         return normalize_nepal_mobile(phone_number)
 
 
-class SnsSmsClient:
-    """AWS SNS — dev / international fallback."""
-
-    def __init__(self, config: SmsConfig) -> None:
-        self.config = config
-        self.task_logger = TaskLogger(service_name='messaging_service')
-        self.logger = self.task_logger.logger
-        self.log_event = self.task_logger.log_event
-        try:
-            self.sns_client = boto3.client('sns', region_name=AWS_REGION)
-            self.logger.info("Successfully initialized SNS client")
-        except ClientError as e:
-            self.logger.error(f"Failed to initialize SNS client: {str(e)}")
-            raise
-
-    def test_connection(self, test_phone_number: str) -> bool:
-        """
-        Test SMS sending functionality with a test message.
-        Args:
-            test_phone_number: Phone number to send test SMS to
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        try:
-            test_message = "This is a test message from your chatbot."
-            result = self.send_sms(test_phone_number, test_message)
-            
-            self.logger.info(
-                "Test SMS sent successfully to %s",
-                mask_phone_for_log(test_phone_number),
-            )
-            return result
-        except Exception as e:
-            self.logger.error(
-                "Test SMS to %s failed with error: %s",
-                mask_phone_for_log(test_phone_number),
-                str(e),
-            )
-            return False
-
-    def send_sms(self, phone_number: str, message: str) -> bool:
-        try:
-            if not self.config.enabled:
-                self.logger.info("SMS_ENABLED is false — SNS message not sent")
-                return False
-
-            formatted_number = self.format_phone_number(phone_number)
-            if self.config.whitelist_only and formatted_number not in WHITELIST_PHONE_NUMBERS_OTP_TESTING:
-                self.logger.warning(
-                    "Phone number %s not in whitelist. SMS not sent.",
-                    mask_phone_for_log(formatted_number),
-                )
-                return False
-
-            self.logger.info(
-                "Sending SMS via SNS to %s",
-                mask_phone_for_log(formatted_number),
-            )
-
-            response = self.sns_client.publish(
-                PhoneNumber=formatted_number,
-                Message=message,
-                MessageAttributes={
-                    'AWS.SNS.SMS.SMSType': {
-                        'DataType': 'String',
-                        'StringValue': 'Transactional'
-                    }
-                }
-            )
-            self.logger.info("SNS SMS sent successfully: %s", response['MessageId'])
-            return True
-        except (ClientError, ValueError) as e:
-            self.logger.error("Failed to send SMS via SNS: %s", e)
-            return False
-
-    def format_phone_number(self, phone_number: str) -> str:
-        return format_philippines_e164(phone_number)
 
 class EmailClient:
     def __init__(self):

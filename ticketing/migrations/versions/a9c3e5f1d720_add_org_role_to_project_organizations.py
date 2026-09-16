@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """add org_role to project_organizations + seed default org roles in settings
 
 Revision ID: a9c3e5f1d720

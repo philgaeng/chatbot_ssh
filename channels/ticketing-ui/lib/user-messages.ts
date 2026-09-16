@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * Officer-facing error copy — strips API paths/status and maps known validation cases (TP-13).
  */
@@ -11,6 +13,10 @@ export interface ActionNoticeState {
 
 export const MSG_IMAGE_BEFORE_ESCALATE =
   "Add at least one photo before escalating. Upload a site photo or ask the complainant to send photos via WhatsApp.";
+
+/** GRM-116: the case moved to another workflow while the resolve form was open. */
+export const MSG_RESOLUTION_WORKFLOW_CHANGED =
+  "This case moved to another workflow. Choose what was done again.";
 
 export const MSG_IMAGE_BEFORE_RESOLVE =
   "Add at least one photo before resolving. Upload a site photo or ask the complainant to send photos via WhatsApp.";
@@ -51,6 +57,22 @@ export function parseApiErrorDetail(raw: string): string | null {
           .filter(Boolean);
         if (parts.length) return parts.join(" ");
       }
+      // R5 (BUILD-REVIEW M3a): object detail — FastAPI structured 409/422 like
+      // {"detail":{"message":..,"errors":[..],"holders_count":3}}. Unwrap to prose so it
+      // never raw-dumps (the org CSV import 422 + position-type delete 409).
+      if (d && typeof d === "object") {
+        const obj = d as Record<string, unknown>;
+        const parts: string[] = [];
+        if (typeof obj.message === "string" && obj.message.trim()) parts.push(obj.message.trim());
+        if (Array.isArray(obj.errors)) {
+          for (const e of obj.errors) if (typeof e === "string" && e.trim()) parts.push(e.trim());
+        }
+        const counts = Object.entries(obj)
+          .filter(([k, v]) => k.endsWith("_count") && typeof v === "number" && (v as number) > 0)
+          .map(([k, v]) => `${v} ${k.replace(/_count$/, "").replace(/_/g, " ")}`);
+        if (counts.length) parts.push(`(${counts.join(", ")})`);
+        if (parts.length) return parts.join(" ");
+      }
     } catch {
       /* not JSON */
     }
@@ -71,6 +93,9 @@ function mapDetailToNotice(detail: string): ActionNoticeState | null {
   }
   if (d.includes("At least one image attachment is required before resolving")) {
     return { message: MSG_IMAGE_BEFORE_RESOLVE, kind: "validation" };
+  }
+  if (d.includes("not offered by this case's workflow")) {
+    return { message: MSG_RESOLUTION_WORKFLOW_CHANGED, kind: "validation" };
   }
   if (d.includes("escalation_notes is required")) {
     return {
@@ -210,6 +235,13 @@ export function formatUserFacingError(
   }
   if (context === "task") {
     return { message: "Could not complete the task. Please try again.", kind: "failure" };
+  }
+
+  // R5 (M3a): a cleanly-parsed detail (parseApiErrorDetail already returns null for raw
+  // "API 4xx /api/…" strings) is user-safe — surface it instead of a bare generic so the
+  // unwrapped 409/422 message reaches the user (settings surfaces have no context tag).
+  if (detail && detail.trim()) {
+    return { message: detail.trim(), kind: "failure" };
   }
 
   return { message: GENERIC_FAILURE, kind: "failure" };

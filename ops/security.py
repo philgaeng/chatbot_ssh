@@ -1,7 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Security monitoring (spec 12) — report-only, run by the ops scheduler.
 
 - dependency_scan: pip-audit (primary) → upsert into ops.dependency_findings.
+- licence_scan: pip-licenses → the same table. A *licence* check, not a vulnerability one
+  (DPG-02 / Q-06). Indicator 2 of the Digital Public Goods Standard is a claim that has to stay
+  true, and a one-off audit is stale the next time anybody adds a dependency — so it runs on the
+  schedule beside the CVE scan rather than being a pre-submission artefact somebody remembers.
 - pg_security_check: self-hosted substitute for Supabase Advisors.
 
 Never auto-upgrades or blocks deploys. npm/Dependabot/Trivy sources are optional
@@ -18,6 +24,8 @@ import subprocess
 from sqlalchemy import text
 
 from ops.checks import CRIT, OK, WARN, _emit
+from ops.findings import Finding, pip_audit_findings, unique_findings
+from ops.licences import classify_licence
 from ops.db import session_scope
 from ops.models import DependencyFinding
 
@@ -71,29 +79,16 @@ def dependency_scan() -> None:
         _emit("dependency_scan", WARN, message=f"pip-audit run failed: {exc}")
         return
 
-    deps = payload.get("dependencies", payload if isinstance(payload, list) else [])
-    seen_keys: set[tuple] = set()
+    # Unique per key before any write: pip-audit repeats advisories, and one repeat used to roll
+    # back the whole night (GRM-113, ops/findings.py).
+    findings = pip_audit_findings(payload)
+    seen_keys = {f.key for f in findings}
     counts = {"critical": 0, "high": 0, "moderate": 0, "low": 0, "unknown": 0}
     try:
         with session_scope() as db:
-            for dep in deps:
-                name = dep.get("name")
-                ver = dep.get("version")
-                for v in dep.get("vulns", []) or []:
-                    advisory = v.get("id")
-                    fix = ",".join(v.get("fix_versions", []) or []) or None
-                    sev = (v.get("severity") or "unknown").lower()
-                    counts[sev if sev in counts else "unknown"] += 1
-                    seen_keys.add(("pip-audit", name, advisory))
-                    _upsert_finding(
-                        db,
-                        source="pip-audit",
-                        package=name,
-                        installed_ver=ver,
-                        advisory_id=advisory,
-                        severity=sev,
-                        fixed_in=fix,
-                    )
+            for f in findings:
+                counts[f.severity if f.severity in counts else "unknown"] += 1
+                _upsert_finding(db, **f._asdict())
             # Mark previously-open pip-audit findings that no longer appear as resolved.
             now = dt.datetime.now(dt.timezone.utc)
             open_rows = (
@@ -167,6 +162,75 @@ def _ingest_npm_findings() -> dict:
         logger.warning("npm findings persist failed: %s", exc)
         return {}
     return {k: c for k, c in counts.items() if c}
+
+
+# ── licence scan (DPG-02) ────────────────────────────────────────────────────────────────────
+# The classification rules live in ops/licences.py — pure logic, no redis/SQLAlchemy imports, so
+# they stay unit-testable without the ops stack installed (tests/repo/test_licence_scan.py).
+
+
+def licence_scan() -> None:
+    """Flag dependencies whose licence is unknown, non-OSI, or copyleft (report-only).
+
+    Findings land in ops.dependency_findings with source='pip-licenses' and the licence string in
+    advisory_id, so the existing resolve-on-disappearance logic works unchanged: fix a licence (or
+    drop the package) and the row closes itself on the next run.
+    """
+    try:
+        proc = subprocess.run(
+            ["pip-licenses", "--format", "json"],
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+        # pip-licenses prints pip's own upgrade notice to stdout on some versions; start at the
+        # first line that is exactly the opening bracket rather than at the first '[' character,
+        # which would match "[notice]".
+        lines = (proc.stdout or "").splitlines()
+        start = next((i for i, line in enumerate(lines) if line.strip() == "["), None)
+        payload = json.loads("\n".join(lines[start:])) if start is not None else []
+    except FileNotFoundError:
+        _emit("licence_scan", WARN, message="pip-licenses not installed")
+        return
+    except Exception as exc:
+        _emit("licence_scan", WARN, message=f"pip-licenses run failed: {exc}")
+        return
+
+    flagged: list[Finding] = []
+    for pkg in payload:
+        licence = (pkg.get("License") or "").strip()
+        severity, is_finding = classify_licence(licence)
+        if is_finding:
+            flagged.append(Finding("pip-licenses", pkg.get("Name") or "?", pkg.get("Version") or "",
+                                   licence, severity, None))
+    # The same table and key as the CVE scan, so the same guard: a repeat rolls back everything.
+    findings = unique_findings(flagged)
+    seen_keys = {f.key for f in findings}
+    counts: dict[str, int] = {}
+    try:
+        with session_scope() as db:
+            for f in findings:
+                counts[f.severity] = counts.get(f.severity, 0) + 1
+                _upsert_finding(db, **f._asdict())
+
+            now = dt.datetime.now(dt.timezone.utc)
+            open_rows = (
+                db.query(DependencyFinding)
+                .filter(
+                    DependencyFinding.source == "pip-licenses",
+                    DependencyFinding.resolved_at.is_(None),
+                )
+                .all()
+            )
+            for row in open_rows:
+                if ("pip-licenses", row.package, row.advisory_id) not in seen_keys:
+                    row.resolved_at = now
+    except Exception as exc:
+        _emit("licence_scan", WARN, message=f"persist failed: {exc}")
+        return
+
+    status = CRIT if counts.get("high") else (WARN if counts else OK)
+    _emit("licence_scan", status, {"scanned": len(payload), "flagged": counts})
 
 
 def pg_security_check() -> None:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Sensitive-content keyword detection and utterance dispatch."""
 
 from __future__ import annotations

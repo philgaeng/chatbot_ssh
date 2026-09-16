@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Import demo SEAH project + contact-point CSV seeds into Postgres."""
 
 import csv

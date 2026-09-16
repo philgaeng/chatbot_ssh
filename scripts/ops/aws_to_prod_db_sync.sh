@@ -78,7 +78,7 @@ GRANT ALL ON SCHEMA public TO \"user\";
 echo "[1/6] Stop prod application containers (keep db)..."
 "${PROD_SSH[@]}" "cd $(printf '%q' "$PROD_DIR") && $(printf '%s ' "${COMPOSE[@]}") stop \
   backend orchestrator celery_default celery_llm celery_file grm_celery grm_celery_beat \
-  ticketing_api ticketing_api_auth grm_ui grm_ui_auth keycloak nginx 2>/dev/null || true"
+  ticketing_api grm_ui keycloak nginx 2>/dev/null || true"
 
 echo "[2/6] Ensure prod Postgres is up..."
 "${PROD_SSH[@]}" "cd $(printf '%q' "$PROD_DIR") && $(printf '%s ' "${COMPOSE[@]}") up -d db"

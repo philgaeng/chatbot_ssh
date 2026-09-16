@@ -1,0 +1,117 @@
+# DECISION — the project type is the template: it names the slots, the project fills them
+
+**Status:** decided 2026-08-04 (Philippe). Built.
+**Partly superseded the same day** by [`DECISION-organization-membership`](DECISION-organization-membership.md): the **`routing_org_role` anchor is retired**. Every organization named on a project sees its grievances — a lot-level naming reaches that lot only, and a parent sees what its children see. Everything else here stands; read §2/§3.1/§5 with that substitution.
+**Supersedes:** [`DECISION-project-participants-and-supervision.md`](DECISION-project-participants-and-supervision.md) (2026-07-10) on how a project's organizations are modelled — §4.
+**Related:** [12 §6.2](../../ticketing_system/12_workflows_configuration.md) · [13 §3/§5A/§5B/§7](../../ticketing_system/13_projects_and_packages.md) · [14 platform settings](../../ticketing_system/14_platform_settings.md) · [followup §6](followups/workflow-stream-vocabulary-and-intake-route-labels.md)
+
+---
+
+## 1. The decision
+
+**A project type is a complete, reusable template owned by a top-level organization.** It binds the workflows a project runs, names the organizations it must have, and routes categories. Creating a project is: **pick the organization → pick one of its types → allocate the remaining organizations.** Everything else comes from the template.
+
+**A typed project cannot deviate from its type.** If the configuration is wrong, you fix the type — not the project. (Q4, 2026-08-04.)
+
+### Why this is the right layer
+It is the only place that can express *"a donor-funded road project has a sensitive workflow; a municipal one doesn't"* once, for every project of that kind. And it lets a technocrat use the words on their contract — "Executing Agency", "Ward Office", "Concessionaire" — instead of the words we picked.
+
+## 2. What already exists
+
+`ticketing.project_types` is ~90% of this, built and unused:
+
+```python
+workflow_bindings   # [{display_label, workflow_id, is_default, classifications, intake_route, sort_order}]
+actor_roles         # [{key, label, description, required, required_package, scope}]
+routing_org_role    # WHICH named role anchors the ticket — an author-chosen key from actor_roles
+```
+
+`required_project_role_keys()` / `package_required_role_keys()` already drive go-live **B1** / **B3**. What is missing: the **authoring UI** (`ProjectTypesTab` only counts entries), **org ownership**, the **project screens consuming it**, and un-deprecating the catalog.
+
+~~`routing_org_role` matters: the anchor is **a key the author picks from their own catalog**.~~ **Retired 2026-08-04** — it was still the old idea in new clothes: one organization owned the grievance and every other one on the project owned nothing. Reporting is membership; see [`DECISION-organization-membership`](DECISION-organization-membership.md).
+
+## 3. Model changes
+
+### 3.1 Project types belong to a top-level organization
+```
+ticketing.project_types
+  owner_organization_id  String(64)  → ticketing.organizations   # the top-level org (Q2)
+```
+- Browsing: **New project** asks for the organization first, then offers only that organization's types (plus any global ones seeded by `super_admin`).
+- Authoring: **`org_admin` may author types within its own subtree** (Q3); `super_admin` may author any. Same gate as workflow authoring, since a type is mostly a bundle of workflows.
+
+### 3.2 Jobs at a level stay on the workflow
+```
+ticketing.workflow_steps
+  tier_labels     JSON  {tier: {label, description}}   # the author's name for each job
+  required_tiers  JSON  ["supervisor", "informed"]     # actor always required, never listed
+```
+These are per-level and belong to the workflow, not the template. They are the **only genuinely missing model** in this decision — documented in [12 §2](../../ticketing_system/12_workflows_configuration.md), depended on by [13 §5A](../../ticketing_system/13_projects_and_packages.md), and absent from every migration, model, schema and endpoint.
+
+### 3.3 The organization slots keep their existing store
+Filled values live in **`project_organizations` (`organization_id`, `org_role`)** — deprecated by the July decision, never dropped, now primary again. `org_role` holds the type's `actor_roles[].key`.
+
+## 4. What this supersedes
+
+[DECISION 2026-07-10](DECISION-project-participants-and-supervision.md) replaced the catalog with two fixed concepts — `implementing_agency_org_id` + `project_donors` — because routing and the donor guardrail needed a *known* organization. Re-checked against the code, **neither reason holds**:
+
+- **Routing never used it.** `workflow_engine._scope_candidates`: *"organization_id is accepted for call-site compatibility but is not used to filter candidates — assignment is by workflow role + jurisdiction only."* `ticket.organization_id` feeds a list filter, report columns and counts. `resolve_ticket_organization()` already resolves it through `routing_org_role`.
+- **The donor guardrail is just a required slot.** The author puts the named organization role in the **last level's kept-informed** job and marks it **required**; the generic check enforces it. **A5 is deleted, not reimplemented.**
+
+`implementing_agency_org_id` and `project_donors` become **legacy reads** for pre-existing projects and stop being written. Dropping them is later cleanup.
+
+## 5. Creating a project (the flow this buys)
+
+1. **Organization** — pick the top-level organization. It decides **which types are offered**, and nothing more. *(Amended twice on 2026-08-04: the `routing_org_role` anchor it was meant to fill is retired — [`DECISION-organization-membership`](DECISION-organization-membership.md) — and the replacement, "fill the first required role", was removed too. List order says nothing about which role an organization plays: on a type listing "Donor" first it wrote a government department into the donor slot and the creation failed. The project screen asks for each organization by role instead, and go-live B1 blocks until the required ones are named.)*
+2. **Type** — pick from that organization's types. The project inherits its workflows, category routing, and organization slots.
+3. **Allocate the remaining organizations** — one picker per named slot; required ones block go-live.
+4. **Locations** and **staffing** — still per-project, and still go-live blockers. A template cannot know which district or which people.
+
+Picking a type removes the **configuration** from project creation; it does not build the project. Locations and officers are the work that remains, and they are the work that actually needs local knowledge.
+
+## 6. Categories and intake — today one chatbot, tomorrow several
+
+Category→workflow routing lives on the type (`workflow_bindings[].classifications`) — already built.
+
+The **category catalog itself** stays global for now (`public.grievance_classification_taxonomy`, owned by the chatbot side and what the LLM classifies against). But a top-level organization will eventually run **its own chatbot and its own intake routes** (Q1), so new code must not assume a single global catalog:
+
+- Resolve the category catalog and the intake-route catalog **for the owning organization**, through one accessor that today returns the single global list.
+- Keep `intake_route` values opaque to ticketing (`story_main` strings) so a second chatbot can define its own.
+
+That is the whole forward-compatibility cost today: **one accessor, no schema change.** The per-organization chatbot/catalog split is a separate build when a second chatbot exists.
+
+## 7. Go-live after this change
+
+| Was | Becomes |
+|---|---|
+| A3 implementing agency set | *(gone)* — covered by required organization slots |
+| A5 donor informed at last step | *(gone)* — the author marks that slot required |
+| B1 required project actors | **required organization slots filled** (same check, author-defined set) |
+| B3 required package actors | unchanged in shape (per-lot required slots) |
+| A4 required cast tiers staffed | **now real** — reads `required_tiers`, which finally exists |
+
+## 8. Consequences to build deliberately
+
+- **The Grievance workflows section becomes read-only on a typed project** (Q4), with one line saying where to change it and a link to the type. The card layout stays — it is now a summary, not an editor. Untyped/legacy projects keep editing inline.
+- **Partner organizations renders the type's `actor_roles`** — one block per named slot, required ones marked, the anchor slot pre-filled from step 1.
+- **A type in use is frozen** (2026-08-04). The moment a type is bound to **any** project it becomes read-only — no edit, no delete. This is what stops one click from re-configuring twenty live projects, and it means the answer to "what does this project run?" never changes underneath anyone.
+  - **Editing a bound type is offered as "Use as template"** — clone it under a new name, in the same owning organization, and edit the copy freely. The original and its projects are untouched.
+  - **Frozen means the configuration** — workflows, organization roles, category routing, `routing_org_role`. **Amended 2026-08-04, twice, when back-filling types made both too tight:**
+    - **Name and description are always editable.** A name is not configuration; renaming changes nothing about what a project runs. The back-fill names types "Type 1", "Type 2" and only a human knows whether that is "ADB-funded road". A rename still cannot smuggle a config change — a PATCH touching both is refused.
+    - **Only a project that is *active* freezes a type** (was: any project). The rule protects work in flight, and a project not accepting grievances has no officers depending on its setup. This makes **deactivate → fix the type → reactivate** the supported repair path; reactivating re-runs go-live, so a broken setup cannot sneak back.
+  - **Bound = an *active* project referencing the type** (amended above). `active_project_count` on the type response drives the UI's frozen state.
+  - **Consequence, weighed and accepted (2026-08-04):** an existing project cannot be moved forward to the improved copy — fixing a type helps future projects only. **This is the preferred trade, not a deferral.** The alternative is a *change this project's type* action that re-applies a new template over a running project: it would need a diff-and-confirm flow (what is added, what is orphaned), and it is the one operation that could silently restaff live work. A frozen project you must rebuild deliberately beats a live project that changes under its officers. Do not add it later without revisiting this paragraph. **Note the 2026-08-04 amendment above gives a narrow, honest path:** deactivate the project, fix its type, reactivate through go-live. That is deliberate and visible, which is exactly what the re-typing action would not have been.
+
+  - **Revisited 2026-08-04 (Philippe), as this paragraph demands.** A project **may now be moved to a different type — while it is not accepting grievances.** `PATCH /projects/{id}` takes `project_type_key`; on a **live** project it returns **409** naming the way round (deactivate → change → activate). What made re-typing dangerous was doing it *under working officers*; on an inactive project there are none, and reactivating re-runs go-live so a broken setup cannot sneak back. The two side effects are explicit rather than silent: the type's workflow links **replace** the project's, and organizations named against a role the new type does not have are **removed** (the project screen renders the type's catalog, so leaving them would hide live rows in a table nobody can see). The UI says so on the toast; go-live's B1 then names whatever the new type requires. The diff-and-confirm flow this paragraph feared is still not built — it is not needed while the operation is restricted to projects with nothing in flight.
+
+## 9. Build order
+
+1. **Model** — migration: `project_types.owner_organization_id`, `workflow_steps.tier_labels`, `workflow_steps.required_tiers`. Schemas + TS types. *(done)* **Plus `n0p2r4t6`: back-fills a type per distinct workflow set so the model has data — every project was untyped and the catalog empty.**
+2. **Type authoring UI** — workflows bound, organization roles (label · description · required), category routing, `routing_org_role` picker. `org_admin` scoped to subtree. **Frozen when bound** (§8): the editor becomes a read-only summary with **Use as template**, and the API refuses config writes to a bound type (409, not a client-side disable). *(done 2026-08-04)*
+3. **Step editor** — name/description/required per job ([`ui/06`](../../ticketing_system/ui/06_workflows_step_cast_editor.html) mocks it). *(done)*
+4. **Consumption** — staffing reads `tier_labels`/`required_tiers`; Partner organizations renders `actor_roles`; Grievance workflows goes read-only when typed. *(done 2026-08-04 — the project reads its **type's** catalog through `effective_role_catalog`; `project_actor_roles` is no longer copied per project and is refused for a typed project)*
+5. **Creation flow** — organization → filtered types → create; anchor slot pre-filled. *(done 2026-08-04 — and `project_type_key` is now required at creation, which is what closes the untyped hole below)*
+6. **Go-live** — A4 reads `required_tiers` *(done 2026-08-04)*. ~~Deleting A3/A5 depends on step 2 + a seeded catalog~~ *(done 2026-08-04)*: `n0p2r4t6` gave every project a type, so B1 runs. **A3/A5 deleted, B1 promoted to blocker in the same change**, with two legacy reads so no existing project was blocked by it — `implementing_agency_org_id` fills the anchor slot and `project_donors` a `donor` slot. The one remaining way to have no catalog is a pre-types project, which now reports `info`; new projects cannot be untyped.
+7. **Docs** — 02/03/04/12/13/14, amend the July DECISION, close followup §6. *(done)*
+
+Steps 1+3 (the workflow half) are independent of 2+5 (the type half).

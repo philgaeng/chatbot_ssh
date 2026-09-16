@@ -1,979 +1,21 @@
-# Nepal Chatbot - Operations Guide
+# Operations — Docker-era guide
 
-Complete operations guide covering monitoring, troubleshooting, maintenance, and common procedures.
+**Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/03_operations.md`](archive/03_operations.md). All legacy systemd/Rasa procedures removed; the stack is Docker Compose only.
+**Last updated:** 2026-09-14 — §6a: the rollback promise narrowed to "only when no migration landed in between", with the check, what to do instead, and the 5 migrations whose downgrade restores nothing (`GRM-102`); new subsection on how every staging deploy now validates, applies and reloads nginx, and why production still needs a recreate (`GRM-103`). Earlier: §6a: the migration step now runs the deployed image and refuses a missing one (`GRM-099`), and the rollback line is marked as not valid across a migration (`GRM-102`) rather than rewritten, because which side moves is an open fork. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093`, the code half of `A-11`), the three remaining manual steps are named, and the credential is corrected to a **classic** PAT — GHCR does not accept fine-grained tokens, which is what `A-11`'s recorded `403` actually meant. Earlier: §6a: a pulling deploy now authenticates to the registry before it pulls (`GRM-093` closes the code half of `A-11`), with the three remaining manual steps named. Earlier: §6a deploying a tagged build and rolling back (QA-02); §6b running a second stack (QA-03); the `tail` warning in §7.
 
-> Note: current operations are Docker-first. Prefer `docker compose` service health/log checks and Alembic-based migrations per `docs/deployment/07_migrations_policy.md`.
-
-## Table of Contents
-
-- [Monitoring](#monitoring)
-- [Log Management](#log-management)
-- [Backup and Recovery](#backup-and-recovery)
-- [Performance Optimization](#performance-optimization)
-- [Troubleshooting](#troubleshooting)
-- [Common Procedures](#common-procedures)
-- [Security Operations](#security-operations)
-
-## Monitoring
-
-### Health Checks
-
-#### Automated Health Checks
-
-**Flask Health Endpoint:**
+## 1. Daily driving
 
 ```bash
-curl http://localhost:5001/health
-
-# Expected response:
-{
-  "status": "healthy",
-  "timestamp": "2025-01-30T10:00:00Z",
-  "database": "connected",
-  "redis": "connected",
-  "celery_workers": 10
-}
+docker compose ps                                   # health of all services (healthchecks are built in)
+docker compose logs -f backend orchestrator         # tail chatbot services
+docker compose -f docker-compose.yml -f docker-compose.grm.yml logs -f ticketing_api grm_celery ops
+docker compose restart <service>                    # bounce one service
+curl http://localhost:5001/health ; curl http://localhost:8000/health ; curl http://localhost:5002/health
 ```
 
-**Rasa Health Check:**
+Container build/run/debug recipes (rebuild-one-service, exec, psql, seed, pytest): [`DOCKER.md`](DOCKER.md).
 
-```bash
-curl http://localhost:5005/
-
-# Expected response:
-{
-  "version": "3.6.21",
-  "minimum_compatible_version": "3.0.0"
-}
-```
-
-**Database Health:**
-
-```bash
-psql -U nepal_grievance_admin -d grievance_db -c "SELECT version();"
-```
-
-**Redis Health:**
-
-```bash
-redis-cli ping
-# Expected: PONG
-```
-
-#### Health Check Script
-
-```bash
-#!/bin/bash
-# health_check.sh
-
-echo "Checking Nepal Chatbot services..."
-
-# Check Rasa
-if curl -s http://localhost:5005/ > /dev/null; then
-    echo "✓ Rasa server is running"
-else
-    echo "✗ Rasa server is down"
-fi
-
-# Check Action server
-if curl -s http://localhost:5055/health > /dev/null; then
-    echo "✓ Action server is running"
-else
-    echo "✗ Action server is down"
-fi
-
-# Check Flask
-if curl -s http://localhost:5001/health > /dev/null; then
-    echo "✓ Flask server is running"
-else
-    echo "✗ Flask server is down"
-fi
-
-# Check PostgreSQL
-if psql -U nepal_grievance_admin -d grievance_db -c "SELECT 1" > /dev/null 2>&1; then
-    echo "✓ PostgreSQL is running"
-else
-    echo "✗ PostgreSQL is down"
-fi
-
-# Check Redis
-if redis-cli ping > /dev/null 2>&1; then
-    echo "✓ Redis is running"
-else
-    echo "✗ Redis is down"
-fi
-
-# Check Celery workers
-active_workers=$(celery -A task_queue inspect active_queues 2>/dev/null | grep -c "llm_queue\|default")
-if [ $active_workers -gt 0 ]; then
-    echo "✓ Celery workers are running ($active_workers active)"
-else
-    echo "✗ Celery workers are down"
-fi
-```
-
-### System Monitoring
-
-#### Resource Usage
-
-**Check System Resources:**
-
-```bash
-# CPU and memory
-htop
-
-# Disk usage
-df -h
-
-# Disk I/O
-iostat -x 1
-
-# Network
-netstat -tulpn
-```
-
-**Monitor Specific Processes:**
-
-```bash
-# Python processes
-ps aux | grep python
-
-# Memory usage per process
-ps aux --sort=-%mem | head -10
-
-# CPU usage per process
-ps aux --sort=-%cpu | head -10
-```
-
-#### Database Monitoring
-
-**Connection Count:**
-
-```sql
-SELECT count(*) FROM pg_stat_activity;
-```
-
-**Active Queries:**
-
-```sql
-SELECT pid, usename, application_name, client_addr, query_start, query
-FROM pg_stat_activity
-WHERE state = 'active';
-```
-
-**Database Size:**
-
-```sql
-SELECT pg_size_pretty(pg_database_size('grievance_db'));
-```
-
-**Table Sizes:**
-
-```sql
-SELECT schemaname, tablename,
-       pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) AS size
-FROM pg_tables
-WHERE schemaname = 'public'
-ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;
-```
-
-**Slow Queries:**
-
-```sql
-SELECT query, calls, total_time, mean_time
-FROM pg_stat_statements
-ORDER BY mean_time DESC
-LIMIT 10;
-```
-
-#### Redis Monitoring
-
-```bash
-# Connect to Redis CLI
-redis-cli
-
-# Check info
-INFO
-
-# Memory usage
-INFO memory
-
-# Connected clients
-INFO clients
-
-# Check specific keys
-KEYS *
-
-# Monitor commands in real-time
-MONITOR
-```
-
-#### Celery Monitoring
-
-**Check Active Tasks:**
-
-```bash
-celery -A task_queue inspect active
-```
-
-**Check Registered Tasks:**
-
-```bash
-celery -A task_queue inspect registered
-```
-
-**Check Worker Stats:**
-
-```bash
-celery -A task_queue inspect stats
-```
-
-**Check Queue Length:**
-
-```bash
-redis-cli LLEN celery
-redis-cli LLEN llm_queue
-```
-
-**Flower Web UI:**
-
-```bash
-# Install Flower
-pip install flower
-
-# Start Flower
-celery -A task_queue flower --port=5555
-
-# Access at: http://localhost:5555
-```
-
-### Application Metrics
-
-#### Grievance Statistics
-
-```sql
--- Total grievances
-SELECT COUNT(*) FROM grievances;
-
--- Grievances by status
-SELECT classification_status, COUNT(*)
-FROM grievances
-GROUP BY classification_status;
-
--- Grievances by date
-SELECT DATE(created_at), COUNT(*)
-FROM grievances
-WHERE created_at >= NOW() - INTERVAL '30 days'
-GROUP BY DATE(created_at)
-ORDER BY DATE(created_at);
-
--- Grievances by municipality
-SELECT c.complainant_municipality, COUNT(*)
-FROM grievances g
-JOIN complainants c ON g.complainant_id = c.complainant_id
-GROUP BY c.complainant_municipality
-ORDER BY COUNT(*) DESC;
-
--- Average resolution time
-SELECT AVG(EXTRACT(EPOCH FROM (updated_at - created_at))/3600) as avg_hours
-FROM grievances
-WHERE classification_status = 'resolved';
-```
-
-#### File Upload Statistics
-
-```sql
--- Total files
-SELECT COUNT(*) FROM file_attachments;
-
--- Files by type
-SELECT file_type, COUNT(*), SUM(file_size)
-FROM file_attachments
-GROUP BY file_type;
-
--- Storage usage
-SELECT pg_size_pretty(SUM(file_size))
-FROM file_attachments;
-```
-
-### Alerting
-
-#### Email Alerts
-
-```python
-# Example alert helper (inline)
-
-import smtplib
-from email.mime.text import MIMEText
-
-def send_alert(subject, message):
-    """Send email alert."""
-    msg = MIMEText(message)
-    msg['Subject'] = f'[Nepal Chatbot Alert] {subject}'
-    msg['From'] = 'alerts@example.com'
-    msg['To'] = 'admin@example.com'
-
-    smtp = smtplib.SMTP('smtp.gmail.com', 587)
-    smtp.starttls()
-    smtp.login('alerts@example.com', 'password')
-    smtp.send_message(msg)
-    smtp.quit()
-
-# Check disk usage
-disk_usage = os.statvfs('/')
-percent_used = (disk_usage.f_blocks - disk_usage.f_bfree) / disk_usage.f_blocks * 100
-
-if percent_used > 90:
-    send_alert('Disk Usage Critical', f'Disk usage at {percent_used:.1f}%')
-```
-
-#### Monitoring Script
-
-```bash
-#!/bin/bash
-# monitor.sh - Run every 5 minutes via cron
-
-LOG_FILE="/var/log/nepal_chatbot_monitor.log"
-
-# Check disk usage
-DISK_USAGE=$(df -h / | awk 'NR==2 {print $5}' | sed 's/%//')
-if [ $DISK_USAGE -gt 90 ]; then
-    echo "$(date): CRITICAL - Disk usage at ${DISK_USAGE}%" >> $LOG_FILE
-    # Send alert
-fi
-
-# Check service status
-systemctl is-active --quiet nepal-rasa || echo "$(date): ERROR - Rasa service down" >> $LOG_FILE
-systemctl is-active --quiet nepal-actions || echo "$(date): ERROR - Actions service down" >> $LOG_FILE
-systemctl is-active --quiet nepal-flask || echo "$(date): ERROR - Flask service down" >> $LOG_FILE
-
-# Check database connections
-DB_CONN=$(psql -U nepal_grievance_admin -d grievance_db -t -c "SELECT count(*) FROM pg_stat_activity;")
-if [ $DB_CONN -gt 50 ]; then
-    echo "$(date): WARNING - High database connections: $DB_CONN" >> $LOG_FILE
-fi
-```
-
-**Add to crontab:**
-
-```bash
-crontab -e
-
-# Add line (inline health/log snapshot every 5 minutes):
-*/5 * * * * cd /home/ubuntu/nepal_chatbot && docker compose ps >> /var/log/nepal_chatbot_monitor.log 2>&1
-```
-
-## Log Management
-
-### Log Locations
-
-**Application Logs:**
-
-```
-logs/
-├── rasa_server.log           # Rasa server
-├── actions_server.log         # Action server
-├── flask_server.log           # Flask server
-├── celery_llm_queue.log       # Celery LLM worker
-├── celery_default.log         # Celery default worker
-├── server_manager.log         # Server orchestration
-├── db_manager.log             # Primary database operations
-└── db_migrations.log          # Database migrations
-```
-
-**System Logs:**
-
-```bash
-# Systemd service logs
-sudo journalctl -u nepal-rasa -f
-sudo journalctl -u nepal-actions -f
-sudo journalctl -u nepal-flask -f
-sudo journalctl -u nepal-celery-llm -f
-
-# Nginx logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-
-# PostgreSQL logs
-sudo tail -f /var/log/postgresql/postgresql-13-main.log
-```
-
-### Viewing Logs
-
-**Follow logs in real-time:**
-
-```bash
-# All logs
-tail -f logs/*.log
-
-# Specific log
-tail -f logs/rasa_server.log
-
-# Last 100 lines
-tail -n 100 logs/actions_server.log
-
-# Search logs
-grep "ERROR" logs/flask_server.log
-
-# Search with context
-grep -C 5 "ERROR" logs/flask_server.log
-```
-
-**Using journalctl:**
-
-```bash
-# Follow service log
-sudo journalctl -u nepal-rasa -f
-
-# Last 1 hour
-sudo journalctl -u nepal-rasa --since "1 hour ago"
-
-# Last 100 lines
-sudo journalctl -u nepal-rasa -n 100
-
-# Filter by priority
-sudo journalctl -u nepal-rasa -p err
-
-# Show only today
-sudo journalctl -u nepal-rasa --since today
-```
-
-### Log Rotation
-
-**Configure logrotate:**
-
-```bash
-sudo nano /etc/logrotate.d/nepal-chatbot
-```
-
-**Configuration:**
-
-```
-/home/ubuntu/nepal_chatbot/logs/*.log {
-    daily
-    rotate 90
-    compress
-    delaycompress
-    notifempty
-    create 0644 ubuntu ubuntu
-    sharedscripts
-    postrotate
-        # Restart services if needed
-        systemctl reload nepal-rasa
-    endscript
-}
-```
-
-**Test configuration:**
-
-```bash
-sudo logrotate -d /etc/logrotate.d/nepal-chatbot
-```
-
-**Force rotation:**
-
-```bash
-sudo logrotate -f /etc/logrotate.d/nepal-chatbot
-```
-
-### Log Analysis
-
-**Error Count:**
-
-```bash
-# Count errors in last hour
-find logs/ -name "*.log" -mmin -60 -exec grep -c "ERROR" {} \;
-
-# Unique errors
-grep "ERROR" logs/*.log | cut -d':' -f3- | sort | uniq -c | sort -rn
-```
-
-**Response Time Analysis:**
-
-```bash
-# Average response time from nginx logs
-awk '{print $10}' /var/log/nginx/access.log | awk '{sum+=$1; count++} END {print sum/count}'
-```
-
-**Failed Requests:**
-
-```bash
-# Count 5xx errors
-grep " 50[0-9] " /var/log/nginx/access.log | wc -l
-```
-
-## Backup and Recovery
-
-### Database Backup
-
-#### Manual Backup
-
-```bash
-# Full database backup
-pg_dump -U nepal_grievance_admin -d grievance_db -F c -f backup_$(date +%Y%m%d_%H%M%S).dump
-
-# SQL format
-pg_dump -U nepal_grievance_admin -d grievance_db -f backup_$(date +%Y%m%d).sql
-
-# Specific tables
-pg_dump -U nepal_grievance_admin -d grievance_db -t grievances -t complainants -f backup_tables.sql
-
-# Schema only
-pg_dump -U nepal_grievance_admin -d grievance_db --schema-only -f schema_backup.sql
-```
-
-#### Automated Backup Script
-
-```bash
-#!/bin/bash
-# backup_database.sh
-
-BACKUP_DIR="/home/ubuntu/backups/database"
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/grievance_db_$DATE.dump"
-
-# Create backup directory
-mkdir -p $BACKUP_DIR
-
-# Perform backup
-pg_dump -U nepal_grievance_admin -d grievance_db -F c -f $BACKUP_FILE
-
-# Compress old backups (older than 7 days)
-find $BACKUP_DIR -name "*.dump" -mtime +7 -exec gzip {} \;
-
-# Delete very old backups (older than 90 days)
-find $BACKUP_DIR -name "*.dump.gz" -mtime +90 -delete
-
-# Log
-echo "$(date): Database backup completed: $BACKUP_FILE" >> /var/log/nepal_chatbot_backup.log
-```
-
-**Schedule daily backups:**
-
-```bash
-crontab -e
-
-# Daily at 2 AM (inline backup command)
-0 2 * * * pg_dump -U nepal_grievance_admin -d grievance_db -F c -f /home/ubuntu/backups/database/grievance_db_$(date +\%Y\%m\%d_\%H\%M\%S).dump
-```
-
-#### Restore Database
-
-```bash
-# Restore from custom format
-pg_restore -U nepal_grievance_admin -d grievance_db -c backup.dump
-
-# Restore from SQL
-psql -U nepal_grievance_admin -d grievance_db -f backup.sql
-
-# Restore specific table
-pg_restore -U nepal_grievance_admin -d grievance_db -t grievances backup.dump
-```
-
-### File Backup
-
-```bash
-#!/bin/bash
-# backup_files.sh
-
-BACKUP_DIR="/home/ubuntu/backups/files"
-DATE=$(date +%Y%m%d)
-BACKUP_FILE="$BACKUP_DIR/uploads_$DATE.tar.gz"
-
-# Create backup
-tar -czf $BACKUP_FILE /home/ubuntu/nepal_chatbot/uploads/
-
-# Delete old backups (older than 30 days)
-find $BACKUP_DIR -name "*.tar.gz" -mtime +30 -delete
-
-echo "$(date): File backup completed: $BACKUP_FILE" >> /var/log/nepal_chatbot_backup.log
-```
-
-### Backup to Remote Server
-
-```bash
-# Using rsync
-rsync -avz -e "ssh -i ~/.ssh/backup_key.pem" \
-    /home/ubuntu/backups/ \
-    backup@backup-server:/backups/nepal_chatbot/
-
-# Using scp
-scp -i ~/.ssh/backup_key.pem backup.dump backup@backup-server:/backups/
-```
-
-### Disaster Recovery
-
-#### Full System Recovery
-
-1. **Restore Server**
-
-   ```bash
-   # Install dependencies
-   sudo apt update
-   sudo apt install postgresql redis-server nginx python3.10
-   ```
-
-2. **Restore Application**
-
-   ```bash
-   # Clone repository
-   git clone https://github.com/philgaeng/chatbot_ssh.git nepal_chatbot
-   cd nepal_chatbot
-
-   # Install dependencies
-   pip install -r requirements.txt
-   ```
-
-3. **Restore Database**
-
-   ```bash
-   # Create database
-   sudo -u postgres psql -c "CREATE DATABASE grievance_db;"
-
-   # Restore backup
-   pg_restore -U nepal_grievance_admin -d grievance_db backup.dump
-   ```
-
-4. **Restore Files**
-
-   ```bash
-   # Extract files
-   tar -xzf uploads_backup.tar.gz -C /home/ubuntu/nepal_chatbot/
-   ```
-
-5. **Configure and Start Services**
-
-   ```bash
-   # Copy environment file
-   cp .env.backup .env
-
-   # Start services
-   systemctl start nepal-rasa
-   systemctl start nepal-actions
-   systemctl start nepal-flask
-   ```
-
-## Performance Optimization
-
-### Database Optimization
-
-#### Indexing
-
-```sql
--- Add indexes for frequently queried fields
-CREATE INDEX IF NOT EXISTS idx_grievances_status
-ON grievances(classification_status);
-
-CREATE INDEX IF NOT EXISTS idx_grievances_created
-ON grievances(created_at);
-
-CREATE INDEX IF NOT EXISTS idx_complainants_municipality
-ON complainants(complainant_municipality);
-
-CREATE INDEX IF NOT EXISTS idx_files_grievance
-ON file_attachments(grievance_id);
-```
-
-#### Query Optimization
-
-```sql
--- Analyze query performance
-EXPLAIN ANALYZE SELECT * FROM grievances WHERE classification_status = 'pending';
-
--- Update statistics
-ANALYZE grievances;
-ANALYZE complainants;
-
--- Vacuum database
-VACUUM ANALYZE;
-```
-
-#### Connection Pooling
-
-```python
-# backend/services/database_services/connection_pool.py
-
-import psycopg2
-from psycopg2 import pool
-
-connection_pool = psycopg2.pool.ThreadedConnectionPool(
-    minconn=1,
-    maxconn=20,  # Adjust based on load
-    host=os.getenv('POSTGRES_HOST'),
-    port=os.getenv('POSTGRES_PORT'),
-    database=os.getenv('POSTGRES_DB'),
-    user=os.getenv('POSTGRES_USER'),
-    password=os.getenv('POSTGRES_PASSWORD')
-)
-```
-
-### Caching Strategy
-
-#### Redis Caching
-
-```python
-import redis
-import json
-
-redis_client = redis.Redis(
-    host='localhost',
-    port=6379,
-    password=os.getenv('REDIS_PASSWORD'),
-    decode_responses=True
-)
-
-def get_grievance_cached(grievance_id):
-    """Get grievance with caching."""
-    # Check cache
-    cache_key = f"grievance:{grievance_id}"
-    cached = redis_client.get(cache_key)
-
-    if cached:
-        return json.loads(cached)
-
-    # Query database
-    grievance = db_manager.get_grievance_by_id(grievance_id)
-
-    # Cache for 5 minutes
-    redis_client.setex(cache_key, 300, json.dumps(grievance))
-
-    return grievance
-```
-
-### Celery Optimization
-
-**Worker Configuration:**
-
-```bash
-# Adjust concurrency based on CPU cores
-celery -A task_queue worker -Q llm_queue --loglevel=INFO --concurrency=6
-
-# Optimize prefetch
-celery -A task_queue worker --prefetch-multiplier=1
-
-# Set max tasks per child
-celery -A task_queue worker --max-tasks-per-child=1000
-```
-
-### Nginx Optimization
-
-```nginx
-# nginx.conf optimization
-
-http {
-    # Enable gzip compression
-    gzip on;
-    gzip_vary on;
-    gzip_proxied any;
-    gzip_types text/plain text/css application/json application/javascript;
-
-    # Connection pooling
-    keepalive_timeout 65;
-    keepalive_requests 100;
-
-    # Buffer sizes
-    client_body_buffer_size 10K;
-    client_header_buffer_size 1k;
-    client_max_body_size 10m;
-    large_client_header_buffers 2 1k;
-
-    # Caching
-    proxy_cache_path /var/cache/nginx levels=1:2 keys_zone=my_cache:10m max_size=1g;
-}
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. Service Won't Start
-
-**Check logs:**
-
-```bash
-sudo journalctl -u nepal-rasa -n 50 --no-pager
-```
-
-**Common causes:**
-
-- Port already in use
-- Configuration error
-- Missing dependencies
-- Database connection failed
-
-**Solutions:**
-
-```bash
-# Kill process using port
-sudo lsof -i :5005
-sudo kill -9 <PID>
-
-# Check configuration
-rasa run --debug
-
-# Test database connection
-psql -U nepal_grievance_admin -d grievance_db -c "SELECT 1;"
-```
-
-#### 2. High Memory Usage
-
-**Check memory:**
-
-```bash
-free -h
-ps aux --sort=-%mem | head -10
-```
-
-**Solutions:**
-
-```bash
-# Restart services
-sudo systemctl restart nepal-rasa
-sudo systemctl restart nepal-celery-llm
-
-# Clear cache
-redis-cli FLUSHALL
-
-# Vacuum database
-psql -U nepal_grievance_admin -d grievance_db -c "VACUUM FULL;"
-```
-
-#### 3. Slow Response Times
-
-**Check bottlenecks:**
-
-```bash
-# Database
-psql -U nepal_grievance_admin -d grievance_db -c "SELECT * FROM pg_stat_activity WHERE state = 'active';"
-
-# CPU usage
-top
-
-# Network
-netstat -i
-```
-
-**Solutions:**
-
-- Add database indexes
-- Implement caching
-- Optimize queries
-- Scale horizontally
-
-#### 4. Classification Failures
-
-**Check Celery:**
-
-```bash
-celery -A task_queue inspect active
-tail -f logs/celery_llm_queue.log
-```
-
-**Common causes:**
-
-- OpenAI API key invalid
-- Rate limit exceeded
-- Network issues
-
-**Solutions:**
-
-```bash
-# Verify API key
-python -c "import openai; openai.api_key='KEY'; print(openai.Model.list())"
-
-# Check rate limits
-# Implement exponential backoff
-# Use different API key
-```
-
-#### 5. Database Connection Errors
-
-**Check connections:**
-
-```sql
-SELECT count(*) FROM pg_stat_activity;
-```
-
-**Solutions:**
-
-```bash
-# Increase max connections in postgresql.conf
-sudo nano /etc/postgresql/13/main/postgresql.conf
-# max_connections = 200
-
-# Restart PostgreSQL
-sudo systemctl restart postgresql
-
-# Use connection pooling
-# Reduce connection timeout
-```
-
-### Debug Commands
-
-```bash
-# Check all services
-docker compose ps
-
-# Tail backend/orchestrator logs
-docker compose logs -f backend orchestrator
-
-# Test API health
-curl http://localhost:5001/health
-curl http://localhost:8000/health
-
-# Check database
-psql -U nepal_grievance_admin -d grievance_db
-
-# Check Redis
-redis-cli INFO
-
-# Monitor Celery
-celery -A task_queue events
-```
-
-## Common Procedures
-
-### Restart Services
-
-```bash
-# Restart all services
-docker compose restart
-
-# Restart individually
-docker compose restart backend
-docker compose restart orchestrator
-
-# Check status
-docker compose ps
-```
-
-### Deploy Updates
-
-```bash
-#!/bin/bash
-# deploy_update.sh
-
-# Stop services
-docker compose down
-
-# Backup
-pg_dump -U nepal_grievance_admin -d grievance_db -F c -f backup_pre_update.dump
-
-# Pull updates
-git pull origin main
-
-# Run migrations
-python -m alembic -c ticketing/migrations/alembic.ini upgrade head
-
-# Start services
-docker compose up -d --build
-
-# Verify
-sleep 10
-docker compose ps
-```
-
-### Startup Runbook (Dev/SSH)
+## 2. Startup Runbook (Dev/SSH)
 
 Use this sequence when bringing up a dev/integration host from a fresh DB or after major schema merges.
 
@@ -986,12 +28,16 @@ git checkout main
 git pull --ff-only origin main
 docker compose build backend
 
-# 2) Initialize baseline chatbot tables if needed (safe on empty/dev DB)
+# 2) db_init = migrate-before-start: applies the public Alembic stream, THEN
+#    seeds reference/lookup data. The app no longer creates public.* tables at
+#    startup — the Alembic baseline (migrations/public) owns all public.* DDL (CL-01).
 docker compose --profile init run --rm db_init || true
 
-# 3) Apply migration streams
+# 3) Apply migration streams (public is idempotent here — db_init already ran it;
+#    ticketing + ops are separate streams). Always migrate before starting the app.
 docker compose run --rm --no-deps backend python -m alembic -c migrations/public/alembic.ini upgrade head
 docker compose run --rm --no-deps backend python -m alembic -c ticketing/migrations/alembic.ini upgrade head
+docker compose run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
 
 # 4) Seed locations/workflows/tickets (JSON source)
 docker compose run --rm --no-deps backend python -m ticketing.seed.import_locations_json \
@@ -1025,6 +71,10 @@ Expected:
 - `mock_tickets --reset` logs `location OK` for KL Road location codes.
 - `ticketing_api` becomes healthy after startup.
 
+## 3. Migration run order
+
+Standard order (what `make migrate_all` does): **ticketing → public → ops**.
+
 ### Public + ticketing migration run order (May5 SEAH tranche)
 
 ```bash
@@ -1038,87 +88,226 @@ python -m alembic -c migrations/public/alembic.ini upgrade head
 Rollback notes:
 
 - Ticketing rollback uses ticketing revision IDs only.
-- Public rollback for the new contact/location work can return to `pub001_seah_reporter_category`.
+- The public stream is a **single squashed baseline** (`pub000_public_core_baseline`, CL-01). `downgrade base` drops every public.* table; there are no intermediate public revisions to roll back to. To rebuild an existing (non-prod, 0-record) DB onto the baseline, use `make reset_public_dev` (drops+recreates the public schema — including the `alembic_version_public` row — then re-migrates).
 
-### Clear Cache
+Full stream-ownership policy: [`07_migrations_policy.md`](07_migrations_policy.md).
 
-```bash
-# Clear Redis cache
-redis-cli FLUSHALL
+## 4. Monitoring — the `ops` container + host watchdog
 
-# Clear application cache
-rm -rf /tmp/nepal_chatbot_cache/*
+Monitoring is layered and already built (spec + as-built detail: [`../services/11_health_and_monitoring_service.md`](../services/11_health_and_monitoring_service.md)):
 
-# Clear Nginx cache
-sudo rm -rf /var/cache/nginx/*
-sudo systemctl reload nginx
-```
+| Layer | What | Where |
+|---|---|---|
+| L1 | Compose `healthcheck` on every service, `restart: unless-stopped` | compose files |
+| L0 | Host watchdog cron: restarts unhealthy/exited containers, restart-storm guard, host disk/RAM checks | `scripts/ops/host_watchdog.sh` (+ `install_watchdog_cron.sh`, every 5 min) |
+| L2 | `ops` container (APScheduler, broker-independent): DB/Redis/queue-depth/beat-liveness/cert/SMTP checks → `ops.system_health_checks`; deduped email alerts; daily ops report | `ops/` module, `make wsl-ops` / `aws-deploy-ops` / `prod-deploy-ops` |
+| L3 | External dead-man's switch: healthchecks.io ping (`HEARTBEAT_URL`) | `ops/` (green-only ping) |
+| Security | Daily dependency/CVE scan → `ops.dependency_findings`; pre-promotion gate `make security-preflight` | [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) |
 
-### Reset Database (Development Only!)
+## 5. Backups & recovery
 
-```bash
-# WARNING: This will delete all data!
+| Script | Purpose |
+|---|---|
+| `scripts/ops/backup_db.sh` | Daily `pg_dump` (custom format) from the `db` container, gzip, off-box copy, prune |
+| `scripts/ops/restore_drill.sh` | Periodic restore verification into a scratch DB — proves backups are usable |
+| `scripts/ops/aws_to_prod_db_sync.sh` | Replace prod DB + uploads from AWS staging (`make prod-sync-db-from-aws CONFIRM=1`, destructive, VPN) |
 
-# Drop and recreate database
-sudo -u postgres psql -c "DROP DATABASE grievance_db;"
-sudo -u postgres psql -c "CREATE DATABASE grievance_db;"
+Notes:
+- `DB_ENCRYPTION_KEY` must be backed up **separately** from DB dumps (dumps contain pgcrypto ciphertext only) — see [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md).
+- Uploads live in the `uploads_data` volume; backups in the `backups_data` volume (mounted into `ops` at `/var/backups/grms`).
+- Manual one-off: `docker compose exec -T db pg_dump -U user -d app_db -F c > backup.dump`.
 
-# Initialize schema
-docker compose --profile init run --rm db_init
+## 6. Logs
 
-# Restart services
-docker compose up -d --build
-```
+| What | Where |
+|---|---|
+| All containers | `docker compose logs [-f] <service>` — json-file driver, bounded 10 MB × 5 files per container |
+| Host watchdog | `logs/watchdog.log` (structured; rotated via `deployment/logrotate/grms.conf`) |
+| Nginx access/error | inside the `nginx` container → `docker compose logs nginx` |
+| Ops check history | Postgres: `ops.system_health_checks` (queryable), plus daily ops email |
+| Keycloak | `docker compose --profile auth logs keycloak` |
 
-## Security Operations
+## 6a. Deploying a specific build, and rolling back
 
-### Security Checklist
-
-- [ ] All services running as non-root user
-- [ ] Firewall configured (ufw)
-- [ ] SSL/HTTPS enabled
-- [ ] Database passwords strong and rotated
-- [ ] Redis password protected
-- [ ] File upload validation enabled
-- [ ] Rate limiting configured
-- [ ] Logs monitored for suspicious activity
-- [ ] Backups encrypted
-- [ ] API keys rotated regularly
-
-### Security Monitoring
+**Staging pulls images that CI already built; production still builds on the box.** Both go
+through the same Makefile macros, and which one happens is `DEPLOY_BUILD` — `0` pulls, `1`
+builds. The `aws-*` targets set `0`; everything else defaults to `1`.
 
 ```bash
-# Check failed login attempts
-sudo grep "Failed password" /var/log/auth.log
-
-# Check unusual database activity
-psql -U nepal_grievance_admin -d grievance_db -c "
-SELECT client_addr, count(*)
-FROM pg_stat_activity
-GROUP BY client_addr
-ORDER BY count(*) DESC;
-"
-
-# Check large file uploads
-find uploads/ -type f -size +100M
-
-# Monitor API usage
-grep "POST /upload" /var/log/nginx/access.log | wc -l
+make aws-deploy IMAGE_TAG=<short-sha>        # deploy that commit's images
+make aws-deploy IMAGE_TAG=<an-older-sha>     # ⭐ rollback, no rebuild — ONLY if no migration landed in between (below)
+make aws-deploy DEPLOY_BUILD=1               # registry unreachable: build on the box instead
 ```
 
-### Incident Response
+⭐ **The rollback is the capability worth knowing about.** Before images were tagged, going back
+a version meant rebuilding an older commit *on the deploy host* — the operation that took
+staging off the network for 41 minutes on 2026-09-04. Now it is a pull of an image that already
+exists, and it takes as long as the download.
 
-1. **Detect**: Monitor logs and alerts
-2. **Isolate**: Stop affected services
-3. **Investigate**: Analyze logs and system state
-4. **Remediate**: Fix vulnerability or issue
-5. **Recover**: Restore services
-6. **Document**: Record incident and response
+⛔ **A tag rollback is only a rollback when no migration landed between the two tags** (`GRM-102`,
+narrowed 2026-09-14). Check before you run it:
 
----
+```bash
+git diff --name-only <older-sha> <current-sha> -- \
+  ticketing/migrations/versions migrations/public/versions ops/migrations/versions
+```
 
-For system setup and architecture details, see:
+**Empty → the tag rollback above is safe.** **Anything listed → do not run it**, because the deploy
+starts the containers *before* it migrates: the older code comes up against the newer schema at once,
+and then `alembic upgrade head` cannot find the database's revision in the older code and stops. The
+site is left running old code on a new schema. (Before `GRM-099` it was worse — the migration step ran
+the newer checkout's code, found nothing to do, and reported **success** over that mismatch.)
 
-- [Setup Guide](SETUP.md)
-- [Architecture Guide](ARCHITECTURE.md)
-- [Backend Guide](BACKEND.md)
+**What to do instead**, in order of preference:
+1. **Roll forward** — fix the problem and deploy a newer tag. Almost always the right answer.
+2. **Downgrade the schema first, deliberately:** take a database backup (`scripts/ops/backup_db.sh`),
+   run `alembic downgrade <the older tag's head>` for each affected stream **using the current image**
+   (the older image does not contain the newer migrations, so it cannot undo them), and only then
+   deploy the older tag. ⚠ **Downgrades have never been exercised here.** 59 of 64 migrations implement
+   one; **5 have an empty `downgrade()`** — all data rewrites (`d6f8a0b2`, `g0h2i4j6`, `q9r7s1u3`,
+   `r4t6v8x0`, `z2b4d6f8`) — and crossing any of them **reports success while restoring nothing**.
+   That is when you restore the backup instead.
+
+*Why the promise was narrowed rather than the deploy taught to downgrade (owner's call, 2026-09-14):
+automated downgrades would be correct only if every downgrade were tested, and a wrong one destroys
+data. A documented limit is honest now; an untested automatic downgrade would be a new way to lose it.*
+
+### nginx on staging: every `aws-deploy` validates, applies and reloads it (`GRM-103`, 2026-09-14)
+
+nginx is not one of the deployed services, and until this change **no deploy ever touched it** — while
+its site config was a single-file bind mount, which `git pull` cannot update in place (git replaces the
+file with a new inode; the mount stays on the old one). So every nginx change was on disk and **not in
+force**, and `nginx -s reload` — and even `nginx -t` — silently read the stale copy. That is how
+`GRM-014`'s rate limiting sat merged for a week doing nothing.
+
+Staging now mounts the `deployment/nginx` **directory** (which follows the rename) and starts through
+`deployment/nginx/bootstrap.sh`. After the services are up, `aws-deploy` and `aws-deploy-full` run:
+
+1. **validate** the new config in a throwaway container — `bootstrap.sh --test`, same image, same mounts,
+   same certificates. ⚠ Never check with `docker exec … nginx -t` on the running container: with a
+   single-file mount that validates the stale copy and passes a config nobody has tested.
+2. **apply** — `up -d --no-deps nginx`, which recreates only if nginx's compose definition changed;
+3. **reload** — picks up content-only changes; a reload that never succeeds fails the deploy.
+
+⚠ **Production is not converted.** `docker-compose.prod.yml` still mounts its site config as a single
+file, so on production an nginx config change still needs a container **recreate**, not a reload.
+
+**`IMAGE_TAG` is a 7-character short sha**, the same one the build workflow tags with. Find one
+with `git rev-parse --short HEAD` on the commit you want, or read it off the Images run.
+
+⚠ **A deploy with no `IMAGE_TAG` is refused, on purpose.** The default resolves to `local`,
+which exists only on a developer's machine, so a pulling deploy without a tag would fail
+partway through with a registry 404 that reads like an outage. It stops before starting and
+says what to pass instead.
+
+⚠ **A pulling deploy needs a registry credential, and that is not optional any more**
+(`GRM-093` / `A-11`, 2026-09-14). [D-010](../DECISIONS.md) made the repository private on
+2026-09-04, so **its GHCR packages are private**: an unauthenticated `compose pull` answers
+`denied`. The deploy now authenticates before it pulls —
+`REMOTE_REGISTRY_LOGIN` reads **`GHCR_READ_TOKEN`** from `env.local` and runs `docker login`
+with `--password-stdin`, never as an argument.
+
+| | |
+|---|---|
+| **Token absent** | The login is **skipped**, with one line saying so, and the pull proceeds unauthenticated. Correct for a public registry; a private one then says `denied`. This is why `make wsl-up` and every `DEPLOY_BUILD=1` path are unaffected |
+| **Login fails** | The deploy stops there and names the fallback, rather than failing later inside `compose pull` |
+| **`DEPLOY_BUILD=1`** | No registry, no login, no token. The documented answer when the registry is unreachable *or* uncredentialed |
+
+⚠ **Three manual steps remain, and none of them is code.** ① create the token — a **classic**
+PAT with `read:packages` **and no other scope**; ② add it as `GHCR_READ_TOKEN` — the value via `make secrets-edit`
+**and** the `#@secret` marker in `.env.shared`, **in the same change**, because
+`gen_env_local.sh` fails when the two halves disagree in either direction; ③ run `make env-local`
+**on the host**, since `aws-deploy` deliberately does not. Pinned by
+[`tests/repo/test_registry_login.py`](../../tests/repo/test_registry_login.py).
+
+> ⚠ **It must be a classic token, and that is not a preference — verified against GitHub's docs
+> 2026-09-14.** *"GitHub Packages only supports authentication using a personal access token
+> (classic)."* A fine-grained token **cannot** read GHCR container packages, which is exactly what
+> `A-11` already had evidence of and did not recognise: the owner's own token returned
+> `403: Resource not accessible by personal access token` when listing packages. `A-11`'s original
+> recommendation said *fine-grained*, and following it would have produced a token that fails at
+> `docker login` for a reason the error message does not explain.
+
+⚠ **And the cost of that, stated plainly: a classic PAT cannot be scoped to one repository.**
+`read:packages` reads every package the account can read. The controls that remain are that it is
+**read-only** and carries **no second scope** — so grant nothing but `read:packages`, and give it
+an expiry. If a per-repo credential is required later, the answer is a GitHub App installation
+token or a machine account, not a differently-shaped PAT.
+
+⚠ **Residue:** a successful login writes a base64 credential to `~/.docker/config.json` on the
+host, unencrypted. Read-only and no-second-scope is the control; that file is not.
+
+⚠ **Production is deliberately unchanged.** `prod-deploy` still builds on the host, because
+nobody has yet run `curl -sI https://ghcr.io/v2/` from the VPN-only DOR box to confirm it can
+reach the registry at all. Converting it before that answer would put an untested path in a
+maintenance window. When the answer arrives, `make prod-deploy DEPLOY_BUILD=0` is the switch —
+and it needs the same credential on that host first.
+
+**Every deploy prints what is actually running**, per service, after `up -d`:
+
+```
+aws-deploy: running images —
+  ticketing_api      ghcr.io/philgaeng/chatbot_ssh/app:a1b2c3d   sha256:9f2e1c4a8b...
+  grm_ui             ghcr.io/philgaeng/chatbot_ssh/ui:a1b2c3d    sha256:3d7b0e5f2c...
+```
+
+⚠ **Read it.** A pulling deploy can succeed while changing nothing: if `IMAGE_TAG` was not
+bumped, `up -d` is a no-op and the deploy reports OK having redeployed the previous build. The
+digest is the only thing that distinguishes those two outcomes, and *"deployed" is not "has
+run"* is a lesson this project has already paid for once.
+
+## 6b. Running a second stack on one machine
+
+Two stacks coexist if they differ in **project name** (which names the containers, network and
+volumes) and in **published ports**. `make ephemeral-up` does both:
+
+```bash
+make ephemeral-up        # isolated + seeded: ui :13001, api :15002, webchat :18081
+make ephemeral-up-full   # the same plus the chatbot half (orchestrator, backend, celery, nginx)
+make ephemeral-down      # containers, network AND volumes — nothing survives
+```
+
+Verified 2026-09-07: both stacks healthy at once, `grm_ci_local_*` and `nepal_chatbot_*` volumes
+side by side, and the officer-UI e2e suite green against the ephemeral one while the dev stack
+kept serving.
+
+⚠ **Do not set `COMPOSE_PROJECT_NAME` on an existing stack.** Compose derives it from the
+directory and the volumes are named after it, so a rename makes compose look for
+`<newname>_postgres_data`, fail to find it, and create an **empty** one — the database still on
+disk, silently detached. The real environments therefore keep deriving their name; only the
+ephemeral stack sets one, because it has no data to lose.
+
+⚠ **The ephemeral stack needs the repository, not just the images.** `nginx` is
+`image: nginx:stable` and is never built: it bind-mounts `channels/REST_webchat`,
+`channels/shared` and its `.conf` from the checkout, so the webchat is served from the working
+tree. This is the one place where "pull, don't build" does not describe what happens.
+
+## 7. Common procedures
+
+```bash
+# Deploy update (staging/prod: prefer make aws-deploy / prod-deploy — they wrap this; §6a)
+git pull --ff-only origin main
+make migrate_all
+docker compose -f docker-compose.yml -f docker-compose.grm.yml up -d --build
+
+# ⚠ Never pipe a deploy through `tail`, `head` or `less`.
+#   make aws-deploy | tail -20     # DON'T
+# Those buffer until the pipe closes, so a deploy that is stalling looks identical to one that
+# is working — which is what left the operator blind for 41 minutes on 2026-09-04. Let it print,
+# or capture with `tee` (which passes output through as it arrives):
+#   make aws-deploy 2>&1 | tee deploy.log
+
+# Recreate nginx after editing deployment/nginx/*.conf
+make wsl-nginx
+
+# Reset DB (DEV ONLY — destroys data)
+docker compose down -v          # wipes volumes
+make wsl-chatbot && docker compose --profile init run --rm db_init && make migrate_all
+
+# Flush Redis (dev; clears sessions/results)
+docker compose exec redis redis-cli FLUSHALL
+```
+
+## 8. Security operations
+
+Implemented-controls index: [`13_security.md`](13_security.md). Key/secret rotation: [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md). Host hardening: [`15_host_hardening.md`](15_host_hardening.md). Pre-promotion gate: `make security-preflight` (non-zero exit blocks promotion).

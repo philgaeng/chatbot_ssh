@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 ticketing.tickets and ticketing.ticket_events
 
@@ -12,7 +14,7 @@ PII rules (CLAUDE.md — LOCKED):
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base
@@ -29,7 +31,14 @@ def _uuid() -> str:
 class Ticket(Base):
     __tablename__ = "tickets"
     __table_args__ = (
-        Index("idx_tickets_grievance_id", "grievance_id"),
+        # HR-03: one active (non-deleted) ticket per grievance_id — DB-enforced invariant.
+        # Replaces the old non-unique idx_tickets_grievance_id (dropped in migration h2j4l6n8).
+        Index(
+            "uq_tickets_grievance_id_active",
+            "grievance_id",
+            unique=True,
+            postgresql_where=text("is_deleted = false"),
+        ),
         Index("idx_tickets_org_loc_status", "organization_id", "location_code", "status_code"),
         Index("idx_tickets_assigned_to", "assigned_to_user_id"),
         Index("idx_tickets_current_workflow", "current_workflow_id", "current_step_id"),

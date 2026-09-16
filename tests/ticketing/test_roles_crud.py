@@ -34,7 +34,7 @@ def _scope_row(**kwargs) -> AdminScopeRow:
     base = dict(
         admin_scope_id=str(uuid.uuid4()),
         user_id=kwargs.get("user_id", "x@grm.local"),
-        role_key="country_admin",
+        role_key="org_admin",
         country_code="NP",
         project_id=None,
         organization_id=None,
@@ -72,7 +72,7 @@ def test_operational_roles_list_excludes_admin_keys(client: TestClient):
     assert res.status_code == 200
     keys = {r["role_key"] for r in res.json()}
     assert "super_admin" not in keys
-    assert "country_admin" not in keys
+    assert "org_admin" not in keys
     assert "project_admin" not in keys
     assert "site_safeguards_focal_person" in keys
 
@@ -82,13 +82,13 @@ def test_archetype_rejects_admin_permissions():
         validate_operational_permissions(["tickets:read", "settings:write"])
 
 
-def test_country_admin_creates_custom_role():
+def test_org_admin_creates_custom_role():
     db = SessionLocal()
     try:
         def override_user():
             return _user(
                 "country-admin@grm.local",
-                ["country_admin"],
+                ["org_admin"],
                 [_scope_row(user_id="country-admin@grm.local", workflow_track="standard")],
             )
 
@@ -153,13 +153,13 @@ def test_project_admin_cannot_create_role():
         db.close()
 
 
-def test_seah_country_admin_cannot_create_project():
+def test_seah_org_admin_cannot_create_project():
     db = SessionLocal()
     try:
         def override_user():
             return _user(
                 "country-admin-seah@grm.local",
-                ["country_admin"],
+                ["org_admin"],
                 [_scope_row(user_id="country-admin-seah@grm.local", workflow_track="seah")],
             )
 
@@ -181,13 +181,13 @@ def test_seah_country_admin_cannot_create_project():
         db.close()
 
 
-def test_standard_country_admin_can_create_project():
+def test_standard_org_admin_can_create_project():
     db = SessionLocal()
     try:
         def override_user():
             return _user(
                 "country-admin@grm.local",
-                ["country_admin"],
+                ["org_admin"],
                 [_scope_row(user_id="country-admin@grm.local", workflow_track="standard")],
             )
 
@@ -196,6 +196,15 @@ def test_standard_country_admin_can_create_project():
         c = TestClient(app)
 
         code = f"T{uuid.uuid4().hex[:6].upper()}"
+        # A project is built from a type since 2026-08-04 (DECISION-author-defined-slots §5):
+        # that is where its workflows and its required organizations come from.
+        from ticketing.models.project_type import ProjectType
+
+        type_key = db.execute(
+            select(ProjectType.type_key).where(ProjectType.is_active.is_(True)).limit(1)
+        ).scalar_one_or_none()
+        assert type_key, "no active project type — the back-fill migration should have made one"
+
         res = c.post(
             "/api/v1/projects",
             json={
@@ -203,9 +212,17 @@ def test_standard_country_admin_can_create_project():
                 "short_code": code,
                 "name": "Matrix Test Project",
                 "is_active": False,
+                "project_type_key": type_key,
             },
         )
         assert res.status_code == 201, res.text
+
+        # Creation fills NO organization slot (2026-08-04). It used to write the chosen
+        # organization into the type's first required role, which assumed list order said
+        # something about which role it plays — and put a government department into a "Donor"
+        # slot the moment a type listed Donor first, failing the whole creation. The project
+        # screen names every organization by role; go-live B1 blocks until the required ones are.
+        assert res.json()["organizations"] == []
 
         from ticketing.models.project import Project
 

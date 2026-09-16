@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Display helpers for grievance summary / categories from API (may be JSON arrays). */
 
 export function parseGrievanceCategoryList(raw: string | null | undefined): string[] {

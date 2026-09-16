@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared API key for ticketing → chatbot backend HTTP calls."""
 from __future__ import annotations
 

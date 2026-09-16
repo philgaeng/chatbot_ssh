@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Apply team-reviewed Nepali utterances (column E) from mapped_translated xlsx."""
 
 from __future__ import annotations

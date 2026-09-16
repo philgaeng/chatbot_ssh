@@ -1,5 +1,9 @@
 # REST Chatbot Production Documentation
 
+**Audience:** public — published with the open-source repository.
+
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
+
 This folder is the production documentation set for chatbot-specific behavior.
 
 Scope of `docs/rest_chatbot`:

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Import all managers from their respective files
 from .base_manager import (
     BaseDatabaseManager,

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SLA overdue stint per workflow step — see docs/ticketing_system/12_reports §14."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Legacy Flask FileServerAPI — only registered by deprecated `backend.api.app`.
 Production file API: `backend.api.fastapi_app` and `backend.api.routers.files`.

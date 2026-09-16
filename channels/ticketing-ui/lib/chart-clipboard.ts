@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Render summary charts to canvas and copy as PNG (no chart library — matches SummaryTab CSS charts). */
 
 export const CHART_COLORS = [

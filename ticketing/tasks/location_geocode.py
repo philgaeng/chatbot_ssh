@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Celery task: async reverse geocode for map-pin submissions.
 

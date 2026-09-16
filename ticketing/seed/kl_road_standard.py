@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Seed data: KL Road Standard 4-level GRM workflow.
 
@@ -25,9 +27,12 @@ from sqlalchemy.orm import Session
 from ticketing.models.base import SessionLocal
 from ticketing.models.country import Location
 from ticketing.models.organization import Organization
-from ticketing.models.project import Project
+from ticketing.models.project import Project, ProjectDonor, ProjectOrganization
 from ticketing.models.settings import Settings
 from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition, WorkflowStep
+from ticketing.constants.resolution import GENERAL_ACTION_CODES
+from ticketing.services.resolution_catalog import ensure_starter_actions, set_workflow_actions
+from ticketing.seed.position_types import seed_position_types
 from ticketing.seed.grm_roles import upsert_grm_roles
 
 logger = logging.getLogger(__name__)
@@ -55,6 +60,7 @@ LOC_MORANG_CODE    = "P1_MOR"   # Morang
 LOC_SUNSARI_CODE   = "P1_SUN"   # Sunsari
 
 WORKFLOW_STANDARD_ID = "00000000-0000-0000-0001-000000000001"
+WORKFLOW_KEY = "KL_ROAD_STANDARD"
 
 STEP_L1_ID = "00000000-0000-0000-0001-000000000011"
 STEP_L2_ID = "00000000-0000-0000-0001-000000000012"
@@ -68,6 +74,36 @@ ASSIGNMENT_STANDARD_ID          = "00000000-0000-0000-0001-000000000021"
 ASSIGNMENT_STANDARD_FALLBACK_ID = "00000000-0000-0000-0001-000000000022"
 
 
+
+# ── Per-slot role keys (2026-08-09) ──────────────────────────────────────────
+# Each (step, tier) slot owns its key. Naming two slots with one operational role — as this
+# seed did, giving level N's supervisor and level N+1's actor the same key — made cast
+# assignments ambiguous: `officer_scopes` records a role_key and nothing else, so officers
+# staffed into the earlier slot surfaced against the later one, and go-live resolved them as
+# candidates for both. Migration `x0z2b4d6` converted existing databases; this keeps fresh
+# ones from re-creating it.
+def _slot(step_key: str, tier: str) -> str:
+    from ticketing.services.cast_staffing import step_tier_role_key
+
+    return step_tier_role_key(WORKFLOW_KEY, step_key, tier)
+
+
+def _mint_slot_roles(db: Session, workflow: WorkflowDefinition, steps) -> None:
+    """Create the `roles` row backing every slot key the steps use."""
+    from ticketing.constants.tiers import STEP_FIELD_BY_TIER, TIERS
+    from ticketing.services.cast_staffing import ensure_tier_role, is_synthetic_key
+
+    for step in steps:
+        for tier in TIERS:
+            value = getattr(step, STEP_FIELD_BY_TIER[tier], None)
+            for key in (value if isinstance(value, list) else [value]):
+                if is_synthetic_key(key):
+                    ensure_tier_role(
+                        db, role_key=key, tier=tier, workflow=workflow,
+                        step_name=step.display_name or step.step_key,
+                    )
+
+
 def seed_organizations(db: Session) -> None:
     orgs = [
         Organization(
@@ -75,12 +111,16 @@ def seed_organizations(db: Session) -> None:
             name="Department of Roads (DOR)",
             country_code="NP",
             is_active=True,
+            org_category="government",  # OC-01 doc 16 §3.1
+            unit_type="department",
         ),
         Organization(
             organization_id=ORG_ADB_ID,
             name="Asian Development Bank (ADB)",
             country_code="NP",
             is_active=True,
+            org_category="donor",  # OC-01: ADB is a development partner, not government
+            unit_type="development_partner",
         ),
     ]
     for org in orgs:
@@ -89,7 +129,15 @@ def seed_organizations(db: Session) -> None:
             db.add(org)
             logger.info("  + organization: %s", org.organization_id)
         else:
-            logger.info("  = organization already exists: %s", org.organization_id)
+            # org_category / unit_type are authoritative actor-type fields (doc 16 §3.1) —
+            # correct them on re-seed. An earlier backfill mislabeled ADB as 'government';
+            # the donor guardrail + implementing-agency validation depend on ADB='donor'.
+            if existing.org_category != org.org_category:
+                existing.org_category = org.org_category
+                logger.info("  ~ organization %s: org_category -> %s", org.organization_id, org.org_category)
+            if existing.unit_type != org.unit_type:
+                existing.unit_type = org.unit_type
+                logger.info("  ~ organization %s: unit_type -> %s", org.organization_id, org.unit_type)
     db.flush()
 
 
@@ -132,9 +180,16 @@ def seed_standard_workflow(db: Session) -> None:
             "Time-based escalation per ADB Loan 52097-003 requirements."
         ),
         workflow_type="STANDARD",
+        # GRM-116 (Q-10): every workflow belongs to an organization, or it can offer no action.
+        owner_organization_id=ORG_DOR_ID,
     )
     db.add(workflow)
     logger.info("  + workflow: KL_ROAD_STANDARD")
+    # GRM-116: DOR's shared resolution actions (the migration seeds them on a database that already
+    # had a ministry; this covers a fresh one), and the general five as this workflow's list —
+    # through the catalog service, the only writer.
+    ensure_starter_actions(db, ORG_DOR_ID)
+    set_workflow_actions(db, workflow, GENERAL_ACTION_CODES)
 
     steps = [
         WorkflowStep(
@@ -143,8 +198,19 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=1,
             step_key="LEVEL_1_SITE",
             display_name="Level 1 – Site Safeguards",
-            assigned_role_key="site_safeguards_focal_person",
-            supervisor_role="pd_piu_safeguards_focal",
+            assigned_role_key=_slot("LEVEL_1_SITE", "actor"),
+            # Staffed package by package (2026-08-08). Migration `p2r4t6v8` defaulted every
+            # existing step to False to preserve behaviour, and the seed never said otherwise —
+            # so the feature shipped switched off everywhere and read as broken: an author who
+            # ticked it saw nothing change, because the level they were looking at was one of
+            # the levels nobody had ticked. This is the level the flag exists for: a site
+            # officer belongs to a stretch of road, not to the whole project. Upper levels stay
+            # project-wide — one PD/PIU focal, one GRC chair, one ADB HQ officer.
+            staff_per_package=True,
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'Safeguard Officer', 'description': 'receives the grievance at site and resolves it'}, 'supervisor': {'label': 'PIU Safeguards Focal'}},
+            supervisor_role=_slot("LEVEL_1_SITE", "supervisor"),
             informed_roles=[],
             observer_roles=[],
             informed_pii_access=False,
@@ -164,8 +230,11 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=2,
             step_key="LEVEL_2_PIU",
             display_name="Level 2 – PD/PIU Safeguards",
-            assigned_role_key="pd_piu_safeguards_focal",
-            supervisor_role="adb_national_project_director",
+            assigned_role_key=_slot("LEVEL_2_PIU", "actor"),
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'PIU Safeguards Focal'}, 'supervisor': {'label': 'National Project Director'}},
+            supervisor_role=_slot("LEVEL_2_PIU", "supervisor"),
             informed_roles=[],
             observer_roles=[],
             informed_pii_access=False,
@@ -185,9 +254,12 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=3,
             step_key="LEVEL_3_GRC",
             display_name="Level 3 – Grievance Redress Committee (GRC)",
-            assigned_role_key="grc_chair",
-            supervisor_role="adb_hq_safeguards",
-            informed_roles=["grc_member"],   # GRC members are standing Informed at L3
+            assigned_role_key=_slot("LEVEL_3_GRC", "actor"),
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={'actor': {'label': 'GRC Chairperson', 'description': 'chairs the hearing and records the decision'}, 'supervisor': {'label': 'ADB Safeguards'}, 'participant': {'label': 'GRC Member'}},
+            supervisor_role=_slot("LEVEL_3_GRC", "supervisor"),
+            informed_roles=[_slot("LEVEL_3_GRC", "informed")],  # GRC members stand Informed at L3
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -212,9 +284,18 @@ def seed_standard_workflow(db: Session) -> None:
             step_order=4,
             step_key="LEVEL_4_LEGAL",
             display_name="Level 4 – Legal Institutions",
-            assigned_role_key="adb_hq_safeguards",
+            assigned_role_key=_slot("LEVEL_4_LEGAL", "actor"),
+            # The author's name for each job at this level (doc 12 §6.2) —
+            # what officers read on staffing, the case view and go-live.
+            tier_labels={
+                "actor": {"label": "ADB Safeguards"},
+                "participant": {"label": "Donor Consultant"},
+            },
             supervisor_role=None,            # no supervisor at L4
-            informed_roles=[],
+            # Donor last-step-informed guardrail (doc 13 §3 / OC-04 §5.6): ADB is a donor
+            # on KL Road, so the final standard step keeps a donor tier in the informed
+            # cast → donor staff are notified on final escalation. SEAH-suppressed.
+            informed_roles=[_slot("LEVEL_4_LEGAL", "informed")],
             observer_roles=[],
             informed_pii_access=False,
             stakeholders=[
@@ -238,6 +319,7 @@ def seed_standard_workflow(db: Session) -> None:
         db.add(step)
         logger.info("  + step: %s (order=%d)", step.step_key, step.step_order)
 
+    _mint_slot_roles(db, workflow, steps)
     db.flush()
 
 
@@ -484,6 +566,113 @@ def seed_project(db: Session) -> None:
     db.flush()
 
 
+def seed_project_organizations(db: Session) -> None:
+    """
+    Ensure KL_ROAD's project_organizations rows carry the org_role that
+    resolve_ticket_organization() (ticketing/services/project_routing.py) looks
+    up for ticket-intake routing.
+
+    Migration e8d4b6a0f291 links KL_ROAD to DOR + ADB but leaves org_role NULL
+    (the column was added afterwards by a9c3e5f1d720, unbackfilled). Without an
+    "implementing_agency" org_role on the DOR row, resolve_ticket_organization()
+    returns None for every KL_ROAD ticket and intake fails with 422 ("No routing
+    organization for project=KL_ROAD"). Backfills existing NULL rows and creates
+    any missing link — safe to re-run.
+    """
+    from sqlalchemy import select
+
+    project = db.execute(
+        select(Project).where(Project.short_code == "KL_ROAD")
+    ).scalar_one_or_none()
+    if not project:
+        logger.warning("  ! project KL_ROAD not found — skipping project_organizations seed")
+        return
+
+    # DOR runs day-to-day implementation (routing target); ADB is the donor —
+    # matches ProjectOrganization's own docstring example and the
+    # construction_road project-type actor-role vocabulary (u3v5w7x9 migration).
+    desired_roles = {
+        ORG_DOR_ID: "implementing_agency",
+        ORG_ADB_ID: "donor",
+    }
+    for org_id, role in desired_roles.items():
+        existing = db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.organization_id == org_id,
+            )
+        ).scalar_one_or_none()
+        if existing is None:
+            db.add(ProjectOrganization(
+                project_id=project.project_id,
+                organization_id=org_id,
+                org_role=role,
+            ))
+            logger.info("  + project_organization: KL_ROAD + %s -> %s", org_id, role)
+        elif not existing.org_role:
+            existing.org_role = role
+            logger.info("  ~ project_organization: KL_ROAD + %s backfilled org_role=%s", org_id, role)
+        else:
+            logger.info("  = project_organization already set: KL_ROAD + %s -> %s", org_id, existing.org_role)
+
+    # doc 13 / DECISION 2026-07-10: the participant model is now thin typed fields, not an
+    # org_role layer. DOR (government) is the implementing agency; ADB is a donor. These
+    # coexist with the legacy org_role links above during the expand phase.
+    if project.implementing_agency_org_id != ORG_DOR_ID:
+        project.implementing_agency_org_id = ORG_DOR_ID
+        logger.info("  ~ project KL_ROAD: implementing_agency_org_id -> %s", ORG_DOR_ID)
+    donor_exists = db.execute(
+        select(ProjectDonor).where(
+            ProjectDonor.project_id == project.project_id,
+            ProjectDonor.organization_id == ORG_ADB_ID,
+        )
+    ).scalar_one_or_none()
+    if donor_exists is None:
+        db.add(ProjectDonor(project_id=project.project_id, organization_id=ORG_ADB_ID))
+        logger.info("  + project_donor: KL_ROAD + %s", ORG_ADB_ID)
+    db.flush()
+
+
+def seed_packages(db: Session) -> None:
+    """Seed the 5 KL Road lots + their district coverage (canonical location codes).
+
+    Formerly seeded inside migration b8c2d4e6f1a3 — moved into the seed so a data reset
+    (mock_tickets --reset TRUNCATEs everything) re-creates them; alembic never re-runs an
+    applied migration. Idempotent (ON CONFLICT DO NOTHING); caller commits.
+    """
+    from sqlalchemy import text
+
+    db.execute(text("""
+        INSERT INTO ticketing.project_packages
+            (package_id, project_id, package_code, name, description, is_active, created_at, updated_at)
+        SELECT gen_random_uuid()::text, p.project_id, v.package_code, v.name, v.description, true, NOW(), NOW()
+        FROM ticketing.projects p
+        CROSS JOIN (VALUES
+            ('01', 'Lot 1 — Kakarbhitta to Sitapur',                 'Civil works: Km 0+000 to Km 45+000'),
+            ('02', 'Lot 2 — Km 45 to Km 85',                          'Civil works: Km 45+000 to Km 85+000'),
+            ('03', 'Lot 3 — Km 85 to Km 95.76',                       'Civil works: Km 85+000 to Km 95+760'),
+            ('04', 'Lot 4 — Major Bridges (Ninda, Biring, Kankai)',   'Bridge construction'),
+            ('05', 'Lot 5 — Major Bridges (Ratuwa, Bakra, Lohendra)', 'Bridge construction')
+        ) AS v(package_code, name, description)
+        WHERE p.short_code = 'KL_ROAD'
+        ON CONFLICT (project_id, package_code) DO NOTHING
+    """))
+    db.execute(text("""
+        INSERT INTO ticketing.package_locations (package_id, location_code)
+        SELECT pp.package_id, v.location_code
+        FROM ticketing.project_packages pp
+        JOIN ticketing.projects p ON p.project_id = pp.project_id
+        CROSS JOIN (VALUES
+            ('01', 'P1_JHA'), ('02', 'P1_MOR'), ('03', 'P1_SUN'),
+            ('04', 'P1_JHA'), ('05', 'P1_JHA'), ('05', 'P1_MOR')
+        ) AS v(package_code, location_code)
+        WHERE p.short_code = 'KL_ROAD' AND pp.package_code = v.package_code
+          AND EXISTS (SELECT 1 FROM ticketing.locations WHERE location_code = v.location_code)
+        ON CONFLICT DO NOTHING
+    """))
+    db.flush()
+
+
 def seed_standard(db: Session | None = None) -> None:
     """Run all standard seed steps inside a single transaction."""
     own_session = db is None
@@ -495,9 +684,12 @@ def seed_standard(db: Session | None = None) -> None:
         seed_organizations(db)
         seed_locations(db)
         seed_roles(db)
+        seed_position_types(db)  # OC-02: after roles (matrix refs) + orgs (owner)
         seed_standard_workflow(db)
         seed_workflow_assignment(db)
         seed_project(db)
+        seed_project_organizations(db)
+        seed_packages(db)  # KL Road lots (was migration-seeded; re-created here after reset)
         seed_settings(db)
         db.commit()
         logger.info("Standard seed complete.")

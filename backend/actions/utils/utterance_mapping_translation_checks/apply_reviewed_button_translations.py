@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Apply reviewed Nepali button titles from buttons_*_translated.csv.
 
 CSV layouts supported

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // Custom OAuth2 client for AWS Cognito — no heavy OIDC library needed.
 // Copied pattern from Stratcon, adapted for GRM ticketing pool.
 

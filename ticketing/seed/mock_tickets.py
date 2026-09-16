@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Mock tickets for May 10 demo.
 
@@ -205,14 +207,14 @@ def seed_mock_officers(db: Session) -> None:
 
 
 def seed_admin_scopes(db: Session) -> None:
-    """Scoped admin assignments for demo matrix (country_admin / project_admin)."""
+    """Scoped admin assignments for demo matrix (org_admin / project_admin)."""
     from sqlalchemy import select
 
     from ticketing.models.admin_scope import AdminScope
 
     specs = [
-        (OFFICER_COUNTRY_ADMIN_STD, "country_admin", "NP", None, "standard", OFFICER_ADMIN),
-        (OFFICER_COUNTRY_ADMIN_SEAH, "country_admin", "NP", None, "seah", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_STD, "org_admin", "NP", None, "standard", OFFICER_ADMIN),
+        (OFFICER_COUNTRY_ADMIN_SEAH, "org_admin", "NP", None, "seah", OFFICER_ADMIN),
         (OFFICER_PROJECT_ADMIN, "project_admin", None, "KL_ROAD", "standard", OFFICER_COUNTRY_ADMIN_STD),
     ]
     for user_id, role_key, country, project_id, track, created_by in specs:
@@ -240,6 +242,281 @@ def seed_admin_scopes(db: Session) -> None:
     db.flush()
 
 
+def seed_project_workflow_links(db: Session) -> None:
+    """Link each project to the workflows it runs — the N-slot model, not the two legacy columns.
+
+    ⚠ **Third instance of the same root cause.** `project_workflows` arrived with migration
+    `b3c5d7e9`, which back-fills it from `projects.standard_workflow_id` / `seah_workflow_id`.
+    Those columns are set by `seed_standard()` / `seed_seah()`, which run **after** migrations —
+    so on a fresh database the back-fill selected zero rows, the link table stayed empty, and
+    `seed_project_types()` (which derives a type from these links, exactly as its own back-fill
+    does) then had nothing to derive from.
+
+    The pattern is worth naming, because it will recur: **a back-fill migration that reads data
+    the seeder writes afterwards is a no-op on every fresh database, and only on fresh
+    databases.** It works perfectly in the place people look — an existing deployment — and
+    fails silently in CI and on a new developer's first `make wsl-up`. Nothing errors; a table is
+    simply empty, and the symptom surfaces later as something unrelated.
+    """
+    from sqlalchemy import select
+
+    from ticketing.constants.workflow_routing import (
+        SEED_SAFEGUARDS_INTAKE_ROUTE,
+        SEED_SEAH_CLASSIFICATIONS,
+        SEED_SEAH_INTAKE_ROUTE,
+    )
+    from ticketing.models.project import Project
+    from ticketing.models.project_workflow import ProjectWorkflow
+    from ticketing.models.workflow import WorkflowDefinition
+
+    for project in db.execute(select(Project)).scalars().all():
+        slots = [
+            (project.standard_workflow_id, "Safeguards GRM", SEED_SAFEGUARDS_INTAKE_ROUTE, [], True, 10),
+            (project.seah_workflow_id, "SEAH", SEED_SEAH_INTAKE_ROUTE, list(SEED_SEAH_CLASSIFICATIONS), False, 40),
+        ]
+        for workflow_id, label, intake_route, classifications, is_default, sort_order in slots:
+            if not workflow_id:
+                continue
+            existing = db.execute(
+                select(ProjectWorkflow).where(
+                    ProjectWorkflow.project_id == project.project_id,
+                    ProjectWorkflow.workflow_id == workflow_id,
+                )
+            ).scalar_one_or_none()
+            if existing:
+                continue
+            wf = db.get(WorkflowDefinition, workflow_id)
+            db.add(
+                ProjectWorkflow(
+                    project_id=project.project_id,
+                    workflow_id=workflow_id,
+                    display_label=(wf.display_name if wf and wf.display_name else label),
+                    classifications=classifications,
+                    intake_route=intake_route,
+                    is_default=is_default,
+                    sort_order=sort_order,
+                )
+            )
+            logger.info("  + workflow link: %s → %s (%s)", project.short_code, label, intake_route)
+    db.flush()
+
+
+def seed_project_types(db: Session) -> None:
+    """Give every seeded project a type — because on a fresh database nothing else will.
+
+    ⚠ **This is the fix for a whole class of CI failure, not a nicety.** `project_types` arrived
+    on 2026-08-04 with a back-fill migration (`n0p2r4t6`) that derives a type from the workflows
+    a project already runs. Its very first statement is
+    `FROM ticketing.projects p JOIN ticketing.project_workflows pw`, and it returns immediately
+    when that join is empty.
+
+    On any **existing** deployment the join was full and the back-fill worked. On a **fresh**
+    database — which is what CI builds every run, and what a new developer builds on day one —
+    the order is inverted: migrations run first, and `project_workflows` rows are created
+    afterwards by `seed_standard()` / `seed_seah()`. So the back-fill saw nothing, returned, and
+    every project came out untyped. Eight tests failed on that alone, and the messages pointed
+    at a migration that had in fact behaved exactly as designed.
+
+    The type is **derived**, not hard-coded, deliberately: it is built from the project's own
+    workflows and the organization roles actually named on it, by the same rules the migration
+    uses. A hard-coded literal here would be a second source of truth that drifts from
+    `seed_standard()` the first time a workflow changes, and would make CI exercise a shape no
+    real deployment has.
+    """
+    from sqlalchemy import select
+
+    from ticketing.models.project import Project, ProjectOrganization
+    from ticketing.models.project_type import ProjectType
+    from ticketing.models.project_workflow import ProjectWorkflow
+
+    ANCHOR_ROLE = "implementing_agency"
+
+    projects = db.execute(select(Project)).scalars().all()
+    for project in projects:
+        if project.project_type_key:
+            continue
+
+        links = db.execute(
+            select(ProjectWorkflow)
+            .where(ProjectWorkflow.project_id == project.project_id)
+            .order_by(ProjectWorkflow.sort_order)
+        ).scalars().all()
+        if not links:
+            # Same rule as the migration: no workflows, no template to infer. A project in this
+            # state is not something the seed should invent a type for.
+            logger.info("  = no workflows for %s — skipping type", project.short_code)
+            continue
+
+        bindings = [
+            {
+                "display_label": l.display_label,
+                "workflow_id": str(l.workflow_id),
+                "is_default": bool(l.is_default),
+                "classifications": list(l.classifications or []),
+                "intake_route": l.intake_route,
+                "sort_order": l.sort_order or 0,
+            }
+            for l in links
+        ]
+
+        # The roles the project actually names, plus the anchor — which is required whether or
+        # not anyone has filled it yet, because that is what B1 exists to say.
+        named = db.execute(
+            select(ProjectOrganization.org_role).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.org_role.isnot(None),
+            )
+        ).scalars().all()
+        keys = sorted({r for r in named if r} | {ANCHOR_ROLE})
+
+        type_key = f"{project.short_code.lower()}_standard"
+        db.add(
+            ProjectType(
+                type_key=type_key,
+                label=f"{project.name} template",
+                description=(
+                    "Seeded from the workflows and organizations this project already runs — "
+                    "the same derivation the back-fill migration performs on a database that "
+                    "has them. Rename it when a human knows what this kind of project is called."
+                ),
+                standard_workflow_id=project.standard_workflow_id,
+                seah_workflow_id=project.seah_workflow_id,
+                routing_org_role=ANCHOR_ROLE,
+                actor_roles=[
+                    {
+                        "key": k,
+                        "label": k.replace("_", " ").capitalize(),
+                        "description": "",
+                        "required": k == ANCHOR_ROLE,
+                        "required_package": False,
+                        "scope": "project",
+                    }
+                    for k in keys
+                ],
+                workflow_bindings=bindings,
+                owner_organization_id=None,
+                is_active=True,
+                sort_order=10,
+            )
+        )
+        # Flush before pointing the project at it: SQLAlchemy orders the projects UPDATE ahead
+        # of the project_types INSERT otherwise, and fk_projects_project_type rejects it.
+        db.flush()
+        project.project_type_key = type_key
+        logger.info(
+            "  + project type %s for %s (%d workflows, roles: %s)",
+            type_key, project.short_code, len(bindings), ", ".join(keys),
+        )
+    db.flush()
+
+
+def seed_donor_informed_defaults(db: Session) -> None:
+    """Put the donor in the final step's "Kept informed" cast — the way adding a donor does.
+
+    ⚠ **Fourth instance of the same root cause, wearing different clothes.** Here it is not a
+    back-fill migration but a **service-layer side effect the seed skipped**: naming a donor on a
+    project is not just a row in `project_donors`. `POST`ing one through
+    `api/routers/locations.py` also calls `apply_donor_informed_defaults`, which adds the
+    `donor_*` tiers to the last standard step's informed cast — because a donor who funds the
+    project and is never told how a grievance ended is the failure the guardrail exists to
+    prevent, and go-live blocks on it.
+
+    The seed writes `project_donors` straight to the table, so that side effect never ran and
+    `donor_informed_ok` was False on every freshly built database. It read as flaky rather than
+    broken: the test that exercises `apply_donor_informed_defaults` **commits**, so once any full
+    suite had run once, the database was permanently repaired and the failure vanished until the
+    next fresh build.
+
+    Calling the real service rather than writing the roles here is the point — a literal list of
+    donor tiers in the seed is a second definition of "which tiers count as a donor", and it would
+    be wrong the first time that list changed.
+    """
+    from sqlalchemy import select
+
+    from ticketing.models.project import Project
+    from ticketing.services.donor_guardrail import apply_donor_informed_defaults
+
+    for project in db.execute(select(Project)).scalars().all():
+        added = apply_donor_informed_defaults(db, project)
+        if added:
+            logger.info("  + donor informed cast on %s: %s", project.short_code, ", ".join(added))
+    db.flush()
+
+
+def _l1_package_scopes(db: Session, role_key: str) -> list[dict]:
+    """One Level 1 officer per lot — because `LEVEL_1_SITE.staff_per_package` is `True`.
+
+    ⚠ **The second half of the same staleness.** A workflow level has said whether it is staffed
+    once for the project or lot by lot since 2026-08-04 (`p2r4t6v8`), and KL Road's Level 1 says
+    lot by lot. Go-live check C1 gates **ticket intake**, so an unstaffed lot does not merely warn
+    — `POST /api/v1/tickets` refuses with "Add a Level 1 officer for these packages: 01, 02, 03,
+    04, 05". Ten tests failed on that, and none of them was about packages.
+
+    Derived from `package_locations` rather than a hand-written lot→officer table: the officers
+    are already scoped by district, the lots already declare which districts they run through, so
+    the pairing is a lookup, not a decision. A hard-coded table would be wrong the first time a
+    lot's alignment changed, and wrong silently.
+
+    These rows are **additive**. The district-scoped rows stay exactly as they were, because
+    `_scope_candidates` tries the package path first and falls back to the project-wide one, and
+    the @integration assignment tests rank on those. Adding a package row must not take an
+    officer out of the pool for a ticket that has no package.
+    """
+    from sqlalchemy import select
+
+    from ticketing.models.package import PackageLocation, ProjectPackage
+
+    # district → the L1 officers already covering it, in seed order
+    by_district: dict[str, list[str]] = {}
+    for user_id, loc in (
+        (OFFICER_SITE_L1, LOC_MORANG_CODE),
+        (OFFICER_SITE_L1_2, LOC_JHAPA_CODE),
+        (OFFICER_SITE_L1_3, LOC_SUNSARI_CODE),
+        (OFFICER_SITE_L1_4, LOC_MORANG_CODE),
+    ):
+        by_district.setdefault(loc, []).append(user_id)
+
+    rows = db.execute(
+        select(ProjectPackage.package_id, ProjectPackage.package_code, PackageLocation.location_code)
+        .join(PackageLocation, PackageLocation.package_id == ProjectPackage.package_id)
+        .order_by(ProjectPackage.package_code)
+    ).all()
+
+    scopes: list[dict] = []
+    claimed: set[str] = set()
+    for package_id, package_code, location_code in rows:
+        if package_id in claimed:
+            continue  # a lot spanning two districts is staffed once, by the first
+        officers = by_district.get(location_code)
+        if not officers:
+            continue
+        # Spread the lots over the officers who cover that district, so no one holds all of them.
+        user_id = officers[len(claimed) % len(officers)]
+        claimed.add(package_id)
+        scopes.append(
+            dict(
+                user_id=user_id,
+                role_key=role_key,
+                organization_id=ORG_DOR_ID,
+                location_code=location_code,
+                project_code="KL_ROAD",
+                package_id=package_id,
+                includes_children=True,
+            )
+        )
+        logger.info("  + L1 lot %s → %s (%s)", package_code, user_id, location_code)
+
+    uncovered = {r[1] for r in rows} - {r[1] for r in rows if r[0] in claimed}
+    if uncovered:
+        # Loud, because a silently unstaffed lot is exactly the failure this function exists to
+        # prevent, and it presents as an unrelated intake error much later.
+        logger.warning(
+            "  ! no Level 1 officer for lot(s) %s — ticket intake will refuse them",
+            ", ".join(sorted(uncovered)),
+        )
+    return scopes
+
+
 def seed_mock_officer_scopes(db: Session) -> None:
     """
     Seed OfficerScope rows so auto_assign_officer() can match live tickets.
@@ -252,6 +529,16 @@ def seed_mock_officer_scopes(db: Session) -> None:
     """
     from sqlalchemy import select
 
+    def STD(step_key: str, tier: str) -> str:
+        from ticketing.seed.kl_road_standard import _slot
+
+        return _slot(step_key, tier)
+
+    def SEAH(step_key: str, tier: str) -> str:
+        from ticketing.seed.kl_road_seah import _slot as seah_slot
+
+        return seah_slot(step_key, tier)
+
     scopes = [
         # Project admin: KL Road project setup (province-wide)
         dict(user_id=OFFICER_PROJECT_ADMIN, role_key="project_admin",
@@ -259,57 +546,75 @@ def seed_mock_officer_scopes(db: Session) -> None:
              project_code="KL_ROAD", includes_children=True),
 
         # L1 site officers — one primary district each (+ L1-4 also Morang for load balance)
-        dict(user_id=OFFICER_SITE_L1, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_2, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_2, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_JHAPA_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_3, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_3, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_SUNSARI_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_SITE_L1_4, role_key="site_safeguards_focal_person",
+        dict(user_id=OFFICER_SITE_L1_4, role_key=STD("LEVEL_1_SITE", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_MORANG_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # L2 PIU: Province 1 + all children (three officers for load balancing)
-        dict(user_id=OFFICER_PIU_L2, role_key="pd_piu_safeguards_focal",
+        # PIU focals hold two jobs: supervisor of L1 and actor of L2. Under one shared key that
+        # was a single row and an ambiguity; per-slot keys make it two honest rows.
+        dict(user_id=OFFICER_PIU_L2, role_key=STD("LEVEL_1_SITE", "supervisor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_PIU_L2_2, role_key="pd_piu_safeguards_focal",
+        dict(user_id=OFFICER_PIU_L2_2, role_key=STD("LEVEL_1_SITE", "supervisor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_PIU_L2_3, role_key="pd_piu_safeguards_focal",
+        dict(user_id=OFFICER_PIU_L2_3, role_key=STD("LEVEL_1_SITE", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        # …and the same three as actors of L2, the level they own.
+        dict(user_id=OFFICER_PIU_L2, role_key=STD("LEVEL_2_PIU", "actor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_2, role_key=STD("LEVEL_2_PIU", "actor"),
+             organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
+             project_code="KL_ROAD", includes_children=True),
+        dict(user_id=OFFICER_PIU_L2_3, role_key=STD("LEVEL_2_PIU", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # GRC chair: Province 1 level
-        dict(user_id=OFFICER_GRC_CHAIR, role_key="grc_chair",
+        dict(user_id=OFFICER_GRC_CHAIR, role_key=STD("LEVEL_3_GRC", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # GRC members: Province 1 level
-        dict(user_id=OFFICER_GRC_MEMBER_1, role_key="grc_member",
+        dict(user_id=OFFICER_GRC_MEMBER_1, role_key=STD("LEVEL_3_GRC", "informed"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
-        dict(user_id=OFFICER_GRC_MEMBER_2, role_key="grc_member",
+        dict(user_id=OFFICER_GRC_MEMBER_2, role_key=STD("LEVEL_3_GRC", "informed"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # SEAH national: Province 1 + all children (covers Sunsari etc.)
-        dict(user_id=OFFICER_SEAH_NATIONAL, role_key="seah_national_officer",
+        dict(user_id=OFFICER_SEAH_NATIONAL, role_key=SEAH("SEAH_LEVEL_1_NATIONAL", "actor"),
              organization_id=ORG_DOR_ID, location_code=LOC_PROVINCE1_CODE,
              project_code="KL_ROAD", includes_children=True),
 
         # SEAH HQ: no location = sees all DOR SEAH tickets across KL_ROAD
         # (organization_id=DOR because all tickets are owned by DOR, the executing agency)
-        dict(user_id=OFFICER_SEAH_HQ, role_key="seah_hq_officer",
+        dict(user_id=OFFICER_SEAH_HQ, role_key=SEAH("SEAH_LEVEL_1_NATIONAL", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+        dict(user_id=OFFICER_SEAH_HQ, role_key=SEAH("SEAH_LEVEL_2_HQ", "actor"),
              organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
         # ADB observer: no location = observes all DOR standard tickets
         # (organization_id=DOR because tickets belong to the executing agency, not the donor)
-        dict(user_id=OFFICER_ADB, role_key="adb_hq_safeguards",
+        dict(user_id=OFFICER_ADB, role_key=STD("LEVEL_3_GRC", "supervisor"),
+             organization_id=ORG_DOR_ID, location_code=None,
+             project_code="KL_ROAD", includes_children=False),
+        dict(user_id=OFFICER_ADB, role_key=STD("LEVEL_4_LEGAL", "actor"),
              organization_id=ORG_DOR_ID, location_code=None,
              project_code="KL_ROAD", includes_children=False),
 
@@ -319,6 +624,10 @@ def seed_mock_officer_scopes(db: Session) -> None:
              project_code=None, includes_children=False),
     ]
 
+    # Level 1 is staffed lot by lot, so the district rows above are not the whole answer —
+    # see _l1_package_scopes for why intake refuses without these.
+    scopes += _l1_package_scopes(db, STD("LEVEL_1_SITE", "actor"))
+
     for s in scopes:
         existing = db.execute(
             select(OfficerScope).where(
@@ -327,6 +636,10 @@ def seed_mock_officer_scopes(db: Session) -> None:
                 OfficerScope.organization_id == s["organization_id"],
                 OfficerScope.location_code  == s["location_code"],
                 OfficerScope.project_code   == s["project_code"],
+                # Without this, a lot-scoped row looks identical to the district-scoped row it
+                # sits beside and would never be created — the seeder would report success and
+                # leave intake blocked.
+                OfficerScope.package_id     == s.get("package_id"),
             )
         ).scalar_one_or_none()
         if not existing:
@@ -663,31 +976,46 @@ def seed_all(reset: bool = False) -> None:
     db = SessionLocal()
     try:
         if reset:
-            logger.info("Reset mode: deleting all ticketing.* rows...")
-            db.execute(TicketEvent.__table__.delete())
-            db.execute(Ticket.__table__.delete())
-            from ticketing.models.admin_scope import AdminScope
-            db.execute(AdminScope.__table__.delete())
-            db.execute(OfficerScope.__table__.delete())
-            db.execute(UserRole.__table__.delete())
-            from ticketing.models.workflow import WorkflowAssignment, WorkflowStep, WorkflowDefinition
-            from ticketing.models.organization import Organization
-            from ticketing.models.user import Role
-            from ticketing.models.settings import Settings
-            db.execute(WorkflowAssignment.__table__.delete())
-            db.execute(WorkflowStep.__table__.delete())
-            db.execute(WorkflowDefinition.__table__.delete())
-            # Locations live in ticketing.locations (imported geodata) — not reset here.
-            # Only reset org/role/settings that are seeded by mock_tickets.
-            db.execute(Organization.__table__.delete())
-            db.execute(Role.__table__.delete())
-            db.execute(Settings.__table__.delete())
+            logger.info("Reset mode: truncating transactional data (structural data preserved)...")
+            # Wipe only the *transactional / assignment* data that accumulates and is
+            # re-seeded (tickets + their children via CASCADE, officer/admin scopes, roster
+            # roles, officer positions). PRESERVE all STRUCTURAL data — workflows, projects,
+            # packages, project_workflows, organizations, roles, position_types — plus the
+            # imported geodata: the seeders upsert those idempotently, and several are
+            # *migration-seeded* (packages, project_workflows) with no seeder to re-create
+            # them, so a blanket TRUNCATE would leave them permanently empty. CASCADE covers
+            # ticket child tables; RESTART IDENTITY resets sequences.
+            from sqlalchemy import text as _sql_text
+
+            transactional = [
+                "tickets",           # → ticket_events / tasks / viewers / files / episodes (CASCADE)
+                "officer_scopes",
+                "admin_scopes",
+                "user_roles",
+                "officer_positions",
+            ]
+            db.execute(
+                _sql_text(
+                    "TRUNCATE TABLE "
+                    + ", ".join(f"ticketing.{t}" for t in transactional)
+                    + " RESTART IDENTITY CASCADE"
+                )
+            )
             db.commit()
-            logger.info("Reset complete.")
+            logger.info("Reset complete (transactional data wiped; structure preserved).")
 
         # Seed workflows (each is idempotent)
         seed_standard(db)
         seed_seah(db)
+
+        # …then the type, which is derived from them. Order matters: the back-fill migration
+        # runs before any of this exists, which is exactly why it produced nothing.
+        logger.info("Seeding project workflow links...")
+        seed_project_workflow_links(db)
+        logger.info("Seeding project types...")
+        seed_project_types(db)
+        logger.info("Seeding donor informed defaults...")
+        seed_donor_informed_defaults(db)
 
         # Seed mock officers, scopes, and tickets
         logger.info("Seeding mock officers...")

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Helpers for project/package code assignment and project short_code renames."""
 from __future__ import annotations
 

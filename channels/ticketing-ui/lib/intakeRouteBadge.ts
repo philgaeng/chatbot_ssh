@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Intake route (chatbot story_main) → queue/detail badge styling. */
 
 export type IntakeRouteKey =

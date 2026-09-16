@@ -1,18 +1,13 @@
-import type { TicketEvent } from "@/lib/api";
+// SPDX-License-Identifier: Apache-2.0
 
-export const RESOLUTION_CATEGORIES = [
-  { code: "CLASSIFIED", label: "Grievance classified", defaultWording: "This grievance has been reviewed and classified. No specific remedial action is required beyond continued monitoring under the project GRM procedure." },
-  { code: "DEMAND_REJECTED", label: "Complainant demand rejected", defaultWording: "After investigation, the grievance was found not to be substantiated. The complainant's request is not accepted. The case is closed with this determination." },
-  { code: "ACCEPTED_MONETARY", label: "Grievance accepted — monetary compensation", defaultWording: "The grievance is substantiated. Remedial action includes monetary compensation as agreed with the complainant / per contract and GRM procedure." },
-  { code: "ACCEPTED_RELOCATION", label: "Grievance accepted — relocation", defaultWording: "The grievance is substantiated. Remedial action includes relocation / resettlement support as applicable under project safeguards." },
-  { code: "ACCEPTED_OTHER", label: "Grievance accepted — other remedy", defaultWording: "The grievance is substantiated. Remedial action has been agreed (other than monetary compensation or relocation). Details are recorded below." },
-] as const;
-
-export type ResolutionCategoryCode = (typeof RESOLUTION_CATEGORIES)[number]["code"];
-
-export function resolutionCategoryLabel(code: string): string {
-  return RESOLUTION_CATEGORIES.find((c) => c.code === code)?.label ?? code;
-}
+import type {
+  ExternalActor,
+  OrganizationChoice,
+  ResolutionActorKind,
+  ResolutionActorPayload,
+  ResolutionOption,
+  WorkflowResolutionPanel,
+} from "@/lib/api";
 
 export function isResolutionRecordEvent(event: {
   event_type: string;
@@ -25,3 +20,129 @@ export function isResolutionRecordEvent(event: {
 }
 
 export const RESOLUTION_MIN_NOTE_LEN = 12;
+
+/** Preselected when the case's workflow offers it — the default before the catalog existed. */
+export const PREFERRED_DEFAULT_ACTION_CODE = "ACCEPTED_OTHER";
+
+export interface ResolutionFormState {
+  /** No options: a sensitive workflow, whose cases record no action (GRM-116). */
+  textOnly: boolean;
+  category: string | null;
+  note: string;
+  valid: boolean;
+}
+
+/**
+ * The resolve form, derived — never seeded from an effect (GRM-107's lesson: a seed that waits on
+ * async loads loses to a fast click). `chosen` and `typed` are what the officer did; everything
+ * else follows from the options the ticket currently offers, so a reload that changes them (the
+ * case moved workflow) cannot leave the form on an action it no longer offers.
+ */
+export function resolutionFormState(
+  options: ResolutionOption[],
+  chosen: string | null,
+  typed: string | null,
+): ResolutionFormState {
+  const textOnly = options.length === 0;
+  const fallback = textOnly
+    ? null
+    : options.some((o) => o.code === PREFERRED_DEFAULT_ACTION_CODE)
+      ? PREFERRED_DEFAULT_ACTION_CODE
+      : options[0].code;
+  const category = chosen && options.some((o) => o.code === chosen) ? chosen : fallback;
+  const note = typed ?? options.find((o) => o.code === category)?.default_wording ?? "";
+  return {
+    textOnly,
+    category,
+    note,
+    valid: note.trim().length >= RESOLUTION_MIN_NOTE_LEN && (textOnly || category !== null),
+  };
+}
+
+/** What the officer has picked in *Who took the action?* (GRM-117). */
+export interface ResolutionActorChoice {
+  kind: ResolutionActorKind;
+  /** For "self": which of their offices, when they have several. For "organization": the office. */
+  organizationId: string | null;
+  external: string | null;
+}
+
+export const DEFAULT_ACTOR_CHOICE: ResolutionActorChoice = { kind: "self", organizationId: null, external: null };
+
+export interface ResolutionActorState {
+  /** No choices at all: a sensitive workflow, whose cases record no actor — the section is absent. */
+  hidden: boolean;
+  /** "I did — <office>" when the office is decided; null when the officer must choose. */
+  selfOffice: OrganizationChoice | null;
+  /** The hint under the section when Confirm is blocked by it, else null. */
+  missing: string | null;
+  /** The RESOLVE fields, or null when hidden or incomplete. */
+  payload: ResolutionActorPayload | null;
+}
+
+/**
+ * The actor section, derived from what the ticket offers and what the officer picked — never seeded
+ * from an effect, for the same reason as `resolutionFormState`.
+ */
+export function resolutionActorState(
+  offers: { selfOffices: OrganizationChoice[]; externalActors: ExternalActor[] },
+  choice: ResolutionActorChoice,
+): ResolutionActorState {
+  const { selfOffices, externalActors } = offers;
+  if (selfOffices.length === 0 && externalActors.length === 0) {
+    return { hidden: true, selfOffice: null, missing: null, payload: null };
+  }
+  const selfOffice = selfOffices.length === 1 ? selfOffices[0] : null;
+
+  if (choice.kind === "self") {
+    if (selfOffice) {
+      return { hidden: false, selfOffice, missing: null, payload: { resolution_actor_kind: "self" } };
+    }
+    const picked = selfOffices.find((o) => o.organization_id === choice.organizationId);
+    return picked
+      ? { hidden: false, selfOffice, missing: null,
+          payload: { resolution_actor_kind: "self", resolution_actor_organization_id: picked.organization_id } }
+      : { hidden: false, selfOffice, missing: "Choose which of your offices took the action.", payload: null };
+  }
+  if (choice.kind === "organization") {
+    return choice.organizationId
+      ? { hidden: false, selfOffice, missing: null,
+          payload: { resolution_actor_kind: "organization", resolution_actor_organization_id: choice.organizationId } }
+      : { hidden: false, selfOffice, missing: "Choose the office that took the action.", payload: null };
+  }
+  const external = externalActors.find((a) => a.key === choice.external);
+  return external
+    ? { hidden: false, selfOffice, missing: null,
+        payload: { resolution_actor_kind: "external", resolution_actor_external: external.key } }
+    : { hidden: false, selfOffice, missing: "Choose who took the action.", payload: null };
+}
+
+export interface ResolutionPanelState {
+  count: number;
+  full: boolean;
+  /** "n of 8" */
+  countLabel: string;
+  /** The line under the list, when there is one to say. */
+  hint: string | null;
+  /** Remove is disabled on a published workflow's last action — it would leave officers nothing. */
+  canRemove: boolean;
+  /** Publish must wait: a non-sensitive workflow with no action cannot be published (GRM-116). */
+  blocksPublish: boolean;
+}
+
+/** The panel's derived state (GRM-119, `ui/08` frames 1 and 3). */
+export function resolutionPanelState(panel: WorkflowResolutionPanel, published: boolean): ResolutionPanelState {
+  const count = panel.actions.length;
+  const full = count >= panel.max;
+  let hint: string | null = null;
+  if (full) hint = `A workflow can offer at most ${panel.max} actions. Remove one to add another.`;
+  else if (count === 0) hint = "Add at least one action before publishing.";
+  return {
+    count,
+    full,
+    countLabel: `${count} of ${panel.max}`,
+    hint: panel.is_sensitive ? null : hint,
+    canRemove: panel.can_change && !(published && count <= 1),
+    blocksPublish: !panel.is_sensitive && count === 0,
+  };
+}

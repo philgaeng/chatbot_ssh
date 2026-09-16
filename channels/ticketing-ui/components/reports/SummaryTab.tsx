@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -565,7 +567,7 @@ export function SummaryTab({ projects, locations, canSeeSeah, onError }: Props) 
               <PieBlock title="On time vs closed overdue" slices={data.charts.pies.overdue_vs_ontime} />
               <PieBlock title="Escalated" slices={data.charts.pies.escalated} />
               <PieBlock title="Max level at resolve" slices={data.charts.pies.max_level} />
-              <PieBlock title="Resolution category" slices={data.charts.pies.resolution_category} />
+              <PieBlock title="Resolution action" slices={data.charts.pies.resolution_category} />
             </div>
           </div>
         </div>

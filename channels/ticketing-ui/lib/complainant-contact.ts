@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { PII_MASK } from "@/lib/pii-display";
 
 /** Visible text for complainant contact fields on the default card (not vault reveal). */

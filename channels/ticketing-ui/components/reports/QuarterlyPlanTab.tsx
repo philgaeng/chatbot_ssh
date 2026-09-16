@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -154,7 +156,7 @@ export function QuarterlyPlanTab({
       return;
     }
     if (addRoles.length === 0) {
-      onError("Choose at least one role to receive this report.");
+      onError("Choose at least one recipient to receive this report.");
       return;
     }
     setAdding(true);
@@ -175,7 +177,7 @@ export function QuarterlyPlanTab({
   }
 
   async function handleRemoveAssignment(assignmentId: string) {
-    if (!confirm("Remove this role from the quarterly plan for this report?")) return;
+    if (!confirm("Remove this recipient from the quarterly plan for this report?")) return;
     onError(null);
     try {
       await deleteQuarterlyAssignment(assignmentId);
@@ -190,8 +192,8 @@ export function QuarterlyPlanTab({
   return (
     <div className="mt-4 space-y-6">
       <p className="text-sm text-gray-600">
-        Plan which saved reports are emailed to which roles for each calendar quarter (max{" "}
-        <strong>{maxPerRole}</strong> reports per role). Create report definitions on the{" "}
+        Plan which saved reports are emailed to which recipients for each calendar quarter (max{" "}
+        <strong>{maxPerRole}</strong> reports per recipient group). Create report definitions on the{" "}
         <strong>Overview</strong> or <strong>Pivot table</strong> tabs first.
       </p>
 
@@ -251,7 +253,7 @@ export function QuarterlyPlanTab({
                   <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
                     <th className="px-4 py-2 font-medium">Report name</th>
                     <th className="px-4 py-2 font-medium">Format</th>
-                    <th className="px-4 py-2 font-medium">Sends to roles</th>
+                    <th className="px-4 py-2 font-medium">Recipients</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -273,7 +275,7 @@ export function QuarterlyPlanTab({
                                 type="button"
                                 onClick={() => handleRemoveAssignment(r.assignmentId)}
                                 className="p-0.5 hover:text-red-600 rounded"
-                                title="Remove role"
+                                title="Remove recipient"
                               >
                                 <Trash2 size={12} />
                               </button>
@@ -295,7 +297,7 @@ export function QuarterlyPlanTab({
             {library.length === 0 ? (
               <p className="text-sm text-gray-500">
                 No saved reports yet. On the Overview or Pivot table tab, use{" "}
-                <strong>Save to report library</strong>, then return here to assign roles.
+                <strong>Save to report library</strong>, then return here to assign recipients.
               </p>
             ) : (
               <div className="space-y-4">
@@ -315,7 +317,7 @@ export function QuarterlyPlanTab({
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 block mb-2">
-                    Send to roles (uses one slot per role for {quarterKey})
+                    Send to recipients (uses one slot per recipient group for {quarterKey})
                   </label>
                   <div className="flex flex-wrap gap-2">
                     {roleChoices.map((r) => {

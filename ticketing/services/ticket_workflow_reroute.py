@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Re-resolve workflow when officer reclassifies a ticket."""
 from __future__ import annotations
 

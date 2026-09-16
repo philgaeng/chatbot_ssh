@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 SessionTracker - adapter matching Rasa Tracker surface used by base_mixins,
 base_classes, and form_grievance so existing Rasa actions can run without Rasa runtime.

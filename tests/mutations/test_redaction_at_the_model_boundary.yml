@@ -1,0 +1,75 @@
+# Mutation records for tests/backend/test_redaction_at_the_model_boundary.py  (DPG-33 step 1)
+#
+# ⚠ EVERY RECORD HERE RUNS IN A CONTAINER (trap §4.3). Both `backend/services/llm_client.py` and
+# `ticketing/clients/llm_client.py` import the OpenAI SDK at module level, and `openai` is not
+# installed on the host — the suite does not even collect there. The runner copies the mutated
+# file in with `docker cp`, runs pytest inside, and copies the container's ORIGINAL bytes back.
+# That avoids a ~90 s image rebuild per mutation, which would make this file unusable.
+#
+# ⚠ The container's code is baked into the image (no bind mount), so a stale image shows up as a
+# `find` that does not match — which is a finding ("rebuild before trusting this run"), not
+# something to loosen the anchor for.
+#
+# Two hooks, not nine call sites: that is what Sprint 1's chokepoint bought, and why DPG-33
+# depends on it rather than merely following it.
+
+- id: T-33-redaction-default-opt-in
+  target: backend/services/llm_client.py
+  container: nepal_chatbot-celery_llm-1
+  runner: container
+  find: "    redact: bool = True,"
+  replace: "    redact: bool = False,"
+  tests: tests/backend/test_redaction_at_the_model_boundary.py
+  expect: kills
+  why: >
+    ⭐ OPT-OUT IS THE CONTROL, not a convenience. With `redact=True` as the default a new call site
+    gets pseudonymisation without its author knowing the feature exists; with opt-in it gets
+    nothing, silently, and the failure is invisible at review because the call looks identical.
+    The parameter is also keyword-only, so it can never be flipped by a positional argument.
+
+- id: T-33-chatbot-hook-removed
+  target: backend/services/llm_client.py
+  container: nepal_chatbot-celery_llm-1
+  runner: container
+  find: "    if redact:\n        messages = _redact_messages(messages, task=task)"
+  replace: "    if False:  # mutation: chatbot hook removed\n        messages = _redact_messages(messages, task=task)"
+  tests: tests/backend/test_redaction_at_the_model_boundary.py
+  expect: kills
+  why: >
+    The chatbot surface's single chokepoint. All nine call sites reach the provider through it, so
+    removing this one branch un-redacts every one of them at once — which is the same property
+    that makes the hook worth having, read from the other direction.
+
+- id: T-33-redacts-in-place
+  target: backend/services/llm_client.py
+  container: nepal_chatbot-celery_llm-1
+  runner: container
+  find: '        out.append({**message, "content": result.text})'
+  replace: "        message[\"content\"] = result.text\n        out.append(message)"
+  tests: tests/backend/test_redaction_at_the_model_boundary.py
+  expect: kills
+  why: >
+    `_redact_messages` must return NEW dicts. The caller still needs the original — the prompt it
+    built, or the text it is about to store — and mutating in place would silently replace a
+    complainant's own words with `<PERSON_1>` in whatever the caller does next. The leak here runs
+    backwards: not text escaping to the provider, but placeholders escaping into storage.
+  note: >
+    ⚠ Authoring trap, hit while seeding this file: `replace` was first written as a SINGLE-quoted
+    YAML scalar, where `\n` stays two literal characters — so the mutation shipped a SyntaxError
+    into the container. The runner reported it as `broken` rather than a kill (pytest exits 2 on a
+    collection error, not 1), which is the whole reason that outcome is distinct. Multi-line
+    values need DOUBLE quotes.
+
+- id: T-33-ticketing-hook-removed
+  target: ticketing/clients/llm_client.py
+  container: nepal_chatbot-celery_llm-1
+  runner: container
+  find: "    if redact:\n        messages = _redact_messages(messages, task=task)"
+  replace: "    if False:  # mutation: ticketing hook removed\n        messages = _redact_messages(messages, task=task)"
+  tests: tests/backend/test_redaction_at_the_model_boundary.py
+  expect: kills
+  why: >
+    The second surface, and the reason the test is parametrised over both. Ticketing imports
+    `redact_for_model` from `backend.services` rather than growing its own — a narrow, deliberate
+    exemption to the independence rule, because duplicating a redaction implementation per surface
+    is exactly how two recognisers drift until the weaker one becomes the border.

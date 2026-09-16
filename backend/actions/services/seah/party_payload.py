@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Multi-party SEAH intake slot payloads."""
 
 from __future__ import annotations

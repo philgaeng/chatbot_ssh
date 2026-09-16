@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pydantic schemas for officers, roles, and user_roles.
 """
@@ -18,6 +20,13 @@ class RoleResponse(BaseModel):
     permissions: Any
     role_kind: str | None = None
     role_origin: str | None = None
+    # Permission-template family (role_archetypes) — groups the role pickers by function.
+    archetype: str | None = None
+    # Actor affiliation (org_category vocab) — soft-narrows the position role picker by office type.
+    actor_category: str | None = None
+    # SH-7 org-scoped catalog: the owning org node (NULL = global/system). Drives the
+    # "available at DoR & below" owning-level chip in the role picker (RB frame 08).
+    owner_organization_id: str | None = None
     steps_count: int = 0
     officers_count: int = 0
     created_at: datetime
@@ -67,7 +76,7 @@ class AdminScopeResponse(BaseModel):
 
 class AdminScopeCreate(BaseModel):
     user_id: str = Field(..., max_length=128)
-    role_key: str = Field(..., pattern="^(country_admin|project_admin)$")
+    role_key: str = Field(..., pattern="^(org_admin|project_admin|officer_admin)$")
     country_code: str | None = Field(None, max_length=8)
     project_id: str | None = Field(None, max_length=64)
     organization_id: str | None = Field(None, max_length=64)
@@ -100,7 +109,7 @@ class AdminScopeCreate(BaseModel):
 
 class AdminContextResponse(BaseModel):
     is_super_admin: bool
-    is_country_admin: bool
+    is_org_admin: bool
     is_project_admin: bool
     admin_workflow_tracks: list[str]
     admin_project_ids: list[str]
@@ -108,6 +117,11 @@ class AdminContextResponse(BaseModel):
     can_access_platform_settings: bool
     can_manage_structure: bool
     can_create_project: bool
+    #: May open sensitive (SEAH) grievances — **cast membership only**, never granted by an
+    #: admin tier. DECISION-sensitive-workflows §3.
+    can_see_seah: bool = False
+    #: May administer sensitive workflows (author / list / bind / staff). Grants no case access.
+    can_configure_sensitive: bool = False
     admin_scopes: list[dict]
 
 

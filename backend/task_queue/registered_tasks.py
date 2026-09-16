@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Registered Tasks Module - Clean Task Functions with Automatic Service Configuration
 
@@ -47,14 +49,21 @@ Architecture Benefits:
 - No configuration duplication
 """
 import json
+import logging
 from celery import group, chord
 from typing import Dict, Any, List, Tuple, Callable, Optional
 from backend.config.constants import CLASSIFICATION_DATA, ALLOWED_EXTENSIONS, USER_FIELDS, FIELD_CATEGORIES_MAPPING
 from backend.services.database_services.postgres_services import db_manager
 from backend.services.file_server_core import FileServerCore
 from backend.logger.logger import TaskLogger
+from backend.services.db_debug_log import text_len_for_log, text_prefix_for_log
 from .task_manager import TaskManager, DatabaseTaskManager
 from .celery_app import celery_app
+
+# Module logger. Tasks previously used bare `print(...)` and per-function
+# `__import__("logging").getLogger(__name__)`; the print wrote the whole task payload —
+# grievance narrative included — to the container logs on every intake (DPG-34).
+logger = logging.getLogger(__name__)
 
 try:
     from backend.services.image_compression import log_heif_availability
@@ -76,6 +85,41 @@ __all__ = [
     'detect_sensitive_content_task',
 ]
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Parked tasks (DPG-19b)
+# ─────────────────────────────────────────────────────────────────────────────
+# ⚠ **Live, parked and rotted look identical to a grep.** That is not a hypothetical: four LLM
+# tasks below have no production caller, and because nothing distinguished "switched off on
+# purpose" from "nobody noticed", they were counted as live egress paths in
+# `docs/dpg/privacy-assessment.md` and in the DPG compliance briefing — a compliance document
+# describing four paths that cannot run. One of them was nearly deleted on that evidence.
+#
+# So a task that nothing enqueues must say why, here. `tests/backend/test_llm_config_pins.py`
+# fails on any LLM task that is neither enqueued in production nor listed below.
+#
+# Parking is not deprecation: these are complete, they resolve their models through
+# `backend/config/llm_config.py` like every live path, their characterization tests still run,
+# and unparking is a budget decision rather than a migration.
+PARKED_TASKS: dict[str, str] = {
+    "transcribe_audio_file_task": (
+        "Voice-notes flow. Switched off in the proto by CB-01 — see the comment in "
+        "process_file_upload_task: audio is stored and never transcribed, transcription and "
+        "classification deferred to officers. Unparking needs a transcription budget (Q-19) and "
+        "DPG-22's Nepali WER baseline, which does not exist yet."
+    ),
+    "extract_contact_info_task": (
+        "Voice-notes flow. Consumes a TRANSCRIPTION of spoken contact details — see the chain in "
+        "backend/task_queue/test_tasks.py — which is why the typed path never needed it and "
+        "validates phone numbers deterministically instead "
+        "(backend/actions/services/contact/phone.py). Parked with transcription."
+    ),
+    "translate_grievance_to_english_task": (
+        "Voice-notes flow. Parked with transcription. Note that officers do read English today: "
+        "the ticketing surface generates it (generate_case_findings), so nothing is missing while "
+        "this is off — grievance_description_en simply is not populated by the chatbot."
+    ),
+}
+
 # Initialize FileServerCore
 file_server_core = FileServerCore()
 
@@ -90,13 +134,20 @@ FAILED = status_codes['FAILED']
 RETRYING = status_codes['RETRYING']
 
 
-def _persist_classification_failed_if_final(task_self, grievance_id: str) -> None:
-    """Set grievance_classification_status=LLM_failed only after Celery retries are exhausted."""
-    max_retries = getattr(task_self, "max_retries", None)
-    if max_retries is None:
-        max_retries = 3
-    if task_self.request.retries < max_retries:
-        return
+def _persist_classification_failed(grievance_id: str) -> None:
+    """
+    Write the terminal `LLM_failed` status.
+
+    ⚠ **This used to be `_persist_classification_failed_if_final`, and it never fired** (D-34). It
+    returned early unless `request.retries >= max_retries` — correct in intent, since a transient
+    outage should not be recorded as permanent — but the task returned a FAILED dict instead of
+    re-raising, so Celery never retried, `retries` stayed 0, and the condition was never true. The
+    terminal state was unreachable on the one path that most needs it, and the grievance sat at
+    `pending` while the conversation polled its full deadline for an answer that would never come.
+
+    The caller now decides when it is final (after `self.retry()` raises MaxRetriesExceeded), which
+    is the same intent with the guard somewhere it can actually be satisfied.
+    """
     try:
         from backend.config.classification_status import LLM_FAILED
         from backend.services.database_services.postgres_services import DatabaseManager
@@ -110,6 +161,7 @@ def _persist_classification_failed_if_final(task_self, grievance_id: str) -> Non
         _logging.getLogger(__name__).warning(
             "Could not persist LLM_failed for %s: %s", grievance_id, exc
         )
+
 
 
 #---------------------------------REGISTERED TASKS---------------------------------
@@ -519,7 +571,13 @@ def transcribe_audio_file_task(self, input_data: Dict[str, Any],
     try:
         task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
         db_result = task_mgr.handle_db_operation(result)
-        print(f"Database operation completed: {db_result}")
+        # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+        # and grievance_summary — the narrative and the generated summary, to stdout,
+        # on every success. A print is also invisible to any logging filter (DPG-34).
+        logger.info(
+            "Database operation completed: %s",
+            (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+        )
     except Exception as e:
         error = "error during database operation: " + str(e) #adding context to error message
         task_mgr.fail_task(
@@ -610,13 +668,22 @@ def classify_and_summarize_grievance_task(self,
     input_data['entity_key'] = 'grievance_id'
     
     if not input_data.get('grievance_id'):
-        raise ValueError(f"Missing grievance_id in input data: {input_data}")
+        # Names the shape, not the payload — the payload used to carry the narrative.
+        raise ValueError(
+            f"Missing grievance_id in input data (keys={sorted(input_data.keys())})"
+        )
     
     # Get the Celery task ID from the current task
     self.request.task_id = self.request.id if hasattr(self, 'request') else None
     
     task_mgr = TaskManager(task=self,  emit_websocket=emit_websocket)
-    print(f"Classify and summarize grievance task called with file_data: {input_data}")
+    # ⚠ Was `print(f"... {input_data}")` — the payload carried the grievance narrative, so this
+    # wrote it to stdout and into the container logs on every intake (D-62/DPG-34).
+    logger.info(
+        "classify_and_summarize_grievance_task received grievance_id=%s session_keys=%s",
+        input_data.get("grievance_id"),
+        sorted(input_data.keys()),
+    )
     
     # Extract grievance_id from the file_data
     grievance_id = input_data.get('grievance_id')
@@ -627,18 +694,55 @@ def classify_and_summarize_grievance_task(self,
     # Extract session_id for websocket emission (handle both Rasa and Flask frontends)
     session_id = input_data.get('flask_session_id') or input_data.get('session_id')
     if not session_id:
-        raise ValueError(f"Missing session_id (flask_session_id or session_id) in input data: {input_data} - emission will fail")
+        raise ValueError(
+            "Missing session_id (flask_session_id or session_id) for grievance_id="
+            f"{input_data.get('grievance_id')} - emission will fail"
+        )
     
     # Store context data in TaskManager instance for later retrieval
     # (This is the proper way according to Celery documentation)
     
     # Extract data directly from file_data (transcription result)
     language_code = input_data.get('language_code', 'ne')
-    grievance_description = input_data.get('values', {}).get('grievance_description')  # The transcription text
- 
-        
+    # ── The narrative is READ, not received (DPG-34 step 3) ───────────────────────────
+    # It used to travel in `input_data["values"]["grievance_description"]`, which serialised
+    # the grievance text into Redis on every intake — and Redis snapshots to disk (D-63), so
+    # the broker held narratives at rest. Passing the id and reading from Postgres removes the
+    # store rather than obscuring it.
+    #
+    # Safe because the row is written BEFORE this task is dispatched: `create_or_update_grievance`
+    # in `backend/actions/forms/intake_submit.py` is a hard write on the submit path, and the
+    # trigger fires after it.
+    #
+    # ⚠ The payload fallback is for IN-FLIGHT LEGACY MESSAGES only — anything enqueued before
+    # this shipped still carries `values`, and with RDB persistence those survive a restart.
+    # Delete the fallback once no such message can exist (a full queue drain), not before.
+    grievance_description = None
+    if grievance_id:
+        try:
+            row = db_manager.get_grievance_core_by_id(grievance_id)
+            grievance_description = (row or {}).get('grievance_description')
+        except Exception as exc:
+            logger.warning(
+                "Could not read grievance_description for %s: %s", grievance_id, exc
+            )
+
     if not grievance_description:
-        raise ValueError(f"No transcription text found in input data: {input_data.get('values')}")
+        legacy = input_data.get('values', {}).get('grievance_description')
+        if legacy:
+            logger.info(
+                "Using legacy in-payload description for grievance_id=%s "
+                "(enqueued before DPG-34 step 3)",
+                grievance_id,
+            )
+            grievance_description = legacy
+
+    if not grievance_description:
+        # ⚠ Names the id and the shape, never the text — this message reaches the Celery log.
+        raise ValueError(
+            f"No grievance_description for grievance_id={grievance_id!r}: "
+            f"not in the database and not in the payload (keys={sorted(input_data.keys())})"
+        )
     
     task_mgr.start_task(
         entity_key=entity_key, 
@@ -650,9 +754,24 @@ def classify_and_summarize_grievance_task(self,
         from backend.services.LLM_services import classify_and_summarize_grievance
         complainant_district = input_data.get('complainant_district')
         complainant_province = input_data.get('complainant_province')
-        values = classify_and_summarize_grievance(grievance_description, language_code, complainant_district, complainant_province) #values is a dict with keys: grievance_summary, grievance_categories
-        if not values:
-            raise ValueError(f"No result found in classify_and_summarize_grievance: {values}")
+        # First attempt: a person is waiting in the chat, so the model gets the short deadline.
+        # Retries: nobody is waiting, so it gets the full one (DPG-15b).
+        values = classify_and_summarize_grievance(
+            grievance_description,
+            language_code,
+            complainant_district,
+            complainant_province,
+            interactive=(self.request.retries == 0),
+        ) #values is a dict with keys: grievance_summary, grievance_categories
+        # DPG-15: `if not values` was the only guard, and the failure dict is TRUTHY — so a dead
+        # model endpoint took the SUCCESS path and stored LLM_generated with an empty summary.
+        # Raising here puts the retry below (and the terminal LLM_failed write) back in play.
+        from backend.config.classification_status import is_failed_classification
+        if is_failed_classification(values):
+            raise ValueError(
+                "classify_and_summarize_grievance returned a failure: "
+                f"{str(values.get('error') or 'no result')[:200]}"
+            )
 
         # Flatten the classification results into the main result for frontend
         from backend.config.classification_status import LLM_GENERATED
@@ -676,7 +795,6 @@ def classify_and_summarize_grievance_task(self,
         
     except Exception as e:
         error = "error during classification by LLM: " + str(e) #adding context to error message
-        _persist_classification_failed_if_final(self, grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 
@@ -684,22 +802,53 @@ def classify_and_summarize_grievance_task(self,
             entity_key=entity_key, 
             entity_id=entity_id
         )
-        return {
-            'status': FAILED,
-            'operation': 'classification',
-            'error': error,
-            'task_id': self.request.task_id,
-            'entity_key': entity_key,
-        }
+        # DPG-15b / D-34: retry, and only call it terminal when the retries are actually spent.
+        # Two failure classes behave very differently here, and only one is observable from the
+        # conversation: a fast failure (refused connection, a 400, a bad model name) exhausts
+        # 2+4+8s of backoff in about fourteen seconds — inside the complainant's wait, so the poll
+        # sees `LLM_failed` and stops instead of running its full deadline. A slow failure (the
+        # model timing out) takes minutes and resolves after the conversation, which is why the
+        # first attempt gets the short deadline and the review step has a message for "not ready".
+        # ⚠ **Decide whether this is the last attempt BEFORE retrying, not after.**
+        # `self.retry(exc=...)` re-raises the ORIGINAL exception once retries are spent — it does
+        # not raise MaxRetriesExceededError, which is only used when no `exc` is given. So an
+        # `except MaxRetriesExceededError:` around the retry never fires, and the terminal write
+        # inside it never happens: the same unreachable-guard shape as D-34 itself, one layer up.
+        # Found by driving it against the database rather than reading the docs.
+        max_retries = self.max_retries if self.max_retries is not None else 3
+        if self.request.retries >= max_retries:
+            _persist_classification_failed(grievance_id)
+            return {
+                'status': FAILED,
+                'operation': 'classification',
+                'error': error,
+                'task_id': self.request.task_id,
+                'entity_key': entity_key,
+            }
+
+        # The countdown is explicit, and stays explicit now that D-45 is fixed and the configured
+        # ladder is applied: this task **catches its own exception**, so `autoretry_for` never sees
+        # it and the configured backoff would not be used. The numbers are chosen to fit inside the
+        # complainant's wait — 2/4/8 exhausts in about fourteen seconds, where three retries at
+        # Celery's old 180-second default would have taken nine minutes.
+        raise self.retry(exc=e, countdown=2 * (2 ** self.request.retries))
 
     # ✅ QUICK FIX (direct database call call):
     try:
         db_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
         db_result = db_mgr.handle_db_operation(result)
-        print(f"Database operation completed: {db_result}")
+        # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+        # and grievance_summary — the narrative and the generated summary, to stdout,
+        # on every success. A print is also invisible to any logging filter (DPG-34).
+        logger.info(
+            "Database operation completed: %s",
+            (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+        )
     except Exception as e:
         error = "Error in classify_and_summarize_grievance_task during database operation: " + str(e) #adding context to error message
-        _persist_classification_failed_if_final(self, grievance_id)
+        # A database failure is not a model failure: no retry ladder here, mark it terminal so the
+        # conversation stops waiting for a classification that was produced but could not be stored.
+        _persist_classification_failed(grievance_id)
         task_mgr.fail_task(
             error=error, 
             grievance_id=grievance_id, 
@@ -745,8 +894,12 @@ def classify_and_summarize_grievance_task(self,
 @TaskManager.register_task(task_type='LLM')
 def detect_sensitive_content_task(
     self,
-    text: str,
     language_code: str,
+    # ⚠ `text` is now OPTIONAL and is not sent by the dispatcher (DPG-34 step 3) — the task reads
+    # the narrative from Postgres by `grievance_id`. It is kept, after `language_code`, purely so
+    # LEGACY IN-FLIGHT MESSAGES enqueued before this shipped still deserialise. Remove it with the
+    # classification fallback, after a full queue drain — not before.
+    text: Optional[str] = None,
     grievance_id: Optional[str] = None,
     session_id: Optional[str] = None,
     complainant_id: Optional[str] = None,
@@ -759,31 +912,89 @@ def detect_sensitive_content_task(
     Result is persisted to DB (grievance.grievance_sensitive_issue) via DatabaseTaskManager,
     same pattern as classify_and_summarize_grievance_task, so Submit details can read it.
     """
-    logger = __import__("logging").getLogger(__name__)
     try:
         from backend.services.LLM_services import detect_sensitive_content_llm
     except Exception as e:
         logger.warning(f"detect_sensitive_content_task import failed: {e}")
         return {"detected": False, "level": "low", "message": ""}
 
+    # ── The narrative is READ, not received (DPG-34 step 3, SEAH half) ─────────────────
+    # `text=` used to travel in the payload, putting the grievance narrative — including
+    # harassment disclosures — into Redis, which snapshots to disk (D-63).
+    #
+    # ⚠ This path is NOT the same as classification's, and the difference decides the design.
+    # `persist_grievance_description_for_detection` writes the row before dispatch, but it is
+    # BEST-EFFORT: it returns early when `grievance_id`/`complainant_id` are unset, and swallows
+    # DB exceptions — while classification's write is hard and raises. The dispatch happens
+    # regardless of either. So a missing row is a REACHABLE state here, and reading from the DB
+    # without handling it would turn a best-effort write into a silently skipped safeguarding
+    # check. Hence: retry (the row may land), then fail TERMINALLY AND LOUDLY — never silently.
+    resolved_text = None
+    if grievance_id:
+        try:
+            row = db_manager.get_grievance_core_by_id(grievance_id)
+            resolved_text = (row or {}).get("grievance_description")
+        except Exception as exc:
+            logger.warning(
+                "detect_sensitive_content_task: could not read grievance %s: %s",
+                grievance_id,
+                exc,
+            )
+
+    if not resolved_text and text:
+        # Legacy in-flight message, enqueued before this shipped. Remove with the classification
+        # fallback, after a full queue drain.
+        logger.info(
+            "detect_sensitive_content_task: using legacy in-payload text | grievance_id=%s",
+            grievance_id,
+        )
+        resolved_text = text
+
+    if not resolved_text:
+        max_retries = self.max_retries if self.max_retries is not None else 3
+        if self.request.retries < max_retries:
+            # The row may still be landing — the pre-dispatch write and this task race by a
+            # thread hand-off. Short backoff: this is a database read, not a model call.
+            raise self.retry(countdown=2 * (2 ** self.request.retries))
+        # ⚠ TERMINAL, and it must be loud. A SEAH detection that never ran is invisible
+        # everywhere else: no flag is written, nothing shows a gap, and the ticket simply is
+        # not marked sensitive. The deterministic keyword detector still runs INLINE at submit
+        # (Q-14's floor), so this is the loss of the second signal, not of all detection —
+        # but nothing else will ever say it happened.
+        logger.error(
+            "detect_sensitive_content_task: NO TEXT after %s retries | grievance_id=%s "
+            "complainant_id=%s — the LLM SEAH signal did not run for this grievance. The "
+            "deterministic keyword detector still applied at submit.",
+            self.request.retries,
+            grievance_id,
+            complainant_id,
+        )
+        return {"detected": False, "level": "low", "message": "", "status": FAILED}
+
     logger.info(
-        "detect_sensitive_content_task: start | grievance_id=%s, complainant_id=%s, language_code=%s, text_snippet=%r",
+        "detect_sensitive_content_task: start | grievance_id=%s, complainant_id=%s, language_code=%s, %s",
         grievance_id,
         complainant_id,
         language_code,
-        (text or "")[:120],
+        text_prefix_for_log("text", resolved_text),
     )
-    result = detect_sensitive_content_llm(text, language_code)
+    result = detect_sensitive_content_llm(resolved_text, language_code)
     detected = result.get("detected", False)
     level = result.get("level", "low")
     message = result.get("message", "")
+    # ⚠ `message` is NOT logged, at any length. The prompt asks for "a short excerpt of the
+    # relevant part of the text" — so it is the fragment the model selected BECAUSE it is the
+    # harassment disclosure. That is categorically different from the first 8 characters of a
+    # narrative, and the owner's free-text prefix rule does not extend to it. `detected` and
+    # `level` are the diagnostic signals; the excerpt adds nothing its length does not.
     logger.info(
-        "detect_sensitive_content_task: llm_result | grievance_id=%s, complainant_id=%s, detected=%s, level=%s, message_snippet=%r",
+        "detect_sensitive_content_task: llm_result | grievance_id=%s, complainant_id=%s, "
+        "detected=%s, level=%s, %s",
         grievance_id,
         complainant_id,
         detected,
         level,
-        (message or "")[:120],
+        text_len_for_log("message", message),
     )
 
     if not grievance_id or not complainant_id:
@@ -891,6 +1102,18 @@ def extract_contact_info_task(self, input_data: Dict[str, Any],
         incorrect_fields = [k for k in values.keys() if k not in USER_FIELDS]
         if incorrect_fields:
             raise ValueError(f"Incorrect fields found in contact info: {incorrect_fields}")
+
+        # DPG-15: an all-empty extraction MUST NOT be written. Verified against the real database
+        # with the endpoint on a dead port: the task reported SUCCESS and overwrote a stored
+        # phone number (+9779841234567) with "". The complainant had typed it; the model was
+        # down; the number was erased. Raising here routes it to the failure branch below, which
+        # writes nothing — losing the enrichment, never the data.
+        from backend.config.classification_status import is_empty_extraction
+        if is_empty_extraction(values):
+            raise ValueError(
+                "contact extraction returned no values for "
+                f"{sorted(values.keys())} — refusing to overwrite stored contact details"
+            )
         
         result= {'status': SUCCESS,
                  'operation': 'contact_info',
@@ -910,7 +1133,13 @@ def extract_contact_info_task(self, input_data: Dict[str, Any],
         try:
             task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
             db_result = task_mgr.handle_db_operation(result)
-            print(f"Database operation completed: {db_result}")
+            # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+            # and grievance_summary — the narrative and the generated summary, to stdout,
+            # on every success. A print is also invisible to any logging filter (DPG-34).
+            logger.info(
+                "Database operation completed: %s",
+                (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+            )
         except Exception as e:
             task_mgr.fail_task(
                 error=str(e), 
@@ -1051,7 +1280,13 @@ details=grievance_data)
         try:
             task_mgr = DatabaseTaskManager(task=self, emit_websocket=False)
             db_result = task_mgr.handle_db_operation(result)
-            print(f"Database operation completed: {db_result}")
+            # ⚠ Was a print of `db_result`, whose "values" carry grievance_description
+            # and grievance_summary — the narrative and the generated summary, to stdout,
+            # on every success. A print is also invisible to any logging filter (DPG-34).
+            logger.info(
+                "Database operation completed: %s",
+                (db_result or {}).get("status") if isinstance(db_result, dict) else type(db_result).__name__,
+            )
         except Exception as e:
             error = "Error in translate_grievance_to_english_task during database operation: " + str(e)
             task_mgr.fail_task(

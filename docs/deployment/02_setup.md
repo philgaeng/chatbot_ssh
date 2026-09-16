@@ -1,891 +1,172 @@
-# Nepal Chatbot - Setup Guide
+# Setup — Docker-era runbook
 
-Complete installation and deployment guide for the Nepal Chatbot system.
+**Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/02_setup.md`](archive/02_setup.md). The legacy systemd / virtualenv / `rasa train` path is gone; everything runs via Docker Compose (see [`01_architecture.md`](01_architecture.md) for the service map, [`DOCKER.md`](DOCKER.md) for day-to-day container commands).
+**Last updated:** 2026-09-07 — host ports are defaults and `make ephemeral-up` runs an isolated second stack (QA-03). Earlier: §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
-> Note: the current runtime path is Docker Compose. For deployment details use `deployment/docker/README.md`; for schema changes use `docs/deployment/07_migrations_policy.md` (Alembic-first).
+## 1. Prerequisites
 
-## Table of Contents
+- Docker Engine + Compose v2 (on Windows: Docker Desktop with WSL2 backend — always run compose **from WSL**, never Git Bash/PowerShell)
+- `make`, `git`
+- No host Python/Postgres/Redis required — they run in containers. (Optional: conda env + `make dev-grm-deps` for host-side pytest.)
 
-- [Prerequisites](#prerequisites)
-- [Local Development Setup](#local-development-setup)
-- [Server Deployment](#server-deployment)
-- [Environment Configuration](#environment-configuration)
-- [Service Management](#service-management)
-- [Production Deployment](#production-deployment)
-- [Troubleshooting](#troubleshooting)
+## 2. Environment files
 
-## Prerequisites
+Compose reads **`env.local`** at the repo root (`env_file:` on every service; gitignored — never commit secrets). Minimum keys to check/fill:
 
-### Required Software
+```env
+# LLM
+OPENAI_API_KEY=...
 
-- **Python 3.10** - Main programming language
-- **PostgreSQL 13+** - Primary database
-- **Redis 6+** - Message broker and cache
-- **Nginx** - Web server and reverse proxy (production only)
-- **Node.js 14+** - For frontend development
-- **Git** - Version control
+# PII encryption (public.* pgcrypto)
+DB_ENCRYPTION_KEY=...          # python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-### Required API Keys
-
-- **OpenAI API Key** - For AI classification, summarization, and transcription
-- **Google API Key** - For location services (optional)
-- **AWS Credentials** - For S3 storage (optional)
-- **Twilio Credentials** - For SMS/WhatsApp (optional)
-
-### System Requirements
-
-**Minimum (Development):**
-
-- 4 GB RAM
-- 2 CPU cores
-- 20 GB disk space
-
-**Recommended (Production):**
-
-- 8 GB RAM
-- 4 CPU cores
-- 50 GB disk space
-- SSD storage
-
-## Local Development Setup
-
-### 1. Clone Repository
-
-```bash
-git clone https://github.com/philgaeng/chatbot_ssh.git nepal_chatbot
-cd nepal_chatbot
-```
-
-### 2. Install PostgreSQL
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
-```
-
-**macOS:**
-
-```bash
-brew install postgresql@13
-brew services start postgresql@13
-```
-
-**Windows (WSL2):**
-
-```bash
-sudo apt update
-sudo apt install postgresql postgresql-contrib
-sudo service postgresql start
-```
-
-### 3. Install Redis
-
-**Ubuntu/Debian:**
-
-```bash
-sudo apt install redis-server
-sudo systemctl start redis-server
-sudo systemctl enable redis-server
-```
-
-**macOS:**
-
-```bash
-brew install redis
-brew services start redis
-```
-
-**Windows (WSL2):**
-
-```bash
-sudo apt install redis-server
-sudo service redis-server start
-```
-
-### 4. Create Database
-
-```bash
-# Switch to postgres user
-sudo -u postgres psql
-
-# Create database and user
-CREATE DATABASE grievance_db;
-CREATE USER nepal_grievance_admin WITH PASSWORD 'your_secure_password';
-GRANT ALL PRIVILEGES ON DATABASE grievance_db TO nepal_grievance_admin;
-
-# Enable pgcrypto extension (for encryption)
-\c grievance_db
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
-\q
-```
-
-### 5. Python Environment
-
-```bash
-# Create virtual environment
-python3 -m venv rasa-env
-
-# Activate virtual environment
-source rasa-env/bin/activate  # Linux/macOS
-# or
-rasa-env\Scripts\activate  # Windows
-
-# Upgrade pip
-pip install --upgrade pip
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install Rasa chatbot dependencies
-pip install -r rasa_chatbot/requirements.txt
-
-# Install backend dependencies
-pip install -r backend/requirements.txt
-```
-
-### 6. Configure Environment Variables
-
-```bash
-# Copy example environment file
-cp env.local .env
-
-# Edit configuration
-nano .env
-```
-
-**Minimal Configuration:**
-
-```bash
-# Database
-POSTGRES_DB=grievance_db
-POSTGRES_USER=nepal_grievance_admin
-POSTGRES_PASSWORD=your_secure_password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
+# Redis (empty = dev, no password; set in staging/prod)
 REDIS_PASSWORD=
 
-# OpenAI
-OPENAI_API_KEY=your_openai_api_key
+# Messaging (see docs/services/05_messaging_service.md)
+SMTP_SERVER=... SMTP_PORT=587 SMTP_USERNAME=... SMTP_PASSWORD=... SMTP_FROM=...
+SMS_PROVIDER=doit|disabled
+DOIT_SMS_BEARER_TOKEN=...      # Nepal prod SMS
 
-# Encryption
-DB_ENCRYPTION_KEY=your_generated_encryption_key
+# Ticketing / GRM
+TICKETING_PORT=5002
+TICKETING_SECRET_KEY=...
 
-# Server Ports
-RASA_PORT=5005
-ACTION_PORT=5055
-FLASK_PORT=5001
-ACCESSIBLE_PORT=5006
+# Keycloak (auth profile — see 16_auth_keycloak.md)
+KEYCLOAK_ADMIN_PASSWORD=...
+KEYCLOAK_WEBHOOK_SECRET=...
+KC_HOSTNAME_URL=http://localhost:18080          # prod: https://grm-chatbot.dor.gov.np/keycloak
+KEYCLOAK_ISSUER=http://localhost:18080/realms/grm
+
+# Ops monitor
+OPS_DB_PASSWORD=...
+HEALTH_ALERT_EMAIL=... DAILY_REPORT_EMAIL=... HEARTBEAT_URL=...
 ```
 
-Generate encryption key:
+Postgres credentials are fixed inside compose (`user`/`password`/`app_db` on service `db`) — dev only; overlays/env govern staging/prod. URLs/hosts per environment: [`12_environment_urls.md`](12_environment_urls.md).
+
+## 3. First bring-up (fresh clone / empty DB)
 
 ```bash
-python -c "import secrets; print(secrets.token_urlsafe(32))"
-```
+cd /home/philg/projects/nepal_chatbot     # repo root, inside WSL
 
-### 7. Initialize Database Schema
+# 1) Chatbot base stack (db, redis, backend, orchestrator, celery x3, nginx)
+make wsl-chatbot                          # = docker compose -f docker-compose.yml up -d --build
 
-```bash
-# Run database initialization
+# 2) One-shot: baseline chatbot tables in the empty Postgres volume
 docker compose --profile init run --rm db_init
 
-# Verify tables created
-psql -U nepal_grievance_admin -d grievance_db -c "\dt"
+# 3) All three Alembic migration streams (ticketing.* + public.* + ops.*)
+make migrate_all                          # = migrate_ticketing + migrate_public + migrate_ops
+
+# 4) Seed reference + demo data
+docker compose run --rm --no-deps backend python -m ticketing.seed.import_locations_json \
+  --country NP \
+  --en backend/dev-resources/location_dataset/en_cleaned.json \
+  --ne backend/dev-resources/location_dataset/ne_cleaned.json \
+  --max-level 3
+make seed_seah_providers                  # SEAH support centres (public.seah_service_providers)
 ```
 
-### 8. Runtime Model Notes
+## 4. Compose up flows (GRM overlay + auth profile)
+
+| Command | What comes up |
+|---|---|
+| `make wsl-chatbot` | Chatbot only — webchat at http://localhost:8080/ |
+| `make wsl-demo-bypass` (alias `wsl-ticketing`) | GRM single stack, dev bypass: UI :3001 → `ticketing_api` :5002, **no Keycloak** (mock super-admin) |
+| `make wsl-up` | Everything: chatbot + GRM single stack (dev bypass) |
+| `make wsl-auth` | Add Keycloak :18080 (`--profile auth`); for real OIDC set `AUTH_MODE=keycloak` + `KEYCLOAK_ISSUER` in `env.local` and rebuild — same UI :3001 / `ticketing_api` :5002 |
+| `make wsl-down` | Stop all (base + GRM + auth profile) |
+
+⚠ **The host ports below are defaults.** Since QA-03 each is `${VAR:-<number>}`, so an unset
+variable gives exactly the port shown — and `make ephemeral-up` runs a second, fully isolated,
+seeded stack beside your own (ui :13001, api :15002, webchat :18081) without touching it.
+`make ephemeral-down` takes its volumes with it. See [`03_operations.md`](03_operations.md) §6b.
+
+Auth mode is a config flag (`AUTH_MODE`), not a duplicate service — dev bypass and real Keycloak use the **same** `grm_ui` (:3001) + `ticketing_api` (:5002). Raw compose equivalents (what the Makefile wraps):
 
 ```bash
-# No standalone Rasa runtime/model-training step in the Docker path.
-# Conversation flow runs through orchestrator + in-process Rasa SDK actions.
-docker compose ps
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml up -d                  # chatbot + GRM (dev bypass)
+docker compose --env-file env.local -f docker-compose.yml -f docker-compose.grm.yml --profile auth up -d   # + Keycloak
 ```
 
-Use historical `rasa_chatbot` training commands only for legacy experiments, not current deploy flow.
-
-### 9. Start Services (Docker-only)
+### Keycloak realm bootstrap (once, after `wsl-auth` and Keycloak is healthy)
 
 ```bash
-# Build and start the stack
-docker compose up -d --build
+make keycloak-setup
+# = docker compose ... exec -T ticketing_api python -m ticketing.auth.keycloak_setup
 ```
 
-### 10. Verify Installation
+Idempotent: creates the `grm` realm, clients, mappers, realm SMTP, demo officers. Details: [`16_auth_keycloak.md`](16_auth_keycloak.md).
+
+### GRM demo tickets
 
 ```bash
-# Check compose services
-docker compose ps
-
-# Check backend API
-curl http://localhost:5001/health
-
-# Check orchestrator
-curl http://localhost:8000/health
-
-# Check Redis
-redis-cli ping
-# Should return: PONG
-
-# Check PostgreSQL
-psql -U nepal_grievance_admin -d grievance_db -c "SELECT version();"
+make wsl-seed        # ticketing.seed.mock_tickets --reset (idempotent)
 ```
 
-### 11. Access the Application
+### Repairing a drifted database WITHOUT resetting it
 
-Open your browser and navigate to:
-
-- **Web Interface**: http://localhost:5001 or http://localhost:5002
-- **Accessible Interface**: http://localhost:5006
-
-## Server Deployment
-
-### 1. Server Setup (Ubuntu 20.04/22.04)
+⚠ **`--reset` is not idempotent in the sense that matters here: it wipes and re-seeds**, taking the
+projects, organizations and officers with it. On a development database carrying local setup you want
+to keep, that is too high a price for a green test run.
 
 ```bash
-# Update system
-sudo apt update && sudo apt upgrade -y
-
-# Install system dependencies
-sudo apt install -y python3.10 python3.10-venv python3-pip \
-    postgresql postgresql-contrib redis-server nginx \
-    git supervisor build-essential libpq-dev
-
-# Create application user
-sudo useradd -m -s /bin/bash ubuntu
-sudo usermod -aG sudo ubuntu
+docker exec nepal_chatbot-backend-1 python -m ticketing.seed.ensure_officer_coverage          # report
+docker exec nepal_chatbot-backend-1 python -m ticketing.seed.ensure_officer_coverage --apply  # write
 ```
 
-### 2. Clone and Setup
+Fills **officer-staffing gaps only**, by inserting `ticketing.officer_scopes` rows and nothing else —
+no updates, no deletes, no Keycloak calls, and no invented officers (identity lives in Keycloak; a
+user created here is one nobody can log in as). Dry-run by default, idempotent, and it **asks the
+go-live checks whether a gap exists** rather than carrying its own copy of the rule.
+
+*The symptom it fixes:* `Ticket intake blocked: Add a Level 1 officer (wf:…:LEVEL_1_SITE:actor) for
+these packages: 01, 02, …` — and, downstream of it, every `tests/ticketing` integration test failing
+at once. **The cause is usually a level that declares `staff_per_package`**: a project-wide officer
+scope deliberately does *not* satisfy it ([`../ticketing_system/`](../ticketing_system/) · `project_go_live.py` C1), so
+each active package needs its own row. Measured 2026-09-06 on a drifted dev DB: 20 test failures, all
+from five missing rows.
+## 5. Migration make targets (reference)
+
+| Target | Runs |
+|---|---|
+| `make migrate_ticketing` | `alembic -c ticketing/migrations/alembic.ini upgrade head` |
+| `make migrate_public` | `alembic -c migrations/public/alembic.ini upgrade head` |
+| `make migrate_ops` | `alembic -c ops/migrations/alembic.ini upgrade head` |
+| `make migrate_all` | all three, in that order |
+| `make reset_public_dev` | **dev only** — drop + recreate `public` schema, re-migrate, restart |
+
+All run inside the `backend` container image (`docker compose run --rm --no-deps backend ...`) so they use the compose DB. Policy + run-order rules: [`07_migrations_policy.md`](07_migrations_policy.md).
+
+## 6. Verify
 
 ```bash
-# Switch to application user
-sudo su - ubuntu
-
-# Clone repository
-git clone https://github.com/philgaeng/chatbot_ssh.git nepal_chatbot
-cd nepal_chatbot
-
-# Create virtual environment
-python3.10 -m venv rasa-env
-source rasa-env/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-pip install -r rasa_chatbot/requirements.txt
-pip install -r backend/requirements.txt
+docker compose ps                                   # all healthy
+curl http://localhost:5001/health                   # backend
+curl http://localhost:8000/health                   # orchestrator
+curl http://localhost:5002/health                   # ticketing_api (with GRM overlay)
+# Webchat: http://localhost:8080/   Officer UI: http://localhost:3001
+# Keycloak admin: http://localhost:18080 (auth profile)
+make check_grm_ports                                # asserts grm_ui :3001 + ticketing_api :5002
+make test-ticketing                                 # pytest inside ticketing_api container
 ```
 
-### 3. Configure Nginx
+## 7. Staging / production deploys
+
+Remote deploys are Makefile-driven (pull `main`, migrate, rebuild selected services):
+
+| Env | Targets |
+|---|---|
+| AWS staging (`nepal-gms-chatbot.facets-ai.com`, key SSH) | `make aws-up` (on host) · `make aws-deploy` / `aws-deploy-light` / `aws-deploy-full` / `aws-deploy-ops` · `make ssh-running` |
+| Nepal DOR prod (`grm-chatbot.dor.gov.np`, Sophos VPN + password SSH) | `make prod-deploy` / `prod-deploy-light` / `prod-deploy-full` / `prod-deploy-ops` · `make ssh-prod` · `make prod-sync-db-from-aws CONFIRM=1` |
+
+Prod compose stack:
 
 ```bash
-# Copy nginx configuration
-sudo cp nginx/nepal_chatbot-prod.conf /etc/nginx/sites-available/
-
-# Update server_name and IP in the config
-sudo nano /etc/nginx/sites-available/nepal_chatbot-prod.conf
-
-# Enable site
-sudo ln -s /etc/nginx/sites-available/nepal_chatbot-prod.conf /etc/nginx/sites-enabled/
-
-# Test configuration
-sudo nginx -t
-
-# Restart Nginx
-sudo systemctl restart nginx
+docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  -f docker-compose.prod.yml --profile auth up -d
 ```
 
-**Example Nginx Configuration:**
-
-```nginx
-server {
-    listen 80;
-    server_name chatbot.example.com;
-
-    # Static files
-    location /static {
-        alias /home/ubuntu/nepal_chatbot/channels/webchat;
-    }
-
-    # Webchat interface
-    location / {
-        proxy_pass http://localhost:5002;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_cache_bypass $http_upgrade;
-    }
-
-    # Rasa webhooks
-    location /webhooks {
-        proxy_pass http://localhost:5005;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-    }
-
-    # Flask API
-    location /api {
-        proxy_pass http://localhost:5001;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-    }
-}
-```
-
-### 4. Configure Systemd Services
-
-Create systemd service files for automatic startup and management.
-
-**Rasa Server Service:**
-
-```bash
-sudo nano /etc/systemd/system/nepal-rasa.service
-```
-
-```ini
-[Unit]
-Description=Nepal Chatbot Rasa Server
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nepal_chatbot/rasa_chatbot
-Environment="PATH=/home/ubuntu/nepal_chatbot/rasa-env/bin"
-ExecStart=/home/ubuntu/nepal_chatbot/rasa-env/bin/rasa run --enable-api --cors "*" --port 5005
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Action Server Service:**
-
-```bash
-sudo nano /etc/systemd/system/nepal-actions.service
-```
-
-```ini
-[Unit]
-Description=Nepal Chatbot Action Server
-After=network.target postgresql.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nepal_chatbot/rasa_chatbot
-Environment="PATH=/home/ubuntu/nepal_chatbot/rasa-env/bin"
-ExecStart=/home/ubuntu/nepal_chatbot/rasa-env/bin/rasa run actions --port 5055
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Flask Server Service:**
-
-```bash
-sudo nano /etc/systemd/system/nepal-flask.service
-```
-
-```ini
-[Unit]
-Description=Nepal Chatbot Flask Server
-After=network.target postgresql.service redis.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nepal_chatbot
-Environment="PATH=/home/ubuntu/nepal_chatbot/rasa-env/bin"
-EnvironmentFile=/home/ubuntu/nepal_chatbot/.env
-ExecStart=/home/ubuntu/nepal_chatbot/rasa-env/bin/python backend/app.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Celery Worker Service (LLM Queue):**
-
-```bash
-sudo nano /etc/systemd/system/nepal-celery-llm.service
-```
-
-```ini
-[Unit]
-Description=Nepal Chatbot Celery Worker (LLM Queue)
-After=network.target redis.service
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/nepal_chatbot
-Environment="PATH=/home/ubuntu/nepal_chatbot/rasa-env/bin"
-EnvironmentFile=/home/ubuntu/nepal_chatbot/.env
-ExecStart=/home/ubuntu/nepal_chatbot/rasa-env/bin/celery -A task_queue worker -Q llm_queue --loglevel=INFO --concurrency=6
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-```
-
-**Enable and Start Services:**
-
-```bash
-# Reload systemd
-sudo systemctl daemon-reload
-
-# Enable services
-sudo systemctl enable nepal-rasa
-sudo systemctl enable nepal-actions
-sudo systemctl enable nepal-flask
-sudo systemctl enable nepal-celery-llm
-
-# Start services
-sudo systemctl start nepal-rasa
-sudo systemctl start nepal-actions
-sudo systemctl start nepal-flask
-sudo systemctl start nepal-celery-llm
-
-# Check status
-sudo systemctl status nepal-rasa
-sudo systemctl status nepal-actions
-sudo systemctl status nepal-flask
-sudo systemctl status nepal-celery-llm
-```
-
-### 5. Set Up File Permissions
-
-```bash
-# Change group ownership to www-data (nginx)
-sudo chown -R ubuntu:www-data /home/ubuntu/nepal_chatbot
-
-# Set directory permissions
-sudo chmod -R 775 /home/ubuntu/nepal_chatbot
-
-# Set setgid bit for new files
-sudo chmod g+s /home/ubuntu/nepal_chatbot
-
-# Create and configure uploads directory
-mkdir -p /home/ubuntu/nepal_chatbot/uploads/voice_recordings
-chmod -R 775 /home/ubuntu/nepal_chatbot/uploads
-```
-
-### 6. Configure Firewall
-
-```bash
-# Allow SSH
-sudo ufw allow 22/tcp
-
-# Allow HTTP and HTTPS
-sudo ufw allow 80/tcp
-sudo ufw allow 443/tcp
-
-# Enable firewall
-sudo ufw enable
-
-# Check status
-sudo ufw status
-```
-
-### 7. SSL/HTTPS Setup (Let's Encrypt)
-
-```bash
-# Install Certbot
-sudo apt install certbot python3-certbot-nginx
-
-# Obtain certificate
-sudo certbot --nginx -d chatbot.example.com
-
-# Test auto-renewal
-sudo certbot renew --dry-run
-```
-
-## Environment Configuration
-
-### Development Environment (env.local)
-
-```bash
-# Application Environment
-ENVIRONMENT=development
-DEBUG=true
-
-# Database
-POSTGRES_DB=grievance_db
-POSTGRES_USER=nepal_grievance_admin
-POSTGRES_PASSWORD=dev_password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-# Celery
-CELERY_BROKER_URL=redis://localhost:6379/0
-CELERY_RESULT_BACKEND=redis://localhost:6379/0
-
-# OpenAI
-OPENAI_API_KEY=your_dev_api_key
-OPENAI_MODEL=gpt-4
-
-# Encryption
-DB_ENCRYPTION_KEY=your_dev_encryption_key
-
-# Server Configuration
-RASA_PORT=5005
-ACTION_PORT=5055
-FLASK_PORT=5001
-ACCESSIBLE_PORT=5006
-
-# Logging
-LOG_LEVEL=DEBUG
-LOG_RETENTION_DAYS=30
-```
-
-### Production Environment (.env)
-
-```bash
-# Application Environment
-ENVIRONMENT=production
-DEBUG=false
-
-# Database (Use strong passwords!)
-POSTGRES_DB=grievance_db
-POSTGRES_USER=nepal_grievance_admin
-POSTGRES_PASSWORD=very_strong_production_password
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-
-# Redis (Enable password protection)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=redis_strong_password
-
-# Celery
-CELERY_BROKER_URL=redis://:redis_strong_password@localhost:6379/0
-CELERY_RESULT_BACKEND=redis://:redis_strong_password@localhost:6379/0
-
-# OpenAI
-OPENAI_API_KEY=your_production_api_key
-OPENAI_MODEL=gpt-4
-
-# Encryption (NEVER reuse dev key!)
-DB_ENCRYPTION_KEY=your_production_encryption_key
-
-# Server Configuration
-RASA_PORT=5005
-ACTION_PORT=5055
-FLASK_PORT=5001
-ACCESSIBLE_PORT=5006
-
-# Domain Configuration
-DOMAIN=https://chatbot.example.com
-ALLOWED_ORIGINS=https://chatbot.example.com
-
-# Email Configuration
-SMTP_SERVER=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=your_email@example.com
-SMTP_PASSWORD=your_email_password
-SMTP_FROM=noreply@example.com
-
-# SMS Configuration (Twilio)
-TWILIO_ACCOUNT_SID=your_account_sid
-TWILIO_AUTH_TOKEN=your_auth_token
-TWILIO_PHONE_NUMBER=+1234567890
-
-# Logging
-LOG_LEVEL=INFO
-LOG_RETENTION_DAYS=90
-
-# Security
-SECRET_KEY=your_django_secret_key
-SESSION_COOKIE_SECURE=true
-CSRF_COOKIE_SECURE=true
-```
-
-## Service Management
-
-### Using systemctl (Production)
-
-```bash
-# Start services
-sudo systemctl start nepal-rasa
-sudo systemctl start nepal-actions
-sudo systemctl start nepal-flask
-sudo systemctl start nepal-celery-llm
-
-# Stop services
-sudo systemctl stop nepal-rasa
-sudo systemctl stop nepal-actions
-sudo systemctl stop nepal-flask
-sudo systemctl stop nepal-celery-llm
-
-# Restart services
-sudo systemctl restart nepal-rasa
-sudo systemctl restart nepal-actions
-sudo systemctl restart nepal-flask
-sudo systemctl restart nepal-celery-llm
-
-# Check status
-sudo systemctl status nepal-rasa
-sudo systemctl status nepal-actions
-sudo systemctl status nepal-flask
-sudo systemctl status nepal-celery-llm
-
-# View logs
-sudo journalctl -u nepal-rasa -f
-sudo journalctl -u nepal-actions -f
-sudo journalctl -u nepal-flask -f
-sudo journalctl -u nepal-celery-llm -f
-```
-
-### Using Docker Compose
-
-```bash
-docker compose up -d --build
-docker compose ps
-docker compose logs -f backend
-```
-
-## Production Deployment
-
-### Deployment Checklist
-
-- [ ] Update `.env` with production credentials
-- [ ] Generate strong passwords for database and Redis
-- [ ] Configure Nginx with correct domain
-- [ ] Set up SSL certificates with Let's Encrypt
-- [ ] Enable firewall (ufw)
-- [ ] Configure file permissions correctly
-- [ ] Set up systemd services for auto-start
-- [ ] Configure log rotation
-- [ ] Set up database backups
-- [ ] Test all endpoints and functionality
-- [ ] Configure monitoring and alerts
-- [ ] Set up email notifications
-- [ ] Test SMS/WhatsApp integration (if using)
-- [ ] Review security settings
-- [ ] Document server IP and credentials (securely)
-
-### Post-Deployment Steps
-
-1. **Verify all services are running:**
-
-```bash
-sudo systemctl status nepal-rasa nepal-actions nepal-flask nepal-celery-llm
-```
-
-2. **Test health endpoints:**
-
-```bash
-curl https://chatbot.example.com/health
-curl https://chatbot.example.com/api/health
-```
-
-3. **Check logs for errors:**
-
-```bash
-sudo journalctl -u nepal-rasa --since "10 minutes ago"
-sudo journalctl -u nepal-actions --since "10 minutes ago"
-```
-
-4. **Test database connection:**
-
-```bash
-psql -U nepal_grievance_admin -d grievance_db -c "SELECT COUNT(*) FROM grievances;"
-```
-
-5. **Verify Redis connection:**
-
-```bash
-redis-cli -a your_redis_password ping
-```
-
-6. **Test complete grievance submission flow**
-
-7. **Set up monitoring and alerts**
-
-### Updating the Application
-
-```bash
-# Switch to application user
-sudo su - ubuntu
-cd nepal_chatbot
-
-# Backup database
-pg_dump -U nepal_grievance_admin grievance_db > backup_$(date +%Y%m%d).sql
-
-# Pull latest changes
-git pull origin main
-
-# Activate virtual environment
-source rasa-env/bin/activate
-
-# Update dependencies
-pip install -r requirements.txt --upgrade
-
-# Run database migrations (if any)
-cd ticketing/migrations
-alembic upgrade head
-cd ../..
-
-# Retrain Rasa model (if NLU data changed)
-cd rasa_chatbot
-rasa train
-cd ..
-
-# Restart services
-sudo systemctl restart nepal-rasa
-sudo systemctl restart nepal-actions
-sudo systemctl restart nepal-flask
-sudo systemctl restart nepal-celery-llm
-
-# Verify services started correctly
-sudo systemctl status nepal-rasa nepal-actions nepal-flask nepal-celery-llm
-```
-
-## Troubleshooting
-
-### Common Issues
-
-#### 1. Port Already in Use
-
-```bash
-# Find process using port
-sudo lsof -i :5005
-
-# Kill process
-sudo kill -9 <PID>
-
-# Or stop the compose stack cleanly
-docker compose down
-```
-
-#### 2. Database Connection Error
-
-```bash
-# Check PostgreSQL is running
-sudo systemctl status postgresql
-
-# Check connection settings
-psql -U nepal_grievance_admin -d grievance_db
-
-# Check if database exists
-sudo -u postgres psql -c "\l"
-
-# Reset password if needed
-sudo -u postgres psql
-ALTER USER nepal_grievance_admin WITH PASSWORD 'new_password';
-```
-
-#### 3. Redis Connection Error
-
-```bash
-# Check Redis is running
-sudo systemctl status redis-server
-
-# Test connection
-redis-cli ping
-
-# Check Redis logs
-sudo journalctl -u redis-server
-```
-
-#### 4. Rasa Model Not Found
-
-```bash
-# Check if model exists
-ls -la rasa_chatbot/models/
-
-# Retrain model
-cd rasa_chatbot
-rasa train
-
-# Verify model created
-ls -la models/
-```
-
-#### 5. Permission Denied Errors
-
-```bash
-# Fix permissions
-sudo chown -R ubuntu:www-data /home/ubuntu/nepal_chatbot
-sudo chmod -R 775 /home/ubuntu/nepal_chatbot
-sudo chmod g+s /home/ubuntu/nepal_chatbot
-
-# Fix uploads directory
-chmod -R 775 /home/ubuntu/nepal_chatbot/uploads
-```
-
-#### 6. Nginx 502 Bad Gateway
-
-```bash
-# Check if backend services are running
-curl http://localhost:5005/
-curl http://localhost:5001/health
-
-# Check Nginx error logs
-sudo tail -f /var/log/nginx/error.log
-
-# Test Nginx configuration
-sudo nginx -t
-
-# Restart Nginx
-sudo systemctl restart nginx
-```
-
-#### 7. Celery Tasks Not Processing
-
-```bash
-# Check Celery worker status
-celery -A task_queue inspect active
-
-# Check Redis queue
-redis-cli LLEN celery
-
-# Restart Celery workers
-sudo systemctl restart nepal-celery-llm
-
-# Check logs
-tail -f logs/celery_llm_queue.log
-```
-
-### Log Locations
-
-- **Rasa Server**: `logs/rasa_server.log` or `journalctl -u nepal-rasa`
-- **Action Server**: `logs/actions_server.log` or `journalctl -u nepal-actions`
-- **Flask Server**: `logs/flask_server.log` or `journalctl -u nepal-flask`
-- **Celery Workers**: `logs/celery_llm_queue.log` or `journalctl -u nepal-celery-llm`
-- **Nginx**: `/var/log/nginx/error.log` and `/var/log/nginx/access.log`
-- **PostgreSQL**: `/var/log/postgresql/postgresql-13-main.log`
-
-### Getting Help
-
-1. Check this documentation
-2. Review log files for error messages
-3. Search GitHub issues
-4. Contact support: philgaeng@pm.me
-
----
-
-For additional information, see:
-
-- [Architecture Guide](ARCHITECTURE.md)
-- [Operations Guide](OPERATIONS.md)
-- [Backend Guide](BACKEND.md)
+Before promotion run `make security-preflight` (gate defined in [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §4). TLS via certbot (`deployment/certbot/`, renew cron: `scripts/ops/install_tls_renew_cron.sh`). Server spec: [`10_production_server_spec.md`](10_production_server_spec.md); hardening: [`15_host_hardening.md`](15_host_hardening.md).

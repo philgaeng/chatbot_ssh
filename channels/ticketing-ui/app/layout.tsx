@@ -1,7 +1,10 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/app/providers/AuthProvider";
+import { LanguageProvider } from "@/app/providers/LanguageProvider";
 import AppShell from "@/components/AppShell";
 
 const geistSans = Geist({
@@ -31,7 +34,9 @@ export default function RootLayout({
     >
       <body className="h-full text-gray-900">
         <AuthProvider>
-          <AppShell>{children}</AppShell>
+          <LanguageProvider>
+            <AppShell>{children}</AppShell>
+          </LanguageProvider>
         </AuthProvider>
       </body>
     </html>

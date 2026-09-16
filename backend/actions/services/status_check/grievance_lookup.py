@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Grievance ID normalization and lookup for status-check flows."""
 
 from __future__ import annotations

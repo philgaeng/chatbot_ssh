@@ -1,6 +1,7 @@
 # Reports — operational dashboard, summary, pivot, and quarterly plan
 
 **Status:** Overview + Pivot + Quarterly email **implemented** (2026-05-26). **Summary tab (ADB Project Director)** — specified §12, not yet built.  
+**Last updated:** 2026-09-15 — §4: *Resolution action*, *Resolved by* and *Resolution action (national)* (`GRM-118`) — what was done and who did it, as picked values, never the case narrative; blank on SEAH rows; §2.5: saved reports keep their columns.  
 **Related:** [00_ticketing_decisions.md](00_ticketing_decisions.md) (quarterly XLSX), [04_ticketing_schema.md](04_ticketing_schema.md), [08_ticket_resolution_and_case_summary.md](08_ticket_resolution_and_case_summary.md) (`resolution_category`), [Escalation_rules.md](Escalation_rules.md)  
 **UI:** `channels/ticketing-ui/app/reports/page.tsx`  
 **Backend:** `ticketing/services/report_rows.py`, `pivot_table.py`, `quarterly_assignments.py`, `quarterly_library.py`, `report_limits.py`  
@@ -120,6 +121,11 @@ Each section is a **collapsible card** with:
 
 **Celery:** for the completed quarter, **one email per assignment** to all officers with that role (one XLSX attachment each).
 
+⚠ **A saved report keeps the columns it was saved with** (`template.columns`). When `GRM-118` added
+*Resolved by* to the default columns, existing library reports and assignments did **not** gain it — an
+admin adds it by editing and re-saving the report. Migrating saved reports behind their owners' backs
+was rejected: a column appearing unannounced in a scheduled email is the surprise this avoids.
+
 **API**
 
 | Method | Path | Purpose |
@@ -168,7 +174,15 @@ These are the **default columns** for all four sections and the **palette** for 
 | `complaint_category` | Complaint category | string | `grievance_categories` (cached text; may be comma-separated) |
 | `days_in_stage` | Days in current stage | int | `floor(now - step_started_at)` days; if null, `floor(now - created_at)` — §8.9 |
 | `total_days` | Total days | int | Open: `floor(now - created_at)`; Resolved: `floor(resolved_at - created_at)` — §8.9 |
-| `resolution_category` | Resolution category | string | From latest `RESOLVED` / resolution record `payload.resolution_category` → label via `resolution_category_label()`; blank if not resolved |
+| `resolution_category` | **Resolution action** | string | Latest `RESOLVED` event: its `resolution_category_label` snapshot, else the catalog label for its code (events before `GRM-116`); blank if not resolved. The key keeps its old name — it is persisted in events and saved reports (`08` §2.2) |
+| `resolution_actor` | **Resolved by** | string | Latest `RESOLVED` event's `resolution_actor_label` — an office or a listed outside body, never typed (`GRM-117`). **`Not recorded`** for a standard case resolved before that; blank if not resolved; **blank on every SEAH row**. Default column, right after *Resolution action*; groupable; **not** in the public share |
+| `resolution_action_national` | **Resolution action (national)** | string | The shared action the recorded code counts as — the code itself when shared, its `counts_as_code` when local — read through the **current** catalog, so correcting what a local action counts as corrects past totals (the *Resolution action* cell keeps its snapshot). Blank if not resolved and on SEAH rows. In the all-data export and groupable; **not** a default column, **not** in the public share |
+
+**Why these and not a case summary.** The client asked for the whole case summarised in the Excel.
+The resolution narrative is free text — officers write names into it — and an `.xlsx` is forwarded
+outside every access control the ticketing screens have. What managers need across many cases is
+*what was done* and *who did it*, and both are recorded as picked values, so the Excel gains the
+answer and no PII. `grievance_summary` (all-data export only) is unchanged.
 | `status_code` | Status | string | `tickets.status_code` |
 | `priority` | Priority | string | `tickets.priority` |
 | `project_name` | Project | string | Join `ticketing.projects` |
@@ -291,7 +305,7 @@ Please answer by number (copy/paste is fine). Implementation should not start un
 
 1. Which roles can open **Reports**? All logged-in officers, or only `super_admin`, `local_admin`, observers (`adb_*`), and GRC — exclude L1 field officers?  
 2. Should report data respect **the same jurisdiction scopes** as the queue (`OfficerScope`), or can admins see **all org tickets** when filters are empty?  
-3. **SEAH:** include SEAH tickets only for `seah_*` roles (mirror queue), with a explicit **“Include SEAH cases”** checkbox for dual-role admins?
+3. ~~**SEAH:** include SEAH tickets only for `seah_*` roles (mirror queue), with an explicit "Include SEAH cases" checkbox for dual-role admins?~~ → **ANSWERED 2026-08-02 ([D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system)):** reports mirror the queue, and the queue rule is now **cast-only** — a grievance on a **sensitive** workflow appears only for officers **cast on that workflow's steps**, never for an admin or oversight role. The **quarterly report excludes sensitive cases** (`include_sensitive`, default **false**); the "include" checkbox is offered **only** to the cast, never to admins.
 
 ### 8.2 Period and population  4,5 YES, 6 NO
 
@@ -395,7 +409,7 @@ Use these when answers are silent:
 
 ## 12. Summary tab — ADB Project Director quarterly view (planned)
 
-**Audience:** Same as Overview — **all report viewers** within **OfficerScope** (§13.1). SEAH tickets included when the viewer’s role can see SEAH (§13.1).
+**Audience:** Same as Overview — **all report viewers** within **OfficerScope** (§13.1). Grievances on a **sensitive** workflow are included **only for officers cast on that workflow** ([D-007](../DECISIONS.md#d-007--seah-is-a-property-of-a-workflow-not-a-concept-in-the-system) §2) — never for admins or oversight roles, and never in the quarterly export.
 
 **Purpose:** One executive screen for the quarterly review the ADB Project Director expects: matrix counts by project × package, plus charts for complaints **closed during the selected period(s)**.
 
@@ -625,7 +639,7 @@ Recorded **2026-05-26**. **All Summary questions locked** — build may proceed 
 
 | # | Question | Answer |
 |---|----------|--------|
-| 17 | Resolution category columns in matrix? | **`pies only`** — matrix shows level totals (L1–L4+); resolution category breakdown **only** in pie chart #5. |
+| 17 | Resolution category columns in matrix? | **`pies only`** — matrix shows level totals (L1–L4+); resolution category breakdown **only** in pie chart #5 (titled *Resolution action* since `GRM-118`). |
 
 ---
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Data-plane health checks (L2) — run by the ops scheduler, persisted to
 ops.system_health_checks, alerting on warn/critical.

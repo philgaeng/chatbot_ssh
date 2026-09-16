@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Form for adding missing contact/location info (Spec 13: Add missing info flow).
 

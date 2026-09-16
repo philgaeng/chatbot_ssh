@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Dict, List, Text
 
 from rasa_sdk import Tracker
@@ -196,7 +198,17 @@ class ValidateFormSeah1(BaseFormValidationAction):
             cmd = "anonymous"
 
         if cmd not in {"identified", "anonymous"}:
-            dispatcher.utter_message(text=self.get_utterance(2))
+            # Index 2 of the ask block is this branch's re-prompt ("Please choose anonymous
+            # grievance or grievance with contact details.") and nothing else uses it — the
+            # copy was written for here. Reuse it rather than duplicating the string under a
+            # second key; H2-08 spent a sprint merging exactly that kind of drifted block.
+            # The old introspection derived "validate_sensitive_issues_follow_up", which
+            # exists nowhere, so this raised ValueError -> HTTP 500 (T3-01).
+            dispatcher.utter_message(
+                text=self.get_utterance(
+                    2, key="action_ask_form_seah_1_sensitive_issues_follow_up"
+                )
+            )
             return {"sensitive_issues_follow_up": None}
 
         updates: Dict[Text, Any] = {

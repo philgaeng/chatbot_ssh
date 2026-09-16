@@ -1,12 +1,44 @@
 services:
   nginx:
-    ports:
+    # ⚠ `!override` (GRM-067, 2026-09-14). The comment below says nothing reaches the site except on
+    # 80 and 443 — and it was not true: compose MERGES this list with docker-compose.yml's
+    # `${NGINX_HOST_PORT:-8080}:80`, so staging also published 0.0.0.0:8080 on every interface.
+    # Measured on the host (docker-proxy on 0.0.0.0:8080 and [::]:8080); closed from outside only
+    # because the security group filters it — GRM-065's shape. Nothing on the staging path uses it.
+    ports: !override
+      # ⚠ **Deliberately literal, unlike the five ports QA-03 parameterised.** These are the
+      # real host's real ports on a public interface: nothing reaches the site except on 80
+      # and 443, and TLS certificates are issued against them. Moving them would not isolate
+      # a second stack, it would take the site off the internet. Running a second stack on
+      # the staging host is ruled out anyway — it has 3825 MB and no swap (DESIGN §3).
       - "80:80"
       - "443:443"
-    volumes:
-      # Named conf file (not default.conf) — base compose entrypoint removes default.conf;
-      # binding AWS config as default.conf makes rm fail and nginx crash-loops.
-      - ./deployment/nginx/webchat_rest_compose_aws.conf:/etc/nginx/conf.d/webchat_rest_compose_aws.conf:ro
+    # ── How the site config reaches nginx (GRM-103, 2026-09-14) ──────────────────────────────
+    # It used to be a SINGLE-FILE bind mount. `git pull` updates a file by writing a new inode and
+    # renaming it over the old one, and a single-file mount stays pinned to the OLD inode. So after
+    # every deploy the container kept serving the pre-pull config, `nginx -s reload` re-read that
+    # stale copy and reported success, and even `nginx -t` validated the stale copy. Measured on
+    # staging: host sha a206acb2, container sha 89e923b4 — which is how GRM-014's rate limiting sat
+    # merged-but-inert for a week. Reproduced in isolation: single-file mount + rename + reload
+    # serves v1; directory mount + rename + reload serves v2.
+    #
+    # Now the DIRECTORY is mounted — a directory mount resolves names at read time, so it follows the
+    # rename — and nginx `include`s the one file NGINX_SITE_CONF names. The file does not move, so
+    # nothing citing deployment/nginx/webchat_rest_compose_aws.conf changes. It is mounted at
+    # /etc/nginx/site, NOT conf.d, so the entrypoint's `rm -f default.conf` still works (see the
+    # crash-loop note that used to live here).
+    environment:
+      NGINX_SITE_CONF: webchat_rest_compose_aws.conf
+    # Start-up lives in deployment/nginx/bootstrap.sh, so the deploy can run the identical logic with
+    # `--test` to validate the config BEFORE touching the running container.
+    command:
+      - sh /etc/nginx/site/bootstrap.sh
+    # ⚠ `!override`, not a merge — the half of GRM-067 production already had. Without it compose
+    # MERGES this list with docker-compose.yml's, which mounts the WSL site config too, so staging
+    # loaded BOTH (the source of every "conflicting server name" warning). prod.yml uses `!override`
+    # for exactly this reason. ⚠ Everything nginx needs must therefore be listed here.
+    volumes: !override
+      - ./deployment/nginx:/etc/nginx/site:ro
       - ./channels/REST_webchat:/app/channels/REST_webchat:ro
       - ./channels/shared:/app/channels/shared:ro
       - ./deployment/certbot/www:/var/www/certbot:ro

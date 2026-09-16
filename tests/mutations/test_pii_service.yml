@@ -1,0 +1,110 @@
+# Mutation records for tests/backend/test_pii_service.py  (DPG-31, sprint 2026-08-llm)
+#
+# Transcribed from commit 3c449e47 ("the deterministic PII layer — 87.5% measured recall") and
+# from TESTS.md's T-31 rows. Every record below was RE-RUN against the current tree, not merely
+# copied out of the prose. Runner: scripts/ops/run_mutations.py
+
+- id: T-31-a-dual-script-digit-class
+  target: backend/services/pii_service.py
+  find: '_ANY_DIGIT = rf"[0-9{_D}]"'
+  replace: '_ANY_DIGIT = r"[0-9]"'
+  tests: tests/backend/test_pii_service.py
+  expect: survives
+  why: >
+    ⭐ The worked example for `expect: survives`, and it is recorded as a NON-KILL on purpose.
+    Dropping the Devanagari half of the numeric character class changes no behaviour, because
+    `find_pii` normalises Devanagari digits to ASCII ONCE, centrally, before any recogniser
+    runs — so the dual-script class is redundant defence-in-depth rather than the working part.
+    What actually kills is removing the normalisation call: see T-31-b-normalisation-removed,
+    which takes 3 tests red. Claiming the kill I did not get is how a ledger stops meaning
+    anything, and deleting the redundant class to force a kill would remove a safety net that
+    costs nothing and covers a recogniser someone may one day run on un-normalised text.
+
+- id: T-31-b-normalisation-removed
+  target: backend/services/pii_service.py
+  find: "    normalised = normalise_digits(text)"
+  replace: "    normalised = text"
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  min_failures: 3
+  why: >
+    The real mechanism behind T-31-a. `९८४१२३४५६७` is a real Nepali mobile number and an ASCII
+    `\d` pattern misses it entirely — the defect that passes every test written by an English
+    speaker. Normalisation is what makes the recognisers see it; it is also 1:1 and
+    length-preserving, which is the only reason offsets computed on the normalised string may be
+    applied to the original.
+
+- id: T-31-c-thar-recogniser-removed
+  target: backend/services/pii_service.py
+  find: "    spans.extend(_names_around_surnames(original))"
+  replace: "    pass  # mutation: thar gazetteer recogniser removed"
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  min_failures: 3
+  why: >
+    The surname gazetteer is the only recogniser that fires with no trigger word — `Kamala Devi
+    Chaudhary` in running prose has no honorific and no self-identification prefix ahead of it.
+    Given-name matching is deliberately absent (many Nepali given names double as common nouns),
+    so without the thar leg a plainly-written name simply crosses to the model.
+
+- id: T-31-d-district-in-the-surname-gazetteer
+  target: backend/constants/nepali_pii_patterns.py
+  find: '    "Rana", "Malla", "Katuwal", "Bogati", "Chettri", "Chhetri", "Kandel", "Marasini",'
+  replace: '    "Rana", "Malla", "Katuwal", "Bogati", "Chettri", "Chhetri", "Kandel", "Marasini", "Jhapa",'
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  why: >
+    The inverse pin, and the one people get backwards. A bare district MUST survive redaction: the
+    classifier derives district from the narrative (§31.3) and a district name alone identifies
+    nobody, so redacting it costs the signal and buys no privacy. The surname gazetteer is the
+    recogniser most likely to over-fire on a place name — many Nepali thar are also toponyms — and
+    it matches a bare surname with no trigger word, so a district added there is redacted as a
+    PERSON in ordinary prose.
+  note: >
+    ⚠ This is NOT the mutation the ledger originally recorded. That one added the district to the
+    SETTLEMENT QUALIFIER list and stopped killing at commit `7dddf5e8` — see the record below,
+    which keeps that loss executable rather than letting it become prose again.
+
+- id: T-31-d-district-added-to-qualifiers
+  target: backend/constants/nepali_pii_patterns.py
+  find: '    "municipality", "VDC", "basti", "chowk", "chok", "marg", "house no", "plot no",'
+  replace: '    "municipality", "VDC", "basti", "chowk", "chok", "marg", "house no", "plot no", "Jhapa",'
+  tests: tests/backend/test_pii_service.py
+  expect: survives
+  why: >
+    ⚠ **A DOCUMENTED REGRESSION, not a designed non-kill — the only record here of that kind, and
+    it is deliberately kept red-in-meaning rather than deleted.** The ledger recorded this as
+    `✅ Checked — Jhapa added to the qualifier list → red`, and it was: until commit `7dddf5e8`
+    the roman address pattern allowed ZERO trailing digits, so a bare qualifier matched and adding
+    `Jhapa` redacted the district. That commit tightened the pattern to two alternatives — a
+    capitalised word *before* the qualifier, or at least one digit *after* it — which correctly
+    stopped the bare word "ward" being redacted as an address. The side effect is that
+    `"...in Jhapa district..."` (the test's own sentence: lowercase "in" before, no digits after)
+    now matches neither alternative, so the mutation is inert and the test stays green.
+    **What is lost:** the district test no longer notices a district added to the qualifier list,
+    even though `"Birtamod Jhapa"` WOULD still be redacted by alternative 1. What still kills is
+    `T-31-d-district-in-the-surname-gazetteer` above. Write-up:
+    `followups/mutation-records-are-prose-not-data.md` §9.5.
+- id: T-31-e-fresh-token-per-occurrence
+  target: backend/services/pii_service.py
+  find: "        token = seen.get(key)"
+  replace: "        token = None  # mutation: never reuse a token within a document"
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  why: >
+    Consistency within a document is the property the classifier actually uses. "<PERSON_1>
+    promised to fix it, then <PERSON_1> refused to return" keeps the narrative structure; a
+    fresh token per occurrence destroys it, and the redaction stops being lossless because the
+    mapping no longer round-trips to one value per token.
+
+- id: T-31-e-global-counter
+  target: backend/services/pii_service.py
+  find: "    counters: dict[str, int] = {}"
+  replace: '    counters: dict[str, int] = globals().setdefault("_MUTANT_GLOBAL_COUNTERS", {})'
+  tests: tests/backend/test_pii_service.py
+  expect: kills
+  min_failures: 3
+  why: >
+    Counters must be per-document, never process-global. Two concurrent grievances sharing
+    `<PERSON_1>` makes the mapping ambiguous and turns the placeholders into a cross-document
+    correlation channel — the exact property pseudonymisation is supposed to remove.

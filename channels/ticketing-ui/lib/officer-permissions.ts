@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import type { TicketDetail } from "@/lib/api";
 
 type StepLike = { supervisor_role?: string | null; assigned_role_key?: string } | null | undefined;

@@ -8,6 +8,7 @@ x-logging: &default-logging
 
 services:
   orchestrator:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -21,12 +22,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -42,6 +43,7 @@ services:
       start_period: 20s
 
   backend:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -58,12 +60,12 @@ services:
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
       SOCKETIO_REDIS_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/0
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -82,6 +84,7 @@ services:
   #   docker compose --profile init run --rm db_init
   db_init:
     profiles: ["init"]
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -94,14 +97,15 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       db:
         condition: service_healthy
 
   celery_file:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -118,12 +122,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -139,6 +143,7 @@ services:
       start_period: 40s
 
   celery_default:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -156,12 +161,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -177,6 +182,7 @@ services:
       start_period: 40s
 
   celery_llm:
+    image: ${IMAGE_REGISTRY:-ghcr.io/philgaeng/chatbot_ssh}/app:${IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: Dockerfile
@@ -191,12 +197,12 @@ services:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-}
       CELERY_BROKER_URL: redis://:${REDIS_PASSWORD:-}@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:${REDIS_PASSWORD:-}@redis:6379/2
-      DATABASE_URL: postgresql://user:password@db:5432/app_db
+      DATABASE_URL: postgresql://${POSTGRES_USER:?}:${POSTGRES_PASSWORD:?}@db:5432/${POSTGRES_DB:?}
       POSTGRES_HOST: db
       POSTGRES_PORT: 5432
-      POSTGRES_DB: app_db
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ${POSTGRES_DB:?}
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
     depends_on:
       redis:
         condition: service_healthy
@@ -212,7 +218,14 @@ services:
       start_period: 40s
 
   redis:
-    image: redis:7
+    # Pinned to the 8.10 MINOR, not `redis:8`. Redis relicensed at a minor bump once
+    # already: 7.2 was BSD-3-Clause, 7.4 went RSALv2/SSPLv1 (not OSI-approved), and the
+    # floating `redis:7` tag followed it silently. Redis 8 is tri-licensed RSALv2 /
+    # SSPLv1 / AGPLv3 — we take it under AGPLv3, which IS OSI-approved, and that is what
+    # answers DPG indicator 2. A two-segment pin means patches still arrive but a future
+    # relicence is opt-in. Bump in lockstep with .github/workflows/ci.yml or CI tests a
+    # different Redis than production runs. See docs/dpg/00_compliance_status.md §3.1(b).
+    image: redis:8.10
     # requirepass is enabled only when REDIS_PASSWORD is non-empty (prod); empty
     # (dev default) starts plain redis so existing WSL flows keep working.
     command: ["sh", "-c", "exec redis-server $${REDIS_PASSWORD:+--requirepass \"$$REDIS_PASSWORD\"}"]
@@ -229,13 +242,13 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_USER: user
-      POSTGRES_PASSWORD: password
-      POSTGRES_DB: app_db
+      POSTGRES_USER: ${POSTGRES_USER:?}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: ${POSTGRES_DB:?}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d app_db"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -246,7 +259,9 @@ services:
     image: nginx:stable
     ports:
       # Host :80 is often taken by another stack; use 8080 for local REST webchat.
-      - "8080:80"
+      # ${NGINX_HOST_PORT:-8080} — default identical to the literal it replaced, so an
+      # unset variable changes nothing (QA-03). Host :80 is often taken by another stack.
+      - "${NGINX_HOST_PORT:-8080}:80"
     # Mount as a named conf file (not default.conf) — Docker Desktop WSL can cache a
     # stale directory at the default.conf bind target if the source was missing once.
     entrypoint: ["/bin/sh", "-c"]

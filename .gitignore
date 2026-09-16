@@ -11,9 +11,23 @@ __pycache__/
 .bash_history
 
 # Environment and dependency folders
+# Convention (CL-03): `.env.example` (root) is the single TRACKED template; per-host
+# secrets live in `env.local` / `.env.local` (never committed). Do not re-add the old
+# per-area templates (env.grm.example; channels/ticketing-ui/.env.local is covered by
+# that package's own .gitignore).
+# ⚠ Two deliberate additions, DPG-16 (2026-08-18): `.env.open` and `.env.openai` are tracked,
+# secret-free templates showing the SAME system pointed at two providers. They are not per-area
+# templates — they are the artefact a DPG reviewer diffs to see that switching provider is an
+# environment change (indicator 4). A test asserts both carry no key and declare identical
+# variables. `.env` (exact match, above) does not cover them; that was checked, not assumed.
 create_env.sh
 env.local
+# env.local is now a GENERATED artefact (make env-local). Per-developer / per-host
+# values that must NOT be committed — PROD_SERVER_USER, PROD_HOST, PROD_SSH_KEY —
+# go in env.local.extra, which the generator appends verbatim.
+env.local.extra
 env.local.example
+.env.local
 aws_local.local
 *.aws.local
 .env
@@ -104,3 +118,20 @@ backend/actions/utils/utterance_mapping_translation_checks/new_mappings/buttons.
 backend/actions/utils/utterance_mapping_translation_checks/new_mappings/utterances.csv
 backend/actions/utils/utterance_mapping_translation_checks/mapping_with_latest_translations/*.xlsx
 
+.smoke_open.json
+.bench_*.json
+
+# Secrets hygiene (added 2026-08-20, docs/deployment/13_security.md §5.2)
+*.decrypted
+
+# ── Source material for the operating-model sprint — NOT committed (2026-09-06) ──
+# Decision: `resources/` stays out of the repository. It holds the three assessments
+# the sprint was built from AND the third-party project-kickoff prompt they review.
+# Why: the prompt is someone else's work, and committing it would redistribute it —
+# a decision that is not ours to make by default. The assessments are *inputs* to a
+# decision, not the record of it: the conclusions live in the sprint's DESIGN doc and
+# in docs/DECISIONS.md, which is where a reader should be sent.
+# ⚠ Consequence, accepted: `resources/01`–`03` citations in the sprint docs are LOCAL
+# paths, not repository paths, and will not resolve for anyone else. The sprint docs
+# say so where they cite them.
+resources/

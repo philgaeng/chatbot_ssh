@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """countries, location tree redesign, location translations, org country FK
 
 Revision ID: f1a3e9c72b05

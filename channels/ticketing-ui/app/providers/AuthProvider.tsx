@@ -1,9 +1,13 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, Suspense, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
-import { OIDCAuthClient, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { OIDCAuthClient, refreshTokens, type TokenPayload } from "@/lib/auth/oidc-auth";
+import { AUTH_BYPASS, OIDC_ISSUER, OIDC_CLIENT_ID } from "@/lib/auth/runtime-config";
 import { loginWithPasswordApi } from "@/lib/auth/auth-api";
+import { installCrossTabSignOut } from "@/lib/auth/session-expired";
 import { persistAuthTokens, rememberLoginEmail } from "@/lib/auth/token-storage";
 import { clearAuthTokens, isAccessTokenExpired } from "@/lib/auth/session-expired";
 import { getUserPreferences, getMyProfile, getMySession, listOfficerRoster, getAdminContext, type OfficerRosterEntry, type AdminContext } from "@/lib/api";
@@ -42,8 +46,9 @@ function tokenFromRosterRow(o: OfficerRosterEntry): TokenPayload {
 
 const PRIVILEGED_ROLE_KEYS = new Set([
   "super_admin",
-  "country_admin",
+  "org_admin",          // SH-7: country_admin retired → org_admin
   "project_admin",
+  "officer_admin",
 ]);
 
 function pickDefaultOfficer(roster: OfficerRosterEntry[]): OfficerRosterEntry | null {
@@ -112,7 +117,10 @@ export interface AuthContextValue {
   user: TokenPayload | null;
   error: string | null;
   roleKeys: string[];
+  /** May open sensitive grievances (cast-only). */
   canSeeSeah: boolean;
+  /** May administer sensitive workflows — grants no case access. */
+  canConfigureSensitive: boolean;
   isAdmin: boolean;
   isSuperAdmin: boolean;
   isCountryAdmin: boolean;
@@ -145,29 +153,37 @@ export function useAuth(): AuthContextValue {
   return ctx;
 }
 
-const SEAH_CAN_SEE_ROLES = new Set(["super_admin", "adb_hq_exec", "seah_national_officer", "seah_hq_officer", "country_admin", "project_admin"]);
-const ADMIN_ROLES = new Set(["super_admin", "country_admin", "project_admin"]);
+// SH-7: country_admin retired → org_admin (org-subtree admin, any depth). The derived
+// `isCountryAdmin` flag is kept (many consumers read it) but now sources from org_admin;
+// RB-3 renames it to isOrgAdmin across the tree.
+// Sensitive-case access is NOT derivable from role keys — it is cast membership on a sensitive
+// workflow, which only the server can answer (DECISION-sensitive-workflows §3). This set is the
+// offline fallback used before /admin-context resolves, and holds only the SEAH *operational*
+// roles: no admin tier and no oversight role belongs here.
+const SEAH_CAN_SEE_ROLES = new Set(["seah_national_officer", "seah_hq_officer"]);
+const ADMIN_ROLES = new Set(["super_admin", "org_admin", "project_admin", "officer_admin"]);
 
 function derivePermissions(roleKeys: string[], adminCtx: AdminContext | null) {
   const fromRoles = {
     canSeeSeah: roleKeys.some((r) => SEAH_CAN_SEE_ROLES.has(r)),
     isAdmin: roleKeys.some((r) => ADMIN_ROLES.has(r)),
     isSuperAdmin: roleKeys.includes("super_admin"),
-    isCountryAdmin: roleKeys.includes("country_admin"),
+    isCountryAdmin: roleKeys.includes("org_admin"),
     isProjectAdmin: roleKeys.includes("project_admin"),
   };
   if (!adminCtx) return fromRoles;
   return {
-    canSeeSeah: fromRoles.canSeeSeah || adminCtx.admin_workflow_tracks.includes("seah"),
-    isAdmin: fromRoles.isAdmin || adminCtx.is_country_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
+    // Server is authoritative: cast membership, never an admin track.
+    canSeeSeah: adminCtx.can_see_seah ?? fromRoles.canSeeSeah,
+    isAdmin: fromRoles.isAdmin || adminCtx.is_org_admin || adminCtx.is_project_admin || adminCtx.is_super_admin,
     isSuperAdmin: fromRoles.isSuperAdmin || adminCtx.is_super_admin,
-    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_country_admin,
+    isCountryAdmin: fromRoles.isCountryAdmin || adminCtx.is_org_admin,
     isProjectAdmin: fromRoles.isProjectAdmin || adminCtx.is_project_admin,
   };
 }
 
 function AuthProviderInner({ children }: { children: React.ReactNode }) {
-  const bypass = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
+  const bypass = AUTH_BYPASS;
   const searchParams = useSearchParams();
 
   const [isAuthenticated, setIsAuthenticated] = useState(bypass);
@@ -202,13 +218,18 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
 
   const client = !bypass
     ? new OIDCAuthClient(
-        process.env.NEXT_PUBLIC_OIDC_ISSUER ?? "",
-        process.env.NEXT_PUBLIC_OIDC_CLIENT_ID ?? "",
+        OIDC_ISSUER,
+        OIDC_CLIENT_ID,
         typeof window !== "undefined"
           ? `${window.location.origin}/auth/callback`
           : (process.env.NEXT_PUBLIC_REDIRECT_SIGN_IN ?? ""),
       )
     : null;
+
+  // Sign-out in one tab must reach the others. `storage` fires only in OTHER tabs, so the
+  // tab that signed out navigates itself and the rest come here. Without this a second tab
+  // keeps showing the app — and stale case data — until the next API call 401s.
+  useEffect(() => installCrossTabSignOut(), []);
 
   const refreshAdminContext = useCallback(async () => {
     try {
@@ -307,21 +328,35 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
       const existing = client.getCurrentUser();
       if (existing && token) {
         if (isAccessTokenExpired(token)) {
-          clearAuthTokens();
-          setUser(null);
-          setAccessToken(null);
-          setIsAuthenticated(false);
-          if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
-            window.location.replace("/login?reason=session_expired");
-            return;
-          }
-        } else {
-          clearCookie(BYPASS_COOKIE);
-          clearCookie(LEGACY_MOCK_COOKIE);
-          setUser(existing);
-          setAccessToken(token);
-          setIsAuthenticated(true);
+          // Returning to the tab with an expired token: try a silent refresh
+          // before bouncing to /login (H2-01) — redirect only if refresh fails.
+          void (async () => {
+            const refreshed = await refreshTokens();
+            if (refreshed) {
+              clearCookie(BYPASS_COOKIE);
+              clearCookie(LEGACY_MOCK_COOKIE);
+              setUser(client.getCurrentUser());
+              setAccessToken(refreshed);
+              setIsAuthenticated(true);
+            } else {
+              clearAuthTokens();
+              setUser(null);
+              setAccessToken(null);
+              setIsAuthenticated(false);
+              if (typeof window !== "undefined" && !window.location.pathname.startsWith("/login")) {
+                window.location.replace("/login?reason=session_expired");
+                return;
+              }
+            }
+            setIsLoading(false);
+          })();
+          return;
         }
+        clearCookie(BYPASS_COOKIE);
+        clearCookie(LEGACY_MOCK_COOKIE);
+        setUser(existing);
+        setAccessToken(token);
+        setIsAuthenticated(true);
       }
     }
     setIsLoading(false);
@@ -364,7 +399,11 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
     } else {
       clearCookie(BYPASS_COOKIE);
       clearCookie(LEGACY_MOCK_COOKIE);
-      client!.signOut();
+      // `signOut` is async now: it awaits the server-side revoke so it can choose between a
+      // same-origin redirect and the Keycloak fallback. The context signature stays sync —
+      // callers are click handlers with nothing to await — so the promise is voided here, and
+      // a rejection is logged rather than becoming an unhandled rejection.
+      void client!.signOut().catch((err) => console.error("signOut failed", err));
     }
   };
 
@@ -431,6 +470,7 @@ function AuthProviderInner({ children }: { children: React.ReactNode }) {
         error,
         roleKeys,
         canSeeSeah: perms.canSeeSeah,
+        canConfigureSensitive: adminContext?.can_configure_sensitive ?? perms.isSuperAdmin,
         isAdmin: perms.isAdmin,
         isSuperAdmin: perms.isSuperAdmin,
         isCountryAdmin: perms.isCountryAdmin,

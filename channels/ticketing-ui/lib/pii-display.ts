@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Standard mask for complainant PII on the default (non-reveal) officer view. */
 export const PII_MASK = "•••• ••••";
 

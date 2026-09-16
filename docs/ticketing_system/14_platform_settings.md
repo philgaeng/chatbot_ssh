@@ -1,24 +1,26 @@
 # Platform settings (locations, reports, types, system JSON)
 
 **Status:** Product reference (June 2026). **Access:** `super_admin` only for this entire main tab — see [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.  
+**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10) · ⚠ header date backfilled; content not re-verified against the code
 **UI:** Settings → **Settings** (platform tab)  
-**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
+**Related:** [10_settings_overview.md](10_settings_overview.md), [11_roles_and_permissions.md](11_roles_and_permissions.md), [09_reports_and_report_builder.md](09_reports_and_report_builder.md), [LOCATION_CODES.md](LOCATION_CODES.md), [18_geography_and_locations.md](18_geography_and_locations.md), [docs/ARCHIVING_AND_RETENTION.md](../ARCHIVING_AND_RETENTION.md)
 
-The fourth main Settings tab holds **platform-wide** configuration: national reference data, project archetypes, system JSON, and **admin role assignment**. `country_admin` and `project_admin` **cannot** open this tab. Per-project routing stays in [13_projects_and_packages.md](13_projects_and_packages.md).
+The fourth main Settings tab holds **platform-wide** configuration: national reference data, project archetypes, system JSON, and **admin role assignment**. `org_admin` and `project_admin` **cannot** open this tab. Per-project routing stays in [13_projects_and_packages.md](13_projects_and_packages.md).
 
 ---
 
+> **⚠ Reinstated 2026-08-04 — [D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it).** The organization-role catalog is **primary again**, on the **project type**: `project_types.actor_roles` names the organizations a project must have (label · description · required), and **every one of them sees that project's grievances** in its reports — a lot-level naming reaches that lot only, and a parent organization sees what its children see ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances), 2026-08-04; the `routing_org_role` anchor is retired). Filled values live in `project_organizations` / `package_organizations`. Still dead: the **per-project** catalog `project_actor_roles` — the catalog is on the type now, not copied per project. `projects.implementing_agency_org_id` + `project_donors` become **legacy reads** and stop being written.
+
 ## 1. Sub-tabs and access
 
-| Sub-tab | `super_admin` | `country_admin` | `project_admin` |
+| Sub-tab | `super_admin` | `org_admin` | `project_admin` |
 |---------|---------------|-----------------|-----------------|
 | **Locations** | ✅ import + tree | ❌ (tab hidden) | ❌ |
 | **Quarterly reports** | ✅ | ❌ | ❌ |
-| **Project types** | ✅ | ❌ | ❌ |
 | **Advanced (JSON)** | ✅ | ❌ | ❌ |
 | **Admin access** *(planned)* | ✅ | ❌ | ❌ |
 
-**Note:** `country_admin` manages workflows, orgs, projects, and packages via the **other three** main Settings tabs (country scope). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
+**Note:** `org_admin` manages workflows, **project types**, orgs, projects, and packages via the **other three** main Settings tabs (country scope) — project types under Workflows ([12 §6.00](12_workflows_configuration.md)). Quarterly report *planning* for local ops may move to a country-scoped surface later; v1 platform tab owns the library.
 
 ---
 
@@ -28,11 +30,12 @@ The fourth main Settings tab holds **platform-wide** configuration: national ref
 
 ### Data
 
-- `ticketing.locations` — `location_code`, `name`, `name_ne`, `parent_code`, `level`, `country_code`
-- `ticketing.location_translations` — EN/NE display names
+- `ticketing.locations` — `location_code`, `country_code`, `level_number`, `parent_location_code`, `source_id`, `latitude`/`longitude`, `is_active` (names live in translations)
+- `ticketing.location_translations` — per-language display names (`location_code`, `lang_code`, `name`)
+- `ticketing.location_level_defs` — level semantics per country (Province / District / Municipality)
 - `ticketing.countries` — country lookup
 
-Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `NP-KO`, district `NP-KO-JH`).
+Codes follow [LOCATION_CODES.md](LOCATION_CODES.md) (e.g. province `P1` = Koshi, district `P1_MOR` = Morang, `P1_JHA` = Jhapa). Full model: [18_geography_and_locations.md](18_geography_and_locations.md).
 
 ### UI (`LocationsSection`)
 
@@ -71,21 +74,55 @@ Full behaviour: [09_reports_and_report_builder.md](09_reports_and_report_builder
 
 ---
 
-## 4. Project types (archetypes)
+## 4. Project types (archetypes) — *the model; the screen lives under Workflows*
 
-**Purpose:** `super_admin` defines reusable project templates (`construction_road`, …).
+> **This is not a platform sub-tab.** Project types are authored under **Settings → Workflows →
+> Project types** ([12 §6.00](12_workflows_configuration.md)) — a type is mostly a bundle of
+> workflows, so it belongs beside them. **Moved 2026-08-04**; it shipped under platform data,
+> where nobody looking at a workflow would find it. The model, the freeze rules and the
+> validation stay documented here because every other doc already points at "14 §4".
 
-**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx`  
+**Purpose:** a project type is the **binding template** for a project — the workflows it runs, the organizations it must name, and how categories route ([D-005](../DECISIONS.md#d-005--the-project-type-is-the-template-a-typed-project-cannot-deviate-from-it)). Creating a project is: pick the organization → pick one of its types → allocate the remaining organizations.
+
+**Component:** `channels/ticketing-ui/components/settings/ProjectTypesTab.tsx` — built 2026-08-04: one card per type, and an editor for the workflows, the organization catalog and the owner. The workflow cards are the project screen's own (`<WorkflowBindingCards>`, shared) — a type is mostly a bundle of workflows, so authoring one looks like editing one.
 **API:** `ticketing/api/routers/project_types.py`
 
-| Field on type | Copied to new project |
-|---------------|----------------------|
-| `type_key`, `label` | `project.project_type_key` |
-| `standard_workflow_id`, `seah_workflow_id` | Project workflow links |
-| Required actor role keys | `project_actor_roles` rows |
-| `routing_org_role` | Go-live implementing-agency check |
+**Who:** `super_admin` anywhere; `org_admin` within its own subtree — the same gate as authoring a workflow. A `project_admin` does not see the sub-tab.
 
-`country_admin` and `project_admin` **cannot** edit type definitions or actor role keys on instantiated projects.
+**Organization keys are never typed or shown.** The author writes the label ("Ward Office"); the key is derived from it once and then never changes, because filled organizations point at it. Renaming a role therefore never orphans anything.
+
+| Field on type | What it gives the project |
+|---------------|----------------------|
+| `type_key`, `label` | `project.project_type_key`. **`label` is always editable**, even with live projects — a name is not configuration |
+| `owner_organization_id` | The organization this template belongs to (`l8n0p2r4`). **NULL = shared with everyone.** New project offers the chosen organization's types, its ancestors' and the shared ones. **Owners are limited to the top two levels of the org tree** — a ministry, one of its departments, or a donor — and never a `third_party` contractor: a contractor is named *by* a project, and there are dozens of them. Enforced in `_validate_owner` (422), not just filtered in the picker |
+| `is_active` | **"Can be chosen when creating a project."** Off → the type is not offered in New project *and* `POST /projects` refuses it — but **projects already using it keep working**. This is how a template is retired; it is also why a **Use as template** copy starts off |
+| `workflow_bindings` | The project's workflow links — name, workflow, default, `intake_route`, `classifications` |
+| `actor_roles` | **The organization catalog** (primary again): `{key, label, description, required, required_package, scope}`. The author's words — "Executing Agency", "Ward Office", "Concessionaire" |
+| ~~`routing_org_role`~~ | **Retired 2026-08-04** ([D-006](../DECISIONS.md#d-006--an-organizations-grievances-are-its-projects-grievances)). No organization is *the* one: every organization named on a project sees its grievances. The column survives, unused, until a cleanup migration |
+| `standard_workflow_id`, `seah_workflow_id` | Legacy mirrors of the bindings |
+
+### 4.1 A type with a live project is frozen
+
+Once **any active project** runs on a type, its **configuration** cannot change — `PATCH` returns **409** naming how many projects are at stake and both ways out. Enforced server-side, not by disabling the form.
+
+| | |
+|---|---|
+| **Frozen** | workflows, `actor_roles`, `owner_organization_id`, category routing |
+| **Always editable** | `label`, `description` (a name is not configuration) · `is_active`, `sort_order` (availability — retiring a type from the New-project list changes nothing about projects using it) |
+| **Two ways out** | **Use as template** — `POST /project-types/{key}/duplicate` copies everything into a new key, `is_active=false` so an unfinished edit is never offered · or **deactivate the project**, fix the type, reactivate (which re-runs go-live) |
+
+`active_project_count` on the type response drives the UI's frozen state.
+
+**Back-filled 2026-08-04** (`n0p2r4t6`): every previously-untyped project got a type derived from the workflows it already ran, named "Type 1", "Type 2" — rename them. Only `implementing_agency` is marked required, so no project was blocked by its own migration. Note the migration writes catalog keys **alphabetically**, so "first listed" carries no authorial intent — anything that needs a project's lead organization reads the first **required** role instead.
+
+`org_admin` authors types **within its own org subtree**; `super_admin` anywhere. Neither `org_admin` nor `project_admin` can edit a type's definition through a project — a typed project cannot deviate from its type. A **global** type (owner NULL) is offered to everyone, so only `super_admin` may change it; an `org_admin` copies it instead (403 names that way out).
+
+**Checked on every write** (`_validate_config`, 422 in plain language):
+
+- role names are unique and non-empty
+- the workflow set has **exactly one** default, the default is never a sensitive workflow, every non-default names a chatbot menu, and a category belongs to one workflow only
+
+`standard_workflow_id` / `seah_workflow_id` are derived from the bindings on save, so the legacy mirrors cannot drift from what the type actually runs.
 
 See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
@@ -93,16 +130,16 @@ See [13_projects_and_packages.md](13_projects_and_packages.md) §3.
 
 ## 5. Admin access *(planned sub-tab)*
 
-**Purpose:** Assign the **admin ladder** — who holds `country_admin` and scoped `project_admin` roles. Operational officer assignment stays under **Organizations & officers** / **Project staffing**.
+**Purpose:** Assign the **admin ladder** — who holds `org_admin` and scoped `project_admin` roles. Operational officer assignment stays under **Organizations & officers** / **Project staffing**.
 
 | Action | Who performs |
 |--------|----------------|
-| Create `country_admin` | `super_admin` |
-| Create `country_admin` (`country_code` + `workflow_track`) | `super_admin` |
-| Create `project_admin` (project + optional org + `workflow_track`) | `country_admin` with **matching** track, or `super_admin` |
+| Create `org_admin` | `super_admin` |
+| Create `org_admin` (`country_code` + `workflow_track`) | `super_admin` |
+| Create `project_admin` (project + optional org + `workflow_track`) | `org_admin` with **matching** track, or `super_admin` |
 | Revoke admin access | Same as creator tier or `super_admin` |
 
-**Not in this tab:** Operational GRM roles (`site_safeguards_focal_person`, …) — those are defined in **Roles & permissions** and assigned by `project_admin` / `country_admin` via Officers.
+**Not in this tab:** Operational GRM roles (`site_safeguards_focal_person`, …) — those are defined in **Roles & permissions** and assigned by `project_admin` / `org_admin` via Officers.
 
 Full role semantics: [11_roles_and_permissions.md](11_roles_and_permissions.md) §2.
 
@@ -115,7 +152,7 @@ Full role semantics: [11_roles_and_permissions.md](11_roles_and_permissions.md) 
 
 Three JSON editors:
 
-### 6.1 `org_roles` (organization role vocabulary)
+### 6.1 `org_roles` (organization role vocabulary) — deprecated
 
 **Key:** `settings.org_roles`  
 **Shape:** JSON array:
@@ -127,7 +164,7 @@ Three JSON editors:
 ]
 ```
 
-**Usage:** Template when **creating** a new project — copied into `project_actor_roles`. Editing this key does **not** retroactively change existing projects.
+**Usage (still deprecated, for a new reason):** a **global** role vocabulary is the wrong shape — since 2026-08-04 each **project type** carries its own `actor_roles` so a client can use the words on their contract. This key is legacy; it is still copied into `project_actor_roles` on project create, and that per-project catalog is **dead** (DECISION 2026-07-10; superseded by the implementing agency + donors). Editing this key does **not** retroactively change existing projects.
 
 Default keys include: `donor`, `executing_agency`, `implementing_agency`, `main_contractor`, `subcontractor_t1`, `subcontractor_t2`, `supervision_consultant`, `specialized_consultant`.
 
@@ -165,7 +202,7 @@ Controls resolved-case archiving schedule and attachment tiering. Documented in 
 | `PUT` | `/settings/{key}` | Admin; `org_roles`, `report_limits`, `archiving_policy` require `super_admin` |
 | `DELETE` | `/settings/{key}` | Admin (same super-admin gate) |
 
-**Other keys** (e.g. `notification_rules`) are writable by `country_admin`+ and edited from the workflow UI — see [12_workflows_configuration.md](12_workflows_configuration.md).
+**Other keys** (e.g. `notification_rules`) are writable by `org_admin`+ and edited from the workflow UI — see [12_workflows_configuration.md](12_workflows_configuration.md).
 
 ---
 
@@ -195,8 +232,8 @@ Orgs are linked to projects via project actors, not as a standalone platform set
 ## 10. Acceptance criteria
 
 1. Only `super_admin` can open the **Settings → Settings** (platform) main tab.
-2. Super admin can import location tree, CRUD project types, edit Advanced JSON, and assign `country_admin`.
-3. `country_admin` and `project_admin` are blocked from platform tab (API + UI).
+2. Super admin can import location tree, CRUD project types, edit Advanced JSON, and assign `org_admin`.
+3. `org_admin` and `project_admin` are blocked from platform tab (API + UI).
 4. `org_roles` JSON validates (array of `{key, label}`) before save.
 5. `report_limits` and `archiving_policy` reject invalid shapes with 422.
 6. Admin access sub-tab lists admin role holders; does not list operational officers.

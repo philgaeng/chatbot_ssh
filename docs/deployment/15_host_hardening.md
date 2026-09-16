@@ -1,6 +1,7 @@
 # Host Hardening Runbook
 
 **Status:** Operational runbook (manual, prod host). Companion to [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 12 and [`13_security.md`](13_security.md).
+**Last updated:** 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
 
 Single Ubuntu host, Docker Compose, public on `grm-chatbot.dor.gov.np`. These are host-OS controls that sit underneath the container hardening.
 
@@ -64,7 +65,15 @@ sudo dpkg-reconfigure -plow unattended-upgrades
 
 ## 5. Backups & keys
 
-- DB + uploads backups: `scripts/ops/backup_db.sh` (encrypt with `BACKUP_GPG_RECIPIENT`/`BACKUP_PASSPHRASE`, off-box via `BACKUP_REMOTE`).
+- DB + uploads backups: `scripts/ops/backup_db.sh` — set `BACKUP_GPG_RECIPIENT` (preferred) or
+  `BACKUP_PASSPHRASE`; off-box via `BACKUP_REMOTE`.
+  ⚠ **Encryption is no longer optional** (D-19/F-4, fixed 2026-08-19). With neither variable set the
+  script **discards the dump and the uploads archive** rather than leaving them on disk, unless
+  `BACKUP_ALLOW_UNENCRYPTED=1` says otherwise in so many words. The reason: the contact columns stay
+  ciphertext inside a dump, but the grievance narrative, every officer note, and **every voice
+  recording and photograph** in the uploads tar do not — so an unencrypted backup is a complete copy
+  of the most sensitive material the system holds. Losing a backup is recoverable on the next run;
+  an unencrypted copy of a survivor's report is not.
 - Weekly restore verification: `scripts/ops/restore_drill.sh`.
 - `DB_ENCRYPTION_KEY` stored separately — see [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md).
 
@@ -79,6 +88,28 @@ scripts/ops/install_tls_renew_cron.sh /opt/grms     # certbot renew
 #   15 2 * * *  /opt/grms/scripts/ops/backup_db.sh /opt/grms
 #   30 4 * * 0  /opt/grms/scripts/ops/restore_drill.sh /opt/grms
 ```
+
+> ### ⛔ None of this ran, from 2026-06-23 to 2026-09-16 (`GRM-139`)
+>
+> Every script above was mode **`100644`** in git — non-executable. Invoked by path, as cron
+> invokes them, each answered `Permission denied`. **The nightly backup, the weekly restore drill
+> and the five-minute watchdog had never executed on any host.** Measured on the DOR production
+> host on 2026-09-16, by being the first person to run the backup by hand.
+>
+> `GRM-114` had recorded production's backups as *unverified*. They were not unverified, they were
+> **absent** — and the distinction matters, because "unverified" invites a check while "absent"
+> demands a restore test.
+>
+> **Why nobody noticed.** `GRM-094` had already fixed this class, for the scripts a **Make target**
+> runs — the ones that fail loudly, in front of a person, on a fresh clone. Its test scoped itself
+> to the Makefile. Cron scripts fail at 02:15 with nobody watching, and production runs no monitor
+> to notice the missing status file. The fix is the mode bit; the durable half is
+> `tests/repo/test_make_scripts_executable.py`, which now requires **every tracked `.sh` with a
+> shebang** to be `100755`, on the reasoning that a shebang *is* the declaration that a file is
+> meant to be run.
+>
+> ⚠ **On a host that already has the old checkout, `git pull` fixes the bit** — git tracks it — but
+> verify rather than assume, and run one backup by hand before trusting the cron again.
 
 ---
 

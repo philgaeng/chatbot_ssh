@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Operational role archetype templates — pre-fill permissions for custom roles.
 

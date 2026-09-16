@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Alembic env.py for GRM Ticketing System.
 Scoped to ticketing.* schema only — never touches public.* tables.

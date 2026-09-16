@@ -24,9 +24,11 @@ tracker_store:
   type: sql
   dialect: "postgresql"
   url: "localhost"
-  db: "grievance_db"
-  username: "nepal_grievance_admin"
-  password: "K9!mP2$vL5nX8&qR4jW7"
+  db: "${POSTGRES_DB}"
+  username: "${POSTGRES_USER}"
+  # Credential removed: this file is archived and not read at runtime (see the
+  # README beside it). It is env-driven wherever it is revived.
+  password: "${POSTGRES_PASSWORD}"
   login_db: "postgres"
 
 #tracker_store:

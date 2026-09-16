@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Tailwind `md` breakpoint — viewports at or below this use /m/* routes. */
 export const MOBILE_MAX_WIDTH_PX = 767;
 

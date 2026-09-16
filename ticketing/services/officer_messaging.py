@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Project-level officer SMS on assignment (link-only, no PII)."""
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ from ticketing.models.project import Project
 from ticketing.models.project_workflow import ProjectWorkflow
 from ticketing.models.ticket import Ticket, TicketEvent
 from ticketing.models.workflow import WorkflowStep
-from ticketing.services.admin_access import is_country_admin, is_super_admin
+from ticketing.services.admin_access import is_org_admin, is_super_admin
 from ticketing.services.keycloak_users import profiles_for_user_ids
 
 if TYPE_CHECKING:
@@ -115,11 +117,11 @@ def update_officer_messaging(
 def can_edit_project_messaging(user: CurrentUser, project: Project) -> bool:
     if is_super_admin(user):
         return True
-    if not is_country_admin(user):
+    if not is_org_admin(user):
         return False
     scopes = getattr(user, "admin_scopes", []) or []
     return any(
-        s.role_key == "country_admin" and s.country_code == project.country_code
+        s.role_key == "org_admin" and s.country_code == project.country_code
         for s in scopes
     )
 
@@ -129,7 +131,7 @@ def require_project_messaging_edit(user: CurrentUser, project: Project) -> None:
         return
     raise HTTPException(
         status_code=403,
-        detail="requires country_admin or super_admin",
+        detail="requires org_admin or super_admin",
     )
 
 

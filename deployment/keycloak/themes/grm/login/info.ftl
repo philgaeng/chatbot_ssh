@@ -1,11 +1,14 @@
 <#import "template.ftl" as layout>
 <#-- Skip the "Perform the following actions" interstitial.
      actionUri = proceed to UPDATE_PASSWORD / UPDATE_PROFILE (invite link start).
-     pageRedirectUri = return to GRM login after actions complete — must not win when both are set. -->
+     pageRedirectUri = return to GRM login after actions complete — must not win when both are set.
+     ⚠ JS-escape, not HTML-escape: inside <script> `&amp;` stays literal, so Keycloak received
+     `amp;client_id` / `amp;tab_id` and dropped them (GRM-134, seen in staging's nginx log).
+     A mail link scanner running this script does NOT use up the setup link — measured, GRM-134. -->
 <#if actionUri?has_content>
-<script>window.location.replace("${actionUri}");</script>
+<script>window.location.replace("${actionUri?js_string?no_esc}");</script>
 <#elseif pageRedirectUri?has_content>
-<script>window.location.replace("${pageRedirectUri}");</script>
+<script>window.location.replace("${pageRedirectUri?js_string?no_esc}");</script>
 </#if>
 <@layout.registrationLayout displayMessage=false; section>
     <#if section = "header">

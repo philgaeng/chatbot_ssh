@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 Report a security vulnerability (private — do not open an issue)
+    url: https://github.com/philgaeng/chatbot_ssh/blob/main/SECURITY.md
+    about: >-
+      This platform holds SEAH disclosures. A public issue describing a data-exposure
+      path is a map for anyone who wants that data. Use the private channel described
+      in SECURITY.md instead.
+  - name: 📄 Documentation, specs and architecture decisions
+    url: https://github.com/philgaeng/chatbot_ssh/blob/main/docs/README.md
+    about: >-
+      Before filing, check whether the behaviour is already specified or already
+      tracked in docs/SPINE.md.

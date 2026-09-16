@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Public report view API — no auth (TP-05)."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Migrate ticketing.locations (Nepal NP) from legacy NP_* PKs to canonical P1/P1_* codes.
 

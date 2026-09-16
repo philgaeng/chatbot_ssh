@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared grievance detail submit logic (standard + dust fast path)."""
 
 from __future__ import annotations

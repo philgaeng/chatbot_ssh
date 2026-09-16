@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Operational and quarterly GRM reports.
 """
@@ -451,7 +453,13 @@ def _builder_xlsx(rows: list[dict], columns: list[str]) -> StreamingResponse:
 def export_report(
     date_from: Optional[date] = Query(None),
     date_to: Optional[date] = Query(None),
-    organization_id: Optional[str] = Query(None, description="Legacy filter; prefer project/location filters"),
+    organization_id: Optional[str] = Query(
+        None,
+        description=(
+            "Grievances of every project this organization — or any organization below it — is "
+            "named on; a package-level naming reaches that package only."
+        ),
+    ),
     project_ids: Optional[str] = Query(None),
     package_ids: Optional[str] = Query(None),
     location_codes: Optional[str] = Query(None),
@@ -475,10 +483,9 @@ def export_report(
         project_ids=_parse_id_list(project_ids),
         package_ids=_parse_id_list(package_ids),
         location_codes=_parse_id_list(location_codes),
+        organization_id=organization_id,
         include_seah=include_seah,
     )
-    if organization_id:
-        rows = [r for r in rows if r.get("organization_id") == organization_id]
 
     sections = split_sections(rows)
     public_sections = {

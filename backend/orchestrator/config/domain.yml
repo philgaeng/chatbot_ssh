@@ -383,6 +383,13 @@ slots:
     type: text
     mappings:
       - type: custom
+  # When the current OTP was generated, UTC ISO-8601. Stored beside the code so verification
+  # can age it (D-62, 2026-08-27) — the code alone carries no time information.
+  otp_issued_at:
+    type: text
+    influence_conversation: false
+    mappings:
+      - type: custom
   otp_status:
     type: categorical
     values:
@@ -390,6 +397,12 @@ slots:
       - invalid_otp
       - resend
       - slot_skipped
+      # Added 2026-08-27 (D-62): the OTP now expires after OTP_VALIDITY_SECONDS.
+      - expired
+      # ⚠ Pre-existing drift, found while adding `expired`: form_otp.py has set this value
+      # since before the OTP work, and it was never declared here. Declared now rather than
+      # left as an undeclared value in a categorical slot.
+      - invalid_format
     mappings:
       - type: custom
   otp_verified:

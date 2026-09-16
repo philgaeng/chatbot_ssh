@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from typing import Any, Dict, List, Optional, Text
 import traceback
 from .base_classes.base_classes import BaseAction

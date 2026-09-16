@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 import { formatUserFacingError } from "@/lib/user-messages";
 
 /** Shared amber styling for field reports and inspection visits in the thread UI. */

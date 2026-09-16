@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Utterance mapping dictionary for multilingual support (English and Nepali).
 Structure:

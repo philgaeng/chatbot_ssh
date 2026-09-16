@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Archiving policy — super-admin JSON (ticketing.settings.archiving_policy).
 

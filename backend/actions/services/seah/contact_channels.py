@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """SEAH contact-channel availability and button filtering."""
 
 from __future__ import annotations

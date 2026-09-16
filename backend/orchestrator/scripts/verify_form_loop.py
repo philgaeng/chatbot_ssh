@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Verify form loop: simulate form turn with /submit_details.
 Task 3.4: slot_updates and messages match expected.

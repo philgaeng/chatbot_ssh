@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import pandas as pd
 from rapidfuzz import fuzz
 import re

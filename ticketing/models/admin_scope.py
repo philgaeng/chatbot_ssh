@@ -1,5 +1,7 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
-ticketing.admin_scopes — scoped admin assignments (country_admin / project_admin).
+ticketing.admin_scopes — scoped admin assignments (org_admin / project_admin / officer_admin).
 
 workflow_track on each row selects Standard vs SEAH behaviour for that assignment.
 """
@@ -23,7 +25,7 @@ def _uuid() -> str:
     return str(uuid.uuid4())
 
 
-ADMIN_ROLE_KEYS = frozenset({"country_admin", "project_admin"})
+ADMIN_ROLE_KEYS = frozenset({"org_admin", "project_admin", "officer_admin"})
 WORKFLOW_TRACKS = frozenset({"standard", "seah"})
 
 

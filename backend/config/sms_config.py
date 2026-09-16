@@ -1,8 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 SMS provider settings from env.
 
-Production Nepal: DOIT government gateway (sms.doit.gov.np).
-Dev / international fallback: AWS SNS.
+**One transport: the DOIT government gateway (sms.doit.gov.np), in Nepal.**
+
+⚠ There is deliberately no cross-border fallback. An AWS SNS path existed until 2026-08-24 as demo
+scaffolding — it could only format *Philippine* numbers, so it was never able to reach a Nepali
+complainant. It was removed because SMS providers serving Nepal must be in Nepal, and a fallback that
+routes a complainant's number and grievance text through Singapore is a cross-border transfer nobody
+chose (privacy assessment F-12).
+
+With no token configured the provider resolves to `disabled`, which sends nothing and says so. That
+is the intended failure mode: **no SMS is better than SMS out of the country.**
 """
 from __future__ import annotations
 
@@ -11,10 +21,9 @@ import re
 from dataclasses import dataclass
 from typing import Any, Literal
 
-SmsProvider = Literal["doit", "aws_sns", "disabled"]
+SmsProvider = Literal["doit", "disabled"]
 
 NEPAL_MOBILE_RE = re.compile(r"^(97|98)\d{8}$")
-PH_E164_RE = re.compile(r"^\+63\d{10}$")
 
 
 @dataclass(frozen=True)
@@ -46,12 +55,14 @@ def resolve_sms_config() -> SmsConfig:
     base_url = _first_nonempty(os.getenv("DOIT_SMS_BASE_URL")) or "https://sms.doit.gov.np"
     provider_raw = _first_nonempty(os.getenv("SMS_PROVIDER")).lower()
 
-    if provider_raw in ("doit", "aws_sns", "disabled"):
+    if provider_raw in ("doit", "disabled"):
         provider: SmsProvider = provider_raw  # type: ignore[assignment]
     elif bearer_token:
         provider = "doit"
     else:
-        provider = "aws_sns"
+        # ⚠ Was `aws_sns` until 2026-08-24 — a missing token silently routed SMS abroad.
+        # Failing closed is the point: no SMS beats SMS out of the country.
+        provider = "disabled"
 
     if os.getenv("SMS_ENABLED") is not None:
         enabled = _env_bool("SMS_ENABLED")
@@ -60,10 +71,9 @@ def resolve_sms_config() -> SmsConfig:
 
         enabled = bool(SMS_ENABLED)
 
-    if os.getenv("SMS_WHITELIST_ONLY") is not None:
-        whitelist_only = _env_bool("SMS_WHITELIST_ONLY")
-    else:
-        whitelist_only = provider == "aws_sns"
+    # Opt-in only. It used to default to true for the AWS SNS path; with that path gone there is
+    # no provider it should switch itself on for. `SMS_ENABLED` is the gate that matters.
+    whitelist_only = _env_bool("SMS_WHITELIST_ONLY")
 
     if provider == "doit" and not bearer_token:
         provider = "disabled"
@@ -93,28 +103,6 @@ def normalize_nepal_mobile(phone_number: str) -> str:
         raise ValueError(f"Invalid Nepal mobile number: {phone_number}")
 
     return cleaned
-
-
-def format_philippines_e164(phone_number: str) -> str:
-    """Normalize Philippines numbers to E.164 (+63…) for AWS SNS dev testing."""
-    cleaned = re.sub(r"[^\d+]", "", phone_number.strip())
-
-    if PH_E164_RE.match(cleaned):
-        return cleaned
-
-    if cleaned.startswith("09"):
-        formatted = "+63" + cleaned[1:]
-    elif cleaned.startswith("63"):
-        formatted = "+" + cleaned
-    elif cleaned.startswith("0063"):
-        formatted = "+" + cleaned[2:]
-    else:
-        raise ValueError(f"Invalid Philippines phone number format: {phone_number}")
-
-    if not PH_E164_RE.match(formatted):
-        raise ValueError(f"Invalid Philippines phone number format: {phone_number}")
-
-    return formatted
 
 
 def sms_config_summary() -> dict[str, Any]:

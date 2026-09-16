@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """XLSX export helpers shared by HTTP routes and Celery quarterly reports."""
 from __future__ import annotations
 

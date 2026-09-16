@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """ticketing.project_workflows — dynamic workflow bindings per project."""
 from __future__ import annotations
 

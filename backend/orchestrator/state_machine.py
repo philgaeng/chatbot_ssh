@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 State machine: drives all flows from flow.yaml.
 
@@ -816,6 +818,1827 @@ async def _restart_intake_from_done(
     return "done"
 
 
+async def _recover_from_unknown_state(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+) -> str:
+    """
+    Terminal fallback for a session state no branch of run_flow_turn serves.
+
+    Nothing outside this module assigns session["state"], so this is reachable only by
+    a session persisted under a state name this version no longer serves — a rename, or
+    a deleted branch, across a deploy. Returning the state unchanged would dispatch zero
+    messages: the user speaks, the chatbot says nothing, and nothing is logged. Recover
+    to a state the machine can actually serve.
+
+    No language yet => intro; otherwise => main menu. That split, and the bilingual
+    inline copy, follow _handle_attachment_ids_sync's answer to the same question.
+    """
+    session["active_loop"] = None
+    session["requested_slot"] = None
+    language_code = session.get("slots", {}).get("language_code")
+
+    if not language_code:
+        dispatcher.utter_message(
+            text=(
+                "Sorry, something went wrong. Please choose your language to continue.\n\n"
+                "माफ गर्नुहोस्, केही त्रुटि भयो। जारी राख्न कृपया भाषा छान्नुहोस्।"
+            )
+        )
+        return "intro"
+
+    if language_code == "ne":
+        dispatcher.utter_message(
+            text="माफ गर्नुहोस्, केही त्रुटि भयो। कृपया अगाडि बढ्न एउटा विकल्प छान्नुहोस्।"
+        )
+    else:
+        dispatcher.utter_message(
+            text="Sorry, something went wrong. Please choose how you would like to proceed."
+        )
+
+    menu_dispatcher = CollectingDispatcher()
+    await invoke_action(
+        "action_main_menu",
+        menu_dispatcher,
+        SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        ),
+        domain,
+    )
+    dispatcher.messages.extend(menu_dispatcher.messages)
+    return "main_menu"
+
+
+async def _recover_from_unknown_state_handler(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """
+    `_recover_from_unknown_state` in the handler table's calling convention — the default
+    for `_STATE_HANDLERS.get(state)`.
+
+    A thin adapter rather than a signature change, because the recovery is also called
+    directly by run_flow_turn's postcondition, where the positional form reads better.
+    """
+    return await _recover_from_unknown_state(
+        session, dispatcher, domain, slot_updates, latest_message
+    )
+
+
+async def _status_check_route_intent(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+    *,
+    intent: Optional[str],
+    next_state: str,
+) -> str:
+    """
+    status_check_form with no form running: the user has seen their grievance details
+    and is choosing an action. No forms run here — this only routes on intent.
+
+    Extracted verbatim from run_flow_turn by T3-02 p3. `next_state` is passed in and
+    returned so a path that does not assign it keeps the caller's value, exactly as the
+    inline code did.
+    """
+    slots_after = dict(session.get("slots", {}))
+    slots_after.update(slot_updates)
+
+    if intent == "status_check_request_follow_up":
+        from backend.actions.status_check_follow_up import (
+            follow_up_needs_otp_verification,
+        )
+
+        if follow_up_needs_otp_verification(slots_after):
+            for otp_slot in (
+                "otp_consent",
+                "otp_input",
+                "otp_status",
+                "otp_number",
+            ):
+                slot_updates[otp_slot] = None
+            slot_updates["otp_resend_count"] = 0
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            session["slots"].update(slot_updates)
+            otp_form = _get_otp_form()
+            msgs, form_updates, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs)
+            slot_updates.update(form_updates)
+            next_state = "status_check_form"
+        else:
+            ask_dispatcher = CollectingDispatcher()
+            events = await invoke_action(
+                "action_status_check_request_follow_up",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            slot_updates.update(events_to_slot_updates(events))
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            next_state = "done"
+            session["active_loop"] = None
+            session["requested_slot"] = None
+    elif intent == "status_check_modify_grievance":
+        ask_dispatcher = CollectingDispatcher()
+        events = await invoke_action(
+            "action_status_check_modify_grievance",
+            ask_dispatcher,
+            SessionTracker(
+                slots=slots_after,
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        slot_updates.update(events_to_slot_updates(events))
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        next_state = "modify_grievance_menu"
+        session["active_loop"] = None
+        session["requested_slot"] = None
+    else:
+        # Unknown or neutral input (e.g. free text): re-show choices so we never return empty messages.
+        ask_dispatcher = CollectingDispatcher()
+        await invoke_action(
+            "action_ask_story_step",
+            ask_dispatcher,
+            SessionTracker(
+                slots=slots_after,
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        next_state = "status_check_form"
+    return next_state
+
+
+async def _status_check_run_active_form(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    latest_message: Dict[str, Any],
+    *,
+    active_loop: Optional[str],
+    user_input: Optional[Dict[str, Any]],
+    next_state: str,
+) -> str:
+    """
+    status_check_form with a form in flight: pick the form from `active_loop`, run one
+    turn, and handle completion.
+
+    Extracted verbatim from run_flow_turn by T3-02 p3.
+    """
+    if active_loop == "form_status_check_1":
+        form = _get_status_form_1()
+    elif active_loop == "form_otp":
+        form = _get_otp_form()
+    elif active_loop == "form_status_check_2":
+        form = _get_status_form_2()
+    elif active_loop == "form_status_check_skip":
+        form = _get_status_form_skip()
+    else:
+        # D-52: this used to be a silent default. An unrecognized active_loop is a bug — a
+        # session persisted under a loop name this version no longer serves — and mapping it
+        # to status form 1 without a word made it read as normal operation.
+        #
+        # The turn postcondition in run_flow_turn catches the *symptom* (this form
+        # dispatches nothing on an already-filled session, so the user is recovered and the
+        # bogus loop cleared). This names the *cause*, which is the actionable half:
+        # `status_check_form` is a perfectly valid state, so an operator reading only the
+        # postcondition's log would go looking in the wrong place entirely.
+        _log_sm.error(
+            "status_check_form: unrecognized active_loop %r (user_id=%s) — falling back "
+            "to form_status_check_1",
+            active_loop,
+            session.get("user_id", "default"),
+        )
+        form = _get_status_form_1()
+
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+
+    if completed:
+        slots_after = dict(session.get("slots", {}))
+        slots_after.update(slot_updates)
+        story_route = slots_after.get("story_route")
+
+        if active_loop == "form_status_check_1":
+            if story_route == "route_status_check_phone":
+                session["active_loop"] = "form_otp"
+                session["requested_slot"] = None
+                session["slots"].update(slot_updates)
+                otp_form = _get_otp_form()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    otp_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+            elif story_route == "route_status_check_grievance_id":
+                session["active_loop"] = "form_status_check_2"
+                session["requested_slot"] = None
+                session["slots"].update(slot_updates)
+                status_form_2 = _get_status_form_2()
+                msgs2, form_updates2, completed_2 = await run_form_turn(
+                    status_form_2, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+                # If form_status_check_2 completed immediately (e.g. grievance ID
+                # already set from 6-char lookup), show grievance details
+                if completed_2 and not msgs2:
+                    session["active_loop"] = None
+                    session["requested_slot"] = None
+                    session["slots"].update(slot_updates)
+                    ask_dispatcher = CollectingDispatcher()
+                    await invoke_action(
+                        "action_ask_story_step",
+                        ask_dispatcher,
+                        SessionTracker(
+                            slots=session["slots"],
+                            sender_id=session.get("user_id", "default"),
+                            latest_message=latest_message,
+                            active_loop=None,
+                            requested_slot=None,
+                        ),
+                        domain,
+                    )
+                    dispatcher.messages.extend(ask_dispatcher.messages)
+                    next_state = "status_check_form"
+            elif story_route and "skip" in str(story_route).lower():
+                session["active_loop"] = "form_status_check_skip"
+                session["requested_slot"] = None
+            else:
+                # story_route missing or unknown: re-ask so we never return done with no messages
+                ask_dispatcher = CollectingDispatcher()
+                await invoke_action(
+                    "action_ask_status_check_method",
+                    ask_dispatcher,
+                    SessionTracker(
+                        slots=slots_after,
+                        sender_id=session.get("user_id", "default"),
+                        latest_message=latest_message,
+                        active_loop="form_status_check_1",
+                        requested_slot="story_route",
+                    ),
+                    domain,
+                )
+                dispatcher.messages.extend(ask_dispatcher.messages)
+                session["active_loop"] = "form_status_check_1"
+                session["requested_slot"] = "story_route"
+                next_state = "status_check_form"
+        elif active_loop == "form_otp":
+            session["active_loop"] = "form_status_check_2"
+            session["requested_slot"] = None
+            session["slots"].update(slot_updates)
+            status_form_2 = _get_status_form_2()
+            msgs2, form_updates2, completed_2 = await run_form_turn(
+                status_form_2, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+            # If form_status_check_2 completes immediately after OTP
+            # (e.g., a single grievance is already selected), ensure
+            # we still show grievance details/options in this turn.
+            if completed_2 and not msgs2:
+                session["active_loop"] = None
+                session["requested_slot"] = None
+                session["slots"].update(slot_updates)
+                ask_dispatcher = CollectingDispatcher()
+                await invoke_action(
+                    "action_ask_story_step",
+                    ask_dispatcher,
+                    SessionTracker(
+                        slots=session["slots"],
+                        sender_id=session.get("user_id", "default"),
+                        latest_message=latest_message,
+                        active_loop=None,
+                        requested_slot=None,
+                    ),
+                    domain,
+                )
+                dispatcher.messages.extend(ask_dispatcher.messages)
+                next_state = "status_check_form"
+        elif active_loop == "form_status_check_2":
+            # After the second status-check form completes, show grievance
+            # details and offer follow-up/modify/skip choices.
+            session["active_loop"] = None
+            session["requested_slot"] = None
+            session["slots"].update(slot_updates)
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_ask_story_step",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=session["slots"],
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            next_state = "status_check_form"
+        elif active_loop == "form_status_check_skip":
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_skip_status_check_outro",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            next_state = "done"
+            session["active_loop"] = None
+            session["requested_slot"] = None
+    elif (
+        active_loop == "form_status_check_2"
+        and not dispatcher.messages
+    ):
+        # Safety net: if the second status-check form is still in progress
+        # and produced no messages (e.g. after the user provides a full
+        # name), ensure we at least show the grievance selection buttons.
+        slots_after = dict(session.get("slots", {}))
+        slots_after.update(slot_updates)
+        if (
+            slots_after.get("list_grievance_id")
+            and not slots_after.get("status_check_grievance_id_selected")
+        ):
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_ask_status_check_grievance_id_selected",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop="form_status_check_2",
+                    requested_slot="status_check_grievance_id_selected",
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            session["active_loop"] = "form_status_check_2"
+            session["requested_slot"] = "status_check_grievance_id_selected"
+            next_state = "status_check_form"
+    elif active_loop not in (
+        "form_status_check_1",
+        "form_otp",
+        "form_status_check_2",
+        "form_status_check_skip",
+    ):
+        # active_loop not in the four known forms: re-prompt so we never return done with no messages
+        ask_dispatcher = CollectingDispatcher()
+        await invoke_action(
+            "action_ask_status_check_method",
+            ask_dispatcher,
+            SessionTracker(
+                slots=session.get("slots", {}),
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop="form_status_check_1",
+                requested_slot="story_route",
+            ),
+            domain,
+        )
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        session["active_loop"] = "form_status_check_1"
+        session["requested_slot"] = "story_route"
+        next_state = "status_check_form"
+    return next_state
+
+
+async def _h_intro(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    tracker: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `intro`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    if intent in ("set_english", "set_nepali"):
+        next_state = await _set_language_and_show_main_menu(
+            session,
+            intent,
+            dispatcher,
+            domain,
+            slot_updates,
+            latest_message,
+        )
+    else:
+        await invoke_action("action_introduce", dispatcher, tracker, domain)
+    return next_state
+
+
+async def _h_main_menu(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    tracker: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `main_menu`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    menu_transition_intents = {
+        "new_grievance",
+        "dust_grievance",
+        "road_hazard_grievance",
+        "start_seah_intake",
+        "start_status_check",
+    }
+    if intent in ("set_english", "set_nepali"):
+        next_state = await _set_language_and_show_main_menu(
+            session,
+            intent,
+            dispatcher,
+            domain,
+            slot_updates,
+            latest_message,
+        )
+    # Avoid repeating the main menu utterance when the user already clicked one of its options.
+    elif intent not in menu_transition_intents:
+        await invoke_action("action_main_menu", dispatcher, tracker, domain)
+    if intent == "new_grievance":
+        ask_dispatcher = CollectingDispatcher()
+        events = await invoke_action(
+            "action_start_grievance_process",
+            ask_dispatcher,
+            tracker,
+            domain,
+        )
+        slot_updates = events_to_slot_updates(events)
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        session["slots"].update(slot_updates)
+        session["active_loop"] = "form_grievance"
+        session["requested_slot"] = "grievance_new_detail"
+        next_state = "form_grievance"
+        # First form prompt: run form loop with no user input
+        session_copy = dict(session)
+        session_copy["slots"] = dict(session["slots"])
+        form = _get_form()
+        msgs, form_updates, completed = await run_form_turn(
+            form, session_copy, None, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+    elif intent in ("dust_grievance", "road_hazard_grievance"):
+        next_state = await _begin_road_hazard_intake(
+            session,
+            dispatcher,
+            domain,
+            slot_updates,
+            latest_message,
+            prefill_subtype="dust" if intent == "dust_grievance" else None,
+        )
+    elif intent == "start_seah_intake" and _is_seah_enabled():
+        next_state = await _begin_seah_intake(
+            session,
+            dispatcher,
+            domain,
+            slot_updates,
+            latest_message,
+        )
+    elif intent == "start_seah_intake" and not _is_seah_enabled():
+        # Feature-flag off: keep legacy behavior and do not enter dedicated SEAH flow.
+        next_state = "main_menu"
+    elif intent == "start_status_check":
+        ask_dispatcher = CollectingDispatcher()
+        events = await invoke_action(
+            "action_start_status_check",
+            ask_dispatcher,
+            tracker,
+            domain,
+        )
+        slot_updates = events_to_slot_updates(events)
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        session["slots"].update(slot_updates)
+        session["active_loop"] = "form_status_check_1"
+        session["requested_slot"] = None
+        next_state = "status_check_form"
+        # First form prompt: run form loop with no user input
+        session_copy = dict(session)
+        session_copy["slots"] = dict(session["slots"])
+        form_status_1 = _get_status_form_1()
+        msgs, form_updates, completed = await run_form_turn(
+            form_status_1, session_copy, None, domain
+        )
+        dispatcher.messages.extend(msgs)
+        slot_updates.update(form_updates)
+        if completed:
+            next_state = "done"
+            session["active_loop"] = None
+            session["requested_slot"] = None
+    return next_state
+
+
+async def _h_form_grievance(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_grievance`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        if session.get("slots", {}).get("grievance_sensitive_issue"):
+            next_state = "form_seah_1"
+            session["active_loop"] = "form_seah_1"
+            session["requested_slot"] = None
+            sensitive_form = _get_form_seah_1()
+            msgs2, form_updates2, _ = await run_form_turn(
+                sensitive_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+        else:
+            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+    return next_state
+
+
+async def _h_form_road_hazard(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_road_hazard`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form_road_hazard()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+    return next_state
+
+
+async def _h_location_consent(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `location_consent`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    from backend.actions.action_map_location import location_skip_slot_updates
+
+    consent_text = latest_message.get("text", "")
+    if consent_text.startswith("/affirm") or intent == "affirm":
+        slot_updates["complainant_location_consent"] = True
+        session["slots"].update(slot_updates)
+        next_state = await _begin_location_method(
+            session, dispatcher, domain, slot_updates
+        )
+    elif consent_text.startswith("/deny") or intent == "deny":
+        slot_updates.update(location_skip_slot_updates())
+        session["slots"].update(slot_updates)
+        next_state = await _begin_contact_form(
+            session, dispatcher, domain, slot_updates
+        )
+    else:
+        next_state = await _begin_location_consent(
+            session, dispatcher, domain, slot_updates
+        )
+    return next_state
+
+
+async def _h_location_method(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    intent: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `location_method`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    if intent == "location_manual_entry":
+        slot_updates["complainant_location_consent"] = True
+        slot_updates["location_pin_status"] = "manual"
+        session["slots"].update(slot_updates)
+        next_state = await _begin_contact_form(
+            session, dispatcher, domain, slot_updates
+        )
+    elif intent == "location_use_map":
+        slot_updates["complainant_location_consent"] = True
+        session["slots"].update(slot_updates)
+        next_state = await _begin_map_picker(
+            session, dispatcher, domain, slot_updates, open_picker=True
+        )
+    elif intent == "location_use_phone":
+        slot_updates["complainant_location_consent"] = True
+        session["slots"].update(slot_updates)
+        # Client reads GPS and sends map_pin_set; no map modal.
+        next_state = "map_location"
+    else:
+        next_state = await _begin_location_method(
+            session, dispatcher, domain, slot_updates
+        )
+    return next_state
+
+
+async def _h_map_location(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    msg_text: Any,
+    payload_raw: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `map_location`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    from backend.actions.action_map_location import (
+        build_map_filled_location_slots,
+        parse_map_pin_payload,
+    )
+    from backend.shared_functions.location_mapping import (
+        resolve_location_code_to_names,
+        resolve_pin_to_location_code,
+    )
+    from backend.services.database_services.postgres_services import db_manager
+
+    if intent == "map_pin_set":
+        try:
+            coords = parse_map_pin_payload(payload_raw or msg_text)
+            province = None
+            district = None
+            location_code = resolve_pin_to_location_code(
+                db_manager, coords["lat"], coords["lng"]
+            )
+            if location_code:
+                slot_updates["location_code"] = location_code
+                names = resolve_location_code_to_names(
+                    db_manager,
+                    location_code,
+                    session.get("slots", {}).get("language_code") or "en",
+                )
+                province = names.get("province_name")
+                district = names.get("district_name")
+            slot_updates.update(
+                build_map_filled_location_slots(
+                    coords["lat"],
+                    coords["lng"],
+                    province=province,
+                    district=district,
+                    location_code=slot_updates.get("location_code"),
+                )
+            )
+            session["slots"].update(slot_updates)
+            apply_dispatcher = CollectingDispatcher()
+            apply_tracker = SessionTracker(
+                slots=session.get("slots", {}),
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            )
+            events = await invoke_action(
+                "action_apply_map_pin",
+                apply_dispatcher,
+                apply_tracker,
+                domain,
+            )
+            slot_updates.update(events_to_slot_updates(events))
+            dispatcher.messages.extend(apply_dispatcher.messages)
+            if session.get("slots", {}).get("intake_fast_path") in ("road_hazard", "dust"):
+                dispatcher.utter_message(
+                    json_message={
+                        "data": {
+                            "event_type": "open_upload_modal",
+                            "grievance_id": session.get("slots", {}).get("grievance_id"),
+                            # Prompt only — do not auto-open native file picker after map confirm.
+                            "auto_open": False,
+                        }
+                    }
+                )
+            next_state = await _begin_contact_form(
+                session, dispatcher, domain, slot_updates
+            )
+        except (ValueError, KeyError, TypeError):
+            next_state = await _begin_map_picker(
+                session, dispatcher, domain, slot_updates, open_picker=False
+            )
+    elif intent == "location_manual_entry":
+        slot_updates["complainant_location_consent"] = True
+        slot_updates["location_pin_status"] = "manual"
+        session["slots"].update(slot_updates)
+        next_state = await _begin_contact_form(
+            session, dispatcher, domain, slot_updates
+        )
+    elif intent == "location_use_phone":
+        next_state = "map_location"
+    elif intent == "location_open_map":
+        await _invoke_ask_action(
+            "action_open_map_picker",
+            session,
+            dispatcher,
+            domain,
+            intent_name="map_location_open",
+        )
+        next_state = "map_location"
+    else:
+        next_state = await _begin_map_picker(
+            session, dispatcher, domain, slot_updates, open_picker=False
+        )
+    return next_state
+
+
+async def _h_form_seah_1(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_seah_1`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form_seah_1()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        # Merge this turn's form output so routing sees slots set in the same turn
+        # (e.g. seah_victim_survivor_role after the victim/survivor answer).
+        merged_slots = {**session.get("slots", {}), **form_updates}
+        story_main = merged_slots.get("story_main")
+        identity_mode = merged_slots.get("sensitive_issues_follow_up")
+        seah_role = merged_slots.get("seah_victim_survivor_role")
+        witness_exit_without_filing = bool(merged_slots.get("seah_witness_exit_without_filing"))
+        next_state = "contact_form"
+        session["active_loop"] = "form_contact"
+        session["requested_slot"] = None
+        session["slots"].update(slot_updates)
+        _log = logging.getLogger("orchestrator.state_machine")
+        contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
+        slot_preview = {k: session["slots"].get(k) for k in contact_slots}
+        _log.info("form_seah_1 completed -> contact_form | contact slot preview: %s", slot_preview)
+        # Witness path: if no consent and no immediate danger, stop with support-only acknowledgement.
+        if story_main == "seah_intake" and seah_role == "not_victim_survivor" and witness_exit_without_filing:
+            next_state = "done"
+            session["active_loop"] = None
+            session["requested_slot"] = None
+        # Focal-point branch starts with reporter name, then reporter phone.
+        elif story_main == "seah_intake" and seah_role == "focal_point":
+            next_state = "contact_form"
+            session["active_loop"] = "form_contact"
+            session["requested_slot"] = None
+            slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
+            session["slots"]["seah_focal_stage"] = "bootstrap_reporter_contact"
+            contact_form = _get_contact_form()
+            msgs2, form_updates2, _ = await run_form_turn(
+                contact_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+        # In dedicated SEAH intake, identified users should be asked for phone first.
+        elif story_main == "seah_intake" and identity_mode == "identified":
+            next_state = "otp_form"
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            otp_form = _get_otp_form()
+            msgs2, form_updates2, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+        # Anonymous SEAH now uses the same OTP hop as identified flow, so phone can
+        # still be requested/collected consistently for victim and other routes.
+        elif story_main == "seah_intake" and identity_mode == "anonymous":
+            next_state = "otp_form"
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            otp_form = _get_otp_form()
+            msgs2, form_updates2, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+        else:
+            contact_form = _get_contact_form()
+            msgs2, form_updates2, _ = await run_form_turn(
+                contact_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+    return next_state
+
+
+async def _h_contact_form(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `contact_form`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_contact_form()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        story_main = session.get("slots", {}).get("story_main")
+        complainant_consent = session.get("slots", {}).get("complainant_consent")
+        seah_victim_survivor_role = session.get("slots", {}).get("seah_victim_survivor_role")
+        seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
+
+        # Dedicated SEAH intake must always collect SEAH incident details
+        # in form_seah_2 / form_seah_focal_point before submission.
+        if story_main == "seah_intake":
+            if seah_victim_survivor_role == "focal_point" and seah_focal_stage == "bootstrap_reporter_contact":
+                next_state = "otp_form"
+                session["active_loop"] = "form_otp"
+                slot_updates["seah_focal_stage"] = "bootstrap_reporter_otp"
+                session["slots"]["seah_focal_stage"] = "bootstrap_reporter_otp"
+                session["requested_slot"] = None
+                otp_form = _get_otp_form()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    otp_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+                seah_form = None
+            elif seah_victim_survivor_role == "focal_point" and seah_focal_stage == "complainant_contact":
+                next_state = "form_seah_focal_point_2"
+                session["active_loop"] = "form_seah_focal_point_2"
+                slot_updates["seah_focal_stage"] = "focal_point_2"
+                session["slots"]["seah_focal_stage"] = "focal_point_2"
+                seah_form = _get_form_seah_focal_point_2()
+            elif seah_victim_survivor_role == "focal_point":
+                next_state = "form_seah_focal_point_2"
+                session["active_loop"] = "form_seah_focal_point_2"
+                slot_updates["seah_focal_stage"] = "focal_point_2"
+                session["slots"]["seah_focal_stage"] = "focal_point_2"
+                seah_form = _get_form_seah_focal_point_2()
+            else:
+                next_state = "form_seah_2"
+                session["active_loop"] = "form_seah_2"
+                seah_form = _get_form_seah_2()
+
+            if seah_form is not None:
+                session["requested_slot"] = None
+                msgs2, form_updates2, _ = await run_form_turn(
+                    seah_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+
+        # If the user refused to share any contact information in the grievance flow,
+        # skip the OTP form entirely and move directly to grievance submission +
+        # review (same path as otp_form completed for new_grievance).
+        elif story_main in (
+            "new_grievance",
+            "dust_grievance",
+            "road_hazard_grievance",
+            "grievance_submission",
+        ) and complainant_consent is False:
+            session["active_loop"] = None
+            session["requested_slot"] = None
+
+            ask_dispatcher = CollectingDispatcher()
+            tracker_submit = SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            )
+            submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
+            events = await invoke_action(
+                submit_action,
+                ask_dispatcher,
+                tracker_submit,
+                domain,
+            )
+            submit_updates = events_to_slot_updates(events)
+            slot_updates.update(submit_updates)
+            session["slots"].update(submit_updates)
+            dispatcher.messages.extend(ask_dispatcher.messages)
+
+            next_state = await _start_grievance_review_after_submit(
+                session, dispatcher, domain, slot_updates, latest_message
+            )
+        else:
+            next_state = "otp_form"
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            otp_form = _get_otp_form()
+            msgs2, form_updates2, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs2)
+            slot_updates.update(form_updates2)
+    return next_state
+
+
+async def _h_form_seah_2(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_seah_2`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form_seah_2()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        ask_dispatcher = CollectingDispatcher()
+        submit_events = await invoke_action(
+            "action_submit_seah",
+            ask_dispatcher,
+            SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        submit_updates = events_to_slot_updates(submit_events)
+        slot_updates.update(submit_updates)
+        session["slots"].update(submit_updates)
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        await _append_seah_outro_after_submit_if_applicable(
+            dispatcher, session, latest_message, domain, slot_updates
+        )
+        next_state = "done"
+    return next_state
+
+
+async def _h_form_seah_focal_point_1(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_seah_focal_point_1`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form_seah_focal_point_1()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        next_state = "form_seah_focal_point_2"
+        session["active_loop"] = "form_seah_focal_point_2"
+        session["requested_slot"] = None
+        slot_updates["seah_focal_stage"] = "focal_point_2"
+        session["slots"]["seah_focal_stage"] = "focal_point_2"
+        focal_form_2 = _get_form_seah_focal_point_2()
+        msgs2, form_updates2, _ = await run_form_turn(
+            focal_form_2, session, None, domain
+        )
+        dispatcher.messages.extend(msgs2)
+        slot_updates.update(form_updates2)
+    return next_state
+
+
+async def _h_form_seah_focal_point_2(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `form_seah_focal_point_2`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_form_seah_focal_point_2()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        session["slots"].update(slot_updates)
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        ask_dispatcher = CollectingDispatcher()
+        submit_events = await invoke_action(
+            "action_submit_seah",
+            ask_dispatcher,
+            SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        submit_updates = events_to_slot_updates(submit_events)
+        slot_updates.update(submit_updates)
+        session["slots"].update(submit_updates)
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        await _append_seah_outro_after_submit_if_applicable(
+            dispatcher, session, latest_message, domain, slot_updates
+        )
+        next_state = "done"
+    return next_state
+
+
+async def _h_otp_form(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `otp_form`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_otp_form()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        story_main = session.get("slots", {}).get("story_main")
+        seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
+        if story_main == "status_check":
+            next_state = "status_check_form"
+            session["active_loop"] = "form_status_check_2"
+            session["requested_slot"] = None
+        elif story_main == "seah_intake":
+            if seah_focal_stage == "bootstrap_reporter_otp":
+                next_state = "form_seah_focal_point_1"
+                session["active_loop"] = "form_seah_focal_point_1"
+                session["requested_slot"] = None
+                slot_updates["seah_focal_stage"] = "focal_point_1"
+                session["slots"]["seah_focal_stage"] = "focal_point_1"
+                session["slots"].update(slot_updates)
+                seah_form = _get_form_seah_focal_point_1()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    seah_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+            else:
+                next_state = "contact_form"
+                session["active_loop"] = "form_contact"
+                session["requested_slot"] = None
+                session["slots"].update(slot_updates)
+                contact_form = _get_contact_form()
+                msgs2, form_updates2, _ = await run_form_turn(
+                    contact_form, session, None, domain
+                )
+                dispatcher.messages.extend(msgs2)
+                slot_updates.update(form_updates2)
+        else:
+            session["slots"].update(slot_updates)
+            session["active_loop"] = None
+            session["requested_slot"] = None
+            ask_dispatcher = CollectingDispatcher()
+            tracker_submit = SessionTracker(
+                slots=session["slots"],
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            )
+            submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
+            events = await invoke_action(
+                submit_action,
+                ask_dispatcher,
+                tracker_submit,
+                domain,
+            )
+            slot_updates = events_to_slot_updates(events)
+            dispatcher.messages.extend(ask_dispatcher.messages)
+            session["slots"].update(slot_updates)
+            next_state = await _start_grievance_review_after_submit(
+                session, dispatcher, domain, slot_updates, latest_message
+            )
+    return next_state
+
+
+async def _h_grievance_review(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `grievance_review`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form = _get_review_form()
+    msgs, form_updates, completed = await run_form_turn(
+        form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs)
+    slot_updates.update(form_updates)
+    if completed:
+        next_state = "done"
+        await _finish_grievance_review(
+            session, dispatcher, domain, slot_updates, latest_message
+        )
+    return next_state
+
+
+async def _h_status_check_form(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `status_check_form`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    active_loop = session.get("active_loop")
+
+    if not active_loop:
+        next_state = await _status_check_route_intent(
+            session, dispatcher, domain, slot_updates, latest_message,
+            intent=intent, next_state=next_state,
+        )
+    else:
+        next_state = await _status_check_run_active_form(
+            session, dispatcher, domain, slot_updates, latest_message,
+            active_loop=active_loop, user_input=user_input, next_state=next_state,
+        )
+    return next_state
+
+
+async def _h_add_more_info_flow(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `add_more_info_flow`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form_modify = _get_form_modify_grievance_details()
+    msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
+        form_modify, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs_modify)
+    slot_updates.update(form_updates_modify)
+    if completed_modify:
+        session["slots"].update(slot_updates)
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        if session.get("slots", {}).get("modify_grievance_new_detail") == "cancelled":
+            next_state = "modify_grievance_menu"
+            # Re-show the modify menu
+            slots_after = dict(session.get("slots", {}))
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_status_check_modify_grievance",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+        else:
+            next_state = "status_check_form"
+            slots_after = dict(session.get("slots", {}))
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_ask_story_step",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+    return next_state
+
+
+async def _h_modify_grievance_menu(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `modify_grievance_menu`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+    if intent == "modify_grievance_add_pictures" and grievance_id:
+        # Tell frontend to open the file upload modal for this grievance (same as "add file" button).
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "event_type": "open_upload_modal",
+                    "grievance_id": grievance_id,
+                    "auto_open": True,
+                }
+            }
+        )
+        next_state = "modify_grievance_menu"
+    elif intent == "modify_grievance_cancel":
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        slots_after = dict(session.get("slots", {}))
+        ask_dispatcher = CollectingDispatcher()
+        await invoke_action(
+            "action_ask_story_step",
+            ask_dispatcher,
+            SessionTracker(
+                slots=slots_after,
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        next_state = "status_check_form"
+    elif intent == "exit":
+        # User chose to exit from the modify-grievance menu: show the
+        # status-check outro and end the flow.
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        slots_after = dict(session.get("slots", {}))
+        ask_dispatcher = CollectingDispatcher()
+        await invoke_action(
+            "action_skip_status_check_outro",
+            ask_dispatcher,
+            SessionTracker(
+                slots=slots_after,
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        next_state = "done"
+    elif intent == "modify_grievance_add_more_info":
+        session["active_loop"] = "form_modify_grievance_details"
+        session["requested_slot"] = None
+        slot_updates["modify_follow_up_answered"] = None
+        slot_updates["modify_follow_up_answer"] = None
+        next_state = "add_more_info_flow"
+        form_modify = _get_form_modify_grievance_details()
+        msgs_modify, form_updates_modify, _ = await run_form_turn(
+            form_modify, session, None, domain
+        )
+        dispatcher.messages.extend(msgs_modify)
+        slot_updates.update(form_updates_modify)
+    elif intent == "modify_grievance_add_missing_info":
+        form_modify = _get_form_modify_contact()
+        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+        hydrate = events_to_slot_updates(
+            form_modify.get_complainant_slot_events_from_grievance(grievance_id)
+        )
+        session.setdefault("slots", {}).update(hydrate)
+        check_tracker = SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        _, missing = form_modify.get_missing_contact_fields(check_tracker)
+        if missing and missing[0] == "complainant_phone":
+            # Phone is first missing: run OTP form to collect and verify
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            if session.get("slots", {}).get("story_main") is None:
+                slot_updates["story_main"] = "status_check"
+            slot_updates["complainant_consent"] = True
+            session["slots"].update(slot_updates)
+            next_state = "add_missing_info_otp_flow"
+            otp_form = _get_otp_form()
+            msgs_otp, form_updates_otp, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs_otp)
+            slot_updates.update(form_updates_otp)
+        else:
+            session["active_loop"] = "form_modify_contact"
+            session["requested_slot"] = None
+            next_state = "add_missing_info_flow"
+            msgs_modify, form_updates_modify, _ = await run_form_turn(
+                form_modify, session, None, domain
+            )
+            dispatcher.messages.extend(msgs_modify)
+            slot_updates.update(form_updates_modify)
+    else:
+        next_state = "modify_grievance_menu"
+    return next_state
+
+
+async def _h_add_missing_info_otp_flow(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `add_missing_info_otp_flow`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    otp_form = _get_otp_form()
+    msgs_otp, form_updates_otp, completed_otp = await run_form_turn(
+        otp_form, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs_otp)
+    slot_updates.update(form_updates_otp)
+    if completed_otp:
+        # Persist complainant_phone (and complainant_phone_verified) to complainant
+        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+        slots_after = dict(session.get("slots", {}))
+        slots_after.update(slot_updates)
+        complainant_phone = slots_after.get("complainant_phone")
+        otp_status = slots_after.get("otp_status")
+        skip_val = "slot_skipped"  # SKIP_VALUE from constants
+        if (
+            grievance_id
+            and complainant_phone
+            and complainant_phone != skip_val
+        ):
+            try:
+                from backend.services.database_services.postgres_services import db_manager
+                complainant_id = db_manager.complainant.get_complainant_id_from_grievance_id(
+                    grievance_id
+                )
+                if complainant_id:
+                    update_data = {"complainant_phone": complainant_phone}
+                    if otp_status == "verified":
+                        update_data["complainant_phone_verified"] = True
+                    db_manager.update_complainant(complainant_id, update_data)
+            except Exception as e:
+                logging.getLogger(__name__).error(
+                    f"Failed to persist complainant_phone after OTP: {e}"
+                )
+        session["slots"].update(slot_updates)
+        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+        form_modify = _get_form_modify_contact()
+        hydrate = events_to_slot_updates(
+            form_modify.get_complainant_slot_events_from_grievance(grievance_id)
+        )
+        session.setdefault("slots", {}).update(hydrate)
+        session["active_loop"] = "form_modify_contact"
+        session["requested_slot"] = None
+        next_state = "add_missing_info_flow"
+        msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
+            form_modify, session, None, domain
+        )
+        dispatcher.messages.extend(msgs_modify)
+        slot_updates.update(form_updates_modify)
+        if completed_modify:
+            # If form_modify_contact already completes in the same turn
+            # (e.g., phone was the only missing field), emit the same
+            # completion messages as add_missing_info_flow to avoid a
+            # "silent" turn after OTP verification.
+            session["slots"].update(slot_updates)
+            session["active_loop"] = None
+            session["requested_slot"] = None
+            slots_after = dict(session.get("slots", {}))
+            # Flush on any form completion — not only "I'm done" (modify_missing_info_complete).
+            # Natural completion (last missing field filled) previously skipped persist entirely.
+            form_modify.persist_all_contact_fields_to_complainant(slots_after)
+            if session.get("slots", {}).get("modify_missing_info_complete"):
+                next_state = "status_check_form"
+                ask_dispatcher = CollectingDispatcher()
+                await invoke_action(
+                    "action_ask_story_step",
+                    ask_dispatcher,
+                    SessionTracker(
+                        slots=slots_after,
+                        sender_id=session.get("user_id", "default"),
+                        latest_message=latest_message,
+                        active_loop=None,
+                        requested_slot=None,
+                    ),
+                    domain,
+                )
+                dispatcher.messages.extend(ask_dispatcher.messages)
+            else:
+                lang = session.get("slots", {}).get("language_code") or "en"
+                from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
+
+                msg = get_utterance_base(
+                    "form_modify_contact", "utterance_all_contact_complete", 1, lang
+                )
+                dispatcher.utter_message(text=msg)
+                next_state = "modify_grievance_menu"
+                slots_after = dict(session.get("slots", {}))
+                ask_dispatcher = CollectingDispatcher()
+                await invoke_action(
+                    "action_status_check_modify_grievance",
+                    ask_dispatcher,
+                    SessionTracker(
+                        slots=slots_after,
+                        sender_id=session.get("user_id", "default"),
+                        latest_message=latest_message,
+                        active_loop=None,
+                        requested_slot=None,
+                    ),
+                    domain,
+                )
+                dispatcher.messages.extend(ask_dispatcher.messages)
+    return next_state
+
+
+async def _h_add_missing_info_flow(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    text: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `add_missing_info_flow`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    user_input = latest_message if (text or payload) else None
+    form_modify = _get_form_modify_contact()
+    msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
+        form_modify, session, user_input, domain
+    )
+    dispatcher.messages.extend(msgs_modify)
+    slot_updates.update(form_updates_modify)
+    if completed_modify:
+        session["slots"].update(slot_updates)
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        slots_after = dict(session.get("slots", {}))
+        form_modify.persist_all_contact_fields_to_complainant(slots_after)
+        if session.get("slots", {}).get("modify_missing_info_complete"):
+            next_state = "status_check_form"
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_ask_story_step",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+        else:
+            lang = session.get("slots", {}).get("language_code") or "en"
+            from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
+            msg = get_utterance_base(
+                "form_modify_contact", "utterance_all_contact_complete", 1, lang
+            )
+            dispatcher.utter_message(text=msg)
+            next_state = "modify_grievance_menu"
+            slots_after = dict(session.get("slots", {}))
+            ask_dispatcher = CollectingDispatcher()
+            await invoke_action(
+                "action_status_check_modify_grievance",
+                ask_dispatcher,
+                SessionTracker(
+                    slots=slots_after,
+                    sender_id=session.get("user_id", "default"),
+                    latest_message=latest_message,
+                    active_loop=None,
+                    requested_slot=None,
+                ),
+                domain,
+            )
+            dispatcher.messages.extend(ask_dispatcher.messages)
+    return next_state
+
+
+async def _h_done(
+    session: Dict[str, Any],
+    dispatcher: CollectingDispatcher,
+    domain: Dict[str, Any],
+    slot_updates: Dict[str, Any],
+    *,
+    latest_message: Any,
+    intent: Any,
+    payload: Any,
+    next_state: str,
+    **_: Any,
+) -> str:
+    """Handler for state `done`. Body moved verbatim from run_flow_turn (T3-02 p4)."""
+    grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+    msg_text = (latest_message.get("text") or "").strip()
+    payload_raw = (payload or "").strip()
+    introduce_restart = msg_text.lower().startswith(
+        "/introduce"
+    ) or payload_raw.lower().startswith("/introduce")
+    if introduce_restart:
+        # REST webchat sends /introduce on every page load; a persisted session can
+        # still be "done" from a prior flow, which previously hit `else: pass` and
+        # returned no messages (empty chat on refresh).
+        session["state"] = "intro"
+        session["active_loop"] = None
+        session["requested_slot"] = None
+        session["slots"] = DEFAULT_SLOTS.copy()
+        next_state = "intro"
+        intro_tracker = SessionTracker(
+            slots=session["slots"],
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        events = await invoke_action(
+            "action_introduce",
+            dispatcher,
+            intro_tracker,
+            domain,
+        )
+        slot_updates.update(events_to_slot_updates(events))
+    elif intent == "modify_grievance_add_pictures" and grievance_id:
+        dispatcher.utter_message(
+            json_message={
+                "data": {
+                    "event_type": "open_upload_modal",
+                    "grievance_id": grievance_id,
+                    "auto_open": True,
+                }
+            }
+        )
+        next_state = "modify_grievance_menu"
+    elif intent == "modify_grievance_add_more_info":
+        session["active_loop"] = "form_modify_grievance_details"
+        session["requested_slot"] = None
+        slot_updates["modify_follow_up_answered"] = None
+        slot_updates["modify_follow_up_answer"] = None
+        next_state = "add_more_info_flow"
+        form_modify = _get_form_modify_grievance_details()
+        msgs_modify, form_updates_modify, _ = await run_form_turn(
+            form_modify, session, None, domain
+        )
+        dispatcher.messages.extend(msgs_modify)
+        slot_updates.update(form_updates_modify)
+    elif intent == "modify_grievance_add_missing_info":
+        form_modify = _get_form_modify_contact()
+        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
+        hydrate = events_to_slot_updates(
+            form_modify.get_complainant_slot_events_from_grievance(grievance_id)
+        )
+        session.setdefault("slots", {}).update(hydrate)
+        check_tracker = SessionTracker(
+            slots=session.get("slots", {}),
+            sender_id=session.get("user_id", "default"),
+            latest_message=latest_message,
+            active_loop=None,
+            requested_slot=None,
+        )
+        _, missing = form_modify.get_missing_contact_fields(check_tracker)
+        if missing and missing[0] == "complainant_phone":
+            session["active_loop"] = "form_otp"
+            session["requested_slot"] = None
+            if session.get("slots", {}).get("story_main") is None:
+                slot_updates["story_main"] = "status_check"
+            slot_updates["complainant_consent"] = True
+            session["slots"].update(slot_updates)
+            next_state = "add_missing_info_otp_flow"
+            otp_form = _get_otp_form()
+            msgs_otp, form_updates_otp, _ = await run_form_turn(
+                otp_form, session, None, domain
+            )
+            dispatcher.messages.extend(msgs_otp)
+            slot_updates.update(form_updates_otp)
+        else:
+            session["active_loop"] = "form_modify_contact"
+            session["requested_slot"] = None
+            next_state = "add_missing_info_flow"
+            msgs_modify, form_updates_modify, _ = await run_form_turn(
+                form_modify, session, None, domain
+            )
+            dispatcher.messages.extend(msgs_modify)
+            slot_updates.update(form_updates_modify)
+    elif intent == "modify_grievance_cancel":
+        slots_after = dict(session.get("slots", {}))
+        ask_dispatcher = CollectingDispatcher()
+        await invoke_action(
+            "action_ask_story_step",
+            ask_dispatcher,
+            SessionTracker(
+                slots=slots_after,
+                sender_id=session.get("user_id", "default"),
+                latest_message=latest_message,
+                active_loop=None,
+                requested_slot=None,
+            ),
+            domain,
+        )
+        dispatcher.messages.extend(ask_dispatcher.messages)
+        next_state = "status_check_form"
+    elif intent in ("new_grievance", "dust_grievance", "road_hazard_grievance", "start_seah_intake"):
+        next_state = await _restart_intake_from_done(
+            intent,
+            dispatcher,
+            session,
+            latest_message,
+            domain,
+            slot_updates,
+        )
+    else:
+        pass
+    return next_state
+
+
+
+# ── the state -> handler table (T3-02 p4) ───────────────────────────────────────
+#
+# Replaces the 20-arm if/elif chain. Each handler was moved verbatim from its arm and
+# declares exactly the inputs its body actually reads — which is information the chain
+# hid: every arm had the whole of run_flow_turn's scope in reach whether it used it or
+# not. `**_` absorbs the rest so the call site is uniform; a typo'd parameter name still
+# fails loudly (the caller's keyword lands in `_`, and the misspelled one is missing).
+#
+# The default is p1's `_recover_from_unknown_state` — which is why p1 gave it this exact
+# signature. `.get(state)` + a default is the whole of the dead-branch protection the
+# chain needed a terminal `else` for.
+#
+# NOTE what this table does NOT buy: it cannot catch a *recognized* state that dispatches
+# nothing (D-51/D-52/D-59) — the lookup succeeds and the default never fires. That class is
+# owned by run_flow_turn's postcondition, not by this table.
+_STATE_HANDLERS: Dict[str, Any] = {
+    "intro": _h_intro,
+    "main_menu": _h_main_menu,
+    "form_grievance": _h_form_grievance,
+    "form_road_hazard": _h_form_road_hazard,
+    "location_consent": _h_location_consent,
+    "location_method": _h_location_method,
+    "map_location": _h_map_location,
+    "form_seah_1": _h_form_seah_1,
+    "contact_form": _h_contact_form,
+    "form_seah_2": _h_form_seah_2,
+    "form_seah_focal_point_1": _h_form_seah_focal_point_1,
+    "form_seah_focal_point_2": _h_form_seah_focal_point_2,
+    "otp_form": _h_otp_form,
+    "grievance_review": _h_grievance_review,
+    "status_check_form": _h_status_check_form,
+    "add_more_info_flow": _h_add_more_info_flow,
+    "modify_grievance_menu": _h_modify_grievance_menu,
+    "add_missing_info_otp_flow": _h_add_missing_info_otp_flow,
+    "add_missing_info_flow": _h_add_missing_info_flow,
+    "done": _h_done,
+}
+
+
 async def run_flow_turn(
     session: Dict[str, Any],
     text: str,
@@ -892,1403 +2715,68 @@ async def run_flow_turn(
         session["state"] = next_state
         return (messages, next_state, expected)
 
-    if state == "intro":
-        # First turn: show language selection intro. On subsequent turns, when the
-        # user clicks a language button, set the language and go straight to main
-        # menu without re-sending the intro message.
-        if intent in ("set_english", "set_nepali"):
-            next_state = await _set_language_and_show_main_menu(
-                session,
-                intent,
-                dispatcher,
-                domain,
-                slot_updates,
-                latest_message,
-            )
-        else:
-            await invoke_action("action_introduce", dispatcher, tracker, domain)
-
-    elif state == "main_menu":
-        menu_transition_intents = {
-            "new_grievance",
-            "dust_grievance",
-            "road_hazard_grievance",
-            "start_seah_intake",
-            "start_status_check",
-        }
-        if intent in ("set_english", "set_nepali"):
-            next_state = await _set_language_and_show_main_menu(
-                session,
-                intent,
-                dispatcher,
-                domain,
-                slot_updates,
-                latest_message,
-            )
-        # Avoid repeating the main menu utterance when the user already clicked one of its options.
-        elif intent not in menu_transition_intents:
-            await invoke_action("action_main_menu", dispatcher, tracker, domain)
-        if intent == "new_grievance":
-            ask_dispatcher = CollectingDispatcher()
-            events = await invoke_action(
-                "action_start_grievance_process",
-                ask_dispatcher,
-                tracker,
-                domain,
-            )
-            slot_updates = events_to_slot_updates(events)
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            session["slots"].update(slot_updates)
-            session["active_loop"] = "form_grievance"
-            session["requested_slot"] = "grievance_new_detail"
-            next_state = "form_grievance"
-            # First form prompt: run form loop with no user input
-            session_copy = dict(session)
-            session_copy["slots"] = dict(session["slots"])
-            form = _get_form()
-            msgs, form_updates, completed = await run_form_turn(
-                form, session_copy, None, domain
-            )
-            dispatcher.messages.extend(msgs)
-            slot_updates.update(form_updates)
-            if completed:
-                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
-        elif intent in ("dust_grievance", "road_hazard_grievance"):
-            next_state = await _begin_road_hazard_intake(
-                session,
-                dispatcher,
-                domain,
-                slot_updates,
-                latest_message,
-                prefill_subtype="dust" if intent == "dust_grievance" else None,
-            )
-        elif intent == "start_seah_intake" and _is_seah_enabled():
-            next_state = await _begin_seah_intake(
-                session,
-                dispatcher,
-                domain,
-                slot_updates,
-                latest_message,
-            )
-        elif intent == "start_seah_intake" and not _is_seah_enabled():
-            # Feature-flag off: keep legacy behavior and do not enter dedicated SEAH flow.
-            next_state = "main_menu"
-        elif intent == "start_status_check":
-            ask_dispatcher = CollectingDispatcher()
-            events = await invoke_action(
-                "action_start_status_check",
-                ask_dispatcher,
-                tracker,
-                domain,
-            )
-            slot_updates = events_to_slot_updates(events)
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            session["slots"].update(slot_updates)
-            session["active_loop"] = "form_status_check_1"
-            session["requested_slot"] = None
-            next_state = "status_check_form"
-            # First form prompt: run form loop with no user input
-            session_copy = dict(session)
-            session_copy["slots"] = dict(session["slots"])
-            form_status_1 = _get_status_form_1()
-            msgs, form_updates, completed = await run_form_turn(
-                form_status_1, session_copy, None, domain
-            )
-            dispatcher.messages.extend(msgs)
-            slot_updates.update(form_updates)
-            if completed:
-                next_state = "done"
-                session["active_loop"] = None
-                session["requested_slot"] = None
-
-    elif state == "form_grievance":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
+    handler = _STATE_HANDLERS.get(state)
+    if handler is None:
+        _log_sm.error(
+            "run_flow_turn: unrecognized state %r (user_id=%s) — recovering",
+            state,
+            session.get("user_id", "default"),
         )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            if session.get("slots", {}).get("grievance_sensitive_issue"):
-                next_state = "form_seah_1"
-                session["active_loop"] = "form_seah_1"
-                session["requested_slot"] = None
-                sensitive_form = _get_form_seah_1()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    sensitive_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-            else:
-                next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
+        handler = _recover_from_unknown_state_handler
 
-    elif state == "form_road_hazard":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_road_hazard()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
+    next_state = await handler(
+        session,
+        dispatcher,
+        domain,
+        slot_updates,
+        latest_message=latest_message,
+        intent=intent,
+        text=text,
+        payload=payload,
+        tracker=tracker,
+        msg_text=msg_text,
+        payload_raw=payload_raw,
+        next_state=next_state,
+    )
+
+    # ── POSTCONDITION: a turn never returns zero messages ────────────────────────────
+    #
+    # The user spoke; the chatbot answers. This file has always *said* so — see the
+    # "re-show choices so we never return empty messages" comment in the status-check
+    # branch — but nothing enforced it, so it failed at each site separately and was found
+    # at each site separately: D-08 (unrecognized state), D-51 (a recognized branch invoking
+    # an action that no-ops), D-52 (an unrecognized active_loop), D-59 (the SEAH flag-off
+    # arm setting next_state and dispatching nothing). The terminal `else` above catches
+    # only D-08; in the other three the *state* is recognized, so it never runs.
+    #
+    # Hence the guard sits at the turn boundary, which is where the invariant actually
+    # lives. Silence here is always a bug — never a design — so it is logged at error with
+    # everything needed to locate it, and the user is recovered rather than left staring at
+    # nothing.
+    #
+    # Safe to recover (rather than merely log) because the blast radius is exactly "turns
+    # that are already broken": instrumenting all three returns and running the whole suite
+    # found **three** zero-message turns out of 208 tests, and all three were bugs. The
+    # `/introduce` restart and attachment_ids_sync never return empty. Measured, not assumed
+    # — if that ever stops holding, this fires on a legitimate path and the control tests in
+    # tests/orchestrator/test_no_silent_turns.py go red, which is the point.
+    if not dispatcher.messages:
+        _log_sm.error(
+            "run_flow_turn: zero-message turn — state=%r intent=%r active_loop=%r "
+            "next_state=%r (user_id=%s). The branch that ran dispatched nothing; recovering. "
+            "This is a bug in that branch, not in the recovery.",
+            state,
+            intent,
+            session.get("active_loop"),
+            next_state,
+            session.get("user_id", "default"),
         )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
-
-    elif state == "form_dust":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_road_hazard()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            next_state = await _begin_location_consent(session, dispatcher, domain, slot_updates)
-
-    elif state == "location_consent":
-        from backend.actions.action_map_location import location_skip_slot_updates
-
-        consent_text = latest_message.get("text", "")
-        if consent_text.startswith("/affirm") or intent == "affirm":
-            slot_updates["complainant_location_consent"] = True
-            session["slots"].update(slot_updates)
-            next_state = await _begin_location_method(
-                session, dispatcher, domain, slot_updates
-            )
-        elif consent_text.startswith("/deny") or intent == "deny":
-            slot_updates.update(location_skip_slot_updates())
-            session["slots"].update(slot_updates)
-            next_state = await _begin_contact_form(
-                session, dispatcher, domain, slot_updates
-            )
-        else:
-            next_state = await _begin_location_consent(
-                session, dispatcher, domain, slot_updates
-            )
-
-    elif state == "location_method":
-        if intent == "location_manual_entry":
-            slot_updates["complainant_location_consent"] = True
-            slot_updates["location_pin_status"] = "manual"
-            session["slots"].update(slot_updates)
-            next_state = await _begin_contact_form(
-                session, dispatcher, domain, slot_updates
-            )
-        elif intent == "location_use_map":
-            slot_updates["complainant_location_consent"] = True
-            session["slots"].update(slot_updates)
-            next_state = await _begin_map_picker(
-                session, dispatcher, domain, slot_updates, open_picker=True
-            )
-        elif intent == "location_use_phone":
-            slot_updates["complainant_location_consent"] = True
-            session["slots"].update(slot_updates)
-            # Client reads GPS and sends map_pin_set; no map modal.
-            next_state = "map_location"
-        else:
-            next_state = await _begin_location_method(
-                session, dispatcher, domain, slot_updates
-            )
-
-    elif state == "map_location":
-        from backend.actions.action_map_location import (
-            build_map_filled_location_slots,
-            parse_map_pin_payload,
-        )
-        from backend.shared_functions.location_mapping import (
-            resolve_location_code_to_names,
-            resolve_pin_to_location_code,
-        )
-        from backend.services.database_services.postgres_services import db_manager
-
-        if intent == "map_pin_set":
-            try:
-                coords = parse_map_pin_payload(payload_raw or msg_text)
-                province = None
-                district = None
-                location_code = resolve_pin_to_location_code(
-                    db_manager, coords["lat"], coords["lng"]
-                )
-                if location_code:
-                    slot_updates["location_code"] = location_code
-                    names = resolve_location_code_to_names(
-                        db_manager,
-                        location_code,
-                        session.get("slots", {}).get("language_code") or "en",
-                    )
-                    province = names.get("province_name")
-                    district = names.get("district_name")
-                slot_updates.update(
-                    build_map_filled_location_slots(
-                        coords["lat"],
-                        coords["lng"],
-                        province=province,
-                        district=district,
-                        location_code=slot_updates.get("location_code"),
-                    )
-                )
-                session["slots"].update(slot_updates)
-                apply_dispatcher = CollectingDispatcher()
-                apply_tracker = SessionTracker(
-                    slots=session.get("slots", {}),
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                )
-                events = await invoke_action(
-                    "action_apply_map_pin",
-                    apply_dispatcher,
-                    apply_tracker,
-                    domain,
-                )
-                slot_updates.update(events_to_slot_updates(events))
-                dispatcher.messages.extend(apply_dispatcher.messages)
-                if session.get("slots", {}).get("intake_fast_path") in ("road_hazard", "dust"):
-                    dispatcher.utter_message(
-                        json_message={
-                            "data": {
-                                "event_type": "open_upload_modal",
-                                "grievance_id": session.get("slots", {}).get("grievance_id"),
-                                # Prompt only — do not auto-open native file picker after map confirm.
-                                "auto_open": False,
-                            }
-                        }
-                    )
-                next_state = await _begin_contact_form(
-                    session, dispatcher, domain, slot_updates
-                )
-            except (ValueError, KeyError, TypeError):
-                next_state = await _begin_map_picker(
-                    session, dispatcher, domain, slot_updates, open_picker=False
-                )
-        elif intent == "location_manual_entry":
-            slot_updates["complainant_location_consent"] = True
-            slot_updates["location_pin_status"] = "manual"
-            session["slots"].update(slot_updates)
-            next_state = await _begin_contact_form(
-                session, dispatcher, domain, slot_updates
-            )
-        elif intent == "location_use_phone":
-            next_state = "map_location"
-        elif intent == "location_open_map":
-            await _invoke_ask_action(
-                "action_open_map_picker",
-                session,
-                dispatcher,
-                domain,
-                intent_name="map_location_open",
-            )
-            next_state = "map_location"
-        else:
-            next_state = await _begin_map_picker(
-                session, dispatcher, domain, slot_updates, open_picker=False
-            )
-
-    elif state == "form_seah_1":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_seah_1()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            # Merge this turn's form output so routing sees slots set in the same turn
-            # (e.g. seah_victim_survivor_role after the victim/survivor answer).
-            merged_slots = {**session.get("slots", {}), **form_updates}
-            story_main = merged_slots.get("story_main")
-            identity_mode = merged_slots.get("sensitive_issues_follow_up")
-            seah_role = merged_slots.get("seah_victim_survivor_role")
-            witness_exit_without_filing = bool(merged_slots.get("seah_witness_exit_without_filing"))
-            next_state = "contact_form"
-            session["active_loop"] = "form_contact"
-            session["requested_slot"] = None
-            session["slots"].update(slot_updates)
-            _log = logging.getLogger("orchestrator.state_machine")
-            contact_slots = ["complainant_location_consent", "complainant_province", "complainant_village_temp", "complainant_consent"]
-            slot_preview = {k: session["slots"].get(k) for k in contact_slots}
-            _log.info("form_seah_1 completed -> contact_form | contact slot preview: %s", slot_preview)
-            # Witness path: if no consent and no immediate danger, stop with support-only acknowledgement.
-            if story_main == "seah_intake" and seah_role == "not_victim_survivor" and witness_exit_without_filing:
-                next_state = "done"
-                session["active_loop"] = None
-                session["requested_slot"] = None
-            # Focal-point branch starts with reporter name, then reporter phone.
-            elif story_main == "seah_intake" and seah_role == "focal_point":
-                next_state = "contact_form"
-                session["active_loop"] = "form_contact"
-                session["requested_slot"] = None
-                slot_updates["seah_focal_stage"] = "bootstrap_reporter_contact"
-                session["slots"]["seah_focal_stage"] = "bootstrap_reporter_contact"
-                contact_form = _get_contact_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    contact_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-            # In dedicated SEAH intake, identified users should be asked for phone first.
-            elif story_main == "seah_intake" and identity_mode == "identified":
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                otp_form = _get_otp_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-            # Anonymous SEAH now uses the same OTP hop as identified flow, so phone can
-            # still be requested/collected consistently for victim and other routes.
-            elif story_main == "seah_intake" and identity_mode == "anonymous":
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                otp_form = _get_otp_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-            else:
-                contact_form = _get_contact_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    contact_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-
-    elif state == "contact_form":
-        user_input = latest_message if (text or payload) else None
-        form = _get_contact_form()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            story_main = session.get("slots", {}).get("story_main")
-            complainant_consent = session.get("slots", {}).get("complainant_consent")
-            seah_victim_survivor_role = session.get("slots", {}).get("seah_victim_survivor_role")
-            seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
-
-            # Dedicated SEAH intake must always collect SEAH incident details
-            # in form_seah_2 / form_seah_focal_point before submission.
-            if story_main == "seah_intake":
-                if seah_victim_survivor_role == "focal_point" and seah_focal_stage == "bootstrap_reporter_contact":
-                    next_state = "otp_form"
-                    session["active_loop"] = "form_otp"
-                    slot_updates["seah_focal_stage"] = "bootstrap_reporter_otp"
-                    session["slots"]["seah_focal_stage"] = "bootstrap_reporter_otp"
-                    session["requested_slot"] = None
-                    otp_form = _get_otp_form()
-                    msgs2, form_updates2, _ = await run_form_turn(
-                        otp_form, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs2)
-                    slot_updates.update(form_updates2)
-                    seah_form = None
-                elif seah_victim_survivor_role == "focal_point" and seah_focal_stage == "complainant_contact":
-                    next_state = "form_seah_focal_point_2"
-                    session["active_loop"] = "form_seah_focal_point_2"
-                    slot_updates["seah_focal_stage"] = "focal_point_2"
-                    session["slots"]["seah_focal_stage"] = "focal_point_2"
-                    seah_form = _get_form_seah_focal_point_2()
-                elif seah_victim_survivor_role == "focal_point":
-                    next_state = "form_seah_focal_point_2"
-                    session["active_loop"] = "form_seah_focal_point_2"
-                    slot_updates["seah_focal_stage"] = "focal_point_2"
-                    session["slots"]["seah_focal_stage"] = "focal_point_2"
-                    seah_form = _get_form_seah_focal_point_2()
-                else:
-                    next_state = "form_seah_2"
-                    session["active_loop"] = "form_seah_2"
-                    seah_form = _get_form_seah_2()
-
-                if seah_form is not None:
-                    session["requested_slot"] = None
-                    msgs2, form_updates2, _ = await run_form_turn(
-                        seah_form, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs2)
-                    slot_updates.update(form_updates2)
-
-            # If the user refused to share any contact information in the grievance flow,
-            # skip the OTP form entirely and move directly to grievance submission +
-            # review (same path as otp_form completed for new_grievance).
-            elif story_main in (
-                "new_grievance",
-                "dust_grievance",
-                "road_hazard_grievance",
-                "grievance_submission",
-            ) and complainant_consent is False:
-                session["active_loop"] = None
-                session["requested_slot"] = None
-
-                ask_dispatcher = CollectingDispatcher()
-                tracker_submit = SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                )
-                submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
-                events = await invoke_action(
-                    submit_action,
-                    ask_dispatcher,
-                    tracker_submit,
-                    domain,
-                )
-                submit_updates = events_to_slot_updates(events)
-                slot_updates.update(submit_updates)
-                session["slots"].update(submit_updates)
-                dispatcher.messages.extend(ask_dispatcher.messages)
-
-                next_state = await _start_grievance_review_after_submit(
-                    session, dispatcher, domain, slot_updates, latest_message
-                )
-            else:
-                next_state = "otp_form"
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                otp_form = _get_otp_form()
-                msgs2, form_updates2, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs2)
-                slot_updates.update(form_updates2)
-
-    elif state == "form_seah_2":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_seah_2()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            ask_dispatcher = CollectingDispatcher()
-            submit_events = await invoke_action(
-                "action_submit_seah",
-                ask_dispatcher,
-                SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                ),
-                domain,
-            )
-            submit_updates = events_to_slot_updates(submit_events)
-            slot_updates.update(submit_updates)
-            session["slots"].update(submit_updates)
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            await _append_seah_outro_after_submit_if_applicable(
-                dispatcher, session, latest_message, domain, slot_updates
-            )
-            next_state = "done"
-
-    elif state == "form_seah_focal_point_1":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_seah_focal_point_1()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            next_state = "form_seah_focal_point_2"
-            session["active_loop"] = "form_seah_focal_point_2"
-            session["requested_slot"] = None
-            slot_updates["seah_focal_stage"] = "focal_point_2"
-            session["slots"]["seah_focal_stage"] = "focal_point_2"
-            focal_form_2 = _get_form_seah_focal_point_2()
-            msgs2, form_updates2, _ = await run_form_turn(
-                focal_form_2, session, None, domain
-            )
-            dispatcher.messages.extend(msgs2)
-            slot_updates.update(form_updates2)
-
-    elif state == "form_seah_focal_point_2":
-        user_input = latest_message if (text or payload) else None
-        form = _get_form_seah_focal_point_2()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            session["slots"].update(slot_updates)
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            ask_dispatcher = CollectingDispatcher()
-            submit_events = await invoke_action(
-                "action_submit_seah",
-                ask_dispatcher,
-                SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                ),
-                domain,
-            )
-            submit_updates = events_to_slot_updates(submit_events)
-            slot_updates.update(submit_updates)
-            session["slots"].update(submit_updates)
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            await _append_seah_outro_after_submit_if_applicable(
-                dispatcher, session, latest_message, domain, slot_updates
-            )
-            next_state = "done"
-
-    elif state == "otp_form":
-        user_input = latest_message if (text or payload) else None
-        form = _get_otp_form()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            story_main = session.get("slots", {}).get("story_main")
-            seah_focal_stage = session.get("slots", {}).get("seah_focal_stage")
-            if story_main == "status_check":
-                next_state = "status_check_form"
-                session["active_loop"] = "form_status_check_2"
-                session["requested_slot"] = None
-            elif story_main == "seah_intake":
-                if seah_focal_stage == "bootstrap_reporter_otp":
-                    next_state = "form_seah_focal_point_1"
-                    session["active_loop"] = "form_seah_focal_point_1"
-                    session["requested_slot"] = None
-                    slot_updates["seah_focal_stage"] = "focal_point_1"
-                    session["slots"]["seah_focal_stage"] = "focal_point_1"
-                    session["slots"].update(slot_updates)
-                    seah_form = _get_form_seah_focal_point_1()
-                    msgs2, form_updates2, _ = await run_form_turn(
-                        seah_form, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs2)
-                    slot_updates.update(form_updates2)
-                else:
-                    next_state = "contact_form"
-                    session["active_loop"] = "form_contact"
-                    session["requested_slot"] = None
-                    session["slots"].update(slot_updates)
-                    contact_form = _get_contact_form()
-                    msgs2, form_updates2, _ = await run_form_turn(
-                        contact_form, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs2)
-                    slot_updates.update(form_updates2)
-            else:
-                session["slots"].update(slot_updates)
-                session["active_loop"] = None
-                session["requested_slot"] = None
-                ask_dispatcher = CollectingDispatcher()
-                tracker_submit = SessionTracker(
-                    slots=session["slots"],
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                )
-                submit_action = "action_submit_seah" if story_main == "seah_intake" else "action_submit_grievance"
-                events = await invoke_action(
-                    submit_action,
-                    ask_dispatcher,
-                    tracker_submit,
-                    domain,
-                )
-                slot_updates = events_to_slot_updates(events)
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                session["slots"].update(slot_updates)
-                next_state = await _start_grievance_review_after_submit(
-                    session, dispatcher, domain, slot_updates, latest_message
-                )
-
-    elif state == "submit_grievance":
-        ask_dispatcher = CollectingDispatcher()
-        submit_action = "action_submit_seah" if session.get("slots", {}).get("story_main") == "seah_intake" else "action_submit_grievance"
-        events = await invoke_action(
-            submit_action,
-            ask_dispatcher,
-            tracker,
-            domain,
-        )
-        slot_updates = events_to_slot_updates(events)
-        dispatcher.messages.extend(ask_dispatcher.messages)
-        session["slots"].update(slot_updates)
-        await _append_seah_outro_after_submit_if_applicable(
-            dispatcher, session, latest_message, domain, slot_updates
-        )
-        next_state = await _start_grievance_review_after_submit(
+        # Reuses p1's terminal-else recovery: bilingual, re-shows the menu, and clears
+        # active_loop/requested_slot — which is also what un-wedges D-52, whose bogus loop
+        # would otherwise survive and re-silence every later turn.
+        next_state = await _recover_from_unknown_state(
             session, dispatcher, domain, slot_updates, latest_message
         )
-
-    elif state == "grievance_review":
-        user_input = latest_message if (text or payload) else None
-        form = _get_review_form()
-        msgs, form_updates, completed = await run_form_turn(
-            form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs)
-        slot_updates.update(form_updates)
-        if completed:
-            next_state = "done"
-            await _finish_grievance_review(
-                session, dispatcher, domain, slot_updates, latest_message
-            )
-
-    elif state == "status_check_form":
-        user_input = latest_message if (text or payload) else None
-        active_loop = session.get("active_loop")
-
-        # Post-form status-check step: user has seen grievance details and is choosing
-        # an action (request follow-up, modify, or skip). In this phase we don't run
-        # any forms, we just route based on intent.
-        if not active_loop:
-            slots_after = dict(session.get("slots", {}))
-            slots_after.update(slot_updates)
-
-            if intent == "status_check_request_follow_up":
-                from backend.actions.status_check_follow_up import (
-                    follow_up_needs_otp_verification,
-                )
-
-                if follow_up_needs_otp_verification(slots_after):
-                    for otp_slot in (
-                        "otp_consent",
-                        "otp_input",
-                        "otp_status",
-                        "otp_number",
-                    ):
-                        slot_updates[otp_slot] = None
-                    slot_updates["otp_resend_count"] = 0
-                    session["active_loop"] = "form_otp"
-                    session["requested_slot"] = None
-                    session["slots"].update(slot_updates)
-                    otp_form = _get_otp_form()
-                    msgs, form_updates, _ = await run_form_turn(
-                        otp_form, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs)
-                    slot_updates.update(form_updates)
-                    next_state = "status_check_form"
-                else:
-                    ask_dispatcher = CollectingDispatcher()
-                    events = await invoke_action(
-                        "action_status_check_request_follow_up",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=slots_after,
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
-                    )
-                    slot_updates.update(events_to_slot_updates(events))
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-                    next_state = "done"
-                    session["active_loop"] = None
-                    session["requested_slot"] = None
-            elif intent == "status_check_modify_grievance":
-                ask_dispatcher = CollectingDispatcher()
-                events = await invoke_action(
-                    "action_status_check_modify_grievance",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                slot_updates.update(events_to_slot_updates(events))
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                next_state = "modify_grievance_menu"
-                session["active_loop"] = None
-                session["requested_slot"] = None
-            else:
-                # Unknown or neutral input (e.g. free text): re-show choices so we never return empty messages.
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_ask_story_step",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                next_state = "status_check_form"
-        else:
-            # We are still inside one of the status-check related forms.
-            if active_loop == "form_status_check_1":
-                form = _get_status_form_1()
-            elif active_loop == "form_otp":
-                form = _get_otp_form()
-            elif active_loop == "form_status_check_2":
-                form = _get_status_form_2()
-            elif active_loop == "form_status_check_skip":
-                form = _get_status_form_skip()
-            else:
-                form = _get_status_form_1()
-
-            msgs, form_updates, completed = await run_form_turn(
-                form, session, user_input, domain
-            )
-            dispatcher.messages.extend(msgs)
-            slot_updates.update(form_updates)
-
-            if completed:
-                slots_after = dict(session.get("slots", {}))
-                slots_after.update(slot_updates)
-                story_route = slots_after.get("story_route")
-
-                if active_loop == "form_status_check_1":
-                    if story_route == "route_status_check_phone":
-                        session["active_loop"] = "form_otp"
-                        session["requested_slot"] = None
-                        session["slots"].update(slot_updates)
-                        otp_form = _get_otp_form()
-                        msgs2, form_updates2, _ = await run_form_turn(
-                            otp_form, session, None, domain
-                        )
-                        dispatcher.messages.extend(msgs2)
-                        slot_updates.update(form_updates2)
-                    elif story_route == "route_status_check_grievance_id":
-                        session["active_loop"] = "form_status_check_2"
-                        session["requested_slot"] = None
-                        session["slots"].update(slot_updates)
-                        status_form_2 = _get_status_form_2()
-                        msgs2, form_updates2, completed_2 = await run_form_turn(
-                            status_form_2, session, None, domain
-                        )
-                        dispatcher.messages.extend(msgs2)
-                        slot_updates.update(form_updates2)
-                        # If form_status_check_2 completed immediately (e.g. grievance ID
-                        # already set from 6-char lookup), show grievance details
-                        if completed_2 and not msgs2:
-                            session["active_loop"] = None
-                            session["requested_slot"] = None
-                            session["slots"].update(slot_updates)
-                            ask_dispatcher = CollectingDispatcher()
-                            await invoke_action(
-                                "action_ask_story_step",
-                                ask_dispatcher,
-                                SessionTracker(
-                                    slots=session["slots"],
-                                    sender_id=session.get("user_id", "default"),
-                                    latest_message=latest_message,
-                                    active_loop=None,
-                                    requested_slot=None,
-                                ),
-                                domain,
-                            )
-                            dispatcher.messages.extend(ask_dispatcher.messages)
-                            next_state = "status_check_form"
-                    elif story_route and "skip" in str(story_route).lower():
-                        session["active_loop"] = "form_status_check_skip"
-                        session["requested_slot"] = None
-                    else:
-                        # story_route missing or unknown: re-ask so we never return done with no messages
-                        ask_dispatcher = CollectingDispatcher()
-                        await invoke_action(
-                            "action_ask_status_check_method",
-                            ask_dispatcher,
-                            SessionTracker(
-                                slots=slots_after,
-                                sender_id=session.get("user_id", "default"),
-                                latest_message=latest_message,
-                                active_loop="form_status_check_1",
-                                requested_slot="story_route",
-                            ),
-                            domain,
-                        )
-                        dispatcher.messages.extend(ask_dispatcher.messages)
-                        session["active_loop"] = "form_status_check_1"
-                        session["requested_slot"] = "story_route"
-                        next_state = "status_check_form"
-                elif active_loop == "form_otp":
-                    session["active_loop"] = "form_status_check_2"
-                    session["requested_slot"] = None
-                    session["slots"].update(slot_updates)
-                    status_form_2 = _get_status_form_2()
-                    msgs2, form_updates2, completed_2 = await run_form_turn(
-                        status_form_2, session, None, domain
-                    )
-                    dispatcher.messages.extend(msgs2)
-                    slot_updates.update(form_updates2)
-                    # If form_status_check_2 completes immediately after OTP
-                    # (e.g., a single grievance is already selected), ensure
-                    # we still show grievance details/options in this turn.
-                    if completed_2 and not msgs2:
-                        session["active_loop"] = None
-                        session["requested_slot"] = None
-                        session["slots"].update(slot_updates)
-                        ask_dispatcher = CollectingDispatcher()
-                        await invoke_action(
-                            "action_ask_story_step",
-                            ask_dispatcher,
-                            SessionTracker(
-                                slots=session["slots"],
-                                sender_id=session.get("user_id", "default"),
-                                latest_message=latest_message,
-                                active_loop=None,
-                                requested_slot=None,
-                            ),
-                            domain,
-                        )
-                        dispatcher.messages.extend(ask_dispatcher.messages)
-                        next_state = "status_check_form"
-                elif active_loop == "form_status_check_2":
-                    # After the second status-check form completes, show grievance
-                    # details and offer follow-up/modify/skip choices.
-                    session["active_loop"] = None
-                    session["requested_slot"] = None
-                    session["slots"].update(slot_updates)
-                    ask_dispatcher = CollectingDispatcher()
-                    await invoke_action(
-                        "action_ask_story_step",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=session["slots"],
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
-                    )
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-                    next_state = "status_check_form"
-                elif active_loop == "form_status_check_skip":
-                    ask_dispatcher = CollectingDispatcher()
-                    await invoke_action(
-                        "action_skip_status_check_outro",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=slots_after,
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
-                    )
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-                    next_state = "done"
-                    session["active_loop"] = None
-                    session["requested_slot"] = None
-            elif (
-                active_loop == "form_status_check_2"
-                and not dispatcher.messages
-            ):
-                # Safety net: if the second status-check form is still in progress
-                # and produced no messages (e.g. after the user provides a full
-                # name), ensure we at least show the grievance selection buttons.
-                slots_after = dict(session.get("slots", {}))
-                slots_after.update(slot_updates)
-                if (
-                    slots_after.get("list_grievance_id")
-                    and not slots_after.get("status_check_grievance_id_selected")
-                ):
-                    ask_dispatcher = CollectingDispatcher()
-                    await invoke_action(
-                        "action_ask_status_check_grievance_id_selected",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=slots_after,
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop="form_status_check_2",
-                            requested_slot="status_check_grievance_id_selected",
-                        ),
-                        domain,
-                    )
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-                    session["active_loop"] = "form_status_check_2"
-                    session["requested_slot"] = "status_check_grievance_id_selected"
-                    next_state = "status_check_form"
-            elif active_loop not in (
-                "form_status_check_1",
-                "form_otp",
-                "form_status_check_2",
-                "form_status_check_skip",
-            ):
-                # active_loop not in the four known forms: re-prompt so we never return done with no messages
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_ask_status_check_method",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=session.get("slots", {}),
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop="form_status_check_1",
-                        requested_slot="story_route",
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-                session["active_loop"] = "form_status_check_1"
-                session["requested_slot"] = "story_route"
-                next_state = "status_check_form"
-
-    elif state == "add_more_info_flow":
-        user_input = latest_message if (text or payload) else None
-        form_modify = _get_form_modify_grievance_details()
-        msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
-            form_modify, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs_modify)
-        slot_updates.update(form_updates_modify)
-        if completed_modify:
-            session["slots"].update(slot_updates)
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            if session.get("slots", {}).get("modify_grievance_new_detail") == "cancelled":
-                next_state = "modify_grievance_menu"
-                # Re-show the modify menu
-                slots_after = dict(session.get("slots", {}))
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_status_check_modify_grievance",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-            else:
-                next_state = "status_check_form"
-                slots_after = dict(session.get("slots", {}))
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_ask_story_step",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-
-    elif state == "modify_grievance_menu":
-        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-        if intent == "modify_grievance_add_pictures" and grievance_id:
-            # Tell frontend to open the file upload modal for this grievance (same as "add file" button).
-            dispatcher.utter_message(
-                json_message={
-                    "data": {
-                        "event_type": "open_upload_modal",
-                        "grievance_id": grievance_id,
-                        "auto_open": True,
-                    }
-                }
-            )
-            next_state = "modify_grievance_menu"
-        elif intent == "modify_grievance_cancel":
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            slots_after = dict(session.get("slots", {}))
-            ask_dispatcher = CollectingDispatcher()
-            await invoke_action(
-                "action_ask_story_step",
-                ask_dispatcher,
-                SessionTracker(
-                    slots=slots_after,
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                ),
-                domain,
-            )
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            next_state = "status_check_form"
-        elif intent == "exit":
-            # User chose to exit from the modify-grievance menu: show the
-            # status-check outro and end the flow.
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            slots_after = dict(session.get("slots", {}))
-            ask_dispatcher = CollectingDispatcher()
-            await invoke_action(
-                "action_skip_status_check_outro",
-                ask_dispatcher,
-                SessionTracker(
-                    slots=slots_after,
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                ),
-                domain,
-            )
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            next_state = "done"
-        elif intent == "modify_grievance_add_more_info":
-            session["active_loop"] = "form_modify_grievance_details"
-            session["requested_slot"] = None
-            slot_updates["modify_follow_up_answered"] = None
-            slot_updates["modify_follow_up_answer"] = None
-            next_state = "add_more_info_flow"
-            form_modify = _get_form_modify_grievance_details()
-            msgs_modify, form_updates_modify, _ = await run_form_turn(
-                form_modify, session, None, domain
-            )
-            dispatcher.messages.extend(msgs_modify)
-            slot_updates.update(form_updates_modify)
-        elif intent == "modify_grievance_add_missing_info":
-            form_modify = _get_form_modify_contact()
-            grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-            hydrate = events_to_slot_updates(
-                form_modify.get_complainant_slot_events_from_grievance(grievance_id)
-            )
-            session.setdefault("slots", {}).update(hydrate)
-            check_tracker = SessionTracker(
-                slots=session.get("slots", {}),
-                sender_id=session.get("user_id", "default"),
-                latest_message=latest_message,
-                active_loop=None,
-                requested_slot=None,
-            )
-            _, missing = form_modify.get_missing_contact_fields(check_tracker)
-            if missing and missing[0] == "complainant_phone":
-                # Phone is first missing: run OTP form to collect and verify
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                if session.get("slots", {}).get("story_main") is None:
-                    slot_updates["story_main"] = "status_check"
-                slot_updates["complainant_consent"] = True
-                session["slots"].update(slot_updates)
-                next_state = "add_missing_info_otp_flow"
-                otp_form = _get_otp_form()
-                msgs_otp, form_updates_otp, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_otp)
-                slot_updates.update(form_updates_otp)
-            else:
-                session["active_loop"] = "form_modify_contact"
-                session["requested_slot"] = None
-                next_state = "add_missing_info_flow"
-                msgs_modify, form_updates_modify, _ = await run_form_turn(
-                    form_modify, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_modify)
-                slot_updates.update(form_updates_modify)
-        else:
-            next_state = "modify_grievance_menu"
-
-    elif state == "add_missing_info_otp_flow":
-        user_input = latest_message if (text or payload) else None
-        otp_form = _get_otp_form()
-        msgs_otp, form_updates_otp, completed_otp = await run_form_turn(
-            otp_form, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs_otp)
-        slot_updates.update(form_updates_otp)
-        if completed_otp:
-            # Persist complainant_phone (and complainant_phone_verified) to complainant
-            grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-            slots_after = dict(session.get("slots", {}))
-            slots_after.update(slot_updates)
-            complainant_phone = slots_after.get("complainant_phone")
-            otp_status = slots_after.get("otp_status")
-            skip_val = "slot_skipped"  # SKIP_VALUE from constants
-            if (
-                grievance_id
-                and complainant_phone
-                and complainant_phone != skip_val
-            ):
-                try:
-                    from backend.services.database_services.postgres_services import db_manager
-                    complainant_id = db_manager.complainant.get_complainant_id_from_grievance_id(
-                        grievance_id
-                    )
-                    if complainant_id:
-                        update_data = {"complainant_phone": complainant_phone}
-                        if otp_status == "verified":
-                            update_data["complainant_phone_verified"] = True
-                        db_manager.update_complainant(complainant_id, update_data)
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        f"Failed to persist complainant_phone after OTP: {e}"
-                    )
-            session["slots"].update(slot_updates)
-            grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-            form_modify = _get_form_modify_contact()
-            hydrate = events_to_slot_updates(
-                form_modify.get_complainant_slot_events_from_grievance(grievance_id)
-            )
-            session.setdefault("slots", {}).update(hydrate)
-            session["active_loop"] = "form_modify_contact"
-            session["requested_slot"] = None
-            next_state = "add_missing_info_flow"
-            msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
-                form_modify, session, None, domain
-            )
-            dispatcher.messages.extend(msgs_modify)
-            slot_updates.update(form_updates_modify)
-            if completed_modify:
-                # If form_modify_contact already completes in the same turn
-                # (e.g., phone was the only missing field), emit the same
-                # completion messages as add_missing_info_flow to avoid a
-                # "silent" turn after OTP verification.
-                session["slots"].update(slot_updates)
-                session["active_loop"] = None
-                session["requested_slot"] = None
-                slots_after = dict(session.get("slots", {}))
-                # Flush on any form completion — not only "I'm done" (modify_missing_info_complete).
-                # Natural completion (last missing field filled) previously skipped persist entirely.
-                form_modify.persist_all_contact_fields_to_complainant(slots_after)
-                if session.get("slots", {}).get("modify_missing_info_complete"):
-                    next_state = "status_check_form"
-                    ask_dispatcher = CollectingDispatcher()
-                    await invoke_action(
-                        "action_ask_story_step",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=slots_after,
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
-                    )
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-                else:
-                    lang = session.get("slots", {}).get("language_code") or "en"
-                    from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
-
-                    msg = get_utterance_base(
-                        "form_modify_contact", "utterance_all_contact_complete", 1, lang
-                    )
-                    dispatcher.utter_message(text=msg)
-                    next_state = "modify_grievance_menu"
-                    slots_after = dict(session.get("slots", {}))
-                    ask_dispatcher = CollectingDispatcher()
-                    await invoke_action(
-                        "action_status_check_modify_grievance",
-                        ask_dispatcher,
-                        SessionTracker(
-                            slots=slots_after,
-                            sender_id=session.get("user_id", "default"),
-                            latest_message=latest_message,
-                            active_loop=None,
-                            requested_slot=None,
-                        ),
-                        domain,
-                    )
-                    dispatcher.messages.extend(ask_dispatcher.messages)
-
-    elif state == "add_missing_info_flow":
-        user_input = latest_message if (text or payload) else None
-        form_modify = _get_form_modify_contact()
-        msgs_modify, form_updates_modify, completed_modify = await run_form_turn(
-            form_modify, session, user_input, domain
-        )
-        dispatcher.messages.extend(msgs_modify)
-        slot_updates.update(form_updates_modify)
-        if completed_modify:
-            session["slots"].update(slot_updates)
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            slots_after = dict(session.get("slots", {}))
-            form_modify.persist_all_contact_fields_to_complainant(slots_after)
-            if session.get("slots", {}).get("modify_missing_info_complete"):
-                next_state = "status_check_form"
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_ask_story_step",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-            else:
-                lang = session.get("slots", {}).get("language_code") or "en"
-                from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
-                msg = get_utterance_base(
-                    "form_modify_contact", "utterance_all_contact_complete", 1, lang
-                )
-                dispatcher.utter_message(text=msg)
-                next_state = "modify_grievance_menu"
-                slots_after = dict(session.get("slots", {}))
-                ask_dispatcher = CollectingDispatcher()
-                await invoke_action(
-                    "action_status_check_modify_grievance",
-                    ask_dispatcher,
-                    SessionTracker(
-                        slots=slots_after,
-                        sender_id=session.get("user_id", "default"),
-                        latest_message=latest_message,
-                        active_loop=None,
-                        requested_slot=None,
-                    ),
-                    domain,
-                )
-                dispatcher.messages.extend(ask_dispatcher.messages)
-
-    elif state == "done":
-        # Allow modify-grievance actions even if the session state was already marked as done
-        grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-        msg_text = (latest_message.get("text") or "").strip()
-        payload_raw = (payload or "").strip()
-        introduce_restart = msg_text.lower().startswith(
-            "/introduce"
-        ) or payload_raw.lower().startswith("/introduce")
-        if introduce_restart:
-            # REST webchat sends /introduce on every page load; a persisted session can
-            # still be "done" from a prior flow, which previously hit `else: pass` and
-            # returned no messages (empty chat on refresh).
-            session["state"] = "intro"
-            session["active_loop"] = None
-            session["requested_slot"] = None
-            session["slots"] = DEFAULT_SLOTS.copy()
-            next_state = "intro"
-            intro_tracker = SessionTracker(
-                slots=session["slots"],
-                sender_id=session.get("user_id", "default"),
-                latest_message=latest_message,
-                active_loop=None,
-                requested_slot=None,
-            )
-            events = await invoke_action(
-                "action_introduce",
-                dispatcher,
-                intro_tracker,
-                domain,
-            )
-            slot_updates.update(events_to_slot_updates(events))
-        elif intent == "modify_grievance_add_pictures" and grievance_id:
-            dispatcher.utter_message(
-                json_message={
-                    "data": {
-                        "event_type": "open_upload_modal",
-                        "grievance_id": grievance_id,
-                        "auto_open": True,
-                    }
-                }
-            )
-            next_state = "modify_grievance_menu"
-        elif intent == "modify_grievance_add_more_info":
-            session["active_loop"] = "form_modify_grievance_details"
-            session["requested_slot"] = None
-            slot_updates["modify_follow_up_answered"] = None
-            slot_updates["modify_follow_up_answer"] = None
-            next_state = "add_more_info_flow"
-            form_modify = _get_form_modify_grievance_details()
-            msgs_modify, form_updates_modify, _ = await run_form_turn(
-                form_modify, session, None, domain
-            )
-            dispatcher.messages.extend(msgs_modify)
-            slot_updates.update(form_updates_modify)
-        elif intent == "modify_grievance_add_missing_info":
-            form_modify = _get_form_modify_contact()
-            grievance_id = session.get("slots", {}).get("status_check_grievance_id_selected")
-            hydrate = events_to_slot_updates(
-                form_modify.get_complainant_slot_events_from_grievance(grievance_id)
-            )
-            session.setdefault("slots", {}).update(hydrate)
-            check_tracker = SessionTracker(
-                slots=session.get("slots", {}),
-                sender_id=session.get("user_id", "default"),
-                latest_message=latest_message,
-                active_loop=None,
-                requested_slot=None,
-            )
-            _, missing = form_modify.get_missing_contact_fields(check_tracker)
-            if missing and missing[0] == "complainant_phone":
-                session["active_loop"] = "form_otp"
-                session["requested_slot"] = None
-                if session.get("slots", {}).get("story_main") is None:
-                    slot_updates["story_main"] = "status_check"
-                slot_updates["complainant_consent"] = True
-                session["slots"].update(slot_updates)
-                next_state = "add_missing_info_otp_flow"
-                otp_form = _get_otp_form()
-                msgs_otp, form_updates_otp, _ = await run_form_turn(
-                    otp_form, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_otp)
-                slot_updates.update(form_updates_otp)
-            else:
-                session["active_loop"] = "form_modify_contact"
-                session["requested_slot"] = None
-                next_state = "add_missing_info_flow"
-                msgs_modify, form_updates_modify, _ = await run_form_turn(
-                    form_modify, session, None, domain
-                )
-                dispatcher.messages.extend(msgs_modify)
-                slot_updates.update(form_updates_modify)
-        elif intent == "modify_grievance_cancel":
-            slots_after = dict(session.get("slots", {}))
-            ask_dispatcher = CollectingDispatcher()
-            await invoke_action(
-                "action_ask_story_step",
-                ask_dispatcher,
-                SessionTracker(
-                    slots=slots_after,
-                    sender_id=session.get("user_id", "default"),
-                    latest_message=latest_message,
-                    active_loop=None,
-                    requested_slot=None,
-                ),
-                domain,
-            )
-            dispatcher.messages.extend(ask_dispatcher.messages)
-            next_state = "status_check_form"
-        elif intent in ("new_grievance", "dust_grievance", "road_hazard_grievance", "start_seah_intake"):
-            next_state = await _restart_intake_from_done(
-                intent,
-                dispatcher,
-                session,
-                latest_message,
-                domain,
-                slot_updates,
-            )
-        else:
-            pass
 
     session["slots"].update(slot_updates)
     session["state"] = next_state

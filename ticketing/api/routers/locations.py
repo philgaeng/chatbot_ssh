@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Locations, Countries, Organizations, and Projects — read + admin CRUD endpoints.
 
@@ -36,7 +38,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import PlainTextResponse, Response
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.orm import Session, selectinload
 
 from ticketing.api.dependencies import CurrentUser, get_authenticated_user, require_admin, require_super_admin
@@ -44,31 +46,58 @@ from ticketing.constants.entity_codes import EntityCodeError, validate_entity_co
 from ticketing.services import entity_codes as entity_codes_svc
 from ticketing.services.admin_access import (
     SettingsAction,
+    can_admin_org,
+    can_admin_org_or_owned,
     can_assign_project_workflow,
+    catalog_owner_for,
+    is_org_admin,
+    is_project_admin,
+    is_super_admin,
+    require_org_admin_project_scope,
     require_settings_write,
+    require_track_for_mutation,
 )
 from ticketing.services import project_workflows as pw_svc
 from ticketing.models.base import get_db
 from ticketing.models.country import Country, Location, LocationLevelDef, LocationTranslation
 from ticketing.models.organization import Organization
+from ticketing.services.org_tree import (
+    INSTITUTIONAL_CATEGORIES,
+    ORG_CATEGORIES,
+    UNIT_TYPES,
+    descendant_org_ids,
+    would_create_cycle,
+)
+from ticketing.services.org_dedup import (
+    OrgRecord,
+    find_duplicate_candidates,
+)
 from ticketing.utils.organization_identifier import (
     allocate_unique_organization_id,
+    ascii_alnum,
     suggested_organization_id,
 )
 from ticketing.models.officer_scope import OfficerScope
 from ticketing.models.package import PackageLocation, PackageOrganization, ProjectPackage
-from ticketing.models.project import Project, ProjectActorRole, ProjectLocation, ProjectOrganization
+from ticketing.models.project import (
+    Project,
+    ProjectActorRole,
+    ProjectDonor,
+    ProjectLocation,
+    ProjectOrganization,
+)
 from ticketing.services import project_actor_roles as actor_roles_svc
 from ticketing.api.schemas.project_messaging import (
     ProjectMessagingPatch,
     ProjectMessagingResponse,
 )
 from ticketing.services import officer_messaging as msg_svc
+from ticketing.services import donor_guardrail as donor_guardrail_svc
 from ticketing.services import project_go_live as go_live_svc
 from ticketing.services import project_types as types_svc
 from ticketing.models.ticket import Ticket
 from ticketing.models.user import UserRole
-from ticketing.models.workflow import WorkflowAssignment
+from ticketing.models.workflow import WorkflowAssignment, WorkflowDefinition
 
 router = APIRouter()
 
@@ -116,8 +145,14 @@ class ProjectCreate(BaseModel):
     is_active: bool | None = None
     project_type_key: str | None = Field(
         None,
-        description="Archetype to instantiate (e.g. construction_road). Defaults workflows and actor roles.",
+        description=(
+            "The template this project is built from — its workflows, category routing and the "
+            "organizations it must name. Required (DECISION-author-defined-slots §5)."
+        ),
     )
+    # Legacy: sets `projects.implementing_agency_org_id`, a read-only fallback for pre-types
+    # projects. It does NOT fill an organization slot — the project screen does that.
+    implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
     @classmethod
@@ -132,9 +167,14 @@ class ProjectUpdate(BaseModel):
     name: str | None = None
     short_code: str | None = Field(None, max_length=8)
     description: str | None = None
+    #: Rebuild the project from a different template. Refused (409) while the project is
+    #: accepting grievances — see `_switch_project_type`.
+    project_type_key: str | None = None
     is_active: bool | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+    # doc 13 / DECISION 2026-07-10 §2: the accountable government agency (routing anchor).
+    implementing_agency_org_id: str | None = Field(None, max_length=64)
 
     @field_validator("short_code", mode="before")
     @classmethod
@@ -189,12 +229,22 @@ class ProjectResponse(BaseModel):
     project_type_key: str | None = None
     standard_workflow_id: str | None = None
     seah_workflow_id: str | None = None
+    implementing_agency_org_id: str | None = None
+    donor_org_ids: list[str] = []
     workflow_slots: list[ProjectWorkflowItem] = []
     officer_messaging: dict[str, Any] | None = None
     created_at: datetime
     updated_at: datetime
     organizations: list[ProjectOrgItem] = []
+    #: **Legacy, and empty on anything set up since 2026-08-08** — coverage moved to packages.
+    #: Kept so older clients do not break; read `package_count` / `covered_location_count`.
     location_codes: list[str] = []
+    #: Packages on the project, and the distinct districts they cover between them. The project
+    #: list used to report `len(location_codes)`, which became "none" for every project the day
+    #: coverage moved — a project with three packages covering three districts read as covering
+    #: nowhere.
+    package_count: int = 0
+    covered_location_count: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -202,7 +252,6 @@ class ProjectResponse(BaseModel):
 class GoLiveCheckResponse(BaseModel):
     id: str
     label: str
-    group: str
     severity: str
     status: str
     message: str
@@ -224,6 +273,16 @@ class OrganizationResponse(BaseModel):
     country_code: str | None
     is_active: bool
     default_language: str = "ne"
+    # Org tree (OC-01, doc 16 §3.1)
+    parent_organization_id: str | None = None
+    org_category: str
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool = False
+    display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). Non-PII org contact fields.
+    email: str | None = None
+    address: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -240,6 +299,17 @@ class OrganizationCreate(BaseModel):
     country_code: str | None = None
     is_active: bool = True
     default_language: str = "ne"
+    # Org tree (OC-01). parent NULL = root. org_category is required-ish for roots
+    # (defaults to 'government' if omitted) and always inherited from parent for children.
+    parent_organization_id: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool = False
+    display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). Populated so the fuzzy finder can match on them.
+    email: str | None = Field(default=None, max_length=255)
+    address: str | None = None
 
 
 class OrganizationUpdate(BaseModel):
@@ -247,21 +317,104 @@ class OrganizationUpdate(BaseModel):
     country_code: str | None = None
     is_active: bool | None = None
     default_language: str | None = None
+    # Org tree (OC-01). Field-presence (model_fields_set) distinguishes "unset" from an
+    # explicit null (e.g. detach-to-root), so these are only applied when supplied.
+    parent_organization_id: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+    territory_location_code: str | None = None
+    territory_includes_children: bool | None = None
+    display_name_ne: str | None = None
+    # Duplicate-candidate signals (SH-4). model_fields_set distinguishes unset from an
+    # explicit null (clear the field), so these apply only when supplied.
+    email: str | None = Field(default=None, max_length=255)
+    address: str | None = None
+
+
+def _order_for_tree(orgs: list[Organization]) -> list[Organization]:
+    """Depth-first order (each parent immediately before its children) for tree rendering.
+
+    A node whose parent is outside the returned set (a true root, or the root of a
+    ``root_id`` subtree) is treated as a top-level node.
+    """
+    by_id = {o.organization_id: o for o in orgs}
+    children: dict[str, list[Organization]] = {}
+    roots: list[Organization] = []
+    for o in orgs:
+        p = o.parent_organization_id
+        if p and p in by_id:
+            children.setdefault(p, []).append(o)
+        else:
+            roots.append(o)
+
+    ordered: list[Organization] = []
+
+    def _walk(node: Organization) -> None:
+        ordered.append(node)
+        for child in sorted(children.get(node.organization_id, []), key=lambda x: x.organization_id):
+            _walk(child)
+
+    for root in sorted(roots, key=lambda x: x.organization_id):
+        _walk(root)
+    return ordered
 
 
 @router.get("/organizations", response_model=list[OrganizationResponse])
 def list_organizations(
     country: str | None = Query(None),
     active_only: bool = Query(True),
+    root_id: str | None = Query(
+        None, description="Restrict to this organization and its descendants (subtree)."
+    ),
+    tree: bool = Query(
+        False, description="Order parents-before-children (depth-first) for tree rendering."
+    ),
+    q: str | None = Query(
+        None, description="Case-insensitive search on id / name / Nepali name (Frame 12 at scale)."
+    ),
+    manageable: bool = Query(
+        False, description="GRM-122: only organizations the caller administers (a platform admin: all)."
+    ),
     db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),  # SH-4 (OC-06 F16): was fully open
 ):
-    """List all organizations."""
-    stmt = select(Organization).order_by(Organization.organization_id)
+    """List organizations. ``root_id`` filters to a subtree; ``tree`` orders for rendering;
+    ``q`` server-side searches id/name/display_name_ne."""
+    stmt = select(Organization)
     if country:
         stmt = stmt.where(Organization.country_code == country)
     if active_only:
         stmt = stmt.where(Organization.is_active.is_(True))
-    return db.execute(stmt).scalars().all()
+    if root_id:
+        subtree = descendant_org_ids(db, root_id, include_self=True)
+        if not subtree:
+            return []
+        stmt = stmt.where(Organization.organization_id.in_(subtree))
+    if manageable:
+        from ticketing.services.admin_access import admin_org_scope_ids, is_org_admin, is_super_admin
+
+        reach = admin_org_scope_ids(db, _user)
+        if reach is None:
+            if not (is_super_admin(_user) or is_org_admin(_user)):
+                return []
+        elif not reach:
+            return []
+        else:
+            stmt = stmt.where(Organization.organization_id.in_(reach))
+    if q and q.strip():
+        like = f"%{q.strip().lower()}%"
+        stmt = stmt.where(
+            or_(
+                func.lower(Organization.organization_id).like(like),
+                func.lower(Organization.name).like(like),
+                func.lower(func.coalesce(Organization.display_name_ne, "")).like(like),
+            )
+        )
+    stmt = stmt.order_by(Organization.organization_id)
+    orgs = list(db.execute(stmt).scalars().all())
+    if tree:
+        orgs = _order_for_tree(orgs)
+    return orgs
 
 
 @router.post("/organizations", response_model=OrganizationResponse, status_code=201,
@@ -269,16 +422,76 @@ def list_organizations(
 def create_organization(
     body: OrganizationCreate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new organization. Admin only."""
+    """Create a new organization. Standard-track country admin or super_admin (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     name_clean = body.name.strip()
     if not name_clean:
         raise HTTPException(status_code=400, detail="Name is required")
+    if body.country_code and not db.get(Country, body.country_code):  # SH-4 (OC-06 F18)
+        raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
+
+    # ── Org tree (OC-01, doc 16 §3.1) ─────────────────────────────────────────
+    if body.unit_type and body.unit_type not in UNIT_TYPES:
+        raise HTTPException(status_code=422, detail=f"Invalid unit_type '{body.unit_type}'")
+
+    parent: Organization | None = None
+    if body.parent_organization_id:
+        parent = db.get(Organization, body.parent_organization_id)
+        if parent is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Parent organization '{body.parent_organization_id}' not found",
+            )
+
+    if parent is not None:
+        # Children inherit the root's category (authoritative). An explicit, mismatched
+        # category is a mistake — reject it rather than silently ignore.
+        org_category = parent.org_category
+        if body.org_category and body.org_category != org_category:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    f"org_category '{body.org_category}' conflicts with inherited "
+                    f"'{org_category}' — children inherit the root's category"
+                ),
+            )
+    else:
+        # Root. org_category defaults to 'government' when omitted (matches the model /
+        # migration backfill).
+        org_category = body.org_category or "government"
+        if org_category not in ORG_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid org_category '{org_category}'")
+
+    # SH-7 §S3: org_category root-creation gating + sub-unit subtree enforcement (doc 11 §2).
+    if not is_super_admin(current_user):
+        if parent is None:
+            if org_category in INSTITUTIONAL_CATEGORIES:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Only super_admin can create a new government / local_government / "
+                        "donor root organization"
+                    ),
+                )
+            # A third_party root (contractor) is delegable to a standard org_admin, which
+            # the MANAGE_ORG_STRUCTURE gate above already confirmed.
+        elif not can_admin_org(db, current_user, parent.organization_id, "standard"):
+            raise HTTPException(
+                status_code=403,
+                detail="Your org_admin scope does not cover this parent organization",
+            )
+
+    if body.territory_location_code and not db.get(Location, body.territory_location_code):
+        raise HTTPException(
+            status_code=422,
+            detail=f"territory_location_code '{body.territory_location_code}' not found",
+        )
 
     raw = body.organization_id.strip() if body.organization_id else ""
     if raw:
-        org_id = "".join(c for c in raw.upper() if c.isalnum() or c == "_")
+        org_id = ascii_alnum(raw.upper(), keep_underscore=True)  # SH-6: ASCII-only ids
         if not org_id:
             raise HTTPException(status_code=400, detail="Invalid organization_id")
         if db.get(Organization, org_id):
@@ -291,17 +504,142 @@ def create_organization(
                 detail="Could not derive organization_id from name; provide organization_id explicitly.",
             )
         org_id = allocate_unique_organization_id(db, base)
+
+    # Gap A: a `third_party` contractor created by a (non-super) org_admin is a root outside
+    # every subtree — stamp the creator's org node as owner so the creator + ancestor-org
+    # admins can still maintain it (super_admin / global creations stay owner-less).
+    owner_org_id: str | None = None
+    if not is_super_admin(current_user) and org_category == "third_party":
+        owner_org_id = catalog_owner_for(current_user, "standard")
+
     org = Organization(
         organization_id=org_id,
         name=name_clean,
         country_code=body.country_code or None,
         is_active=body.is_active,
         default_language=body.default_language,
+        parent_organization_id=parent.organization_id if parent else None,
+        org_category=org_category,
+        unit_type=body.unit_type,
+        territory_location_code=body.territory_location_code,
+        territory_includes_children=body.territory_includes_children,
+        display_name_ne=body.display_name_ne,
+        email=(body.email or "").strip() or None,
+        address=(body.address or "").strip() or None,
+        owner_organization_id=owner_org_id,
     )
     db.add(org)
     db.commit()
     db.refresh(org)
     return org
+
+
+# ── Duplicate-candidate finder (SH-4, design §2.4) ───────────────────────────────
+
+class DuplicateCheckRequest(BaseModel):
+    """Proposed org to fuzzy-match against the registry (a preview — no write)."""
+    name: str
+    email: str | None = None
+    address: str | None = None
+    country_code: str | None = None
+    # On update, exclude the org being edited so it never matches itself.
+    exclude_organization_id: str | None = None
+    limit: int = Field(8, ge=1, le=50)
+
+
+class DuplicateCandidateItem(BaseModel):
+    organization_id: str
+    name: str
+    score: float
+    reasons: list[str]
+    name_score: float
+    email_domain_match: bool
+    address_score: float
+    # Display context for the soft-flag row ("Possible duplicate: … (contractor, Jhapa)").
+    country_code: str | None = None
+    org_category: str | None = None
+    unit_type: str | None = None
+
+
+@router.post(
+    "/organizations/duplicate-candidates",
+    response_model=list[DuplicateCandidateItem],
+    summary="Fuzzy duplicate-candidate finder for an org (soft flag — never blocks create)",
+)
+def find_organization_duplicate_candidates(
+    body: DuplicateCheckRequest,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Return likely-duplicate organizations for a proposed ``{name, email, address}``.
+
+    This is a **soft-flag preview** (SH-4, design §2.4): the UI shows "Possible duplicate:
+    {org} · Use existing / Create anyway". It **never** blocks creation — creation stays on
+    ``POST /organizations`` and is unaffected by this result. Matching (pure logic in
+    ``ticketing/services/org_dedup.py``) uses distinctive name tokens (generic-word
+    stoplist), corporate email domain (free providers ignored), and fuzzy address.
+
+    Read/preview only, so it requires just an authenticated user — not the
+    ``MANAGE_ORG_STRUCTURE`` write gate that ``POST/PATCH/DELETE /organizations`` carry.
+    """
+    name = (body.name or "").strip()
+    if not name:
+        return []
+
+    # DB-level pre-filter to bound the scan (the matcher itself is country-agnostic):
+    # compare within the same country plus country-less orgs (e.g. ADB). With no country
+    # supplied, scan everything.
+    stmt = select(Organization)
+    if body.country_code:
+        stmt = stmt.where(
+            or_(
+                Organization.country_code == body.country_code,
+                Organization.country_code.is_(None),
+            )
+        )
+    orgs = list(db.execute(stmt).scalars().all())
+    by_id = {o.organization_id: o for o in orgs}
+
+    proposed = OrgRecord(
+        name=name,
+        email=body.email,
+        address=body.address,
+        country_code=body.country_code,
+    )
+    existing = [
+        OrgRecord(
+            name=o.name,
+            organization_id=o.organization_id,
+            email=o.email,
+            address=o.address,
+            country_code=o.country_code,
+        )
+        for o in orgs
+    ]
+    candidates = find_duplicate_candidates(
+        proposed,
+        existing,
+        exclude_id=body.exclude_organization_id,
+        limit=body.limit,
+    )
+    out: list[DuplicateCandidateItem] = []
+    for c in candidates:
+        org = by_id.get(c.organization_id)
+        out.append(
+            DuplicateCandidateItem(
+                organization_id=c.organization_id,
+                name=c.name,
+                score=c.score,
+                reasons=c.reasons,
+                name_score=c.name_score,
+                email_domain_match=c.email_domain_match,
+                address_score=c.address_score,
+                country_code=org.country_code if org else None,
+                org_category=org.org_category if org else None,
+                unit_type=org.unit_type if org else None,
+            )
+        )
+    return out
 
 
 @router.patch("/organizations/{organization_id}", response_model=OrganizationResponse,
@@ -310,20 +648,114 @@ def update_organization(
     organization_id: str,
     body: OrganizationUpdate,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Update organization name, country, or active status. Admin only."""
+    """Update organization fields incl. tree placement. Standard-track admin / super (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    # SH-7 §S3: an org_admin may only edit within its own subtree. Gap A: plus a `third_party`
+    # it (or an ancestor-org admin) created, which lives outside every subtree as a root.
+    if not is_super_admin(current_user) and not can_admin_org_or_owned(
+        db, current_user, org, "standard"
+    ):
+        raise HTTPException(
+            status_code=403, detail="Your org_admin scope does not cover this organization"
+        )
+    fields = body.model_fields_set
     if body.name is not None:
         org.name = body.name.strip()
     if body.country_code is not None:
+        if body.country_code and not db.get(Country, body.country_code):  # SH-4 (OC-06 F18)
+            raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
         org.country_code = body.country_code or None
     if body.is_active is not None:
         org.is_active = body.is_active
     if body.default_language is not None:
         org.default_language = body.default_language
+
+    # ── Org tree (OC-01, doc 16 §3.1) ─────────────────────────────────────────
+    if "unit_type" in fields:
+        if body.unit_type and body.unit_type not in UNIT_TYPES:
+            raise HTTPException(status_code=422, detail=f"Invalid unit_type '{body.unit_type}'")
+        org.unit_type = body.unit_type
+    if "territory_location_code" in fields:
+        if body.territory_location_code and not db.get(Location, body.territory_location_code):
+            raise HTTPException(
+                status_code=422,
+                detail=f"territory_location_code '{body.territory_location_code}' not found",
+            )
+        org.territory_location_code = body.territory_location_code
+    if "territory_includes_children" in fields and body.territory_includes_children is not None:
+        org.territory_includes_children = body.territory_includes_children
+    if "display_name_ne" in fields:
+        org.display_name_ne = body.display_name_ne
+    # Duplicate-candidate signals (SH-4) — apply only when supplied; "" clears to NULL.
+    if "email" in fields:
+        org.email = (body.email or "").strip() or None
+    if "address" in fields:
+        org.address = (body.address or "").strip() or None
+
+    # Category is inherited from the root, so it moves with the parent. Compute the new
+    # category (if any) and cascade it to the whole subtree.
+    new_category: str | None = None
+    cascade = False
+    if "parent_organization_id" in fields:
+        new_parent_id = body.parent_organization_id or None
+        if new_parent_id:
+            parent = db.get(Organization, new_parent_id)
+            if parent is None:
+                raise HTTPException(
+                    status_code=422, detail=f"Parent organization '{new_parent_id}' not found"
+                )
+            if would_create_cycle(db, organization_id, new_parent_id):
+                raise HTTPException(
+                    status_code=422,
+                    detail="Reparenting would create a cycle (a node cannot report to its own descendant)",
+                )
+            # SH-7 §S3: the destination parent must also be within the admin's subtree.
+            if not is_super_admin(current_user) and not can_admin_org(
+                db, current_user, new_parent_id, "standard"
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Your org_admin scope does not cover the destination parent",
+                )
+            org.parent_organization_id = new_parent_id
+            new_category = parent.org_category
+        else:
+            # Detach to root — keep the current category unless a new one is supplied.
+            org.parent_organization_id = None
+            new_category = body.org_category or org.org_category
+            if new_category not in ORG_CATEGORIES:
+                raise HTTPException(status_code=422, detail=f"Invalid org_category '{new_category}'")
+        org.org_category = new_category
+        cascade = True
+    elif "org_category" in fields and body.org_category is not None:
+        # Directly settable only on a root; children inherit.
+        if org.parent_organization_id is not None:
+            raise HTTPException(
+                status_code=422,
+                detail="A child organization inherits its category from the root; set it on the root.",
+            )
+        if body.org_category not in ORG_CATEGORIES:
+            raise HTTPException(status_code=422, detail=f"Invalid org_category '{body.org_category}'")
+        if body.org_category != org.org_category:
+            org.org_category = body.org_category
+            new_category = body.org_category
+            cascade = True
+
+    if cascade and new_category is not None:
+        db.flush()  # make org's own change visible before walking its subtree
+        descendants = descendant_org_ids(db, organization_id, include_self=False)
+        if descendants:
+            db.execute(
+                update(Organization)
+                .where(Organization.organization_id.in_(descendants))
+                .values(org_category=new_category, updated_at=_now())
+            )
+
     org.updated_at = _now()
     db.commit()
     db.refresh(org)
@@ -338,11 +770,35 @@ def update_organization(
 def delete_organization(
     organization_id: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_authenticated_user),
 ) -> None:
+    """Delete an organization. Standard-track org_admin (own subtree) or super_admin (doc 16 §7)."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
     org = db.get(Organization, organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organization not found")
+    # SH-7 §S3: an org_admin may only delete within its own subtree. Gap A: plus a `third_party`
+    # it (or an ancestor-org admin) created, which lives outside every subtree as a root.
+    if not is_super_admin(current_user) and not can_admin_org_or_owned(
+        db, current_user, org, "standard"
+    ):
+        raise HTTPException(
+            status_code=403, detail="Your org_admin scope does not cover this organization"
+        )
+
+    # OC-01: block deleting a parent — the self-FK is ON DELETE SET NULL, which would
+    # silently orphan the subtree (turn children into roots). Reparent/remove them first.
+    child_count = db.scalar(
+        select(func.count())
+        .select_from(Organization)
+        .where(Organization.parent_organization_id == organization_id)
+    ) or 0
+    if child_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {child_count} child organization(s) report to this org. "
+            f"Reassign or delete them first.",
+        )
 
     ticket_count = db.scalar(
         select(func.count()).select_from(Ticket).where(Ticket.organization_id == organization_id)
@@ -395,8 +851,198 @@ def delete_organization(
             detail=f"Cannot delete: {pkg_count} package actor assignment(s) use this organization.",
         )
 
+    # SH-4 (OC-06 F7): project actor links were NOT guarded (unlike package links), so a
+    # delete cascade-orphaned the ProjectOrganization row silently. Guard it symmetrically.
+    proj_count = db.scalar(
+        select(func.count())
+        .select_from(ProjectOrganization)
+        .where(ProjectOrganization.organization_id == organization_id)
+    ) or 0
+    if proj_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: {proj_count} project actor assignment(s) use this organization.",
+        )
+
+    # GRM-116: the FK is RESTRICT on purpose — an org deleted out from under its resolution actions
+    # would otherwise turn them global. Say why here rather than surface a constraint error.
+    from ticketing.models.resolution_action import ResolutionAction
+
+    action_count = db.scalar(
+        select(func.count())
+        .select_from(ResolutionAction)
+        .where(ResolutionAction.owner_organization_id == organization_id)
+    ) or 0
+    if action_count:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot delete: this organization owns {action_count} resolution action(s).",
+        )
+
     db.delete(org)
     db.commit()
+
+
+class OrgDeleteImpact(BaseModel):
+    organization_id: str
+    child_count: int
+    ticket_count: int
+    role_count: int
+    scope_count: int
+    position_count: int
+    workflow_assignment_count: int
+    package_actor_count: int
+    project_actor_count: int
+    resolution_action_count: int = 0
+    # Informational, like positions: the workflow FK is SET NULL, so these do not block the delete —
+    # but a workflow left with no organization can offer no resolution action (GRM-116). The delete
+    # rule for workflows is GRM-120's to decide.
+    workflow_count: int = 0
+    deletable: bool
+
+
+@router.get("/organizations/{organization_id}/delete-impact", response_model=OrgDeleteImpact)
+def organization_delete_impact(
+    organization_id: str,
+    db: Session = Depends(get_db),
+    _user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Aggregated delete-impact preview (Frame 12): every reference that blocks a delete,
+    in one call, so the UI shows the combined "N children / N projects / N officers / N
+    cases" line instead of only the first blocking guard the DELETE returns."""
+    from ticketing.models.officer_position import OfficerPosition
+    from ticketing.models.resolution_action import ResolutionAction
+
+    if not db.get(Organization, organization_id):
+        raise HTTPException(status_code=404, detail="Organization not found")
+
+    def _count(model, col) -> int:
+        return db.scalar(select(func.count()).select_from(model).where(col == organization_id)) or 0
+
+    child = _count(Organization, Organization.parent_organization_id)
+    tickets = _count(Ticket, Ticket.organization_id)
+    roles = _count(UserRole, UserRole.organization_id)
+    scopes = _count(OfficerScope, OfficerScope.organization_id)
+    positions = _count(OfficerPosition, OfficerPosition.organization_id)
+    assigns = _count(WorkflowAssignment, WorkflowAssignment.organization_id)
+    pkgs = _count(PackageOrganization, PackageOrganization.organization_id)
+    projs = _count(ProjectOrganization, ProjectOrganization.organization_id)
+    actions = _count(ResolutionAction, ResolutionAction.owner_organization_id)
+    workflows = _count(WorkflowDefinition, WorkflowDefinition.owner_organization_id)
+    return OrgDeleteImpact(
+        organization_id=organization_id,
+        child_count=child,
+        ticket_count=tickets,
+        role_count=roles,
+        scope_count=scopes,
+        position_count=positions,
+        workflow_assignment_count=assigns,
+        package_actor_count=pkgs,
+        project_actor_count=projs,
+        resolution_action_count=actions,
+        workflow_count=workflows,
+        # positions are informational — the org FK cascades them, so they don't block the
+        # DELETE (which guards child/ticket/role/scope/assignment/package/project refs).
+        deletable=not any([child, tickets, roles, scopes, assigns, pkgs, projs, actions]),
+    )
+
+
+# ── Organization tree CSV import (OC-01, doc 16 §9) ──────────────────────────────
+
+class OrgImportResult(BaseModel):
+    organizations_upserted: int
+    dry_run: bool
+    errors: list[str] = []
+
+
+@router.get(
+    "/organizations/import/template.csv",
+    response_class=PlainTextResponse,
+    summary="Download blank CSV template for org tree import (admin)",
+)
+def download_org_csv_template(
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Blank org-tree CSV template. Columns: organization_id, name, parent_organization_id,
+    org_category, unit_type, country_code, territory_location_code,
+    territory_includes_children, display_name_ne."""
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
+    from ticketing.seed.org_import_core import CSV_TEMPLATE
+    return PlainTextResponse(
+        content=CSV_TEMPLATE,
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="organization_template.csv"'},
+    )
+
+
+@router.post(
+    "/organizations/import",
+    response_model=OrgImportResult,
+    status_code=200,
+    summary="Import an org tree from CSV (admin) — whole-file validate, single transaction",
+)
+async def import_organizations(
+    file: UploadFile = File(..., description="CSV org-tree file"),
+    dry_run: bool = Form(False, description="Validate + parse only — do not write to DB"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Upsert an org tree from CSV. Standard-track admin or super_admin (doc 16 §7).
+
+    All-or-nothing: the entire file is validated first (required fields, domains, parent
+    resolution, cycles, category inheritance). On any error nothing is written and the
+    errors are returned; otherwise rows are upserted parents-first in a single transaction
+    (idempotent — re-importing updates existing rows by ``organization_id``).
+    """
+    require_settings_write(current_user, SettingsAction.MANAGE_ORG_STRUCTURE)
+    from ticketing.seed.org_import_core import parse_org_csv, plan_import, upsert_organizations
+
+    raw = await file.read()
+    try:
+        rows = parse_org_csv(raw.decode("utf-8-sig"))
+    except (UnicodeDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=f"File parse error: {exc}")
+    if not rows:
+        raise HTTPException(status_code=422, detail="No organization rows found in file")
+
+    # DB-shaped checks: external parents' categories (for inheritance), countries, territories.
+    in_file_ids = {r.organization_id for r in rows if r.organization_id}
+    external_cats: dict[str, str] = {}
+    for pid in sorted(
+        {r.parent_organization_id for r in rows if r.parent_organization_id and r.parent_organization_id not in in_file_ids}
+    ):
+        parent = db.get(Organization, pid)
+        if parent is not None:
+            external_cats[pid] = parent.org_category
+        # A missing external parent is reported by plan_import ("not found").
+
+    db_errors: list[str] = []
+    for cc in sorted({r.country_code for r in rows if r.country_code}):
+        if not db.get(Country, cc):
+            db_errors.append(f"country_code '{cc}' not found")
+    for lc in sorted({r.territory_location_code for r in rows if r.territory_location_code}):
+        if not db.get(Location, lc):
+            db_errors.append(f"territory_location_code '{lc}' not found")
+
+    plan = plan_import(rows, external_org_categories=external_cats)
+    all_errors = plan.errors + db_errors
+    if all_errors:
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Import rejected — nothing written", "errors": all_errors},
+        )
+
+    if dry_run:
+        return OrgImportResult(organizations_upserted=len(plan.ordered_rows), dry_run=True)
+
+    try:
+        count = upsert_organizations(plan.ordered_rows, plan.resolved_categories, db)
+        db.commit()
+    except Exception as exc:  # pragma: no cover - defensive
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"DB write failed: {exc}") from exc
+
+    return OrgImportResult(organizations_upserted=count, dry_run=False)
 
 
 # ── Countries ─────────────────────────────────────────────────────────────────
@@ -676,6 +1322,20 @@ def _validate_project_workflow(
         )
 
 
+def _package_coverage(db: Session, project_id: str) -> dict:
+    """How many packages a project has, and how many distinct districts they cover."""
+    pkg_ids = db.execute(
+        select(ProjectPackage.package_id).where(ProjectPackage.project_id == project_id)
+    ).scalars().all()
+    if not pkg_ids:
+        return {"package_count": 0, "covered_location_count": 0}
+    covered = db.execute(
+        select(func.count(func.distinct(PackageLocation.location_code)))
+        .where(PackageLocation.package_id.in_(pkg_ids))
+    ).scalar_one()
+    return {"package_count": len(pkg_ids), "covered_location_count": int(covered)}
+
+
 def _project_to_response(p: Project, db: Session) -> dict:
     slots = [
         ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(link, db))
@@ -691,6 +1351,8 @@ def _project_to_response(p: Project, db: Session) -> dict:
         "project_type_key": p.project_type_key,
         "standard_workflow_id": p.standard_workflow_id,
         "seah_workflow_id": p.seah_workflow_id,
+        "implementing_agency_org_id": p.implementing_agency_org_id,
+        "donor_org_ids": [d.organization_id for d in (p.donors or [])],
         "workflow_slots": slots,
         "officer_messaging": p.officer_messaging or msg_svc.default_officer_messaging(),
         "created_at":    p.created_at,
@@ -700,6 +1362,7 @@ def _project_to_response(p: Project, db: Session) -> dict:
             for po in p.organizations
         ],
         "location_codes": [pl.location_code for pl in p.locations],
+        **_package_coverage(db, p.project_id),
     }
 
 
@@ -715,7 +1378,7 @@ def _load_project(db: Session, project_id: str) -> Project | None:
     ).scalar_one_or_none()
 
 
-@router.get("/projects", response_model=list[ProjectResponse])
+@router.get("/projects", response_model=list[ProjectResponse], dependencies=[Depends(get_authenticated_user)])
 def list_projects(
     country: str | None = Query(None),
     active_only: bool = Query(True),
@@ -745,12 +1408,28 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Create a new project. Country admin (any track) or super_admin."""
+    """Create a new project. Standard-track country admin or super_admin."""
     require_settings_write(current_user, SettingsAction.CREATE_PROJECT)
+    # Creating a project is a standard-track structural action: a SEAH-only
+    # org_admin is unauthorized and must get 403 here, before body/country/
+    # go-live validation can turn the request into a 422.
+    require_track_for_mutation(current_user, "standard")
 
     # Validate country exists
     if not db.get(Country, body.country_code):
         raise HTTPException(status_code=422, detail=f"Country '{body.country_code}' not found")
+
+    # A project is built from a type (DECISION-author-defined-slots §5) — that is where its
+    # workflows and its required organizations come from. Without one, go-live's B1 has no
+    # catalog to check and a project could activate with no accountable organization at all.
+    if not body.project_type_key:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Choose a project type. It sets the workflows this project runs and the "
+                "organizations it must name."
+            ),
+        )
 
     # Check short_code uniqueness
     existing = db.execute(
@@ -774,16 +1453,48 @@ def create_project(
         created_at=now,
         updated_at=now,
     )
+    if body.implementing_agency_org_id:
+        try:
+            donor_guardrail_svc.validate_implementing_agency(db, body.implementing_agency_org_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        project.implementing_agency_org_id = body.implementing_agency_org_id
+
     db.add(project)
     db.flush()
 
-    if body.project_type_key:
-        try:
-            types_svc.instantiate_project_from_type(db, project, body.project_type_key)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-    else:
-        actor_roles_svc.seed_project_actor_roles(db, project.project_id)
+    # Every project has at least one package (2026-08-08, Philippe): *"we create first the
+    # package — a project with one package is like a project without package"*. Coverage is
+    # declared on packages and nowhere else, so a project with none has nowhere to say where it
+    # works, and routing (location → package → officer) has nothing to match.
+    #
+    # It is called "Package 1", not the project's name (2026-08-09): the project's name reads as
+    # a mistake beside "Package 2", and the author renames it and adds a description like any
+    # other package. It briefly carried an `is_unnamed` flag that hid those fields — dropped in
+    # `v8x0z2b4`, because the package most likely to need a chainage description was the one
+    # that could not have one.
+    first_package = ProjectPackage(
+        project_id=project.project_id,
+        package_code=entity_codes_svc.next_package_code(db, project.project_id),
+        name="Package 1",
+        is_active=True,
+    )
+    db.add(first_package)
+    db.flush()
+    _mint_qr_token(db, first_package.package_id, getattr(current_user, "user_id", None))
+
+    try:
+        types_svc.instantiate_project_from_type(db, project, body.project_type_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    # **No organization slot is filled here** (2026-08-04, Philippe). Creation used to write the
+    # chosen organization into the type's first required role, which assumed list order said
+    # something about which role that organization plays. It does not: the back-fill sorts keys
+    # alphabetically, so a type whose roles begin with "Donor" had a government department
+    # written into the donor slot — and the legacy donor guard rejected the whole creation.
+    # A guess that is right most of the time is worse here than not guessing: the project screen
+    # asks for every slot by name, and go-live B1 blocks until the required ones are named.
 
     if is_active:
         report = go_live_svc.evaluate_go_live(db, project.project_id)
@@ -801,7 +1512,7 @@ def create_project(
     return _project_to_response(p, db)
 
 
-@router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse)
+@router.get("/projects/{project_id}/go-live", response_model=GoLiveReportResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
     """Go-live readiness checklist for a project."""
     if not db.get(Project, project_id):
@@ -812,7 +1523,6 @@ def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
             GoLiveCheckResponse(
                 id=c.id,
                 label=c.label,
-                group=c.group,
                 severity=c.severity,
                 status=c.status,
                 message=c.message,
@@ -826,7 +1536,7 @@ def get_project_go_live(project_id: str, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse)
+@router.get("/projects/{project_id}/messaging", response_model=ProjectMessagingResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project_messaging(project_id: str, db: Session = Depends(get_db)):
     """Officer SMS/WhatsApp config for a project plus computed max workflow levels."""
     config = msg_svc.get_officer_messaging(db, project_id)
@@ -863,7 +1573,7 @@ def patch_project_messaging(
     )
 
 
-@router.get("/projects/{project_id}", response_model=ProjectResponse)
+@router.get("/projects/{project_id}", response_model=ProjectResponse, dependencies=[Depends(get_authenticated_user)])
 def get_project(project_id: str, db: Session = Depends(get_db)):
     """Get a single project with all org and location links."""
     p = _load_project(db, project_id)
@@ -872,7 +1582,11 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
     return _project_to_response(p, db)
 
 
-@router.get("/projects/{project_id}/workflows", response_model=list[ProjectWorkflowItem])
+@router.get(
+    "/projects/{project_id}/workflows",
+    response_model=list[ProjectWorkflowItem],
+    dependencies=[Depends(get_authenticated_user)],
+)
 def list_project_workflow_slots(project_id: str, db: Session = Depends(get_db)):
     """Workflow streams linked on this project (safeguards, hazards, CA, SEAH, custom)."""
     p = db.get(Project, project_id)
@@ -889,10 +1603,25 @@ def replace_project_workflow_slots(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
-    """Replace all workflow bindings on a project."""
+    """Replace all workflow bindings on a **legacy untyped** project.
+
+    A typed project runs what its type says (DECISION-author-defined-slots §1/§8) — otherwise
+    two projects on the same template quietly diverge and "what does this project run?" has no
+    answer but the project itself. Refused here, not just disabled in the UI: a disabled form
+    is a suggestion. Creating a project still writes these rows, through
+    `apply_workflow_bindings_from_type`, which is the type speaking.
+    """
     p = _load_project(db, project_id)
     if not p:
         raise HTTPException(status_code=404, detail="Project not found")
+    if p.project_type_key:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This project's workflows come from its project type. Change them under "
+                "Settings → Project types."
+            ),
+        )
 
     from ticketing.models.workflow import WorkflowDefinition
 
@@ -916,6 +1645,42 @@ def replace_project_workflow_slots(
     return [ProjectWorkflowItem(**pw_svc.project_workflow_to_dict(r, db)) for r in rows]
 
 
+def _switch_project_type(db: Session, project: Project, type_key: str) -> None:
+    """Rebuild a project from a different type — **only while it is not accepting grievances**.
+
+    Re-applying a template over a project replaces its workflow links and can leave
+    organizations named against roles the new type does not have. On a **live** project that is
+    the one operation that could silently restaff work in flight, which
+    [DECISION-author-defined-slots §8](../../../docs/sprints/2026-07_org_chart_positions/DECISION-author-defined-slots.md)
+    refuses. On an **inactive** project nobody is working its grievances, and the same
+    deactivate → fix → reactivate path already blessed for types applies: reactivating re-runs
+    go-live, so a broken setup cannot sneak back.
+
+    Organizations whose role the new type does not name are **removed**, not left dangling —
+    the project screen renders the type's catalog, so a stale row would simply vanish from view
+    while still sitting in the table.
+    """
+    if project.is_active:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "This project is accepting grievances, so its type cannot change — officers are "
+                "working to the current setup. Deactivate it first, change the type, then "
+                "activate it again."
+            ),
+        )
+    try:
+        type_row = types_svc.instantiate_project_from_type(db, project, type_key)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    keys = {str(e["key"]) for e in (type_row.actor_roles or []) if e.get("key")}
+    for po in list(project.organizations):
+        if po.org_role and po.org_role not in keys:
+            db.delete(po)
+    db.flush()
+
+
 @router.patch("/projects/{project_id}", response_model=ProjectResponse)
 def update_project(
     project_id: str,
@@ -924,6 +1689,13 @@ def update_project(
     current_user: CurrentUser = Depends(get_authenticated_user),
 ):
     """Update project metadata. Admin only."""
+
+    # authz-gaps-h2-03 #3: metadata edits (name/short_code/description/is_active/
+    # implementing_agency) had NO gate despite the docstring — any authenticated officer could
+    # rename or deactivate a project. Gate the whole handler on project management
+    # (super/org/project admin, doc 11 §2.3/§4). The per-track workflow-binding fields keep
+    # their finer `can_assign_project_workflow` sub-gate below.
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
 
     p = _load_project(db, project_id)
     if not p:
@@ -941,6 +1713,18 @@ def update_project(
             raise HTTPException(status_code=422, detail=msg) from exc
     if body.description is not None:
         p.description = body.description
+    if body.project_type_key is not None and body.project_type_key != p.project_type_key:
+        _switch_project_type(db, p, body.project_type_key)
+    if "implementing_agency_org_id" in body.model_fields_set:
+        if body.implementing_agency_org_id:
+            try:
+                donor_guardrail_svc.validate_implementing_agency(
+                    db, body.implementing_agency_org_id
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+        p.implementing_agency_org_id = body.implementing_agency_org_id
+        db.flush()
     if body.is_active is not None:
         if body.is_active and not p.is_active:
             report = go_live_svc.evaluate_go_live(db, project_id)
@@ -1039,7 +1823,7 @@ def delete_project(
 
 # ── Project ↔ Organizations ───────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/organizations", response_model=list[ProjectOrgItem])
+@router.get("/projects/{project_id}/organizations", response_model=list[ProjectOrgItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_organizations(project_id: str, db: Session = Depends(get_db)):
     """List organizations linked to a project, with their roles."""
     if not db.get(Project, project_id):
@@ -1054,6 +1838,51 @@ class OrgRoleBody(BaseModel):
     org_role: str | None = None
 
 
+def _sync_participant_role(
+    db: Session, project: Project, organization_id: str, old_role: str | None, new_role: str | None
+) -> None:
+    """Keep the dedicated ``implementing_agency_org_id`` + ``project_donors`` in sync with the
+    Project-actors "Implementing Agency" / "Donor" roles, so the actors table is the single
+    surface (the separate Implementing-agency / Donors panel retired). Raises 422 for an org
+    that is invalid for the role (non-government IA / non-donor Donor). Idempotent per role.
+    """
+    # Implementing agency — single, government/local-government org; mirrors the dedicated field.
+    if new_role == "implementing_agency" and old_role != "implementing_agency":
+        try:
+            donor_guardrail_svc.validate_implementing_agency(db, organization_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        # Only one implementing agency — demote any other org that holds the role.
+        for other in db.execute(
+            select(ProjectOrganization).where(
+                ProjectOrganization.project_id == project.project_id,
+                ProjectOrganization.org_role == "implementing_agency",
+                ProjectOrganization.organization_id != organization_id,
+            )
+        ).scalars().all():
+            other.org_role = None
+        project.implementing_agency_org_id = organization_id
+    elif old_role == "implementing_agency" and new_role != "implementing_agency":
+        if project.implementing_agency_org_id == organization_id:
+            project.implementing_agency_org_id = None
+
+    # Donor — mirrors project_donors + pre-fills the final step's informed cast (go-live A5).
+    if new_role == "donor" and old_role != "donor":
+        try:
+            donor_guardrail_svc.validate_donor_org(db, organization_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if db.get(ProjectDonor, (project.project_id, organization_id)) is None:
+            db.add(ProjectDonor(project_id=project.project_id, organization_id=organization_id))
+            db.flush()
+        donor_guardrail_svc.apply_donor_informed_defaults(db, project)
+    elif old_role == "donor" and new_role != "donor":
+        row = db.get(ProjectDonor, (project.project_id, organization_id))
+        if row is not None:
+            db.delete(row)
+            db.flush()
+
+
 @router.post("/projects/{project_id}/organizations/{organization_id}", status_code=201,
              response_model=ProjectOrgItem)
 def add_project_organization(
@@ -1061,11 +1890,14 @@ def add_project_organization(
     organization_id: str,
     body: OrgRoleBody = OrgRoleBody(),
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Link an organization to a project with an optional role. Admin only."""
-    if not db.get(Project, project_id):
+    project = db.get(Project, project_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    require_org_admin_project_scope(db, current_user, project)
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
 
@@ -1083,7 +1915,9 @@ def add_project_organization(
 
     if existing:
         # Allow updating the role on an existing link
+        old_role = existing.org_role
         existing.org_role = body.org_role
+        _sync_participant_role(db, project, organization_id, old_role, body.org_role)
         db.commit()
         return {"organization_id": organization_id, "org_role": existing.org_role}
 
@@ -1093,6 +1927,7 @@ def add_project_organization(
         org_role=body.org_role,
     )
     db.add(po)
+    _sync_participant_role(db, project, organization_id, None, body.org_role)
     db.commit()
     return {"organization_id": organization_id, "org_role": po.org_role}
 
@@ -1104,7 +1939,7 @@ def update_project_organization_role(
     organization_id: str,
     body: OrgRoleBody,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Update the role of an already-linked organization. Admin only."""
     row = db.execute(
@@ -1116,13 +1951,127 @@ def update_project_organization_role(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Organization not linked to this project")
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    require_org_admin_project_scope(db, current_user, project)
     try:
         actor_roles_svc.validate_org_role_for_project(db, project_id, body.org_role)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    old_role = row.org_role
     row.org_role = body.org_role
+    _sync_participant_role(db, project, organization_id, old_role, body.org_role)
     db.commit()
     return {"organization_id": organization_id, "org_role": row.org_role}
+
+
+# ── Project donors (doc 13 / DECISION 2026-07-10 §3) ──────────────────────────
+
+def _require_project_scope(current_user: CurrentUser, project_id: str, db: Session) -> None:
+    """R2 (BUILD-REVIEW M1b): a ``project_admin`` may only mutate a project they administer.
+
+    ``MANAGE_PROJECT`` alone returns True for *any* project_admin (tier predicate, no
+    ``project_id``), so without this a project_admin of project A could edit project B's
+    donors — and trigger ``apply_donor_informed_defaults`` on B's (possibly shared) workflow
+    step.
+
+    Gap B (2026-07-24): the same hole existed for ``org_admin`` (any org_admin could mutate
+    any project). An org_admin is now constrained to projects its subtree manages (the
+    project's implementing agency ∈ subtree; unanchored projects stay open for setup).
+    Super_admin keeps the broad access the other project mutations grant.
+    """
+    if is_super_admin(current_user):
+        return
+    if is_project_admin(current_user, project_id, "standard"):
+        return
+    if is_org_admin(current_user):
+        project = db.get(Project, project_id)
+        if project is not None:
+            require_org_admin_project_scope(db, current_user, project)
+        return
+    raise HTTPException(status_code=403, detail="You do not administer this project")
+
+
+class DonorItem(BaseModel):
+    organization_id: str
+    name: str | None = None
+
+
+@router.get("/projects/{project_id}/donors", response_model=list[DonorItem], dependencies=[Depends(get_authenticated_user)])
+def list_project_donors(project_id: str, db: Session = Depends(get_db)):
+    """Donor organizations funding this project (category ``donor``)."""
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    rows = db.execute(
+        select(ProjectDonor).where(ProjectDonor.project_id == project_id)
+    ).scalars().all()
+    out: list[DonorItem] = []
+    for r in rows:
+        org = db.get(Organization, r.organization_id)
+        out.append(DonorItem(organization_id=r.organization_id, name=org.name if org else None))
+    return out
+
+
+@router.post("/projects/{project_id}/donors/{organization_id}", status_code=201,
+             response_model=DonorItem)
+def add_project_donor(
+    project_id: str,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Add a donor to a project (doc 13 §3). Standard-track project mutation.
+
+    Auto-populates the final standard step's "Kept informed" cast with the donor tiers
+    (the admin may later trim to ≥1) so the go-live donor guardrail is satisfiable and
+    donor staff are notified on final escalation. **SEAH-suppressed** at runtime.
+    """
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
+    require_track_for_mutation(current_user, "standard")
+    _require_project_scope(current_user, project_id, db)
+
+    project = db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        donor_guardrail_svc.validate_donor_org(db, organization_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    existing = db.get(ProjectDonor, (project_id, organization_id))
+    if existing is None:
+        db.add(ProjectDonor(project_id=project_id, organization_id=organization_id))
+        db.flush()
+    # Auto-populate the last standard step's informed cast (idempotent).
+    donor_guardrail_svc.apply_donor_informed_defaults(db, project)
+    db.commit()
+    org = db.get(Organization, organization_id)
+    return DonorItem(organization_id=organization_id, name=org.name if org else None)
+
+
+@router.delete("/projects/{project_id}/donors/{organization_id}", status_code=204)
+def remove_project_donor(
+    project_id: str,
+    organization_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_authenticated_user),
+):
+    """Remove a donor from a project. Leaves the donor roles in the workflow cast (an
+    admin trims those in the workflow editor) — removing the donor only drops the
+    go-live guardrail requirement."""
+    require_settings_write(current_user, SettingsAction.MANAGE_PROJECT)
+    require_track_for_mutation(current_user, "standard")
+    _require_project_scope(current_user, project_id, db)
+
+    if not db.get(Project, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    row = db.get(ProjectDonor, (project_id, organization_id))
+    if row is not None:
+        db.delete(row)
+        db.commit()
+    return None
 
 
 # ── Project actor role vocabulary ─────────────────────────────────────────────
@@ -1132,22 +2081,31 @@ class ActorRoleItem(BaseModel):
     label: str
     description: str = ""
     sort_order: int = 0
+    #: From the project type's catalog (doc 13 §2). `required` blocks go-live until the slot is
+    #: filled (B1); `required_package` does the same per package (B3). Ignored on PUT.
+    required: bool = False
+    required_package: bool = False
+    scope: str = "project"
 
 
 class ActorRolesReplace(BaseModel):
     roles: list[ActorRoleItem]
 
 
-@router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
+@router.get("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem], dependencies=[Depends(get_authenticated_user)])
 def list_project_actor_roles(project_id: str, db: Session = Depends(get_db)):
-    """Role vocabulary for this project (donor, CSC, contractor, etc.)."""
-    if not db.get(Project, project_id):
+    """The organizations this project must name — its **type's** catalog (doc 13 §2/§3).
+
+    A typed project reads the type; only a legacy untyped one falls back to the dead
+    per-project table.
+    """
+    project = db.get(Project, project_id)
+    if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    rows = actor_roles_svc.list_project_actor_roles(db, project_id)
-    if not rows:
-        rows = actor_roles_svc.seed_project_actor_roles(db, project_id)
-        db.commit()
-    return actor_roles_svc.actor_roles_to_api(rows)
+    catalog = actor_roles_svc.effective_role_catalog(db, project_id)
+    if not project.project_type_key:
+        db.commit()  # the untyped fallback seeds rows — keep them
+    return catalog
 
 
 @router.put("/projects/{project_id}/actor-roles", response_model=list[ActorRoleItem])
@@ -1157,16 +2115,22 @@ def replace_project_actor_roles(
     db: Session = Depends(get_db),
     admin: CurrentUser = Depends(require_admin),
 ):
-    """Replace the full role vocabulary for a project. Super admin only when project has a type."""
+    """Replace the role vocabulary of a **legacy untyped** project.
+
+    A typed project cannot deviate from its type (DECISION-author-defined-slots §1), and its
+    catalog is read from the type — so editing this table would change nothing on screen.
+    Refused rather than silently accepted.
+    """
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    if project.project_type_key and not (
-        admin.is_super_admin or admin.is_country_admin()
-    ):
+    if project.project_type_key:
         raise HTTPException(
-            status_code=403,
-            detail="Actor role keys are defined by the project type; admin only",
+            status_code=409,
+            detail=(
+                "Organization roles come from this project's type. Change them under "
+                "Settings → Project types."
+            ),
         )
     try:
         rows = actor_roles_svc.replace_project_actor_roles(
@@ -1185,7 +2149,7 @@ def remove_project_organization(
     project_id: str,
     organization_id: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Unlink an organization from a project. Admin only."""
 
@@ -1198,13 +2162,17 @@ def remove_project_organization(
     ).scalar_one_or_none()
     if not row:
         raise HTTPException(status_code=404, detail="Link not found")
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     db.delete(row)
     db.commit()
 
 
 # ── Project ↔ Locations ───────────────────────────────────────────────────────
 
-@router.get("/projects/{project_id}/locations")
+@router.get("/projects/{project_id}/locations", dependencies=[Depends(get_authenticated_user)])
 def list_project_locations(
     project_id: str,
     with_details: bool = Query(False, description="Include full location + translations"),
@@ -1356,6 +2324,29 @@ def _package_to_dict(pkg: ProjectPackage) -> dict:
     }
 
 
+def _mint_qr_token(db: Session, package_id: str, user_id: str | None) -> None:
+    """Give a new package its QR token immediately (2026-08-09, Philippe: *"the QR should be
+    generated when we create the packages"*).
+
+    Tokens used to appear only when somebody opened the **QR codes** page, which auto-creates
+    the missing ones as a side effect of listing them. So a package created and never visited
+    there had none, and go-live's D2 reported "Optional: add QR for 01, 02" with a "Fix →" that
+    jumped to Packages — a screen with no QR anything. The token is one row and depends on
+    nothing but the package, so there is no reason to defer it.
+    """
+    from ticketing.models.qr_token import QrToken
+
+    db.add(QrToken(package_id=package_id, created_by_user_id=user_id))
+
+
+def _package_count(db: Session, project_id: str) -> int:
+    return db.execute(
+        select(func.count())
+        .select_from(ProjectPackage)
+        .where(ProjectPackage.project_id == project_id)
+    ).scalar_one()
+
+
 def _get_package_or_404(db: Session, project_id: str, package_id: str) -> ProjectPackage:
     pkg = db.execute(
         select(ProjectPackage)
@@ -1373,7 +2364,7 @@ def _get_package_or_404(db: Session, project_id: str, package_id: str) -> Projec
     return pkg
 
 
-@router.get("/projects/{project_id}/packages", response_model=list[PackageResponse])
+@router.get("/projects/{project_id}/packages", response_model=list[PackageResponse], dependencies=[Depends(get_authenticated_user)])
 def list_packages(project_id: str, db: Session = Depends(get_db)):
     """List all packages for a project, ordered by package_code."""
     if not db.get(Project, project_id):
@@ -1421,6 +2412,7 @@ def create_package(
     )
     db.add(pkg)
     db.flush()
+    _mint_qr_token(db, pkg.package_id, getattr(_admin, "user_id", None))
     db.refresh(pkg, ["locations", "organizations"])
     db.commit()
     return _package_to_dict(pkg)
@@ -1534,10 +2526,14 @@ def add_package_organization(
     organization_id: str,
     body: PackageOrgRoleBody,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
-    """Assign an organization + role to a package (overrides project-wide for this lot)."""
+    """Assign an organization + role to a package (overrides project-wide for this package)."""
     _get_package_or_404(db, project_id, package_id)
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     if not db.get(Organization, organization_id):
         raise HTTPException(status_code=404, detail=f"Organization '{organization_id}' not found")
     try:
@@ -1575,10 +2571,14 @@ def remove_package_organization(
     organization_id: str,
     org_role: str,
     db: Session = Depends(get_db),
-    _admin: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """Remove a package-level actor assignment."""
     _get_package_or_404(db, project_id, package_id)
+    # Gap B: constrain org_admin to projects its subtree manages (other tiers unchanged).
+    project = db.get(Project, project_id)
+    if project is not None:
+        require_org_admin_project_scope(db, current_user, project)
     row = db.execute(
         select(PackageOrganization).where(
             PackageOrganization.package_id == package_id,

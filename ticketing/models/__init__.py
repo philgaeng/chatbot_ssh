@@ -1,10 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from .base import Base
 from .country import Country, LocationLevelDef, Location, LocationTranslation
 from .organization import Organization
+from .position_type import PositionType
+from .officer_position import OfficerPosition
 from .user import Role, UserRole
 from .admin_scope import AdminScope
 from .officer_onboarding import OfficerOnboarding
 from .workflow import WorkflowDefinition, WorkflowStep, WorkflowAssignment
+from .resolution_action import ResolutionAction, WorkflowResolutionAction
 from .ticket import Ticket, TicketEvent
 from .ticket_overdue_episode import TicketOverdueEpisode
 from .ticket_file import TicketFile
@@ -26,6 +31,8 @@ __all__ = [
     "Location",
     "LocationTranslation",
     "Organization",
+    "PositionType",
+    "OfficerPosition",
     "Role",
     "UserRole",
     "AdminScope",
@@ -33,6 +40,8 @@ __all__ = [
     "WorkflowDefinition",
     "WorkflowStep",
     "WorkflowAssignment",
+    "ResolutionAction",
+    "WorkflowResolutionAction",
     "Ticket",
     "TicketEvent",
     "TicketOverdueEpisode",

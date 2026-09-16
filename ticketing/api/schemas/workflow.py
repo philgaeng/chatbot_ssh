@@ -1,13 +1,40 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pydantic schemas for workflow definitions, steps, and assignments.
 """
 from datetime import datetime
 from typing import Any, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
+
+#: Non-actor tiers an author may mark mandatory. The ACTOR is always required and is never
+#: listed — a level with nobody to work it is not a level (doc 13 §5A.5).
+REQUIRABLE_TIERS = ("supervisor", "informed", "observer")
+
+
+class TierLabel(BaseModel):
+    """The author's name for one job at a level (doc 12 §6.2)."""
+
+    label: str = Field(..., max_length=80)
+    description: str = Field("", max_length=160)
+
 
 
 # ── Steps ─────────────────────────────────────────────────────────────────────
+
+def _check_required_tiers(value: Optional[list[str]]) -> Optional[list[str]]:
+    if value is None:
+        return None
+    bad = [t for t in value if t not in REQUIRABLE_TIERS]
+    if bad:
+        raise ValueError(
+            "required_tiers may only contain "
+            + ", ".join(REQUIRABLE_TIERS)
+            + " — the actor is always required"
+        )
+    return list(dict.fromkeys(value))
+
 
 class WorkflowStepResponse(BaseModel):
     step_id: str
@@ -23,6 +50,10 @@ class WorkflowStepResponse(BaseModel):
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
+    tier_labels: dict[str, TierLabel] = {}
+    required_tiers: list[str] = []
+    staff_per_package: bool = False
     stakeholders: Optional[Any]
     expected_actions: Optional[Any]
     is_deleted: bool = False
@@ -36,15 +67,28 @@ class WorkflowStepResponse(BaseModel):
 class WorkflowStepCreate(BaseModel):
     display_name: str
     step_key: Optional[str] = None          # auto-generated if omitted
-    assigned_role_key: str
+    # Optional: the tier-toggle editor omits it (Actor is auto-minted a synthetic per-step
+    # key). Legacy/template callers may still pass a named key.
+    assigned_role_key: str = ""
     response_time_hours: Optional[int] = None
     resolution_time_days: Optional[int] = None
     supervisor_role: Optional[str] = None
     informed_roles: list[str] = []
     observer_roles: list[str] = []
     informed_pii_access: bool = False
+    actor_can_reassign: bool = False
+    tier_labels: dict[str, TierLabel] = {}
+    required_tiers: list[str] = []
+    staff_per_package: bool = False
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
+    # Tier-toggle editor (DESIGN-cast-model §3.5): when any of these is set, the step's tier
+    # fields are (re)derived from on/off toggles — enabled empty slots mint synthetic keys.
+    supervisor_enabled: Optional[bool] = None
+    participants_enabled: Optional[bool] = None
+    observers_enabled: Optional[bool] = None
+
+    _validate_required_tiers = field_validator("required_tiers")(_check_required_tiers)
 
 
 class WorkflowStepUpdate(BaseModel):
@@ -57,8 +101,18 @@ class WorkflowStepUpdate(BaseModel):
     informed_roles: Optional[list[str]] = None
     observer_roles: Optional[list[str]] = None
     informed_pii_access: Optional[bool] = None
+    actor_can_reassign: Optional[bool] = None
+    tier_labels: Optional[dict[str, TierLabel]] = None
+    required_tiers: Optional[list[str]] = None
+    staff_per_package: Optional[bool] = None
     stakeholders: Optional[list[str]] = None
     expected_actions: Optional[list[str]] = None
+    # Tier-toggle editor (see WorkflowStepCreate).
+    supervisor_enabled: Optional[bool] = None
+    participants_enabled: Optional[bool] = None
+    observers_enabled: Optional[bool] = None
+
+    _validate_required_tiers = field_validator("required_tiers")(_check_required_tiers)
 
 
 class StepReorderRequest(BaseModel):
@@ -98,6 +152,11 @@ class WorkflowDefinitionResponse(BaseModel):
     version: int
     is_template: bool
     template_source_id: Optional[str]
+    # GRM-122: the organization it belongs to — decides which resolution actions it can offer.
+    owner_organization_id: Optional[str] = None
+    owner_name: Optional[str] = None
+    # Filled only by GET /workflows/{id}: names of the projects bound to it, shown when moving it.
+    used_by_projects: list[str] = []
     steps: list[WorkflowStepResponse] = []
     assignments: list[WorkflowAssignmentResponse] = []
     created_at: datetime
@@ -118,6 +177,13 @@ class WorkflowCreate(BaseModel):
     description: Optional[str] = None
     clone_from_id: Optional[str] = None     # clone steps from this workflow/template
     is_template: bool = False               # True → reusable template (not assigned to tickets)
+    # GRM-122: required from a platform admin; an org_admin's defaults to its organization.
+    owner_organization_id: Optional[str] = None
+
+
+class WorkflowOrganizationUpdate(BaseModel):
+    """PATCH /workflows/{id}/organization (GRM-122)."""
+    organization_id: str
 
 
 class SaveAsTemplateBody(BaseModel):

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Hydrate complainant slots from DB by grievance_id."""
 
 from __future__ import annotations

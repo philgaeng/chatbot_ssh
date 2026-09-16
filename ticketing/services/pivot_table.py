@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Pivot-table aggregation for the report builder (Excel / Google Sheets style).
 """
@@ -21,6 +23,8 @@ DIMENSION_FIELDS = frozenset({
     "stage_level",
     "complaint_category",
     "resolution_category",
+    "resolution_actor",
+    "resolution_action_national",
     "status_code",
     "priority",
     "project_name",

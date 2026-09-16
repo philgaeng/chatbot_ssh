@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Centralized form-to-form routing (story_main → form → route → step)."""
 
 from __future__ import annotations

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Resolve ticket routing organization from project / package actor configuration.
 
@@ -29,33 +31,58 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_ROUTING_ORG_ROLE = "implementing_agency"
+def _required_role_order(db: Session, project: Project) -> list[str]:
+    """The type's **required** organization roles, in the order the author listed them.
 
-
-def routing_org_role_for_project(db: Session, project: Project) -> str:
+    Required, not merely listed: the back-fill migration writes catalog keys in alphabetical
+    order, so on a migrated type "first listed" is `donor` — an accident of sorting, not a
+    statement about the project. `required` is the author saying *every project of this kind
+    must have this one*, which is the same thing the creation flow fills.
+    """
     from ticketing.services.project_types import get_project_type
 
-    pt = (
-        get_project_type(db, project.project_type_key)
-        if project.project_type_key
-        else None
-    )
-    return (pt.routing_org_role if pt else None) or DEFAULT_ROUTING_ORG_ROLE
+    if not project.project_type_key:
+        return []
+    pt = get_project_type(db, project.project_type_key)
+    if not pt:
+        return []
+    return [
+        str(e.get("key"))
+        for e in (pt.actor_roles or [])
+        if e.get("key") and e.get("required")
+    ]
 
 
-def _org_for_role_on_project(project: Project, org_role: str) -> Optional[str]:
+def _primary_org_for_project(db: Session, project: Project) -> Optional[str]:
+    """The project's **lead** organization: the first required role the type names.
+
+    Descriptive only. Until 2026-08-04 this was the author-designated *anchor*
+    (`routing_org_role`) and it decided which organization a grievance was reported under —
+    which meant one organization owned the grievance and every other one on the project owned
+    nothing. **That idea is gone** (DECISION-organization-membership): reporting is membership,
+    computed in `services/org_reach.py`, and reads none of this.
+
+    What remains needs a value only because `tickets.organization_id` is NOT NULL and rides
+    along in a few payloads. Order: first required role → the legacy accountable-organization
+    field → any organization named on the project.
+    """
+    by_role = {po.org_role: po.organization_id for po in project.organizations if po.org_role}
+    for role in _required_role_order(db, project):
+        if by_role.get(role):
+            return by_role[role]
+    if project.implementing_agency_org_id:
+        return project.implementing_agency_org_id
     for po in project.organizations:
-        if po.org_role == org_role:
+        if po.organization_id:
             return po.organization_id
     return None
 
 
-def _org_for_role_on_package(db: Session, package_id: str, org_role: str) -> Optional[str]:
+def _primary_org_for_package(db: Session, package_id: str) -> Optional[str]:
     return db.execute(
-        select(PackageOrganization.organization_id).where(
-            PackageOrganization.package_id == package_id,
-            PackageOrganization.org_role == org_role,
-        ).limit(1)
+        select(PackageOrganization.organization_id)
+        .where(PackageOrganization.package_id == package_id)
+        .limit(1)
     ).scalar_one_or_none()
 
 
@@ -216,11 +243,17 @@ def resolve_ticket_organization(
     location_code: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Commercial organization that owns ticket routing for intake / auto-assign.
+    The organization stamped on a new ticket (`tickets.organization_id`).
 
-    Priority:
-      1. Package actor for routing role (overrides project-wide for that role)
-      2. Project actor for routing role (from project type, default implementing_agency)
+    **Descriptive since 2026-08-04** (DECISION-organization-membership). It used to be *the*
+    organization a grievance was reported under, chosen by the project type's
+    ``routing_org_role``. Reporting is now **membership** — every organization named on the
+    project sees the grievance, a lot-level naming reaches that lot, and a parent organization
+    sees everything its children see (`services/org_reach.py`). Nothing reads this field to
+    decide who sees what.
+
+    Order: the lot's first organization (a lot is more specific), else the project's
+    first-named organization, else the legacy ``implementing_agency_org_id``.
 
     location_code is accepted for future package-from-location resolution; unused today.
     """
@@ -235,11 +268,9 @@ def resolve_ticket_organization(
             logger.warning("resolve_ticket_organization: unknown package_id=%s", pkg_id)
         else:
             project = _load_project(db, project_id=pkg.project_id)
-            if project:
-                role = routing_org_role_for_project(db, project)
-                pkg_org = _org_for_role_on_package(db, pkg_id, role)
-                if pkg_org:
-                    return pkg_org
+            pkg_org = _primary_org_for_package(db, pkg_id)
+            if pkg_org:
+                return pkg_org
 
     if not project:
         project = _load_project(
@@ -251,11 +282,9 @@ def resolve_ticket_organization(
     if not project:
         return None
 
-    role = routing_org_role_for_project(db, project)
-    return _org_for_role_on_project(project, role)
+    return _primary_org_for_project(db, project)
 
 
 def routing_org_id_for_loaded_project(db: Session, project: Project) -> Optional[str]:
-    """Go-live helper when project.organizations is already eager-loaded."""
-    role = routing_org_role_for_project(db, project)
-    return _org_for_role_on_project(project, role)
+    """Helper for callers that already eager-loaded ``project.organizations``."""
+    return _primary_org_for_project(db, project)

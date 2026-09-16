@@ -1,6 +1,9 @@
 # Ticketing System – SLA and Escalation Rules
 
-> **Status (June 2026):** Fully implemented. Auto-escalation Celery watchdog runs every 15 min. Manual escalation available via ESCALATE action. Auto-assign on escalation wired. Complainant notification fires automatically on RESOLVE and ESCALATE. Overdue episodes tracked in `ticket_overdue_episodes`.
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
+> **Status (July 2026):** Fully implemented. Auto-escalation Celery watchdog runs every 15 min. Manual escalation available via ESCALATE action. Auto-assign on escalation wired. Complainant notification fires automatically on RESOLVE and ESCALATE. Overdue episodes tracked in `ticket_overdue_episodes`.
 
 This document specifies how **SLAs** and **escalation rules** work in the ticketing system. All roles, levels, timelines, and actions are **configurable through settings** (see [02_ticketing_domain_and_settings.md](02_ticketing_domain_and_settings.md)). Concrete roles are described in **TOR GRMS** (Terms of Reference – Grievance Redress System); the system supports 100% configuration of access levels and escalation behaviour.
 
@@ -16,7 +19,7 @@ This document specifies how **SLAs** and **escalation rules** work in the ticket
 | Auto-assign on escalation | `auto_assign_officer()` in `escalation.py`; uses `OfficerScope` to find eligible officer at next step |
 | Notification on escalation | `notify_complainant.delay()` fires after reassign |
 | Overdue tracking | `ticket_overdue_episodes` table; `current_overdue_episode_id` on ticket; `days_overdue` at closure |
-| GRC (L3) special flow | GRC_CONVENE → GRC_DECIDE two-step; notifies all GRC members on convene |
+| GRC (L3) special flow | `GRC_CONVENE` sets status `GRC_HEARING_SCHEDULED` and notifies all GRC members. The former `GRC_DECIDE` action was **removed in v1** — the chair ends the case with `RESOLVE` (+ resolution record) or advances it with `ESCALATE` to L4, like any assigned officer (see `08_ticket_resolution_and_case_summary.md` §2). A legacy `grc_decide()` helper remains in `ticketing/engine/escalation.py` for historical event replay only; it is not exposed via API. |
 | L4 (legal) | No auto-escalation; no resolution time; manual action only |
 
 ---
@@ -106,7 +109,7 @@ This is the **reference example** from the project. The system must support this
 - **Timeline** → SLA stored per step: `response_time_hours`, `resolution_time_days` (nullable for “no specific timeline”).
 - **Actions** → list of action labels or descriptions per step (for UI and reporting).
 
-Workflow assignment can still be by (organization, location, project, ticket type, priority, sensitive/high-priority flag) so that, for example, one organization can have different workflows for standard vs sensitive/high-priority (as per answered Q3.2 in [00_ticketing_overview_and_questions.md](00_ticketing_overview_and_questions.md)).
+Workflow selection at ticket creation is now driven by **project workflow bindings** (`ticketing.project_workflows` — classification / intake-route match, then default; see [12_workflows_configuration.md](12_workflows_configuration.md) §8). The older (organization, location, project, priority) `workflow_assignments` lookup survives only as a **legacy fallback** for tickets without a resolvable project.
 
 ---
 

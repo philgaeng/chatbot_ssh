@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Orchestrator adapters - CollectingDispatcher and SessionTracker for running Rasa actions without Rasa runtime."""
 
 from .dispatcher import CollectingDispatcher

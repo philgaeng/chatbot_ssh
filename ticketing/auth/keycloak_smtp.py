@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Apply shared SMTP env to the Keycloak grm realm (officer invite / execute-actions).
 

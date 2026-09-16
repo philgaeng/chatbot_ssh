@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shareable report links — internal (officers) and public (complainant-safe) snapshots (TP-05)."""
 from __future__ import annotations
 
@@ -25,12 +27,22 @@ def _load(db: Session) -> list[dict[str, Any]]:
 
 
 def _save(db: Session, items: list[dict[str, Any]], updated_by: str) -> None:
+    # ⚠ The column is `updated_by_user_id`. This function said `updated_by` in both
+    # branches (GRM-071, found 2026-09-06), and the two branches failed differently,
+    # which is why it survived: the INSERT raised
+    # `TypeError: 'updated_by' is an invalid keyword argument for Settings` → HTTP 500,
+    # and the UPDATE silently set an unmapped Python attribute and discarded the value.
+    # So sharing a report was a 500 on **every deployment where nobody had shared one
+    # before** — the row does not exist until the first share — and merely un-audited
+    # afterwards. The other four services writing this table always had it right
+    # (`archiving_policy`, `grievance_categories_catalog`, `report_limits`,
+    # `quarterly_report`); this one was never called by a test.
     row = db.get(Settings, SETTING_KEY)
     if row:
         row.value = items
-        row.updated_by = updated_by
+        row.updated_by_user_id = updated_by
     else:
-        db.add(Settings(key=SETTING_KEY, value=items, updated_by=updated_by))
+        db.add(Settings(key=SETTING_KEY, value=items, updated_by_user_id=updated_by))
     db.commit()
 
 

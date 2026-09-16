@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Fire-and-forget HTTP dispatch: chatbot action server → ticketing API.
 
 Called after a grievance is successfully written to the DB.

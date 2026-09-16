@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Reverse geocoding for map pins via OSM Nominatim (CB-06 async enrichment)."""
 
 from __future__ import annotations

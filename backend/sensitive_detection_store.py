@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Store for sensitive content detection results from the background Celery task.
 

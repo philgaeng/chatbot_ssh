@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 
 
 from typing import Dict, List, Optional, Any, TypeVar, Generic
@@ -361,30 +362,9 @@ class DatabaseManager(BaseDatabaseManager):
             )
 
     def _ensure_seah_service_providers_table(self) -> None:
-        ddl = """
-            CREATE TABLE IF NOT EXISTS seah_service_providers (
-                seah_service_provider_id TEXT PRIMARY KEY,
-                country_code TEXT NOT NULL DEFAULT 'NP',
-                province_code TEXT,
-                district_code TEXT,
-                municipality_code TEXT,
-                province TEXT,
-                district TEXT,
-                municipality TEXT,
-                ward TEXT,
-                seah_center_name TEXT NOT NULL,
-                address TEXT,
-                phone TEXT,
-                opening_days TEXT,
-                opening_hours TEXT,
-                remarks TEXT,
-                is_active BOOLEAN NOT NULL DEFAULT TRUE,
-                sort_order INTEGER NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """
-        self.execute_update(ddl, ())
+        """No-op: seah_service_providers is created by the Alembic public
+        baseline (migrations/public). Retained so existing call sites keep working."""
+        return None
 
     def find_seah_service_providers(
         self,
@@ -469,25 +449,8 @@ class DatabaseManager(BaseDatabaseManager):
         return []
 
     def _ensure_seah_contact_points_table(self) -> None:
-        """Reference rows for SEAH center / referral text (spec 08)."""
-        ddl = """
-            CREATE TABLE IF NOT EXISTS seah_contact_points (
-                seah_contact_point_id TEXT PRIMARY KEY,
-                province TEXT,
-                district TEXT,
-                municipality TEXT,
-                ward TEXT,
-                project_uuid TEXT,
-                seah_center_name TEXT NOT NULL,
-                address TEXT,
-                phone TEXT,
-                opening_days TEXT,
-                opening_hours TEXT,
-                is_active BOOLEAN DEFAULT TRUE,
-                sort_order INTEGER DEFAULT 0
-            );
-        """
-        self.execute_update(ddl, ())
+        """Seed the default SEAH contact-point row. The table itself is created
+        by the Alembic public baseline (migrations/public)."""
         seed = """
             INSERT INTO seah_contact_points (
                 seah_contact_point_id, province, district, municipality, ward, project_uuid,
@@ -719,33 +682,10 @@ class DatabaseManager(BaseDatabaseManager):
                     ),
                 )
 
-            grievance_description = data.get("grievance_description")
-            if grievance_description not in (None, "", not_provided):
-                vault_payload_id = f"vault-{uuid.uuid4()}"
-                self.execute_update(
-                    """
-                    INSERT INTO grievance_vault_payloads (
-                        vault_payload_id,
-                        grievance_id,
-                        case_sensitivity,
-                        payload_type,
-                        content_ciphertext,
-                        source_channel,
-                        source_language_code,
-                        created_by
-                    )
-                    VALUES (%s, %s, 'seah', 'original_grievance', %s, 'chatbot', %s, %s)
-                    """,
-                    (vault_payload_id, grievance_id, grievance_description, data.get("language_code", "en"), self.DEFAULT_USER),
-                )
-                self.grievance.update_grievance(
-                    grievance_id,
-                    {
-                        "vault_payload_ref": vault_payload_id,
-                        "vault_last_updated_at": datetime.now(),
-                        "case_sensitivity": "seah",
-                    },
-                )
+            # NOTE (CL-01): the grievance_vault_payloads table was dropped
+            # (AUDIT_FINDINGS §1c — abandoned SEAH vault trio, 0 rows, no readers).
+            # The SEAH free-text description is intentionally not persisted here;
+            # the canonical SEAH model stores parties in grievance_parties above.
 
             return {
                 "ok": True,

@@ -1,5 +1,8 @@
 # Agent: Security monitoring & hardening
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 **Copy this entire file into a new Cursor agent session.** Prereq: **Runbook A** (`ops` module + `ops` Alembic stream + container) must already exist — this runbook adds to it.
 
 ## Mission

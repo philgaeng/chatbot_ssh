@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 # Safe to run: only creates ticketing.ticket_viewers
 # Does NOT touch: grievances, complainants, or any public.* table
 #

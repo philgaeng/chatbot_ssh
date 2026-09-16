@@ -23,7 +23,13 @@ from ticketing.models.workflow import WorkflowDefinition
 ORG_DOR = "DOR"
 ORG_ADB = "ADB"
 PROJECT_KL_ROAD = "KL_ROAD"
-ROLE_L1 = "site_safeguards_focal_person"
+# Per-slot keys (2026-08-09): each (step, tier) slot owns its role key, because a key shared by
+# two slots made cast assignments ambiguous — officers staffed into one surfaced against the
+# other. The seed writes these; `site_safeguards_focal_person` and friends remain *operational*
+# roles (permissions, tracks) but no longer name a slot.
+ROLE_L1 = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:actor"
+ROLE_L1_SUPERVISOR = "wf:KL_ROAD_STANDARD:LEVEL_1_SITE:supervisor"
+ROLE_L2 = "wf:KL_ROAD_STANDARD:LEVEL_2_PIU:actor"
 COUNTRY_L1_FALLBACK_ROLE = "country_l1_fallback"
 
 LOC_P1 = "P1"              # Koshi province
@@ -142,6 +148,69 @@ def ctx(db):
         yield context
     finally:
         context.cleanup()
+
+
+# The demo seed staffs one L1 per Koshi district it touches — including a Jhapa L1
+# (l1-officer-2). Several assignment tests assert province-fallback or "my own officer is
+# the only local" behaviour that requires Jhapa to have NO *seeded* local L1. This opt-in
+# fixture removes only that scope for the test and restores it after, keeping the Morang L1
+# (the fallback target) intact. Tests that deliberately accept l1-officer-2 don't use it.
+SEEDED_JHAPA_L1 = "l1-officer-2@grm.local"
+
+
+@pytest.fixture
+def without_seeded_jhapa_l1(db):
+    rows = db.execute(
+        select(OfficerScope).where(
+            OfficerScope.user_id == SEEDED_JHAPA_L1,
+            OfficerScope.role_key == ROLE_L1,
+        )
+    ).scalars().all()
+    snapshot = [
+        {c.name: getattr(r, c.name) for c in OfficerScope.__table__.columns} for r in rows
+    ]
+    for r in rows:
+        db.delete(r)
+    db.flush()
+    try:
+        yield
+    finally:
+        if snapshot:
+            for data in snapshot:
+                db.add(OfficerScope(**data))
+            db.commit()
+
+
+# The demo seed staffs Level 1 **lot by lot** (2026-08-19, D-26): `LEVEL_1_SITE.staff_per_package`
+# is `True`, and go-live check C1 gates ticket intake — so an unstaffed lot does not warn, it makes
+# `POST /api/v1/tickets` refuse. Before that fix no lot had an officer, and a handful of tests
+# quietly relied on it: one asserted "a per-lot level is not satisfied by a project-wide officer"
+# by staffing nobody per lot, another expected its own package officer to be the only candidate.
+#
+# ⚠ Those tests were **asserting the absence of seed data**, which is not a precondition anyone
+# declared — it is a gap nobody had noticed. This fixture makes the precondition explicit: a test
+# that needs "no lot has a Level 1 officer" says so, and keeps saying it if the seed changes again.
+@pytest.fixture
+def without_seeded_package_l1s(db):
+    rows = db.execute(
+        select(OfficerScope).where(
+            OfficerScope.role_key == ROLE_L1,
+            OfficerScope.package_id.isnot(None),
+        )
+    ).scalars().all()
+    snapshot = [
+        {c.name: getattr(r, c.name) for c in OfficerScope.__table__.columns} for r in rows
+    ]
+    for r in rows:
+        db.delete(r)
+    db.flush()
+    try:
+        yield
+    finally:
+        if snapshot:
+            for data in snapshot:
+                db.add(OfficerScope(**data))
+            db.commit()
 
 
 @pytest.fixture

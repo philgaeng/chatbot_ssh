@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 HTTP client for the Backend Messaging API.
 
@@ -9,7 +11,7 @@ Base URL: settings.backend_grievance_base_url
 Auth:     x-api-key: TICKETING_SECRET_KEY (or MESSAGING_API_KEY fallback)
 
 INTEGRATION POINT: backend/api/routers/messaging.py
-  POST /api/messaging/send-sms   — DOIT gateway (Nepal) or AWS SNS fallback
+  POST /api/messaging/send-sms   — DOIT gateway (Nepal). No fallback: SMS never leaves the country
   POST /api/messaging/send-email — SMTP mailbox relay
 """
 from __future__ import annotations
@@ -39,7 +41,7 @@ def _client() -> httpx.Client:
 
 def send_sms(phone_number: str, body: str, template_id: str | None = None) -> dict:
     """
-    Send SMS to complainant via AWS SNS through the backend Messaging API.
+    Send SMS to complainant via the DOIT gateway through the backend Messaging API.
 
     Use this as fallback when session_id is expired / unavailable.
     Phone number must include country code (e.g. +977XXXXXXXXXX for Nepal).

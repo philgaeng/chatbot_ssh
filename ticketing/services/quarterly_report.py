@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Quarterly scheduled report: load template + schedule from ticketing.settings,
 generate XLSX (overview four-sheet or pivot), resolve recipient emails.

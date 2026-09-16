@@ -8,10 +8,17 @@
 
 # --- Orchestrator ---
 fastapi>=0.100.0
-uvicorn>=0.22.0
+# Cap: uvicorn>=0.50 pulls the sans-io websockets impl importing
+# websockets.server.ServerProtocol (needs websockets>=12), but rasa-sdk pins
+# websockets 10.4 -> ImportError at startup. 0.49.x is the last compatible line.
+uvicorn>=0.22.0,<0.50
 python-multipart>=0.0.9
 pyyaml>=6.0
 pydantic>=2.0
+# Moved here from requirements.grm.txt by DPG-17 (2026-08-18): backend/config/llm_config.py
+# is the single LLM registry both surfaces read, so the base (chatbot) surface now depends on
+# it. Three consumers: backend/config/llm_config.py, ticketing/config/settings.py, ops/config.py.
+pydantic-settings>=2.0
 email-validator>=2.0.0
 
 # --- WebSocket / Socket.IO (FastAPI ASGI: backend.api.websocket_fastapi, orchestrator socket bridge) ---
@@ -33,7 +40,6 @@ celery==5.5.2
 flower==2.0.1
 
 # --- Messaging (SMTP email / SNS SMS) ---
-boto3==1.37.28
 
 # --- LLM (classification, if LLM_CLASSIFICATION=True) ---
 openai==1.70.0

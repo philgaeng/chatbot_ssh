@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import re
 import logging
 from typing import Any, Text, Dict, List, Optional, Union, Tuple

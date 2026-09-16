@@ -1,49 +1,54 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Project archetype (project_types) — instantiate and validate."""
 from __future__ import annotations
-
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ticketing.models.project import Project, ProjectActorRole
+from ticketing.models.project import Project
 from ticketing.models.project_type import ProjectType
-from ticketing.services import project_actor_roles as actor_roles_svc
 
 
 def get_project_type(db: Session, type_key: str) -> ProjectType | None:
     return db.get(ProjectType, type_key)
 
 
-def list_project_types(db: Session, active_only: bool = True) -> list[ProjectType]:
+def list_project_types(
+    db: Session,
+    active_only: bool = True,
+    *,
+    user=None,
+    owner_organization_id: str | None = None,
+) -> list[ProjectType]:
+    """Project types, newest catalog rules applied.
+
+    ``user`` narrows the list to what that admin may see — global types (owner NULL) plus
+    those owned inside its own subtree (DECISION-author-defined-slots §3.1). ``owner_organization_id``
+    narrows further to the types offered *for one organization*: its own plus the global ones.
+    """
     stmt = select(ProjectType).order_by(ProjectType.sort_order, ProjectType.type_key)
     if active_only:
         stmt = stmt.where(ProjectType.is_active.is_(True))
+    if owner_organization_id:
+        from ticketing.services.org_tree import ancestor_org_ids
+
+        # A type authored at an organization is available there **and below it** (doc 11 §3.3),
+        # so a district office can be created from its ministry's template.
+        offered = ancestor_org_ids(db, owner_organization_id, include_self=True)
+        stmt = stmt.where(
+            (ProjectType.owner_organization_id.in_(offered))
+            | (ProjectType.owner_organization_id.is_(None))
+        )
+    if user is not None:
+        from ticketing.services.admin_access import apply_catalog_scope
+
+        stmt = apply_catalog_scope(stmt, db, user, ProjectType.owner_organization_id)
     return list(db.execute(stmt).scalars().all())
 
 
-def type_actor_roles_for_project_seed(type_row: ProjectType) -> list[dict[str, Any]]:
-    """Unique role keys for project_actor_roles table."""
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for i, entry in enumerate(type_row.actor_roles or []):
-        key = (entry.get("key") or "").strip()
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        out.append(
-            {
-                "key": key,
-                "label": entry.get("label") or key,
-                "description": entry.get("description") or "",
-                "sort_order": i,
-            }
-        )
-    return out
-
-
 def instantiate_project_from_type(db: Session, project: Project, type_key: str) -> ProjectType:
-    """Apply archetype workflows and actor vocabulary to a new project."""
+    """Apply the type's workflows to a new project. Its organization catalog stays on the type."""
     pt = get_project_type(db, type_key)
     if not pt or not pt.is_active:
         raise ValueError(f"Unknown or inactive project type '{type_key}'")
@@ -89,10 +94,9 @@ def instantiate_project_from_type(db: Session, project: Project, type_key: str) 
         if legacy_bindings:
             pw_svc.apply_workflow_bindings_from_type(db, project, legacy_bindings)
 
-    roles_payload = type_actor_roles_for_project_seed(pt)
-    if roles_payload:
-        actor_roles_svc.replace_project_actor_roles(db, project.project_id, roles_payload)
-
+    # The organization catalog is NOT copied into the project (DECISION-author-defined-slots
+    # §3.3): it is read from the type, one catalog per archetype. Copying it per project is how
+    # a vocabulary drifts — `project_actor_roles` stays dead for typed projects.
     return pt
 
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import os
 from typing import Dict, Any
 from dotenv import load_dotenv
@@ -159,7 +161,7 @@ def get_grm_config_summary() -> Dict[str, Any]:
     }
 
 ############################
-# ENVIRONMENT VALIDATION
+# GRM ENV VAR VALIDATION
 ############################
 
 def validate_grm_environment() -> Dict[str, Any]:

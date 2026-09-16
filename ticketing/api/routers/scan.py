@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 QR token scan + management endpoints.
 
@@ -42,9 +44,9 @@ class ScanResponse(BaseModel):
     """Returned to the chatbot after a successful token scan."""
     project_code: str
     package_id: str
-    package_code: str   # e.g. "SHEP/OCB/KL/01" — human-readable lot reference
+    package_code: str   # e.g. "SHEP/OCB/KL/01" — human-readable package reference
     location_code: str  # primary district — chatbot pre-fills district + province slots
-    label: str          # e.g. "Lot 1 — Kakarbhitta to Sitapur"
+    label: str          # e.g. "Package 1 — Kakarbhitta to Sitapur"
 
 
 class QrTokenOut(BaseModel):

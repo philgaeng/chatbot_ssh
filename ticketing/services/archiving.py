@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Resolved-case archiving — eligibility, selection, and archive execution.
 

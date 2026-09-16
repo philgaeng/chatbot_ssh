@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Language detection, skip-instruction matching, and category label helpers."""
 
 from __future__ import annotations
@@ -8,6 +10,7 @@ from typing import Any, Dict, List, Tuple
 from rapidfuzz import fuzz
 
 from backend.config.constants import CLASSIFICATION_DATA
+from backend.services.category_resolution import resolve_categories
 from backend.config.database_constants import GRIEVANCE_STATUS_DICT
 
 SKIP_WORDS_DIC: Dict[str, Dict[str, Any]] = {
@@ -120,16 +123,44 @@ def is_valid_email(email: str) -> bool:
 
 
 def categories_in_local_language(categories: List[str], language_code: str) -> List[str]:
+    """
+    Translate canonical category keys into the complainant's language.
+
+    ⚠ **Look the key up whole.** This used to do `category.split(" - ")[1]` and look the *leaf* up
+    in `CLASSIFICATION_DATA`, whose keys are the full `Classification - Leaf` — so the lookup never
+    hit, both halves fell back to the leaf, and every Nepali session got `Air Pollution - Air
+    Pollution`. That is not only a display bug: the doubled value goes into
+    `grievance_categories_local`, `_resolve_grievance_categories_for_db` prefers that slot,
+    `categories_in_english` cannot match it back, and it is **stored** — a category outside the
+    taxonomy, invisible to every filter and report and unmatched by the `high_priority` lookup.
+    The same damage as D-51's invented categories, from our own code, on every Nepali grievance.
+    Fixed 2026-08-25 with D-51.
+
+    ⚠ And it raised `IndexError` on any value without `" - "`, which is exactly the shape the
+    classifier produces when it drops the classification half (`Wildlife Passage`).
+    """
     if language_code == "en":
         return categories
     categories_local = []
     key_local_1 = f"generic_grievance_name_{language_code}"
     key_local_2 = f"classification_{language_code}"
     for category in categories:
-        category = category.split(" - ")[1].strip()
-        category_data = CLASSIFICATION_DATA.get(category, {})
-        category_name_local_1 = category_data.get(key_local_1, category)
-        category_name_local_2 = category_data.get(key_local_2, category)
+        category = str(category or "").strip()
+        if not category:
+            continue
+        category_data = CLASSIFICATION_DATA.get(category)
+        if not category_data:
+            # Unknown key: show it as it stands. Never crash the review step over a label, and
+            # never invent a translation for a category nobody configured.
+            categories_local.append(category)
+            continue
+        classification, _, leaf = category.partition(" - ")
+        category_name_local_1 = category_data.get(key_local_1) or category_data.get(
+            "generic_grievance_name"
+        ) or leaf or category
+        category_name_local_2 = category_data.get(key_local_2) or category_data.get(
+            "classification"
+        ) or classification or category
         categories_local.append(f"{category_name_local_2} - {category_name_local_1}")
     return categories_local
 
@@ -160,8 +191,13 @@ def categories_in_english(categories: List[str], language_code: str) -> List[str
                 matched = True
                 break
         if not matched:
-            # UI may show English taxonomy labels even when language_code is ne.
-            categories_en.append(cat)
+            # Not a label in either language. Try the taxonomy itself before giving up: this is
+            # where legacy `Air Pollution - Air Pollution` slots — written by the leaf-lookup bug
+            # above, and possibly sitting in live sessions — find their way home. Only an exact,
+            # unambiguous match repairs; anything else is passed through as before, because the
+            # UI may legitimately show English labels while `language_code` is `ne`.
+            repaired = resolve_categories([cat], CLASSIFICATION_DATA).kept
+            categories_en.append(repaired[0] if repaired else cat)
     return categories_en
 
 

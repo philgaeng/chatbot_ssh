@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 SQLAlchemy declarative base and engine/session factory for the ticketing schema.
 All models must use __table_args__ = {"schema": "ticketing"}.

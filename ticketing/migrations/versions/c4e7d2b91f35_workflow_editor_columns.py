@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """add workflow editor columns (status, version, template, is_deleted)
 
 Revision ID: c4e7d2b91f35

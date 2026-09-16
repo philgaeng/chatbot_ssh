@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 import { urgencyDotCls, urgencyTextCls, stepShortLabel, type SlaUrgency } from "@/lib/mobile-constants";

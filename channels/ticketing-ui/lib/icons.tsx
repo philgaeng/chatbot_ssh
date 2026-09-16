@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * GRM Icon system — all Lucide icons used in the app, re-exported from one place.
  *
@@ -75,6 +77,7 @@ export {
   AlertTriangle  as IconWarning,
   X              as IconClose,
   Info           as IconInfo,
+  RefreshCw      as IconRetry,           // list-load error card / boundary "Try again"
 
   // ── Settings / admin ────────────────────────────────────────────────────────
   Cpu            as IconSystemConfig,

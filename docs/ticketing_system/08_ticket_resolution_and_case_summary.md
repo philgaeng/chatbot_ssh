@@ -1,6 +1,7 @@
 # Ticket resolution record and resolved case summary
 
 **Status:** Implemented baseline (June 2026); Summary enhancements and complainant closure page/PDF tracked in this spec.  
+**Last updated:** 2026-09-15 — §2.2: a workflow serving road-hazard reports and another route starts with the general five plus three road-works actions. The first rule ("road hazard on any project → road works") left staging's default workflow unable to close an ordinary grievance as accepted or rejected. Earlier the same day: §2.2: lists are managed in the workflow's resolution panel (`GRM-119`). Earlier the same day: §2.3–§2.6, §3.4, §3.6.1: *Who took the action?* (`GRM-117`) — the officer's office, another organization or a listed outside body, never typed; four payload keys, a *Resolved by* line, none on SEAH cases. Earlier the same day: §2.2: a workflow's organization is now chosen and changed in Settings (`GRM-122`). Earlier the same day: §2.1–§2.6 and §3.9.1 rewritten for `GRM-116`: resolution categories become **each workflow's list from a catalog owned by organizations** — no global actions, local actions count as a ministry's shared ones, at most 8 per workflow, lists copied never inherited, publishing refused without one; the chosen label is snapshotted on both events; **a case in a sensitive workflow records no action** and its form is the text alone. Verified in a browser on the local stack (§2.6). Earlier: 2026-09-04 · ⚠ backfilled from git; the rest of this doc not re-verified against the code
 **Related:** [04_ticketing_schema.md](04_ticketing_schema.md) (`ticket_events`), [03_ticketing_api_integration.md](03_ticketing_api_integration.md), [CLAUDE.md](../../CLAUDE.md) (PII rules)
 
 This document defines:
@@ -65,25 +66,94 @@ The **findings narrative** inside the resolved case summary (`findings_summary.*
 - **Who may resolve (Q1-b):** assigned officer, **admin**, or officer whose role matches the current step’s **`supervisor_role`** (even if not assignee).
 - Resolve is **blocked** while ticket is `ESCALATED` until the new-level officer **acknowledges** (unchanged).
 - `**CLOSE` and `GRC_DECIDE` actions are removed** (v1). The only way to end a case is `**RESOLVE`** with a resolution record. GRC chairs at L3 use **Convene GRC** (`GRC_CONVENE`) then **Resolve** (or **Escalate** to legal / next level) like any assigned officer.
-- Officer must choose a **resolution category** and enter **resolution text** (what was decided / done). Both are required.
+- Officer chooses **what was done** — one of the **resolution actions its workflow offers** (§2.2) — and enters **resolution text**. Both are required, **except on a case in a sensitive workflow**, which records no action: the text alone is required, and sending an action is refused.
 - The resolution appears in the thread as a **dedicated bubble** (like field reports — not only a grey “Case resolved” pill).
 - The **resolution record** in the officer thread stays **internal** (full officer wording). A separate **complainant-facing closure document** (§3.9) is derived at resolve time and shared via link + PDF — plain language, no internal notes or officer roster.
 
-### 2.2 Resolution categories
+### 2.2 Resolution actions — one catalog, selected per workflow (`GRM-116`)
 
-Stored as `resolution_category` (enum string). UI shows a label; saved text is officer-editable from a default template.
+**What an officer can record as done depends on the case's workflow.** The actions live in one
+catalog, `ticketing.resolution_actions`, and each workflow holds an ordered selection of them,
+`ticketing.workflow_resolution_actions` ([04](04_ticketing_schema.md)). A case offers the selection
+of **the workflow it is in** (`tickets.current_workflow_id`) at the moment of resolving, so a case
+re-classified into another workflow offers that workflow's actions.
 
+**Why one catalog and not a list per workflow.** A list copied onto each workflow puts the same
+action under several codes and lets its wording drift apart between copies — so duplicates cannot be
+caught, and outcomes cannot be totalled across workflows. One catalog gives an action one code
+everywhere. Codes are the primary key: platform-unique, immutable, never reused. The API field and
+event key stay `resolution_category` (they are persisted in append-only events and in saved report
+templates); on screen the word is *what was done*.
 
-| Code                  | Label                                      | Suggested default wording (EN)                                                                                                                                       |
-| --------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLASSIFIED`          | Grievance classified                       | This grievance has been reviewed and classified. No specific remedial action is required beyond continued monitoring under the project GRM procedure.                |
-| `DEMAND_REJECTED`     | Complainant demand rejected                | After investigation, the grievance was found not to be substantiated. The complainant’s request is not accepted. The case is closed with this determination.         |
-| `ACCEPTED_MONETARY`   | Grievance accepted — monetary compensation | The grievance is substantiated. Remedial action includes monetary compensation as agreed with the complainant / per contract and GRM procedure.                      |
-| `ACCEPTED_RELOCATION` | Grievance accepted — relocation            | The grievance is substantiated. Remedial action includes relocation / resettlement support as applicable under project safeguards.                                   |
-| `ACCEPTED_OTHER`      | Grievance accepted — other remedy          | The grievance is substantiated. Remedial action has been agreed (other than monetary compensation or relocation). Details are recorded in the resolution text below. |
+**Nothing is global — every action and every workflow belongs to one organization** (the org-scoped
+catalog rule of [11 §3.3](11_roles_and_permissions.md), with global items removed for this kind):
 
+| | |
+| --- | --- |
+| **Shared action** | owned by a **ministry** — a top organization, no parent (e.g. `DOR`). Its national vocabulary |
+| **Local action** | owned **below** its ministry. Must **count as** one shared action of that same ministry (`counts_as_code`), so national totals stay whole |
+| **Usable by a workflow** | when the action belongs to the workflow's organization or one **above** it. A workflow with no organization can use nothing; one ministry's actions never reach another's |
+| **Every workflow and template** | belongs to an organization. The migration gave each existing one its projects' ministry; it is chosen on create and changed in Settings ([12](12_workflows_configuration.md)) |
 
-Nepali UI labels: add via i18n later; v1 English-only in API enum is acceptable.
+⚠ `owner_organization_id` is `NOT NULL` and `ON DELETE RESTRICT` — deleting an owning organization is
+refused. An action is never deleted: historical events cite its code.
+
+**Rules, enforced in `ticketing/services/resolution_catalog.py`** — the only writer of lists and the
+only way to create an action, so no caller can skip them:
+
+1. an action the workflow's organization cannot use is refused;
+2. **a sensitive workflow lists nothing** — a SEAH case records neither what was done nor who did it:
+   a structured value about a SEAH case in a report re-identifies, and before this a SEAH case was
+   *forced* to pick a general outcome such as *Complainant demand rejected*;
+3. **at most 8 actions** per workflow and template (`MAX_RESOLUTION_ACTIONS`, a constant): an officer
+   chooses from a short list, often on a phone, in a second language;
+4. a **published** non-sensitive workflow lists **at least one**. A draft or template may be empty,
+   and `POST /workflows/{id}/publish` refuses a non-sensitive workflow with none — *"Add at least one
+   resolution action before publishing."* Only a published workflow can be bound to a project, so a
+   case never meets an empty list unless its workflow is sensitive;
+5. a local action without `counts_as_code`, a shared action with one, or a `counts_as_code` that is
+   not a shared action of the same ministry is refused.
+
+**Starter actions** — seeded by migration `b3d5f7h9` as **shared actions of the ministry that
+implements projects** (`DOR` on every database today); on an empty database the seed scripts create
+them under `DOR`. The general five keep their pre-catalog codes and wording, so every historical event
+still resolves to a label.
+
+| Code | Label | Default wording (EN) |
+| --- | --- | --- |
+| `CLASSIFIED` | Grievance classified | This grievance has been reviewed and classified. No specific remedial action is required beyond continued monitoring under the project GRM procedure. |
+| `DEMAND_REJECTED` | Complainant demand rejected | After investigation, the grievance was found not to be substantiated. The complainant's request is not accepted. The case is closed with this determination. |
+| `ACCEPTED_MONETARY` | Grievance accepted — monetary compensation | The grievance is substantiated. Remedial action includes monetary compensation as agreed with the complainant / per contract and GRM procedure. |
+| `ACCEPTED_RELOCATION` | Grievance accepted — relocation | The grievance is substantiated. Remedial action includes relocation / resettlement support as applicable under project safeguards. |
+| `ACCEPTED_OTHER` | Grievance accepted — other remedy | The grievance is substantiated. Remedial action has been agreed (other than monetary compensation or relocation). Details are recorded below. |
+| `ROAD_REPAIRED` | Hazard repaired | The reported hazard was inspected and repaired. |
+| `ROAD_MADE_SAFE` | Made safe — signs, barriers or traffic control | The site was made safe with warning signs, barriers or traffic control. A permanent repair is planned. |
+| `ROAD_DUST_NOISE_CONTROLLED` | Dust or noise controlled | The contractor was instructed to control dust or noise, for example by spraying water or limiting working hours. |
+| `ROAD_NOT_PROJECT_ROAD` | Not on a project road — passed on | The location is not on a project road. The report was passed to the authority responsible for it. |
+| `ROAD_NO_HAZARD_FOUND` | No hazard found on inspection | The site was inspected and no hazard was found. |
+
+**Where a workflow's list comes from.**
+
+| Workflow | Lists |
+| --- | --- |
+| existing before the migration, sensitive (`workflow_type = seah`) | nothing |
+| existing before the migration, bound **only** to the road-hazard chatbot menu | the road-works five |
+| existing before the migration, bound to the road-hazard menu **and** to another route | the general five, then *Hazard repaired*, *Made safe* and *No hazard found on inspection* — 8, the most a workflow holds |
+| existing before the migration, anything else (templates included) | the general five |
+| created from scratch or from a built-in template | **nothing** — and it cannot be published until it has an action |
+| cloned, created from a database template, or saved as a template | a **copy** of the source's list — refused if the new organization cannot use one of its actions |
+
+**A list is copied, never inherited**: a later change to the source does not reach the copy. With
+inheritance, a shared list growing past a full local list would have to block the ministry, break the
+limit of 8, or silently drop local actions; a copy never forces that choice.
+
+⚠ **A project that wants road-works actions must bind a road-hazard workflow.** A road-hazard report
+routed to a project's default workflow resolves with that workflow's actions. Measured 2026-09-15:
+no project on the dev DB binds one, so there `KL_ROAD`'s road-hazard reports offer the general five.
+
+A workflow's list is managed in its **resolution panel** in Settings — add, reorder, remove, create, edit
+([12](12_workflows_configuration.md), `GRM-119`). A workflow's organization is chosen on create and changed in the editor
+([12](12_workflows_configuration.md), `GRM-122`). Nepali labels: not yet — the admin UI is English-only ([ui/05](ui/05_ui_copy_style.md)).
 
 ### 2.3 Storage model (no new table)
 
@@ -92,8 +162,30 @@ Nepali UI labels: add via i18n later; v1 English-only in API enum is acceptable.
 
 | Order | `event_type` | Purpose                             | `note`                                         | `payload`                                                                             |
 | ----- | ------------ | ----------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 1     | `NOTE_ADDED` | Thread bubble — “resolution record” | Formatted resolution body (see §2.4)           | `{ "internal": true, "is_resolution_record": true, "resolution_category": "<code>" }` |
-| 2     | `RESOLVED`   | Status change + system pill         | Optional short line (e.g. category label only) | `{ "resolution_category": "<code>", "resolution_event_id": "<uuid of row 1>" }`       |
+| 1     | `NOTE_ADDED` | Thread bubble — “resolution record” | Formatted resolution body (see §2.4)           | `{ "internal": true, "is_resolution_record": true, "resolution_category": "<code>", "resolution_category_label": "<label>" }` |
+| 2     | `RESOLVED`   | Status change + system pill         | `Case resolved — <label>` (or `Case resolved`) | `{ "resolution_category": "<code>", "resolution_category_label": "<label>", "resolution_event_id": "<uuid of row 1>" }`       |
+
+**`resolution_category_label` is a snapshot** of the action's label at resolve time (`GRM-116`).
+Readers — reports, the Summary tab, the resolved case summary, the thread pill — use it first, and
+fall back to the catalog's label only for events written before snapshots existed (which can only
+hold the general five). A later rename in the catalog therefore never rewrites what an officer chose.
+
+**Who took the action — four more keys on both events (`GRM-117`):**
+
+```jsonc
+"resolution_actor_kind": "self" | "organization" | "external",
+"resolution_actor_organization_id": "<org id>" | null,   // set for self (the derived office) and organization
+"resolution_actor_external": "police" | … | null,        // set for external only
+"resolution_actor_label": "Jhapa Division Road Office"    // snapshot, computed server-side
+```
+
+**Nothing here is typed by the officer.** The label is always computed from an organization row or
+the fixed outside-body list, and the request has no field to set it — the manager's Excel reads
+*Resolved by* from it, and a free-text answer is where a person's name would be written. *I did*
+records the officer's **office**, never the officer, so every resolved row is comparable by office.
+
+**A case in a sensitive workflow writes none of these six keys** on either event; its `RESOLVED`
+note is `Case resolved`. *Resolved by: Police* on a SEAH row re-identifies as surely as an action.
 
 
 Also:
@@ -107,11 +199,15 @@ Also:
 ### 2.4 Formatted `note` for resolution record
 
 ```text
-Resolution — <Category label>
+Resolution — <Action label>
 Date: <YYYY-MM-DD UTC>
+Resolved by: <Actor label>
 
 <Officer resolution text>
 ```
+
+For a case in a sensitive workflow, which records neither, the first line is `Resolution` and there is
+no *Resolved by* line.
 
 Example:
 
@@ -127,27 +223,75 @@ Contractor will pay NRs 15,000 for crop damage. Payment scheduled within 14 days
 **Extend** `TicketActionRequest` (`ticketing/api/schemas/ticket.py`):
 
 ```python
-resolution_category: Optional[str] = None  # required when action_type == RESOLVE
+resolution_category: Optional[str] = None  # a code from the case's workflow selection (§2.2)
 # note: required when action_type == RESOLVE (min length 12 chars after strip)
+resolution_actor_kind: Optional[str] = None             # self | organization | external — omitted → self (GRM-117)
+resolution_actor_organization_id: Optional[str] = None  # organization: required · self: only with several offices
+resolution_actor_external: Optional[str] = None         # external: required, a key of resolution_external_actors
 ```
 
-**Validation on `RESOLVE`:**
+**Ticket detail** (`GET /api/v1/tickets/{id}`) returns `resolution_options: [{code, label,
+default_wording}]` — the active actions the case's workflow selects, in order; **empty for a sensitive
+workflow**. Served from the ticket the officer can already open, so resolving needs no read access to
+`GET /workflows/{id}` (which a SEAH workflow restricts to those who configure sensitive workflows).
 
-- `resolution_category` ∈ enum above.
+It also returns, for *Who took the action?* (`GRM-117`) — **all three empty on a sensitive workflow**:
+
+| Field | What |
+| --- | --- |
+| `resolution_self_offices: [{organization_id, name}]` | the viewing officer's office for this case. Among their **active** positions: one → it; several → those linked to the case's project or package (or above a linked one) if any, else all — **the officer chooses when more than one is left**; none → the case's organization |
+| `resolution_office_suggestions: [{organization_id, name}]` | the active organizations named on the case's project and package — listed before the officer searches |
+| `resolution_external_actors: [{key, label}]` | the fixed outside bodies: Police · Municipality or ward office · Contractor · Court · Users' committee · Other government office |
+
+**Validation on `RESOLVE`** (422 on each, naming the field):
+
+- `resolution_category` **required and one of the case's `resolution_options`** when that list is
+  non-empty; **refused** when it is empty.
 - `note` length ≥ **12** after strip.
+- Actor (`GRM-117`): `organization` needs an **active** organization; `external` needs a listed key;
+  `self` needs `resolution_actor_organization_id` when the officer has several offices, and it must be
+  one of them. **Any** actor field on a case in a sensitive workflow is refused.
 - Reject if ticket already `RESOLVED` or `CLOSED` (no re-resolve — Q2).
 - Auto-acknowledge if assignee resolves while `OPEN`/`ESCALATED` (Q4).
 - On success: `update_grievance_status` with resolution excerpt (Q6).
 
 **Response:** unchanged `TicketActionResponse`; `event_id` = `RESOLVED` event id (client may refetch ticket for both events).
 
+**Compatibility (`GRM-116`).** `resolution_options` and `resolution_category_label` are additive.
+Validation **narrowed twice, deliberately**: a code the case's workflow does not select is refused
+(it used to be any of the five hard-coded outcomes), and a SEAH case that sends any code is refused. The officer UI
+shipped the change in the same release; a client that always sends a code must follow. The actor
+fields (`GRM-117`) are additive: a client sending none records *I did* — except for an officer with
+several offices, who must now choose.
+
 ### 2.6 UI contract
 
 **Desktop** (`/tickets/[id]`): Replace one-click Resolve with **Resolution sheet / modal**:
 
-- Category `<select>` (5 options; changing selection pre-fills textarea with default wording; officer may edit).
+- **What was done** `<select>` — the ticket's `resolution_options`. Preselects `ACCEPTED_OTHER` when
+  offered, else the first option. The textarea shows the chosen action's default wording **until the
+  officer types**; after that, changing the action no longer replaces their text (`GRM-116` — it used
+  to overwrite it on every change).
+- **Who took the action?** (`GRM-117`) — *I did — <office>* (default; a select of the officer's own
+  offices when there are several, nothing preselected) · *Another office* (the project's offices, then a
+  search over active organizations **of the case's country**, debounced) · *An outside body* (a select
+  of the fixed list). Confirm stays disabled until the answer is complete. An empty search says *"No
+  office found. If it is not in the directory, choose 'An outside body' or ask an admin to add it."*
+  State derived, never seeded (`lib/resolution.ts` `resolutionActorState`).
 - Resolution text `<textarea>` (required).
-- Confirm → `performAction({ action_type: "RESOLVE", resolution_category, note })`.
+- **No options → a sensitive workflow → the text-only form:** no select, no default wording, no *Who
+  took the action?*.
+- Confirm → `performAction({ action_type: "RESOLVE", resolution_category?, resolution_actor_*?, note })` —
+  both omitted on the text-only form.
+- **Refused while open** (e.g. the case moved to another workflow): the sheet stays open with the
+  officer's text, shows *"This case moved to another workflow. Choose what was done again."*, and the
+  ticket reloads so the select offers the new list. The form's state is derived from the options,
+  never seeded by an effect (`lib/resolution.ts` `resolutionFormState`).
+
+✅ **Verified end-to-end on the local stack, 2026-09-15** — `e2e/flows/ticket-actions.spec.ts` resolves a
+standard case through *What was done* and a SEAH case through the text-only form, and (`GRM-117`) one
+standard case per answer to *Who took the action?*, reading *Resolved by* in the thread. Unit level: `tests/ticketing/test_resolution_catalog.py`, `lib/resolution.test.ts`. Not yet on
+staging.
 
 **Mobile** (`/m/tickets/[id]`): Same fields in bottom sheet from ⋮ menu or green resolve CTA.
 
@@ -155,7 +299,7 @@ resolution_category: Optional[str] = None  # required when action_type == RESOLV
 
 - New helper `isResolutionRecordEvent(event)` — `NOTE_ADDED` + `payload.is_resolution_record`.
 - Style: distinct from field report (e.g. **green** left border — “Resolution record”) to align with resolved status.
-- System pill still shows “Case resolved” from `RESOLVED` event.
+- System pill shows `Case resolved — <label>` from the `RESOLVED` event's snapshot (the pre-catalog five by code for older events), or `Case resolved` when no action was recorded.
 
 **Info menu (mobile):** Optional “Resolution” row when resolved (read-only view of resolution record).
 
@@ -273,6 +417,7 @@ CREATE TABLE ticketing.ticket_resolved_summaries (
     "resolved_by_display_name": "string",
     "category": "ACCEPTED_MONETARY",
     "category_label": "Grievance accepted — monetary compensation",
+    "actor_label": "Jhapa Division Road Office",   // GRM-117 — who took the action; "" when none recorded
     "text": "officer resolution text (from resolution record note)"
   },
   "findings_summary": {
@@ -343,7 +488,7 @@ Sent as compact JSON to OpenAI (same pattern as `generate_case_findings`):
 {
   "case_ref": { "grievance_id": "…", "is_seah": false },
   "original_complaint": "…",
-  "resolution": { "category": "ACCEPTED_MONETARY", "text": "…" },
+  "resolution": { "category": "ACCEPTED_MONETARY", "category_label": "…", "actor_label": "…", "text": "…" },
   "field_reports": [{ "at": "…", "by_role": "…", "text": "…" }],
   "other_officer_notes": [{ "at": "…", "by_role": "…", "text": "…" }],
   "prior_ai_findings": { "summary_en": "…", "key_findings": [] }
@@ -418,7 +563,7 @@ This is the primary deliverable for Q11 (not officer-only).
 | Header | Project name, package/road label, grievance reference, resolved date | Internal org codes |
 | Complainant | Their own name + address (already theirs) | Other people’s PII |
 | Complaint | Filed date, original complaint text (their language) | AI `ai_summary_en`, internal categories jargon |
-| Outcome | Resolution category label (plain language), **resolution text for complainant** | Officer roster, field-report digests, internal notes |
+| Outcome | Resolution action label (plain language) — **omitted for a case that recorded none** (sensitive workflow, `GRM-116`); **resolution text for complainant** | Officer roster, field-report digests, internal notes |
 | Findings (optional) | Short **public findings** paragraph in grievance language (LLM) — high-level only | `field_reports_digest`, officer names, legal speculation |
 
 **SEAH tickets:** Public page is still issued to the complainant (they filed it) but **public findings** must be minimal and non-identifying (no third-party names, no investigation tactics). Officer full summary remains restricted.

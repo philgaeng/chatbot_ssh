@@ -1,0 +1,64 @@
+Nepal GRM — Grievance Redress Mechanism platform
+================================================
+
+A grievance redress mechanism for ADB-financed road infrastructure in Nepal
+(Kakarbhitta–Laukahi Road, ADB Loan 52097-003): multilingual chatbot intake by
+text and voice, an officer ticketing workflow with enforced service-level
+deadlines and escalation to a Grievance Redress Committee, and an
+access-isolated SEAH (sexual exploitation, abuse and harassment) stream.
+
+Licensed under the Apache License, Version 2.0. See LICENSE.
+
+
+COPYRIGHT
+---------
+
+⚠ PENDING IP DETERMINATION — see docs/sprints/2026-08-llm/01-licensing-and-governance-spec.md#dpg-03
+
+    Copyright [yyyy] [name of copyright owner]
+
+The copyright holder is NOT YET DETERMINED. Parts of this platform were
+developed in the context of an ADB-financed engagement, so ownership may vest
+in the Asian Development Bank, in the implementing agency, in the contributors,
+or jointly. A written determination has been requested from ADB's Office of the
+General Counsel; until it arrives, the line above is the unfilled Apache-2.0
+template and this file states so rather than guessing.
+
+Do not fill it in from inference. When the determination arrives, replace the
+line above, delete this note, and record the determination in
+docs/dpg/ip-ownership.md.
+
+The Apache-2.0 grant in LICENSE is applied on the same provisional basis: it is
+the licence this project intends to release under, adopted so that development
+and review can proceed. If the ownership determination or ADB's advice requires
+a different licence, LICENSE and every SPDX-License-Identifier header change
+together — see the header script at scripts/ops/add_spdx_headers.py.
+
+
+THIRD-PARTY COMPONENTS
+----------------------
+
+This product includes software developed by third parties. Every runtime
+dependency is open source under a permissive or OSI-approved licence; none is
+redistributed in modified form, and none is statically linked into this
+codebase.
+
+A generated, dated inventory of every dependency and its licence — Python
+(requirements.txt, requirements.grm.txt), npm (channels/ticketing-ui), and
+container images — is published at docs/dpg/dependency-licenses.md: 153
+packages, scanned in-container from the resolved trees, with a disposition for
+every entry carrying conditions beyond attribution. It is the authoritative
+inventory and supersedes the hand-written ones. The ops container re-runs the
+scan nightly, so a licence change surfaces the way a CVE does.
+
+Two notices worth stating here because they are conditions of use rather than
+mere attribution:
+
+  * Redis (container image redis:8.10) is tri-licensed RSALv2 / SSPLv1 /
+    AGPLv3. This project elects AGPLv3, the OSI-approved option. Redis runs as
+    an unmodified upstream image behind a network boundary; no Redis source is
+    conveyed by this project, and AGPLv3 imposes no condition on this
+    repository's own licensing or on a downstream fork's.
+
+  * psycopg2 is distributed under LGPL-3.0 with a linking exception. It is used
+    as an unmodified library dependency.

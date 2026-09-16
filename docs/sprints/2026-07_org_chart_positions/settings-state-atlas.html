@@ -1,0 +1,828 @@
+(<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎛️</text></svg>">
+<title>[SUPERSEDED] Settings Redesign — State Atlas</title>
+<style>
+  html, body { margin: 0; }
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --font-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", Menlo, Consolas, monospace;
+    --font-ui:   ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+
+    --ground:      #e7ebf3;
+    --grid:        rgba(63, 86, 120, 0.08);
+    --board:       #eef1f7;
+    --meta-ink:    #253143;
+    --meta-2:      #56637a;
+    --meta-line:   #c4cddd;
+    --meta-accent: #3d5578;
+    --prose:       #333c49;
+    --prose-2:     #59636f;
+    --tag-bg:      #dbe2ef;
+    --tag-fg:      #33425c;
+    --stage-shadow: 0 1px 2px rgba(30,45,70,.08), 0 10px 26px rgba(30,45,70,.12);
+    --stage-ring:  #d0d8e6;
+
+    --p-paper:#ffffff; --p-bg50:#f9fafb;
+    --p-ink:#1f2937; --p-ink2:#374151; --p-ink3:#4b5563; --p-muted:#6b7280;
+    --p-line:#e5e7eb; --p-line2:#d1d5db; --p-sk:#eef1f5;
+    --p-blue:#2563eb; --p-blue700:#1d4ed8; --p-blue50:#eff6ff; --p-blue100:#dbeafe; --p-blue800:#1e40af;
+    --p-red:#dc2626; --p-red50:#fef2f2; --p-red100:#fee2e2; --p-red700:#b91c1c; --p-red800:#991b1b;
+    --p-amber:#d97706; --p-amber50:#fffbeb; --p-amber100:#fef3c7; --p-amber700:#b45309; --p-amber800:#92400e;
+    --p-green:#16a34a; --p-green50:#f0fdf4; --p-green100:#dcfce7; --p-green700:#15803d; --p-green800:#166534;
+    --p-violet:#7c3aed; --p-violet100:#ede9fe; --p-violet800:#5b21b6;
+    --p-slate800:#1e293b; --p-slate700:#334155; --p-slate400:#94a3b8; --p-slate300:#cbd5e1; --p-slate200:#e2e8f0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:#0d131d; --grid:rgba(142,163,196,0.06); --board:#121a26;
+      --meta-ink:#dbe3ef; --meta-2:#93a0b4; --meta-line:#273240; --meta-accent:#93a9cf;
+      --prose:#c3ccd9; --prose-2:#8b96a6; --tag-bg:#1e2a3a; --tag-fg:#a9b8d1;
+      --stage-shadow:0 2px 8px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.5); --stage-ring:#26313f;
+    }
+  }
+  :root[data-theme="light"] { --ground:#e7ebf3; --grid:rgba(63,86,120,0.08); --board:#eef1f7; --meta-ink:#253143; --meta-2:#56637a; --meta-line:#c4cddd; --meta-accent:#3d5578; --prose:#333c49; --prose-2:#59636f; --tag-bg:#dbe2ef; --tag-fg:#33425c; --stage-shadow:0 1px 2px rgba(30,45,70,.08),0 10px 26px rgba(30,45,70,.12); --stage-ring:#d0d8e6; }
+  :root[data-theme="dark"] { --ground:#0d131d; --grid:rgba(142,163,196,0.06); --board:#121a26; --meta-ink:#dbe3ef; --meta-2:#93a0b4; --meta-line:#273240; --meta-accent:#93a9cf; --prose:#c3ccd9; --prose-2:#8b96a6; --tag-bg:#1e2a3a; --tag-fg:#a9b8d1; --stage-shadow:0 2px 8px rgba(0,0,0,.4),0 16px 40px rgba(0,0,0,.5); --stage-ring:#26313f; }
+
+  body {
+    font-family: var(--font-ui); color: var(--prose); background-color: var(--ground);
+    background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 26px 26px; line-height: 1.5;
+  }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 0 24px 96px; }
+
+  header.mast { padding: 56px 0 18px; }
+  .eyebrow { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: .22em; text-transform: uppercase; color: var(--meta-accent); margin: 0 0 14px; }
+  h1.title { font-size: clamp(30px, 5vw, 46px); line-height: 1.02; margin: 0 0 12px; color: var(--meta-ink); font-weight: 680; letter-spacing: -0.015em; text-wrap: balance; }
+  .lede { font-size: 16.5px; max-width: 70ch; margin: 0 0 22px; color: var(--prose); }
+  .lede b { color: var(--meta-ink); font-weight: 620; }
+  .lede code { font-family: var(--font-mono); font-size: 14px; color: var(--meta-accent); }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+  .stag { font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; padding: 4px 9px; border-radius: 5px; display:inline-flex; align-items:center; gap:6px; }
+  .stag::before { content:""; width:7px; height:7px; border-radius:999px; background: currentColor; }
+  .stag--load { color: var(--p-blue700); background: var(--p-blue50); }
+  .stag--empty { color: var(--p-ink3); background: var(--p-bg50); border:1px solid var(--p-line); }
+  .stag--err { color: var(--p-red800); background: var(--p-red50); }
+  .stag--bi { color: var(--p-green800); background: var(--p-green50); }
+  .stag--scope { color: var(--p-amber800); background: var(--p-amber50); }
+  .stag--ready { color: var(--p-green800); background: var(--p-green100); }
+
+  .jump { display:grid; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); gap:8px 22px; padding:16px 20px; border:1px solid var(--meta-line); border-radius:10px; background: color-mix(in srgb, var(--board) 82%, transparent); }
+  .jump a { color: var(--meta-accent); text-decoration:none; font-size:13.5px; border-bottom:1px solid transparent; }
+  .jump a:hover { border-bottom-color: var(--meta-accent); }
+  .note { font-size:12.5px; color:var(--prose-2); margin:12px 2px 0; }
+  .note b { color: var(--meta-ink); }
+
+  /* surface section */
+  .surface { margin-top: 50px; scroll-margin-top: 16px; }
+  .surface__head { display:flex; align-items:baseline; gap:13px; flex-wrap:wrap; margin-bottom:5px; }
+  .surface__no { font-family: var(--font-mono); font-size: 12px; letter-spacing:.16em; color: var(--meta-accent); font-weight:600; }
+  .surface__title { font-size: 20px; font-weight:650; color: var(--meta-ink); letter-spacing:-.01em; margin:0; }
+  .surface__sub { font-size: 13.5px; color: var(--prose-2); margin: 3px 0 16px; max-width: 82ch; }
+  .surface__sub .ref { font-family: var(--font-mono); font-size:11px; background: var(--tag-bg); color: var(--tag-fg); padding:1px 6px; border-radius:4px; }
+
+  .tiles { display:grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+  .tile { position: relative; border:1px solid var(--stage-ring); border-radius:11px; background: var(--p-paper); box-shadow: var(--stage-shadow); padding: 14px 14px 12px; display:flex; flex-direction:column; gap:10px; overflow:hidden; color: var(--p-ink); font-family: var(--font-ui); }
+  .tile__tag { align-self:flex-start; }
+  .tile__body { display:flex; flex-direction:column; gap:9px; min-height: 96px; }
+  .tile__cap { font-size:12px; color: var(--prose-2); border-top:1px solid var(--p-line); padding-top:9px; margin-top:2px; }
+  .tile__cap b { color: var(--meta-ink); font-weight:620; }
+  .tile__cap code { font-family: var(--font-mono); font-size:11px; color: var(--p-blue700); }
+  .tile--wide { grid-column: span 2; }
+
+  /* ── mock UI (product design system) ── */
+  .m-h2 { font-size:12px; font-weight:680; color:var(--p-ink2); text-transform:uppercase; letter-spacing:.04em; border-left:3px solid var(--p-blue); padding-left:9px; margin:0; }
+  .m-eyebrow { font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--p-muted); font-weight:600; }
+  .m-muted { color: var(--p-muted); }
+  .ne { color: var(--p-muted); font-weight:400; }
+  .m-btn { font-size:12px; font-weight:600; padding:6px 11px; border-radius:7px; border:1px solid var(--p-line2); background:var(--p-paper); color:var(--p-ink2); display:inline-flex; align-items:center; gap:6px; }
+  .m-btn--primary { background:var(--p-blue); border-color:var(--p-blue); color:#fff; }
+  .m-btn--green { background:var(--p-green); border-color:var(--p-green); color:#fff; }
+  .m-btn--disabled { background:var(--p-bg50); color:var(--p-muted); border-color:var(--p-line); }
+  .m-btn--ghost { border-style:dashed; color:var(--p-ink3); }
+  .m-btnrow { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .m-chip { font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--p-line2); color:var(--p-ink3); background:var(--p-paper); white-space:nowrap; }
+  .m-chip--blue { background:var(--p-blue50); border-color:var(--p-blue100); color:var(--p-blue800); }
+  .m-field { display:flex; flex-direction:column; gap:4px; }
+  .m-label { font-size:11px; font-weight:600; color:var(--p-ink3); }
+  .m-input { border:1px solid var(--p-line2); border-radius:7px; padding:7px 10px; font-size:12.5px; color:var(--p-ink); background:var(--p-paper); display:flex; align-items:center; justify-content:space-between; gap:8px; }
+  .m-input.is-filled { border-color:var(--p-slate400); }
+  .car { color: var(--p-muted); }
+  .m-tree { display:grid; gap:2px; }
+  .m-tnode { display:flex; align-items:center; gap:8px; padding:6px 7px; border-radius:7px; font-size:12.5px; color:var(--p-ink); }
+  .m-tnode__tw { color:var(--p-muted); font-family:var(--font-mono); font-size:11px; }
+  .indent-1 { margin-left:16px; } .indent-2 { margin-left:32px; }
+  .m-outcome { border:1px solid var(--p-blue100); background:var(--p-blue50); border-radius:10px; padding:12px; display:flex; flex-direction:column; gap:7px; }
+  .m-outcome__h { font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--p-blue800); font-weight:700; }
+  .m-outcome__title { font-size:13.5px; font-weight:680; color:var(--p-ink); }
+  .m-line { display:flex; gap:7px; align-items:baseline; font-size:12px; }
+  .m-line__arrow { color:var(--p-blue); font-weight:700; }
+  .prov { font-size:10.5px; color:var(--p-muted); font-style:italic; }
+  .m-check { display:grid; gap:7px; }
+  .m-check__i { display:grid; grid-template-columns:16px 1fr auto; gap:9px; align-items:start; padding:8px 9px; border:1px solid var(--p-line); border-radius:8px; }
+  .m-check__i--block { border-color:var(--p-red100); background:var(--p-red50); }
+  .m-check__i--warn { border-color:var(--p-amber100); background:var(--p-amber50); }
+  .m-mark { width:15px; height:15px; border-radius:999px; margin-top:1px; display:grid; place-items:center; }
+  .m-mark--block { background:var(--p-red); } .m-mark--warn { background:transparent; border:2px solid var(--p-amber); } .m-mark--done { background:var(--p-green); }
+  .m-mark svg { width:9px; height:9px; color:#fff; }
+  .m-check__t { font-size:12px; color:var(--p-ink); }
+  .m-check__f { font-size:11px; color:var(--p-ink3); margin-top:2px; }
+  .m-check__f code { font-family:var(--font-mono); font-size:10.5px; color:var(--p-blue700); }
+  .sev { font-size:9.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:2px 6px; border-radius:5px; white-space:nowrap; }
+  .sev--block { background:var(--p-red100); color:var(--p-red800); }
+  .sev--warn { background:var(--p-amber100); color:var(--p-amber800); }
+  .sev--done { background:var(--p-green100); color:var(--p-green800); }
+  .m-empty { text-align:center; padding:16px 12px; border:1px dashed var(--p-line2); border-radius:9px; background:var(--p-bg50); }
+  .m-empty__t { font-size:12.5px; color:var(--p-ink2); font-weight:600; margin-bottom:3px; }
+  .m-empty__d { font-size:11.5px; color:var(--p-ink3); margin-bottom:10px; }
+  .m-next { display:flex; align-items:center; gap:8px; font-size:13.5px; font-weight:650; color:var(--p-ink); }
+  .m-warnbar { display:flex; align-items:center; gap:8px; padding:8px 10px; border-radius:8px; background:var(--p-amber50); border:1px solid var(--p-amber100); font-size:12px; color:var(--p-amber800); }
+
+  /* ── state primitives ── */
+  .sk { background: linear-gradient(90deg, var(--p-line) 25%, var(--p-sk) 37%, var(--p-line) 63%); background-size: 400% 100%; border-radius: 6px; height: 11px; }
+  @media (prefers-reduced-motion: no-preference) { .sk { animation: sh 1.4s ease infinite; } }
+  @keyframes sh { 0% { background-position: 100% 0; } 100% { background-position: 0 0; } }
+  .sk-w70 { width:70%; } .sk-w50 { width:50%; } .sk-w90 { width:90%; } .sk-w40 { width:40%; }
+  .sk-tall { height: 20px; }
+
+  .errnotice { border:1px solid var(--p-red100); background:var(--p-red50); color:var(--p-red800); border-radius:9px; padding:10px 11px; font-size:12px; display:flex; gap:8px; }
+  .errnotice svg { width:15px; height:15px; flex:none; margin-top:1px; color:var(--p-red); }
+  .errnotice b { font-weight:650; }
+  .errnotice a { color:var(--p-red800); font-weight:650; text-decoration:underline; }
+  .was { font-family:var(--font-mono); font-size:10px; color:var(--p-muted); background:var(--p-bg50); border:1px dashed var(--p-line2); border-radius:6px; padding:6px 8px; word-break:break-word; }
+  .was .tg { color:var(--p-red700); font-family:var(--font-ui); font-weight:700; letter-spacing:.04em; text-transform:uppercase; font-size:9px; margin-right:6px; }
+
+  .scopebox { border:1px solid var(--p-amber100); background:var(--p-amber50); border-radius:8px; padding:9px 10px; font-size:11.5px; color:var(--p-amber800); display:flex; gap:8px; align-items:flex-start; }
+  .scopebox svg { width:14px; height:14px; flex:none; margin-top:1px; color:var(--p-amber700); }
+
+  footer.foot { margin-top:60px; padding-top:20px; border-top:1px solid var(--meta-line); color:var(--prose-2); font-size:13px; }
+  footer.foot b { color:var(--meta-ink); }
+  footer.foot code { font-family:var(--font-mono); font-size:12px; color:var(--meta-accent); }
+  :focus-visible { outline:2px solid var(--meta-accent); outline-offset:2px; border-radius:3px; }
+  @media (max-width: 620px) { .tile--wide { grid-column: span 1; } }
+</style>
+</head>
+<body>
+<!-- ══ SUPERSEDED — historical sprint artifact, 2026-08-02 ══════════════════════════ -->
+<div style="background:#fef2f2;border:2px solid #fecaca;border-radius:10px;margin:16px;padding:14px 18px;font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;color:#7f1d1d;line-height:1.55;color-scheme:light;">
+  <div style="font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:800;color:#dc2626;">Superseded — do not build from this</div>
+  <div style="font-size:14.5px;font-weight:700;color:#111827;margin:5px 0 7px;">Historical sprint artifact (2026-08-02)</div>
+  <div style="font-size:13px;color:#374151;">
+    Kept for the record of how the settings redesign was reasoned through. It predates two model changes and is
+    <b>wrong in ways that matter</b> if used as a build reference:
+    <ul style="margin:7px 0 0;padding-left:20px;">
+      <li>the fixed <b>intake &ldquo;stream&rdquo; / <code>slot_key</code></b> model &mdash; dropped by migration <code>c5e7f9a1</code>; a project now links N <b>named</b> workflows;</li>
+      <li>the <b>standard / SEAH track</b> model &mdash; SEAH is now an ordinary workflow with a <b>sensitive</b> property, and access to its grievances is <b>cast membership only</b>
+      (<code>DECISION-sensitive-workflows.md</code>, 2026-08-02).</li>
+    </ul>
+    <div style="margin-top:9px;">Current wireframes:
+      <b>docs/ticketing_system/ui/04_projects_packages_redesign.html</b> (project editor) &middot;
+      <b>docs/ticketing_system/ui/06_workflows_step_cast_editor.html</b> (workflow authoring).
+      Specs: docs/ticketing_system/<b>12</b> &amp; <b>13</b>.
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <header class="mast">
+    <p class="eyebrow">GRM · Admin Settings · Redesign — Handover A · Deliverable 2</p>
+    <h1 class="title">State atlas</h1>
+    <p class="lede">
+      The systematic companion to the <b>desktop wireframes</b> (<code>settings-wireframes.html</code>). That deck walks the
+      happy path; this one covers the states a real government admin actually hits — <b>loading, empty, error, bilingual,</b>
+      and <b>scoped</b> — for every surface, plus the new <b>Admin access</b> surface from the hierarchical admin model (§2.5).
+      Same design system throughout: friendly errors via <code>user-messages.ts</code>, text severity beside colour, no
+      developer copy in empty states, and <code>_ne</code> rendered inline with English fallback — never fabricated.
+    </p>
+
+    <div class="legend" aria-label="State legend">
+      <span class="stag stag--load">Loading</span>
+      <span class="stag stag--empty">Empty</span>
+      <span class="stag stag--err">Error</span>
+      <span class="stag stag--bi">Bilingual</span>
+      <span class="stag stag--scope">Scoped / permission</span>
+      <span class="stag stag--ready">Ready</span>
+    </div>
+
+    <nav class="jump">
+      <a href="#s0">00 · State vocabulary (shared primitives)</a>
+      <a href="#s1">01 · Setup &amp; go-live</a>
+      <a href="#s2">02 · Organisation — org tree</a>
+      <a href="#s3">03 · Officers — invite-as-result</a>
+      <a href="#s4">04 · Workflows &amp; roles — step binder</a>
+      <a href="#s5">05 · Projects — staffing &amp; actors</a>
+      <a href="#s6">06 · Platform — Admin access (§2.5)</a>
+      <a href="#s7">07 · Organisation — position types</a>
+      <a href="#s8">08 · Roles &amp; permissions</a>
+      <a href="#s9">09 · Notifications</a>
+      <a href="#s10">10 · Create a project</a>
+      <a href="#s11">11 · Officers — directory &amp; lifecycle</a>
+      <a href="#s12">12 · Org lifecycle &amp; scale</a>
+      <a href="#s13">13 · SEAH — setup &amp; invisibility</a>
+    </nav>
+    <p class="note"><b>Theming:</b> the drafting board follows your OS light/dark; the mock UI tiles stay in the product's
+      light palette in both (a reviewer needs the real product colours). <b>Motion:</b> skeletons respect
+      <code>prefers-reduced-motion</code>.</p>
+  </header>
+
+  <!-- ══════════ 00 · VOCABULARY ══════════ -->
+  <section class="surface" id="s0">
+    <div class="surface__head"><span class="surface__no">SURFACE 00</span><h2 class="surface__title">State vocabulary — the shared primitives</h2></div>
+    <p class="surface__sub">These six components repeat on every surface, so they're specified once here. Everything below reuses them. <span class="ref">shared/* in the component tree</span></p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body">
+          <div class="sk sk-tall sk-w50"></div>
+          <div class="sk sk-w90"></div>
+          <div class="sk sk-w70"></div>
+          <div class="sk sk-w40"></div>
+        </div>
+        <div class="tile__cap"><b>Skeleton</b>, not a spinner — the shape of what's coming. Respects reduced-motion.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty</span>
+        <div class="tile__body">
+          <div class="m-empty">
+            <div class="m-empty__t">No organisations yet</div>
+            <div class="m-empty__d">A ministry, donor, or company — each its own top-level org, each able to hold sub-units. Or import.</div>
+            <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Add organisation</span><span class="m-btn">Import CSV</span></div>
+          </div>
+          <div class="was"><span class="tg">was</span>“Run Alembic migrations and seed (mock_tickets --reset) …”</div>
+        </div>
+        <div class="tile__cap">Real CTAs replace developer copy. <span style="color:var(--p-red700)">Never</span> "run migrations". <span class="tile__cap" style="border:0;padding:0;display:inline"><code>F10</code></span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>That role belongs to the SEAH track,</b> but this workflow is Standard. Pick a Standard role, or change the workflow's track.</span>
+          </div>
+          <div class="was"><span class="tg">replaces</span>API 409 …: {"detail":{"message":"Role is in use","code":"WRONG_TRACK"}}</div>
+        </div>
+        <div class="tile__cap">Every mutation routes failure through <code>user-messages.ts</code> — no raw JSON. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F11</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--bi">Bilingual</span>
+        <div class="tile__body">
+          <div class="m-tree">
+            <div class="m-tnode"><span class="m-tnode__tw">•</span>SDE <span class="ne">/ वरिष्ठ डिभिजनल इन्जिनियर</span></div>
+            <div class="m-tnode"><span class="m-tnode__tw">•</span>Jhapa Division Office <span class="ne">/ झापा डिभिजन कार्यालय</span></div>
+            <div class="m-tnode"><span class="m-tnode__tw">•</span>Ilam Division Office <span class="ne">/ —</span> <span class="m-chip">Nepali name needed</span></div>
+          </div>
+        </div>
+        <div class="tile__cap"><code>&lt;Bilingual&gt;</code>: render EN / देवनागरी when present, EN fallback when absent — absent is flagged, <b>never fabricated</b>. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F14 · D4</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Scoped / permission</span>
+        <div class="tile__body">
+          <div class="m-btnrow"><span class="m-btn m-btn--disabled">Publish workflow</span></div>
+          <div class="scopebox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span>Publishing is done by an organisation admin. You're signed in as a <b>project admin</b> — ask your admin, or open the workflow read-only.</span>
+          </div>
+        </div>
+        <div class="tile__cap">Actions the server would 403 are <b>disabled + explained</b>, not shown enabled then rejected. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F12</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag" style="color:var(--p-ink3);background:var(--p-bg50);border:1px solid var(--p-line)">Severity</span>
+        <div class="tile__body">
+          <div class="m-btnrow"><span class="sev sev--block">Blocking</span><span class="sev sev--warn">Warning</span><span class="sev sev--done">Done</span></div>
+          <p class="m-check__f" style="margin-top:6px">Text label always accompanies the colour dot — a colour-blind admin on a glare-washed budget screen still reads severity.</p>
+        </div>
+        <div class="tile__cap">Blocking / Warning / Done as <b>words</b>, not colour alone. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F11</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 01 · SETUP & GO-LIVE ══════════ -->
+  <section class="surface" id="s1">
+    <div class="surface__head"><span class="surface__no">SURFACE 01</span><h2 class="surface__title">Setup &amp; go-live — the landing</h2></div>
+    <p class="surface__sub">The spine. It must read the same whether things are loading, blocked, or clear — and never lie by going stale. <span class="ref">D6 · F9 · F17</span></p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body">
+          <div class="sk sk-tall sk-w70"></div>
+          <div class="sk sk-w90"></div>
+          <div class="sk sk-w90"></div>
+          <div class="sk sk-w50"></div>
+        </div>
+        <div class="tile__cap">Checklist streams in as each check resolves — the "Go live" button stays disabled until the read completes.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error (couldn't compute)</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>We couldn't check go-live status just now.</b> Your setup is safe. <a href="#s1">Try again</a></span>
+          </div>
+        </div>
+        <div class="tile__cap">A failed status read <b>never</b> shows a false "ready" — it says so plainly and offers retry.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Blocked (1 item)</span>
+        <div class="tile__body">
+          <div class="m-next">KL Road is <span style="color:var(--p-blue700)">&nbsp;1 step&nbsp;</span> from going live.</div>
+          <div class="m-check">
+            <div class="m-check__i m-check__i--block">
+              <span class="m-mark m-mark--block"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M12 8v5M12 16h.01"/></svg></span>
+              <div><div class="m-check__t">No L2 officer for “Section A”</div><div class="m-check__f">Fix: <code>Projects ▸ Staffing ▸ Section A</code></div></div>
+              <span class="sev sev--block">Blocking</span>
+            </div>
+          </div>
+          <div class="m-btnrow"><span class="m-btn m-btn--disabled">Go live →</span></div>
+        </div>
+        <div class="tile__cap">One plain "next blocker" line; "Fix" deep-links to the field. Refreshes after every edit. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F17 · F9</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--ready">Ready</span>
+        <div class="tile__body">
+          <div class="m-next"><span class="m-mark m-mark--done" style="width:18px;height:18px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></span> KL Road is ready to go live.</div>
+          <div class="m-check">
+            <div class="m-check__i"><span class="m-mark m-mark--done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M5 13l4 4L19 7"/></svg></span><div class="m-check__t">Workflow published · Actors assigned · Every package staffed</div><span class="sev sev--done">Done</span></div>
+          </div>
+          <div class="m-btnrow"><span class="m-btn m-btn--green">Go live →</span></div>
+        </div>
+        <div class="tile__cap">"Activated" and "accepts tickets" resolve to one verdict — no "activated but blocked" limbo. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F17</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 02 · ORG TREE ══════════ -->
+  <section class="surface" id="s2">
+    <div class="surface__head"><span class="surface__no">SURFACE 02</span><h2 class="surface__title">Organisation — org tree</h2></div>
+    <p class="surface__sub">Forest of roots (§2.4): the government reporting line plus independent org roots — and each independent root (a donor, a company) can be its own multi-level subtree. States below; the happy-path tree is Frame 02 of the wireframes deck. <span class="ref">F1 · F8 · F10 · D4</span></p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body">
+          <div class="sk sk-w70"></div>
+          <div class="sk sk-w50" style="margin-left:16px"></div>
+          <div class="sk sk-w40" style="margin-left:32px"></div>
+          <div class="sk sk-w40" style="margin-left:32px"></div>
+        </div>
+        <div class="tile__cap">Tree skeleton preserves indentation so the hierarchy shape is legible before data lands.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty</span>
+        <div class="tile__body">
+          <div class="m-empty">
+            <div class="m-empty__t">No organisations yet</div>
+            <div class="m-empty__d">Add your ministry, a donor, or a company — each is its own top-level organisation and can hold sub-units. Or import the whole structure.</div>
+            <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Add organisation</span><span class="m-btn">Import from CSV</span></div>
+          </div>
+        </div>
+        <div class="tile__cap">First-run has a real path in, not a dead panel. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F10</span></div>
+      </div>
+
+      <div class="tile tile--wide">
+        <span class="tile__tag stag stag--err">Error — CSV import (all-or-nothing)</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <div><b>Nothing was imported — 2 rows need fixing:</b>
+              <div style="margin-top:6px;font-size:11.5px">• Row 4 — office type “district” isn't one we use (try <em>Division office</em>).<br>• Row 7 — parent “DoR2” doesn't exist yet.</div>
+            </div>
+          </div>
+        </div>
+        <div class="tile__cap">Whole file validates <b>before</b> any insert; errors are per-row and human, and the import is one transaction — a half-loaded tree can't happen. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">OC-01 · F11</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--bi">Bilingual</span>
+        <div class="tile__body">
+          <div class="m-tree">
+            <div class="m-tnode"><span class="m-tnode__tw">▾</span>Ministry of Phys. Infra. <span class="ne">/ भौतिक पूर्वाधार…</span></div>
+            <div class="m-tnode indent-1"><span class="m-tnode__tw">▾</span>Department of Roads <span class="ne">/ सडक विभाग</span></div>
+            <div class="m-tnode indent-2"><span class="m-tnode__tw">•</span>Jhapa Division Office <span class="ne">/ झापा…</span></div>
+            <div class="m-tnode indent-2"><span class="m-tnode__tw">•</span>Ilam Division Office <span class="ne">/ —</span> <span class="m-chip">Nepali name needed</span></div>
+          </div>
+        </div>
+        <div class="tile__cap">Devanagari names are <b>creatable</b> (id derives server-side); absent Nepali is flagged, not invented. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F1 · D4</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 03 · INVITE ══════════ -->
+  <section class="surface" id="s3">
+    <div class="surface__head"><span class="surface__no">SURFACE 03</span><h2 class="surface__title">Officers — invite-as-result</h2></div>
+    <p class="surface__sub">The flagship. Its error and confirm states matter most — an irreversible email fires at the end. Happy-path outcome card is Frame 03 of the wireframes deck. <span class="ref">D2 · F5 · F21 · SH-3</span></p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading (resolving defaults)</span>
+        <div class="tile__body">
+          <div class="m-eyebrow">This will create</div>
+          <div class="m-outcome" style="gap:8px">
+            <div class="sk sk-w70"></div>
+            <div class="sk sk-w90"></div>
+            <div class="sk sk-w50"></div>
+          </div>
+        </div>
+        <div class="tile__cap">Picking office + position resolves role/scope/project from the position's defaults; the outcome card is a skeleton until it does.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error — position has no default role</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>This position doesn't have a default role yet.</b> Pick one below, or ask an organisation admin to set it on the position type.</span>
+          </div>
+          <div class="m-btnrow"><span class="m-btn">▸ Adjust — choose a role</span></div>
+        </div>
+        <div class="tile__cap">The missing default is explained and recoverable in-place — the invite doesn't dead-end. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 16 §4</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Prerequisite — org not on project (S5)</span>
+        <div class="tile__body">
+          <div class="m-warnbar"><span>⚠</span><span>Jhapa Division Office isn't on KL Road yet. <b style="text-decoration:underline">Link it and continue</b></span></div>
+        </div>
+        <div class="tile__cap">The seam that stranded users hardest becomes one inline click — no trip to another tab. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">S5</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag" style="color:var(--p-blue700);background:var(--p-blue50)">Confirm (before the email)</span>
+        <div class="tile__body">
+          <div class="m-outcome" style="background:var(--p-paper);border-color:var(--p-line2)">
+            <div class="m-outcome__title" style="font-size:12.5px">Send invite to r.thapa@dor.gov.np?</div>
+            <div class="m-line"><span class="m-line__arrow">→</span><span>as <strong>SDE, Jhapa Division Office</strong> · Site Safeguards Focal · Jhapa</span></div>
+            <div class="prov">This emails a set-password link — it can't be un-sent.</div>
+          </div>
+          <div class="m-btnrow" style="justify-content:flex-end"><span class="m-btn">Back</span><span class="m-btn m-btn--primary">Send invite</span></div>
+        </div>
+        <div class="tile__cap">No pre-selected role, and a one-line confirm before the irreversible Keycloak email. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F21</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error — partial-invite guard</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>Couldn't create one of the 3 area scopes,</b> so none were saved. Nothing partial was left behind — try again.</span>
+          </div>
+        </div>
+        <div class="tile__cap">Multi-location invite is one transaction (all-or-nothing) — no orphan scopes. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">SH-3 · O10</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--bi">Bilingual</span>
+        <div class="tile__body">
+          <div class="m-field"><span class="m-label">Position</span><span class="m-input is-filled">SDE <span class="ne">/ वरिष्ठ डिभिजनल इन्जिनियर</span><span class="car">▾</span></span></div>
+          <div class="m-field"><span class="m-label">Office</span><span class="m-input is-filled">Jhapa Division Office <span class="ne">/ झापा…</span><span class="car">▾</span></span></div>
+        </div>
+        <div class="tile__cap">Pickers and the outcome card render both scripts where present. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">D4</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 04 · WORKFLOWS ══════════ -->
+  <section class="surface" id="s4">
+    <div class="surface__head"><span class="surface__no">SURFACE 04</span><h2 class="surface__title">Workflows &amp; roles — step→role binder</h2></div>
+    <p class="surface__sub">The valid-only picker is Frame 04 of the wireframes deck; here are its empty / error / draft / bilingual states. <span class="ref">S1 · F2 · F11 · F20</span></p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty (no roles for track)</span>
+        <div class="tile__body">
+          <div class="m-empty">
+            <div class="m-empty__t">No Standard-track roles yet</div>
+            <div class="m-empty__d">A step binds to a role. Create one to bind here.</div>
+            <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Create a role</span></div>
+          </div>
+        </div>
+        <div class="tile__cap">Cross-links to the role catalog instead of a bare empty select. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">S1</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error — publish rejected (wrong track)</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>Can't publish yet.</b> Step 2 is bound to a SEAH role, but this workflow is Standard. <a href="#s4">Fix step 2</a></span>
+          </div>
+        </div>
+        <div class="tile__cap">The server (SH-2) rejects wrong-track bindings; the message names the offending step and re-opens it. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F2 · SH-2</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Draft (publish state surfaced)</span>
+        <div class="tile__body">
+          <div class="m-btnrow" style="margin-bottom:2px"><span class="m-chip m-chip--blue">Standard grievances</span><span class="m-chip">Draft</span></div>
+          <div class="m-warnbar"><span>⚠</span><span>Not published — this won't appear on any project yet. <b style="text-decoration:underline">Publish</b></span></div>
+        </div>
+        <div class="tile__cap">Kills "I made the workflow, why doesn't it show on the project?". <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">S1</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--bi">Bilingual (labels, not slugs)</span>
+        <div class="tile__body">
+          <div class="m-tree">
+            <div class="m-tnode"><span class="m-tnode__tw">✓</span>Site Safeguards Focal <span class="ne">/ स्थल सुरक्षा फोकल</span></div>
+            <div class="m-tnode"><span class="m-tnode__tw">✓</span>PD/PIU Safeguards Focal <span class="ne">/ —</span></div>
+          </div>
+          <div class="was"><span class="tg">was</span>site_safeguards_focal_person</div>
+        </div>
+        <div class="tile__cap">Human role labels everywhere; Nepali where the translator has supplied it. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F11 · D4</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 05 · PROJECTS ══════════ -->
+  <section class="surface" id="s5">
+    <div class="surface__head"><span class="surface__no">SURFACE 05</span><h2 class="surface__title">Projects — staffing &amp; actors</h2></div>
+    <p class="surface__sub">Actors-as-action and the dedup flag are in Frame 05 of the wireframes deck; here are the staffing states. <span class="ref">S2 · F8 · F23</span></p>
+    <p class="surface__sub" style="border-left:3px solid #b45309;padding-left:.6rem"><b>⚠ Revised 2026-07-10 (DECISION-project-participants-and-supervision.md):</b> actor-role catalog removed → one defaulted <b>Implementing agency</b> + optional <b>Donor</b> (auto-fills last-step "Kept informed", SEAH-suppressed); per-level <b>Supervisor</b> (reassignment authority); <b>go-live blocks on any unstaffed level</b>. New states to add here: donor-present-but-not-informed (blocking), unstaffed-level (blocking), supervisor-defaulted-vs-overridden. RB-0 rebuilds.</p>
+    <div class="tiles">
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body">
+          <div class="sk sk-w90"></div><div class="sk sk-w90"></div><div class="sk sk-w50"></div>
+        </div>
+        <div class="tile__cap">Staffing table streams per actor; coverage warnings compute as rows land.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty staffing (real CTA)</span>
+        <div class="tile__body">
+          <div class="m-empty">
+            <div class="m-empty__t">No L2 officer yet</div>
+            <div class="m-empty__d">Every package needs an L2 before go-live.</div>
+            <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Invite officer for L2 →</span></div>
+          </div>
+        </div>
+        <div class="tile__cap">Pre-targets the right actor + level, not a disabled button that silently hits <code>projectActors[0]</code>. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F23</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Coverage warning</span>
+        <div class="tile__body">
+          <div class="m-warnbar"><span>⚠</span><span>No officer scoped for <b>Jhapa Division Office</b> on this package.</span></div>
+          <p class="m-check__f" style="margin-top:4px">A proactive, per-actor gap notice — a retained OC-06 strength, now beside the staffing it refers to.</p>
+        </div>
+        <div class="tile__cap">Warns before go-live, not after a ticket has nowhere to route.</div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Error — save failed</span>
+        <div class="tile__body">
+          <div class="errnotice">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            <span><b>That organisation isn't on this project,</b> so the officer can't be scoped to it here. Add it as an actor first, or pick another office.</span>
+          </div>
+        </div>
+        <div class="tile__cap">Jurisdiction validation (SH-3) surfaces as guidance, not a 409 dump. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">SH-3 · F11</span></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 06 · ADMIN ACCESS ══════════ -->
+  <section class="surface" id="s6">
+    <div class="surface__head"><span class="surface__no">SURFACE 06</span><h2 class="surface__title">Platform — Admin access <span style="font-size:13px;color:var(--prose-2);font-weight:500">· new, from §2.5</span></h2></div>
+    <p class="surface__sub">The hierarchical admin model made visible: an organisation admin manages its own office and everything beneath it (plus organisations it added or was given), and can appoint admins for offices below it. Every list here shows only what that admin is responsible for. <span class="ref">§2.5 · SH-7 · F12</span></p>
+    <div class="tiles">
+
+      <div class="tile tile--wide">
+        <span class="tile__tag stag" style="color:var(--p-blue700);background:var(--p-blue50)">Your scope (row-gating)</span>
+        <div class="tile__body">
+          <div class="m-eyebrow">Signed in as Organisation admin · Standard grievances</div>
+          <div class="m-tree" style="margin-top:2px">
+            <div class="m-tnode"><span class="m-tnode__tw">▾</span><b style="font-weight:620">Department of Roads</b> <span class="ne">/ सडक विभाग</span> <span class="m-chip m-chip--blue">your node</span></div>
+            <div class="m-tnode indent-1"><span class="m-tnode__tw">•</span>Jhapa Division Office <span class="m-chip">subtree · 23 offices</span></div>
+            <div class="m-tnode"><span class="m-tnode__tw">•</span>Kankai–Laukahi JV <span class="m-chip">shared with you</span></div>
+          </div>
+        </div>
+        <div class="tile__cap">You manage <b>your office and every office beneath it</b>, plus organisations you added or that were shared with you. Everything else is invisible, not just greyed out. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§2.5 · SH-7</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag" style="color:var(--p-blue700);background:var(--p-blue50)">Appoint an admin</span>
+        <div class="tile__body">
+          <div class="m-field"><span class="m-label">Admin role</span><span class="m-input is-filled">Organisation / Project / Officer admin<span class="car">▾</span></span></div>
+          <div class="m-field"><span class="m-label">Responsible for (below you)</span><span class="m-input is-filled">Jhapa Division Office<span class="car">▾</span></span></div>
+          <div class="m-btnrow" style="justify-content:flex-end"><span class="m-btn m-btn--primary">Appoint</span></div>
+        </div>
+        <div class="tile__cap">Appoint one of the three tiers below you, in your track — never above your own powers. New institutional roots (ministry/donor/local-gov) are super-admin only. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§2.5 · doc 11 §2</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Can't grant more than you have</span>
+        <div class="tile__body">
+          <div class="m-btnrow" style="gap:6px"><span class="m-chip">Create child orgs</span><span class="m-chip">Invite officers</span><span class="m-chip m-btn--disabled" style="opacity:.6">Author workflows</span></div>
+          <div class="scopebox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span>You can't grant <b>Author workflows</b> — you don't hold it yourself. That stays with a super admin.</span>
+          </div>
+        </div>
+        <div class="tile__cap">A delegate never exceeds the delegator's own capabilities — no privilege escalation. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§2.5</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Share an organisation</span>
+        <div class="tile__body">
+          <div class="m-field"><span class="m-label">Grant into scope</span><span class="m-input is-filled">Kankai–Laukahi JV (subtree)<span class="car">▾</span></span></div>
+          <p class="m-check__f">Gives an IT/administration admin oversight of an implementing agency <b>outside</b> its reporting line.</p>
+        </div>
+        <div class="tile__cap">Granted by any admin at or above the grantee (super always). Contractors are reached this way — never by tree inheritance. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§2.4 · §2.5</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">A project admin sees it read-only</span>
+        <div class="tile__body">
+          <div class="m-btnrow"><span class="m-btn m-btn--disabled">Appoint an admin</span><span class="m-btn m-btn--disabled">Share an organisation</span></div>
+          <div class="scopebox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg>
+            <span>Appointing admins is above your tier. You're a <b>project admin</b> — you manage contractors and officers on your project.</span>
+          </div>
+        </div>
+        <div class="tile__cap">No enabled button that always 403s; the tier boundary is shown, not discovered on click. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F12</span></div>
+      </div>
+
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body">
+          <div class="sk sk-w70"></div><div class="sk sk-w90" style="margin-left:16px"></div><div class="sk sk-w50"></div>
+        </div>
+        <div class="tile__cap">Scope resolves from <code>/users/me/admin-context</code> before any admin action renders.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ══════════ 07 · POSITION TYPES ══════════ -->
+  <section class="surface" id="s7">
+    <div class="surface__head"><span class="surface__no">SURFACE 07</span><h2 class="surface__title">Organisation — position types</h2></div>
+    <p class="surface__sub">The set-once catalog under Organisation. Added in remediation (was missing from the atlas). <span class="ref">§7.E · D3</span></p>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body"><div class="sk sk-w70"></div><div class="sk sk-w90"></div><div class="sk sk-w50"></div></div>
+        <div class="tile__cap">~20–50 rows; loads once, edited rarely.</div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty</span>
+        <div class="tile__body"><div class="m-empty">
+          <div class="m-empty__t">No position types yet</div>
+          <div class="m-empty__d">Start from the Department of Roads defaults, or add your own.</div>
+          <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">Add the DoR set</span><span class="m-btn">Add one</span></div>
+        </div></div>
+        <div class="tile__cap">Seeded starter set, not a blank wall. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">F10</span></div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Review holders (after edit)</span>
+        <div class="tile__body">
+          <div class="scopebox" style="border-color:var(--p-amber100);background:var(--p-amber50)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg><span>Default role changed. <b>12 officers</b> hold SDE — their role wasn't changed. <b style="text-decoration:underline">Review 12 holders</b></span></div>
+        </div>
+        <div class="tile__cap">Editing a default role never silently re-syncs holders — it offers an opt-in re-sync. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">D3 · doc 16 §4</span></div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--bi">Bilingual</span>
+        <div class="tile__body"><div class="m-tree">
+          <div class="m-tnode"><span class="m-tnode__tw">•</span>Senior Divisional Engineer <span class="ne">/ वरिष्ठ डिभिजनल इन्जिनियर</span></div>
+          <div class="m-tnode"><span class="m-tnode__tw">•</span>Sub-Engineer <span class="ne">/ —</span> <span class="m-chip">Nepali name needed</span></div>
+        </div></div>
+        <div class="tile__cap">Title renders both scripts; absent Nepali flagged, never invented. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">D4</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 08 · ROLES ══════════ -->
+  <section class="surface" id="s8">
+    <div class="surface__head"><span class="surface__no">SURFACE 08</span><h2 class="surface__title">Roles &amp; permissions</h2></div>
+    <p class="surface__sub">The role catalog states. Added in remediation. <span class="ref">§7.E · doc 11 §3</span></p>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body"><div class="sk sk-w90"></div><div class="sk sk-w90"></div><div class="sk sk-w50"></div></div>
+        <div class="tile__cap">Catalog + "used on N steps · M officers" compute as rows land.</div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--empty">Empty (custom roles)</span>
+        <div class="tile__body"><div class="m-empty">
+          <div class="m-empty__t">No custom roles</div>
+          <div class="m-empty__d">The TOR starter set is already here — add a custom role only if a job needs different permissions.</div>
+          <div class="m-btnrow" style="justify-content:center"><span class="m-btn m-btn--primary">New role</span></div>
+        </div></div>
+        <div class="tile__cap">Seeded roles present; custom is the exception. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 11 §3.1</span></div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--err">Delete blocked (in use)</span>
+        <div class="tile__body"><div class="errnotice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Can't delete "Site Safeguards Focal".</b> It's used on 1 workflow step and held by 3 officers. Unbind it first.</span></div></div>
+        <div class="tile__cap">Usage guard — no orphaning a bound/held role. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 11 §3.4 · F15</span></div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">System role — permissions locked</span>
+        <div class="tile__body">
+          <div class="m-btnrow"><span class="m-chip">✓ View</span><span class="m-chip">✓ Acknowledge</span><span class="m-chip" style="opacity:.55">☐ Escalate</span></div>
+          <div class="scopebox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span>This is a standard (TOR) role — its permissions are set by a super admin, so they're read-only here.</span></div>
+        </div>
+        <div class="tile__cap">Editable-looking checkboxes are locked for system roles — no accidental routing break. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 11 §3.3</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 09 · NOTIFICATIONS ══════════ -->
+  <section class="surface" id="s9">
+    <div class="surface__head"><span class="surface__no">SURFACE 09</span><h2 class="surface__title">Notifications</h2></div>
+    <p class="surface__sub">The per-track alert grid states. Added in remediation. <span class="ref">§7.E · §4.5</span></p>
+    <div class="tiles">
+      <div class="tile">
+        <span class="tile__tag stag stag--load">Loading</span>
+        <div class="tile__body"><div class="sk sk-w90"></div><div class="sk sk-w70"></div><div class="sk sk-w90"></div></div>
+        <div class="tile__cap">Grid reads from <code>settings.notification_rules</code>.</div>
+      </div>
+      <div class="tile tile--wide">
+        <span class="tile__tag" style="color:var(--p-blue700);background:var(--p-blue50);font-family:var(--font-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:700;padding:4px 9px;border-radius:5px">Proto phasing</span>
+        <div class="tile__body"><div class="scopebox" style="border-color:var(--p-blue100);background:var(--p-blue50);color:var(--p-blue800)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Right now officers get in-app alerts only.</b> Email &amp; SMS in the grid are the target setup and switch on later — the grid is safe to leave as-is.</span></div></div>
+        <div class="tile__cap">Reconciles the seeded matrix with the locked "in-app only (proto)" policy. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§7.E · CLAUDE.md</span></div>
+      </div>
+      <div class="tile">
+        <span class="tile__tag stag stag--scope">Read-only (not your tier)</span>
+        <div class="tile__body"><div class="scopebox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span>Notification rules are set by an organisation admin. You're a project admin — this is read-only.</span></div></div>
+        <div class="tile__cap">Gated to the catalog owners; project admins view only. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 12 §9</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════ 10 · CREATE PROJECT ══════════ -->
+  <section class="surface" id="s10">
+    <div class="surface__head"><span class="surface__no">SURFACE 10</span><h2 class="surface__title">Create a project</h2></div>
+    <p class="surface__sub">States for the create flow (Frame 10). Added in round-3 (the new frames had no states). <span class="ref">§7.B1</span></p>
+    <div class="tiles">
+      <div class="tile"><span class="tile__tag stag stag--load">Loading</span><div class="tile__body"><div class="sk sk-w70"></div><div class="sk sk-w90"></div><div class="sk sk-w50"></div></div><div class="tile__cap">Country list + workflow options load before the form is usable.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--err">Error — validation</span><div class="tile__body"><div class="errnotice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Pick a country</b> and give the project a name — both are needed before it can be created.</span></div></div><div class="tile__cap">Country is validated (recent SH-4a/SH-6 work); no silent bad-country project.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--scope">No workflow to link yet</span><div class="tile__body"><div class="m-warnbar"><span>⚠</span><span>No published workflow yet. <b style="text-decoration:underline">Set one up first</b> — or save the project as a draft.</span></div></div><div class="tile__cap">Carries the "publish first" prerequisite into the create flow instead of dead-ending. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§7.B3</span></div></div>
+    </div>
+  </section>
+
+  <!-- ══════════ 11 · OFFICER LIFECYCLE ══════════ -->
+  <section class="surface" id="s11">
+    <div class="surface__head"><span class="surface__no">SURFACE 11</span><h2 class="surface__title">Officers — directory &amp; lifecycle</h2></div>
+    <p class="surface__sub">States for the directory + manage flow (Frame 11). <span class="ref">§7.F1/F3</span></p>
+    <div class="tiles">
+      <div class="tile"><span class="tile__tag stag stag--load">Loading</span><div class="tile__body"><div class="sk sk-w90"></div><div class="sk sk-w90"></div><div class="sk sk-w50"></div></div><div class="tile__cap">Server-side search/pagination — rows stream, no full-list scroll.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--empty">No matches</span><div class="tile__body"><div class="m-empty"><div class="m-empty__t">No officers match "thapa … Ilam"</div><div class="m-empty__d">Try fewer filters, or check the spelling.</div></div></div><div class="tile__cap">Search-first means an empty result is normal, not broken.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--err">Deactivate blocked (open cases)</span><div class="tile__body"><div class="errnotice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Reassign R. Thapa's 4 open cases first.</b> Then you can deactivate — no case is left without an owner.</span></div></div><div class="tile__cap">In-flight tickets handled on transfer/deactivate (round-3 fix). <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">§7.F1</span></div></div>
+    </div>
+  </section>
+
+  <!-- ══════════ 12 · ORG LIFECYCLE ══════════ -->
+  <section class="surface" id="s12">
+    <div class="surface__head"><span class="surface__no">SURFACE 12</span><h2 class="surface__title">Organisation — lifecycle &amp; scale</h2></div>
+    <p class="surface__sub">States for the "⋯" lifecycle + tree at scale (Frame 12). <span class="ref">§7.F2/F3</span></p>
+    <div class="tiles">
+      <div class="tile"><span class="tile__tag stag stag--load">Loading a subtree</span><div class="tile__body"><div class="sk sk-w70"></div><div class="sk sk-w50" style="margin-left:16px"></div><div class="sk sk-w40" style="margin-left:16px"></div></div><div class="tile__cap">Subtrees lazy-load on expand — thousands of nodes never render at once.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--err">Delete blocked (SH-4)</span><div class="tile__body"><div class="errnotice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Can't delete Jhapa Division Office.</b> On 2 projects, 3 officers, 4 open cases. Reassign &amp; move first.</span></div></div><div class="tile__cap">Friendly 409, never a cascade-orphan. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">SH-4</span></div></div>
+      <div class="tile"><span class="tile__tag stag stag--err">Move blocked (cycle)</span><div class="tile__body"><div class="errnotice"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span><b>Can't move an office under one of its own sub-offices.</b> Pick a parent outside this branch.</span></div></div><div class="tile__cap">Cycle guard surfaced in plain words. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">OC-01</span></div></div>
+    </div>
+  </section>
+
+  <!-- ══════════ 13 · SEAH ══════════ -->
+  <section class="surface" id="s13">
+    <div class="surface__head"><span class="surface__no">SURFACE 13</span><h2 class="surface__title">SEAH — setup &amp; invisibility</h2></div>
+    <p class="surface__sub">States for the restricted SEAH surface (Frame 13). <span class="ref">§7.F4 · doc 16 §6</span></p>
+    <div class="tiles">
+      <div class="tile"><span class="tile__tag stag stag--load">Loading</span><div class="tile__body"><div class="sk sk-w70"></div><div class="sk sk-w90"></div></div><div class="tile__cap">Restricted content loads only after the SEAH gate passes.</div></div>
+      <div class="tile"><span class="tile__tag stag stag--scope">Not a SEAH admin</span><div class="tile__body"><div class="scopebox" style="border-color:var(--p-red100);background:var(--p-red50);color:var(--p-red800)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span>This area is restricted to <b>SEAH admins</b>. A standard admin can't see it — and sees no hint that SEAH cases exist.</span></div></div><div class="tile__cap">The tab itself is absent for non-SEAH admins — invisibility, not a locked door. <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 16 §6</span></div></div>
+      <div class="tile"><span class="tile__tag stag stag--bi">Directory (shared)</span><div class="tile__body"><div class="m-tree"><div class="m-tnode"><span class="m-tnode__tw">•</span>S. Sharma — SDE, Jhapa <span class="m-muted">(person visible)</span></div><div class="m-tnode" style="color:var(--p-muted);font-style:italic"><span class="m-tnode__tw"></span>(their SEAH cases are not)</div></div></div><div class="tile__cap">Only case <em>existence</em> is hidden — people still appear in the shared directory (round-3 correction). <span style="color:var(--p-blue700);font-family:var(--font-mono);font-size:11px">doc 16 §6</span></div></div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <p><b>Coverage.</b> Thirteen surfaces × the five states (loading / empty / error / bilingual / scoped) plus ready — including
+      Position types, Roles, and Notifications (the three added in the post-review remediation). Together with
+      <code>settings-wireframes.html</code> (happy path + key variants), this closes Handover A deliverable 2.</p>
+    <p style="margin-top:9px"><b>Traceability.</b> Each state cites the OC-06 finding (F-number), seam (S-number), D-fork, or
+      design section (§2.4 / §2.5) it satisfies. Design system honoured throughout: friendly errors, text severity,
+      no banned hues, no fabricated Nepali. Source of record: <code>DESIGN-settings-redesign.md</code>.</p>
+  </footer>
+</div>
+</body>
+</html>

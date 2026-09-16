@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: Apache-2.0
 
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
@@ -30,7 +31,7 @@ class ValidateMenuForm(BaseFormValidationAction):
         self.logger.info("validate_language_code")
         value = slot_value.strip("/")
         if value not in ["en", "ne"]:
-            utterance = self.get_utterance(1)
+            utterance = self.get_utterance(1, key="validate_language_code")
             dispatcher.utter_message(text=utterance)
             return {"language_code": None}
         return {"language_code": value}

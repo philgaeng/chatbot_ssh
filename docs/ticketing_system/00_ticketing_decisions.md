@@ -1,5 +1,8 @@
 # Ticketing System – Decisions (as-built, June 2026)
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 This file records **settled product, architecture, and integration decisions** for the GRM ticketing system.
 It reflects what has actually been built. Questions that drove these decisions are in `00_ticketing_overview_and_questions.md`.
 
@@ -117,8 +120,8 @@ Four-tier model per ticket step:
 - **Production:** Keycloak OIDC. Webhook (`POST /api/v1/webhooks/keycloak`) creates `UserRole` + `OfficerOnboarding` on invite acceptance.
 - **Local/demo:** `NEXT_PUBLIC_BYPASS_AUTH=true` — header role-switcher lists officers from `GET /api/v1/users/roster`.
 - **Officer lifecycle:** `officer_onboarding` table — states: `invited` → `active`.
-- **Admin model (locked):** three keys (`super_admin`, `country_admin`, `project_admin`); **`workflow_track`** (`standard` \| `seah`) on country and project **assignment scope** — no `seah_admin` / `seah_project_admin` / `local_admin`. Details: [11_roles_and_permissions.md](11_roles_and_permissions.md).
-- **Operational roles:** `ticketing.roles` — GRM case handlers and observers; configured in Roles & permissions tab, assigned by `project_admin` / `country_admin`.
+- **Admin model (locked):** three keys (`super_admin`, `org_admin`, `project_admin`); **`workflow_track`** (`standard` \| `seah`) on country and project **assignment scope** — no `seah_admin` / `seah_project_admin` / `local_admin`. Details: [11_roles_and_permissions.md](11_roles_and_permissions.md).
+- **Operational roles:** `ticketing.roles` — GRM case handlers and observers; configured in Roles & permissions tab, assigned by `project_admin` / `org_admin`.
 - **OfficerScope:** Org + project + package + location scope; enforced on ticket queries and auto-assign.
 
 ---

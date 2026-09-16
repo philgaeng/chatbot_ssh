@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Read and merge non-PII grievance fields from public.grievances (no is_temporary filter).
 """

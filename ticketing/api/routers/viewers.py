@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Viewer (watcher) endpoints — UI_SPEC.md §2.7.
 

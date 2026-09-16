@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 Grievance classification catalog — super-admin JSON (ticketing.settings.grievance_categories).
 

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 FastAPI backend app (Phase 1–2). Production backend API.
 Run: uvicorn backend.api.fastapi_app:app --port 5001
@@ -42,12 +44,49 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
 
-from backend.api.routers import grievance, files, voice_grievance, gsheet, messaging
+from backend.api.routers import grievance, files, health_llm, messaging
 from backend.api.websocket_fastapi import emit_status_update_accessible, socketio_app
+
+
+def _backend_bypass_enabled() -> bool:
+    """Dev auth bypass for the backend grievance API (HR-01).
+
+    Honoured ONLY when APP_ENV=dev AND AUTH_MODE=bypass — the canonical single-flag
+    scheme shared with the ticketing service. Production can never bypass.
+    """
+    return (
+        os.getenv("APP_ENV", "production").strip().lower() == "dev"
+        and os.getenv("AUTH_MODE", "keycloak").strip().lower() == "bypass"
+    )
+
+
+def _assert_backend_auth_configured() -> None:
+    """Fail-closed startup guard (HR-01) for the grievance API key check.
+
+    Mirrors the ticketing service: unless the dev bypass is enabled (APP_ENV=dev
+    AUTH_MODE=bypass) the backend refuses to boot when no shared API key is
+    configured, so PII-bearing grievance endpoints can never run with
+    authentication silently disabled.
+    """
+    if _backend_bypass_enabled():
+        return
+    has_key = any(
+        (os.environ.get(name, "") or "").strip()
+        for name in ("TICKETING_SECRET_KEY", "MESSAGING_API_KEY")
+    )
+    if not has_key:
+        raise RuntimeError(
+            "Refusing to start backend API: dev bypass not enabled (APP_ENV=dev "
+            "AUTH_MODE=bypass) but no TICKETING_SECRET_KEY / MESSAGING_API_KEY is "
+            "configured — grievance API-key auth would be disabled. Set a key, or "
+            "APP_ENV=dev AUTH_MODE=bypass for local dev."
+        )
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
+    # Fail-closed auth guard — must run before serving any request (HR-01).
+    _assert_backend_auth_configured()
     # Wire real Socket.IO emit for accessible (grievance suffix A) on POST /task-status.
     files.set_emit_status_update_accessible(emit_status_update_accessible)
     yield
@@ -91,13 +130,13 @@ def health():
     return "OK"
 
 
+# LLM reachability probe (DPG-15). ⚠ Separate from /health, and NOT part of any container
+# healthcheck: an LLM outage must degrade classification, never restart the chatbot.
+app.include_router(health_llm.router)
 # Grievance API: paths already include /api/grievance, so no prefix
 app.include_router(grievance.router)
 # File server: same paths as Flask FileServerAPI (no prefix)
 app.include_router(files.router)
-# Voice and gsheet: no prefix (paths are /accessible-file-upload, etc., and /gsheet-get-grievances)
-app.include_router(voice_grievance.router)
-app.include_router(gsheet.router)
 # Messaging API: /api/messaging/*
 app.include_router(messaging.router)
 

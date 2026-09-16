@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 import asyncio
 from typing import Any, Text, Dict, List, Optional, Union, Tuple
 
@@ -6,6 +8,7 @@ from rasa_sdk.executor import CollectingDispatcher
 from rasa_sdk.types import DomainDict
 from rasa_sdk.events import SlotSet, FollowupAction
 from backend.actions.base_classes.base_classes import BaseFormValidationAction, BaseAction
+from backend.services.db_debug_log import mask_phone_for_log, text_prefix_for_log
 
 
 class ActionStartStatusCheck(BaseAction):
@@ -70,8 +73,12 @@ class ValidateFormStatusCheck1(BaseFormValidationAction):
         Validate phone and retrieve grievances in one step.
         This optimizes the flow by fetching grievances during phone validation.
         """
-        _sv = slot_value if not isinstance(slot_value, str) else (slot_value[:20] + "..." if len(slot_value) > 20 else slot_value)
-        self.logger.info("validate_complainant_phone: entry | slot_value=%s", _sv)
+        # ⚠ This used to truncate with `slot_value[:20]`, which never fired: a Nepali mobile is
+        # 10 digits, so the full number was logged behind something that read as a redaction
+        # (D-62, 2026-08-27). Last four only, via the helper the service layer already uses.
+        self.logger.info(
+            "validate_complainant_phone: entry | phone=%s", mask_phone_for_log(slot_value)
+        )
         try:
             slots = self.base_validate_phone(slot_value, dispatcher)
             self.logger.info(
@@ -213,7 +220,9 @@ class ValidateFormStatusCheck2(BaseFormValidationAction):
             "status_check_grievance_selected_action": self.SKIP_VALUE}
 
         grievance_list = tracker.get_slot("list_grievance_id")
-        self.logger.debug(f"validate_status_check_grievance_id_selected: slot_value: {slot_value}")
+        # ⚠ The raw picker value is not logged: its label is complainant-supplied and its
+        # content was never traced. The grievance_id it carries IS logged below, parsed —
+        # which is the correlation key anyway (D-62, 2026-08-27).
         self.logger.debug(f"validate_status_check_grievance_id_selected: grievance_list: {grievance_list}")
         grievance_id = slot_value.split("|")[1].strip()
         self.logger.debug(f"validate_status_check_grievance_id_selected: grievance_id: {grievance_id}")
@@ -232,9 +241,15 @@ class ValidateFormStatusCheck2(BaseFormValidationAction):
         if slot_value == self.SKIP_VALUE:
             return {"status_check_grievance_selected_action": self.SKIP_VALUE}
         if "/" in slot_value:
-            self.logger.debug(f"validate_status_check_grievance_selected_action: slot_value: {slot_value}")
+            self.logger.debug(
+                "validate_status_check_grievance_selected_action: %s",
+                text_prefix_for_log("slot_value", slot_value),
+            )
             slot_value = slot_value.split("/")[1].strip()
-            self.logger.debug(f"validate_status_check_grievance_selected_action: slot_value: {slot_value}")
+            self.logger.debug(
+                "validate_status_check_grievance_selected_action: parsed %s",
+                text_prefix_for_log("slot_value", slot_value),
+            )
         return {"status_check_grievance_selected_action": slot_value}
 
 
@@ -387,6 +402,12 @@ class LegacyActionStatusCheckRequestFollowUp(BaseAction):
                 email_data["grievance_summary"] = grievance.get("grievance_summary") or grievance.get("grievance_description") or self.NOT_PROVIDED
                 email_data["grievance_description"] = email_data.get("grievance_description") or grievance.get("grievance_description") or self.NOT_PROVIDED
                 email_data["grievance_categories"] = grievance.get("grievance_categories") or email_data.get("grievance_categories") or self.NOT_PROVIDED
+                # F-19: the admin send is gated on this and treats an ABSENT key as
+                # sensitive. Take it from the stored row, not the tracker slot — the
+                # column only ever escalates (D-64), so it is the authoritative value.
+                email_data["grievance_sensitive_issue"] = bool(
+                    grievance.get("grievance_sensitive_issue")
+                )
         def _log_email_done(task: asyncio.Task) -> None:
             try:
                 task.result()

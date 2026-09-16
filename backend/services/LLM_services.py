@@ -1,8 +1,24 @@
-import os
+# SPDX-License-Identifier: Apache-2.0
+
 import json
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Optional
+
 from openai import OpenAI
-from dotenv import load_dotenv
+
+from backend.config.llm_config import (
+    get_llm_settings,
+    is_too_short_to_process,
+    model_for,
+)
+from backend.services.llm_client import call_llm, get_asr_client, get_llm_client
+from backend.services.llm_schemas import (
+    ContactExtractionAll,
+    GrievanceTranslation,
+    SensitiveContentDetection,
+    grievance_classification_schema,
+    single_field_contact_schema,
+)
+from backend.services.category_resolution import resolve_categories
 from backend.logger.logger import TaskLogger
 from ..config.constants import CLASSIFICATION_DATA, LIST_OF_CATEGORIES, USER_FIELDS, DEFAULT_VALUES
 from backend.services.database_services.postgres_services import db_manager
@@ -21,29 +37,56 @@ FAILED = status_codes['FAILED']
 STARTED = status_codes['STARTED']
 RETRYING = status_codes['RETRYING']
 
-# Load environment variables
-load_dotenv('/home/ubuntu/nepal_chatbot/.env')
-open_ai_key = os.getenv("OPENAI_API_KEY")
+# ── Clients (DPG-11) ─────────────────────────────────────────────────────────
+# Built on first use by backend/services/llm_client.py from the shared registry, never at
+# import. `load_dotenv('/home/ubuntu/nepal_chatbot/.env')` lived here and was deleted: an
+# absolute path to a host directory that exists in no container.
+#
+# These two helpers return None when no client can be built — reproducing exactly the contract
+# the module-level `client = None` had, so that every call site keeps its own documented
+# fallback (raise / sentinel dict / fail-open). Those three idioms differ per function and are
+# pinned as they are by tests/backend/test_llm_services.py; unifying them is a behaviour change
+# and belongs to its own ticket, not to this migration.
 
-# Initialize OpenAI client
-try:
-    client = OpenAI(api_key=open_ai_key)
-    logger.info("OpenAI client initialized")
-except Exception as e:
-    logger.error(f"Error initializing OpenAI client: {str(e)}")
-    client = None
+
+def _llm_client() -> Optional[OpenAI]:
+    try:
+        return get_llm_client()
+    except Exception as e:
+        logger.error(f"Error initializing OpenAI client: {str(e)}")
+        return None
+
+
+def _asr_client() -> Optional[OpenAI]:
+    try:
+        return get_asr_client()
+    except Exception as e:
+        logger.error(f"Error initializing ASR client: {str(e)}")
+        return None
 
 def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> str:
-    """Transcribe an audio file using OpenAI Whisper API"""
+    """Transcribe an audio file using the configured ASR endpoint.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). Nothing enqueues `transcribe_audio_file_task`:
+    audio is uploaded and stored, and `process_file_upload_task` skips transcription by decision
+    (CB-01 proto). This is complete code that is switched off, not dead code — see
+    `PARKED_TASKS` in `backend/task_queue/registered_tasks.py` for what unparking needs.
+    """
+    client = _asr_client()
     if not client:
         raise RuntimeError("OpenAI client not available for transcription")
-    
+
+    asr = model_for("asr")
     try:
         with open(file_path, "rb") as audio_data:
             response = client.audio.transcriptions.create(
                 file=audio_data,
-                model="whisper-1",
-                language_code=language_code
+                model=asr.model,
+                timeout=asr.timeout,
+                # DPG-14.3: the SDK parameter is `language`, not `language_code`, and
+                # `Transcriptions.create` declares its parameters explicitly — no **kwargs.
+                # Every call on this path raised TypeError before this line was corrected.
+                language=language_code
             )
         return response.text
     except Exception as e:
@@ -51,19 +94,35 @@ def transcribe_audio_file(file_path: str, language_code: str = DEFAULT_LANGUAGE_
         raise
     
 def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
-    """Extract name and phone number from contact information text"""
+    """Extract name and phone number from contact information text.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). It consumes a *transcription of spoken contact
+    details*, which is why the typed path never needed it: typed phone numbers are validated
+    deterministically in a slot validator (`actions/services/contact/phone.py`), with no model.
+    ⚠ **No complainant PII reaches a model through this function today.**
+    """
+    # DPG-14 / D-28: `field_name` and `response` are resolved BEFORE the try, because the
+    # handler below reads both. Previously `field_name` came from a list index and `response`
+    # was bound only after the API call, so every pre-call failure — no client, a provider
+    # error, an empty field value — raised UnboundLocalError from inside the `except` instead
+    # of the documented `{field_name: ""}`. The declared contract was unreachable.
+    # The caller (registered_tasks.extract_contact_info_task) checks every returned key against
+    # USER_FIELDS, so the sentinel has to carry the real field name.
+    field_name = next((i for i in contact_data.keys() if i in USER_FIELDS), None)
+    if not field_name:
+        # No contact field to extract: a caller error, not a model failure. Raise the field
+        # NAMES, never the values — this message reaches the Celery error log (T-34-b).
+        raise ValueError(
+            f"No valid contact field in contact_data; keys={sorted(contact_data.keys())}"
+        )
+    response = None
     try:
-        # Use OpenAI to extract structured information
-        if not client:
-            raise ValueError("OpenAI client not available for contact info extraction")
-            
-        # Get the first key-value pair from contact_data
-        field_name = [i for i in contact_data.keys() if i in USER_FIELDS][0]
-        if not field_name:
-            raise ValueError(f"Missing valid field_name in contact_data: {contact_data}")
+        # ⚠ No client is built here any more: `call_llm` constructs it, and the factory refuses to
+        # build one without a key — so an unkeyed deployment still lands on the documented
+        # `{field_name: ""}` sentinel below, by the same route as a provider outage.
         field_value = contact_data.get(field_name)
         if not field_value:
-            raise ValueError(f"Missing {field_name} in contact_data: {contact_data}")
+            raise ValueError(f"Missing value for {field_name} in contact_data")
         
         message_input = f"""
             Extract the {field_name.replace("_", " ")} from {field_value}.
@@ -73,21 +132,19 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
             }}
         """
         
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
+        # Validated through a per-call schema: the caller checks every returned key against
+        # USER_FIELDS and raises on a stray one, so dropping keys the schema does not declare is
+        # the difference between a task that succeeds and one that fails on the model's enthusiasm.
+        response = call_llm(
+            "extract",
+            [
                 {"role": "system", "content": f"You are an assistant helping to extract contact information from a contact form containing the following fields: {USER_FIELDS}. The contact form is part of a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. Extract the person's contact and location information in the language which language_code is {language_code}."},
-                {"role": "user", "content": message_input}
+                {"role": "user", "content": message_input},
             ],
-            response_format={"type": "json_object"}
+            schema=single_field_contact_schema(field_name),
+            schema_name="contact_extraction",
         )
-        
-        # Get the full ChatGPT response content
-        full_response = response.choices[0].message.content
-        result = json.loads(full_response)
-         # FIXED: Use full ChatGPT response instead of just extracted field
-        
-        return result  # FIXED: Return result instead of result_dict
+        return response.model_dump()
         
     except Exception as e:
         if not response:
@@ -103,15 +160,16 @@ def extract_contact_info(contact_data: Dict[str, Any], language_code: str = DEFA
         
 
 def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = DEFAULT_LANGUAGE_CODE, complainant_district: str = DEFAULT_DISTRICT, complainant_province: str = DEFAULT_PROVINCE) -> Dict[str, Any]:
-    """Extract name and phone number from contact information text"""
+    """Extract all six contact fields at once.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b), and the more thoroughly parked of the pair:
+    this one has no reference anywhere outside its own module and tests.
+    """
     try:
-        # Use OpenAI to extract structured information
-        if not client:
-            raise ValueError("OpenAI client not available for contact info extraction")
-        
-        
-        response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+        response = call_llm(
+            "extract",
+            schema=ContactExtractionAll,
+            schema_name="contact_extraction_all",
             messages=[
                 {"role": "system", "content": "Extract the person's contact and location information in the language of the text."},
                 {"role": "user", "content": f"""
@@ -131,11 +189,8 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
                 }}
                     """}
             ],
-            response_format={"type": "json_object"}
         )
-        
-        result = parse_llm_response("contact_response", response.choices[0].message.content)
-        return result
+        return response.model_dump()
         
             
     except Exception as e:
@@ -149,13 +204,58 @@ def extract_all_contact_info(contact_data: Dict[str, Any], language_code: str = 
             "complainant_address": ""
         }
 
+def _redact_generated_text(values: Dict[str, Any], *fields: str) -> Dict[str, Any]:
+    """Second redaction pass, over the model's OUTPUT, before anything is persisted (§31.4).
+
+    **The ordering is the control; the prompt is not.** The input is already pseudonymised at the
+    `call_llm` chokepoint (DPG-33), so the model never receives a name it could echo. This pass
+    catches the case where the *input* redaction MISSED one — which is exactly where a prompt
+    instruction is least dependable, because a missed name reads to the model as ordinary
+    narrative.
+
+    It converts *"we asked the model not to name anyone"* into **"a summary carrying a detected
+    name is not stored"** — deterministic, and pinnable.
+
+    ⚠ **Applied to BOTH summary-producing fields, which is the point of doing it here rather than
+    per prompt.** There are two, and the second is easy to miss: the classification call produces
+    `grievance_summary`, and the *translation* call produces `grievance_summary_en` — its prompt
+    says *"create a new summary from the translated details"*, so it reads as a translation step
+    while actually generating text. Its output is also the English summary most likely to reach a
+    quarterly report. One output pass covers both; a prompt gate has to be applied twice and stay
+    applied.
+
+    ⚠ **The mapping is discarded.** Nothing restores a generated summary — the stored summary
+    carries no names by decision (owner, 2026-08-27).
+    """
+    from backend.services.pii_service import redact_for_model
+
+    for field in fields:
+        original = values.get(field)
+        if not isinstance(original, str) or not original:
+            continue
+        redacted = redact_for_model(original)
+        if redacted.mapping:
+            # Count only. The values are what this exists to keep out of the record.
+            logger.warning(
+                "%s: input redaction missed %d identifier(s) that the model echoed into '%s'; "
+                "redacted again before storage (DPG-31 §31.4)",
+                "output_redaction",
+                len(redacted.mapping),
+                field,
+            )
+            values[field] = redacted.text
+    return values
+
+
 def classify_and_summarize_grievance(
     grievance_text: str,
     language_code: str = DEFAULT_LANGUAGE_CODE,
     complainant_district: str = DEFAULT_DISTRICT,
     complainant_province: str = DEFAULT_PROVINCE,
     categories: List[str] = LIST_OF_CATEGORIES,
-    categories_list: Dict[str, Any] = CLASSIFICATION_DATA
+    categories_list: Dict[str, Any] = CLASSIFICATION_DATA,
+    *,
+    interactive: bool = True,
 ) -> Dict[str, Any]:
     """
     Classify and summarize a grievance using LLM.
@@ -185,34 +285,93 @@ def classify_and_summarize_grievance(
                 "error": "No grievance text provided"
             }
 
-        # Use provided categories or default to CLASSIFICATION_DATA
-        category_list = [f"{item.get('classification')} - {item.get('generic_grievance_name')}" for item in CLASSIFICATION_DATA.values()]
-        result_dict = {}
-        for key, value in CLASSIFICATION_DATA.items():
-            result_dict[key] = {k:v for k,v in value.items() if "_"+language_code not in k}
-        #transform the dict into a string using json.dumps
-        category_list_str = json.dumps(category_list)
-        result_dict_str = json.dumps(result_dict)
-        
-        # Initialize OpenAI client with explicit timeout for classification (avoids "Request timed out." when API is slow)
-        classification_timeout = float(os.getenv("OPENAI_CLASSIFICATION_TIMEOUT", "120"))
-        client = OpenAI(api_key=open_ai_key, timeout=classification_timeout)
-        if not client:
-            raise ValueError("OpenAI client initialization failed")
+        # DPG-19: too short to classify → do not call the model at all. This is not a failure and
+        # must not be reported as one: there is nothing to summarise, and the call would cost a
+        # request to be told so. `status` is deliberately absent — callers key failure on it.
+        if is_too_short_to_process(grievance_text):
+            logger.info(
+                "classify_and_summarize_grievance: below the minimum length, skipping the model "
+                "(chars=%d, minimum=%d)",
+                len((grievance_text or "").strip()),
+                get_llm_settings().min_classify_chars,
+            )
+            return {
+                "grievance_summary": "",
+                "grievance_categories": [],
+                "grievance_categories_alternative": [],
+                "follow_up_question": "",
+                "skipped": "too_short",
+            }
 
-        # Make API call
-        response = client.chat.completions.create(
+        # ── The catalogue, sent ONCE and trimmed (2026-08-21) ────────────────────────────────
+        # Measured before/after on the 30-category taxonomy. What this replaced sent the catalogue
+        # THREE times — a flat list twice plus the full dictionary once — and the dictionary was
+        # 51,213 characters for an English grievance against 15,121 for a Nepali one.
+        #
+        # ⚠ **That asymmetry was a bug, not a design.** The filter was
+        # `if "_" + language_code not in k`, which strips the `_ne` keys when the grievance is
+        # Nepali and strips **nothing** when it is English — because no key contains `_en`. So every
+        # English classification carried every Nepali translation, JSON-escaped to `\uXXXX` at six
+        # bytes per character, for a model that never used them.
+        #
+        # The dictionary is a **classification aid** and the categories come back in English, so only
+        # the English fields belong in it. Nepali grievances see exactly what they saw before.
+        _CLASSIFY_FIELDS = (
+            "classification",
+            "generic_grievance_name",
+            "description",
+            "follow_up_question_description",
+            "follow_up_question_quantification",
+        )
+        # Dropped deliberately: `high_priority` is downstream routing metadata and never a
+        # classification signal; `short_description` restates `description`; the `*_extra` question
+        # pair exists for two categories and was charged to all thirty.
+        catalogue = {
+            key: {k: v for k, v in value.items() if k in _CLASSIFY_FIELDS}
+            for key, value in CLASSIFICATION_DATA.items()
+        }
+        # ⚠ There is **no separate flat list** any more. The model chooses from the KEYS of this
+        # dictionary, and that is a correctness fix as well as a saving: the old flat list was built
+        # from raw CSV values (`Relocation issues - Poor housing…`) while every downstream consumer
+        # matches the canonical key (`Relocation Issues - Poor Housing…`). The model was being shown
+        # one form and read in another.
+        # `ensure_ascii=False` is a no-op while no `_ne` field survives the filter — it is here so
+        # that re-adding one cannot silently reintroduce six-bytes-per-character escaping.
+        catalogue_str = json.dumps(catalogue, ensure_ascii=False)
+        
+        # DPG-14.2: this used to build a SECOND client here, shadowing the module-level one,
+        # with its own OPENAI_CLASSIFICATION_TIMEOUT — then guard it with `if not client`, which
+        # could never fire because OpenAI(...) either returns an object or raises. One client
+        # now, shared with every other call site; the classification deadline survives as a
+        # per-request timeout from the registry (TIMEOUT_CLASSIFY, default 120s, with
+        # OPENAI_CLASSIFICATION_TIMEOUT honoured as a deprecated alias).
+        # DPG-14.2 removed a second client built here, shadowing the module one behind a guard that
+        # could never fire. DPG-18 removes the request construction too: model, deadline and
+        # structured-output rung all come from the registry.
+        # ⚠ `interactive` is the caller telling us whether a person is waiting, and the registry
+        # decides what that means in seconds (DPG-15b). A first attempt gets the short deadline so
+        # the conversation is not held open; a retry gets the long one because nobody is watching.
+        settings = get_llm_settings()
+        validated = call_llm(
+            "classify",
+            # ⚠ The schema is built from THIS call's catalogue, so the permitted categories reach
+            # the provider as an enum as well as reaching the model as prose (D-51). On a provider
+            # that honours it the model cannot name a category that does not exist; where it does
+            # not, `resolve_categories` below is what holds.
+            schema=grievance_classification_schema(list(catalogue)),
+            schema_name="grievance_classification",
+            timeout=settings.timeout_classify_interactive if interactive else None,
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to categorize grievances for a grievance form related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {complainant_district} in the province of {complainant_province}. You will be given a grievance text and you will need to categorize it into one or more categories as provided to you. You will also need to summarize the grievance text."},
                 {"role": "user", "content": f"""
                     Step 1:
                     Categorize this grievance: "{grievance_text}"
-                    Only choose from the following categories:
-                    {category_list_str}. The categories response is always in English for consistency. Another process will be used to translate the categories to the language of the grievance for the bot.
+                    Only choose from the keys of the category dictionary given at the end of this message.
+                    The categories response is always in English for consistency, and must reproduce the dictionary key exactly. Another process will be used to translate the categories to the language of the grievance for the bot.
                     Do not create new categories.
                     Reply only with the categories, if many categories apply just list them with a format similar to a list in python:
                     [category 1, category 2, etc] - do not prompt your response yet as stricts instructions for format are providing at the end of the prompt.
-                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories are only coming from the following list: {category_list_str}.
+                    Provice as well a second list of categories that are alternative to the first list, these are categories that are possibly related to the grievance but that you have not picked. They will be used by the complainant to modify the categories. These categories must also be keys of that same dictionary.
                     Step 2: summarize the grievance with simple and direct words so they can be understood by people with limited literacy.
                     For the summary, reply in the language of the grievance eg if the input is in English, reply in English, if the input is in Nepali, reply in Nepali.
                     Step 3: Prepare a follow up question that the complainant can answer to provide more information about the grievance especially quantifying the impact of the grievance (health, economic, etc). Sample questions are provided in the dictionary. The follow up question is in the language of the grievance.
@@ -224,15 +383,93 @@ def classify_and_summarize_grievance(
                         "grievance_categories_alternative": ["Category 3", "Category 4", "Category 5"] in English
                         "follow_up_question": "Follow up question in the language of the grievance"
                     }}
-                    Use the following dictionary to assist you in the classification and prepare the follow up question: {result_dict_str}
+                    Category dictionary — the keys are the only permitted categories, and the values describe each one and give sample follow-up questions: {catalogue_str}
                 """}
             ],
-            model="gpt-5-nano",
         )
 
-        # Parse the response
-        result = parse_llm_response("grievance_response", response.choices[0].message.content.strip(), language_code)
-        return result
+        if not (validated.grievance_summary or validated.grievance_categories):
+            # The model looked at text long enough to summarise and said "not enough information".
+            # ⚠ That is an ANSWER, not an error: `parse_llm_response` turns it into the localized
+            # fallback and no `status` key is set, so `is_failed_classification()` stays False.
+            # Logged with the LENGTH so DPG-23 can count how often it happens — never the narrative.
+            logger.warning(
+                "classify_and_summarize_grievance: the model declined to classify %d chars "
+                "(above the %d-char minimum). Not a failure — the complainant sees the "
+                "'not enough information' response",
+                len((grievance_text or "").strip()),
+                get_llm_settings().min_classify_chars,
+            )
+            # The localized fallback still comes from `parse_llm_response`'s language table — the
+            # one place the four translations live, and exactly what its `"{}"` branch was for.
+            return parse_llm_response("grievance_response", "{}", language_code)
+
+        # ⚠ **The boundary (D-51).** Everything downstream of this line — the review step, the
+        # database write, the ticketing sync, the `high_priority` lookup — assumes a category is a
+        # catalogue KEY, and none of it says so out loud or checks. So it is settled here, once:
+        # values are repaired onto the catalogue where a unique leaf identifies one, and dropped
+        # where nothing does. This used to only log, and store the value anyway.
+        #
+        # ⚠ Both lists, not just the first: `grievance_categories_alternative` is *offered to the
+        # complainant to choose from* at the review step, so an unlisted value there is one they
+        # can actively select.
+        primary = resolve_categories(validated.grievance_categories, catalogue)
+        alternative = resolve_categories(
+            validated.grievance_categories_alternative, catalogue, exclude=primary.kept
+        )
+
+        # Repairs and drops are logged apart because they mean different things. A repair is the
+        # model naming a real category badly. A drop is the model asking for a category that does
+        # not exist — which is a **product signal**, not only a defect: eighteen items asking for
+        # a `Road Hazard` family is how that gap in the taxonomy was found. Keep it greppable.
+        #
+        # ⚠ The values are **truncated** on the way into the log. A dropped value is the one piece
+        # of model output here that no schema constrained, and this module's rule on the parse path
+        # is already "the length, not the narrative" (T-34-c): a model that answers with a phrase
+        # from the complaint must not put it in the Celery log. 80 characters is longer than every
+        # real category key and far shorter than a narrative.
+        def _short(value: object, limit: int = 80) -> str:
+            text = str(value)
+            return text if len(text) <= limit else text[:limit] + "…"
+
+        if primary.repaired or alternative.repaired:
+            logger.info(
+                "classify_and_summarize_grievance: repaired %d category value(s) onto the "
+                "catalogue: %s",
+                len(primary.repaired) + len(alternative.repaired),
+                [(_short(raw), canonical) for raw, canonical in primary.repaired + alternative.repaired],
+            )
+        if primary.dropped or alternative.dropped:
+            logger.warning(
+                "classify_and_summarize_grievance: dropped %d category value(s) that exist "
+                "nowhere in the live catalogue: %s",
+                len(primary.dropped) + len(alternative.dropped),
+                [_short(value) for value in primary.dropped + alternative.dropped],
+            )
+
+        kept = primary.kept
+        alternatives = alternative.kept
+        if not kept and alternatives:
+            # Everything the model chose was unresolvable. Its own second choices are already
+            # here and already resolved, so promoting the first costs nothing and beats storing
+            # no category at all — which is the one real objection to dropping (D-51 "Option A"
+            # loses information on items where the invented value was the only answer).
+            kept, alternatives = alternatives[:1], alternatives[1:]
+            logger.warning(
+                "classify_and_summarize_grievance: no category survived resolution; promoted "
+                "the first alternative instead: %s", kept,
+            )
+
+        # ⚠ Patch the two fields — do not add a key. The whole dict is handed to the database task
+        # as `values`, and `map_fields_between_backend_and_database` resolves every key through a
+        # fixed mapping: an extra one is a KeyError, which the caller turns into a terminal
+        # `LLM_failed` for a classification that actually succeeded.
+        result = validated.model_dump()
+        result["grievance_categories"] = kept
+        result["grievance_categories_alternative"] = alternatives
+        # §31.4 — the model's own output, before it is persisted. Summary only: the categories are
+        # taxonomy keys resolved against the live catalogue, so they cannot carry a name.
+        return _redact_generated_text(result, "grievance_summary")
 
     except Exception as e:
         logger.error(f"Error in classify_and_summarize_grievance: {str(e)}")
@@ -246,6 +483,17 @@ def classify_and_summarize_grievance(
         }
         
         
+class LLMResponseParseError(ValueError):
+    """
+    The model's reply was not JSON.
+
+    A distinct type because the alternative — returning `{}` — is the bug: a parse failure and a
+    legitimately empty result then look identical to every caller, and this codebase was
+    absorbing the difference on its primary AI path. Subclasses `ValueError` so existing
+    `except ValueError` handlers keep working.
+    """
+
+
 def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:
     """
     Parse the LLM response into a structured format.
@@ -279,29 +527,83 @@ def parse_llm_response(type: str, response: str, language_code: str = DEFAULT_LA
             result_dict[field] = result_dict.get(field, "")
         return result_dict
     except json.JSONDecodeError as e:
-        logger.error(f"Error parsing LLM response: {str(e)} - raw response from LLM: {response}")
-        return {}
+        # ⚠ This used to `return {}`, which made a malformed reply **indistinguishable from a
+        # successful empty classification** — the silent failure DPG-13 exists to remove. It now
+        # raises, so each caller's own error contract fires and the difference is visible.
+        # The log carries the response **length, not its content**: the raw body is grievance
+        # narrative (T-34-c, Sprint 3).
+        logger.error(
+            "Error parsing LLM response (%s): %s - response length %d chars",
+            type, str(e), len(response or ""),
+        )
+        raise LLMResponseParseError(
+            f"The model's {type} reply was not valid JSON ({len(response or '')} chars)"
+        ) from e
     
     
 
+def _grievance_ref(input_data: Dict[str, Any]) -> str:
+    """
+    Enough to find the record in the logs, and no more.
+
+    ⚠ The messages this feeds used to interpolate the **whole `input_data`** — the narrative, its
+    summary, the district — into a `ValueError` that the Celery layer then logs. The owner's rule
+    (DPG-19.3): the id plus the first three words is enough to identify a grievance, and the id is
+    the half that actually identifies it.
+
+    Three words of a grievance is still narrative text and could read *"Er. Sharma refused"*. That
+    is a bounded, deliberate trade — and DPG-34's log redaction will see three words instead of a
+    paragraph.
+    """
+    gid = input_data.get("grievance_id") or "unknown grievance"
+    words = (input_data.get("grievance_description") or "").split()[:3]
+    excerpt = " ".join(words)[:60]
+    return f"{gid} (text starts: {excerpt!r})" if excerpt else str(gid)
+
+
 def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Translate a grievance to English using OpenAI API
+    """Translate a grievance to English.
+
+    ⏸ **PARKED — the voice-notes flow** (DPG-19b). Nothing enqueues
+    `translate_grievance_to_english_task`, so `grievance_description_en` / `grievance_summary_en`
+    are not populated by the chatbot. ⚠ **Officers still read English**: the ticketing surface
+    generates it (`generate_case_findings`). Nothing is missing while this is off.
+
     Args:
         grievance_data: Dict containing grievance data: {grievance_id, language_code, grievance_description, grievance_summary, grievance_categories}
     Returns:
         Dict containing translated grievance data: {grievance_id, source_language, translation_method, confidence_score, grievance_description_en, grievance_summary_en, grievance_categories_en}
     """
+    client = _llm_client()
     if not client:
         raise RuntimeError("OpenAI client not available for translation")
+    task = model_for("translate")
+    # DPG-19.3 / D-29: the fix is that the handlers below no longer interpolate `result` at all.
+    # ⚠ A pre-binding `result = {}` was written here first and then removed: with the message
+    # bounded to `_grievance_ref()`, the binding protected nothing, and its mutation check proved
+    # it — deleting the binding left the test green. Dead defensive code that reads as the fix is
+    # worse than no code, because the next person maintains it believing it matters.
     grievance_description = input_data.get('grievance_description')
     grievance_summary = input_data.get('grievance_summary')
     language_code = input_data.get('language_code')
     if not grievance_description or not language_code:
         raise ValueError("grievance_description and language_code are required")
+    if is_too_short_to_process(grievance_description):
+        # DPG-19: same rule as classification. Translating four characters costs a call and
+        # returns nothing useful. (This path is parked with the voice flow — DPG-19b — but the
+        # rule is uniform so it does not need rediscovering on the day it is unparked.)
+        raise ValueError(
+            f"Too short to translate: {_grievance_ref(input_data)} "
+            f"({len(grievance_description.strip())} chars, minimum "
+            f"{get_llm_settings().min_classify_chars})"
+        )
     if not grievance_summary:
         raise Warning("grievance_summary is missing")
     try:
-        response = client.chat.completions.create(
+        translated = call_llm(
+            "translate",
+            schema=GrievanceTranslation,
+            schema_name="grievance_translation",
             messages=[
                 {"role": "system", "content": f"You are an assistant helping to translate grievances to English from {input_data['language_code']}. The grievance is related to road works in rural Nepal. Locations are in Nepal, precisely in the district of {input_data['complainant_district']} in the province of {input_data['complainant_province']}."},
                 {"role": "user", "content": f"""
@@ -319,28 +621,26 @@ def translate_grievance_to_english_LLM(input_data: Dict[str, Any]) -> Dict[str, 
                     }}
                 """}
             ],
-            model="gpt-4",
         )
-        if not response:
-            raise ValueError("No response from OpenAI API")
-        
-        if response.choices[0].message.content == "{}":
-            raise ValueError("Missing information, response from OpenAI is empty or invalid, check input data: {input_data}")
-        
-        # Parse the response
-        result = {}
-        try:
-            result = json.loads(response.choices[0].message.content.strip())
-        except Exception as e:
-            raise ValueError(f"Error parsing LLM response: {str(e)} - input_data: {input_data} - result: {result}")
+        if not (translated.grievance_description_en or translated.grievance_summary_en):
+            raise ValueError(f"Empty translation for {_grievance_ref(input_data)}")
+
+        result = translated.model_dump()
         result["grievance_id"] = input_data["grievance_id"]
         result["source_language"] = input_data["language_code"]
         result["translation_method"] = "LLM"
         result["grievance_categories_en"] = input_data["grievance_categories"]
-        return result
+        # §31.4 — ⚠ this is the summary-producing prompt that is easy to miss. Its own instruction
+        # says "create a new summary from the translated details", so it GENERATES text while
+        # reading as a translation step, and its output is the English summary most likely to reach
+        # a quarterly report. The description is passed too: it is a full translation of the
+        # narrative, so anything the input pass missed is reproduced here in English.
+        return _redact_generated_text(
+            result, "grievance_summary_en", "grievance_description_en"
+        )
     
     except Exception as e:
-        raise ValueError(f"Error translating grievance to English: {str(e)} - input_data: {input_data} - result: {result}")
+        raise ValueError(f"Error translating grievance to English: {_grievance_ref(input_data)}: {e}")
 
 
 def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAGE_CODE) -> Dict[str, Any]:
@@ -352,12 +652,14 @@ def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAG
         Dict with: detected (bool), level ("high"|"medium"|"low"), message (str excerpt or "").
         On parse/LLM failure returns detected=False, level="low", message="".
     """
+    client = _llm_client()
     if not client:
         logger.warning("detect_sensitive_content_llm: OpenAI client not available")
         return {"detected": False, "level": "low", "message": ""}
     if not text or not text.strip():
         logger.debug("detect_sensitive_content_llm: empty text, skipping detection")
         return {"detected": False, "level": "low", "message": ""}
+    detect = model_for("detect")
     try:
         lang_label = "Nepali" if language_code == "ne" else "English"
         logger.debug(
@@ -365,7 +667,10 @@ def detect_sensitive_content_llm(text: str, language_code: str = DEFAULT_LANGUAG
             language_code,
             text_len_for_log("input", text),
         )
-        response = client.chat.completions.create(
+        detection = call_llm(
+            "detect",
+            schema=SensitiveContentDetection,
+            schema_name="sensitive_content_detection",
             messages=[
                 {
                     "role": "system",
@@ -380,18 +685,13 @@ Text: "{text[:2000]}"
 Respond with a JSON object only: {{"detected": true or false, "level": "high" or "medium" or "low", "message": "short excerpt of the relevant part of the text, or empty string if not detected"}}""",
                 },
             ],
-            model="gpt-3.5-turbo",
-            response_format={"type": "json_object"},
         )
-        raw = response.choices[0].message.content.strip()
-        out = json.loads(raw)
-        detected = bool(out.get("detected", False))
-        level = out.get("level", "low")
-        if level not in ("high", "medium", "low"):
-            level = "low"
-        message = out.get("message") or ""
-        if not isinstance(message, str):
-            message = str(message)[:200]
+        # ⚠ The clamps live in the schema now (DPG-13/DPG-18): `SensitiveContentDetection`
+        # NORMALISES an out-of-range level and a non-string message rather than rejecting the
+        # reply. On this path that distinction is the whole point — a model that answers
+        # `level: "critical"` has still told us it detected something, and rejecting the reply
+        # would fail open to `detected: False`, turning a bad label into a missed report.
+        detected, level, message = detection.detected, detection.level, detection.message
         logger.info(
             "detect_sensitive_content_llm: result | detected=%s, level=%s, %s",
             detected,

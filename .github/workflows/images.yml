@@ -1,0 +1,366 @@
+name: Images
+
+# QA-02 — build the stack's images once, here, so no deploy host ever builds one again.
+#
+# On 2026-09-04 a routine `make aws-deploy` ran `docker compose build` on a t4g.medium
+# (3825 MB, no swap, 14 containers) and took staging off the network for 41 minutes. The
+# incident's own logged remedy, second of three, was "stop building on the box and pull a
+# CI-built image (the actual fix)". This is that.
+#
+# Eleven services, two images: ten build the root Dockerfile, grm_ui builds its own.
+#
+# ⚠ **The UI is published TWICE for the same commit.** NEXT_PUBLIC_AUTH_MODE is inlined by
+# the compiler, so the auth mode is a property of the image, not of the runtime:
+#   ui:<sha>          AUTH_MODE=keycloak — the deployable one
+#   ui:<sha>-bypass   AUTH_MODE=bypass   — test only; NO login, identity comes from a cookie
+# `scripts/ci/check_no_bypass_image.sh` (run by ui-checks) refuses a -bypass reference in any
+# compose file describing a real environment. Do not remove one without the other.
+#
+# ⭐ **The `e2e` job lives here too, behind `needs: build`** — it drives a browser against a stack
+# built from the images this workflow just pushed, so its dependency on them is real and is
+# expressed rather than hoped for. It was in `ci.yml` first and skipped every run, racing this
+# build (2026-09-07, run 34063394930).
+
+on:
+  # ⚠ **Deliberately the same trigger set as ci.yml, plus pull_request** — Q-16, answered (a).
+  # The e2e job (QA-05) pulls IMAGE_TAG=<this commit's sha>. If this workflow did not build for
+  # the branch under test, no such tag would exist and that job would fail for a reason having
+  # nothing to do with the change — including on this sprint's own PRs. A narrow trigger here
+  # would be a fresh instance of the defect ci.yml's own header documents: a gate that does not
+  # run on the branches people actually work on.
+  pull_request:
+  push:
+    branches:
+      - main
+      - "integration/**"
+      - "dev/**"
+      - "dpg/**"
+
+# One build at a time per ref, and ⚠ **deliberately NOT cancel-in-progress.**
+#
+# My first version cancelled superseded runs, on the reasoning that these are the most expensive
+# jobs in the pipeline. **That contradicts the decision this workflow exists to serve.** Q-16 was
+# answered `(a)` — build on everything, including pull requests — precisely so that *every commit
+# under test has its own image*. Cancelling breaks that: push X then Y in quick succession and
+# X's images never get built, while `ci.yml` has **no** concurrency group of its own, so X's CI
+# run keeps going. QA-05's e2e job pulls `IMAGE_TAG=<X's sha>`, finds nothing, and fails for a
+# reason having nothing to do with the change — the exact defect Q-16 was answered to prevent.
+#
+# So runs queue instead of cancelling. It costs minutes on a rapid series of pushes; the
+# alternative costs a false red on a gate people are supposed to trust.
+concurrency:
+  group: images-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository }}
+
+  # ⭐ **The architecture dial, deliberately one variable in one place (A-1 / A-10).**
+  #
+  # Staging is a t4g.medium — ARM64. The DOR production host's `uname -m` is still UNVERIFIED:
+  # the owner expects x86_64 and would move staging to match, but has not been able to reach the
+  # box to confirm. Until someone runs `uname -m` there, multi-arch is the only value that works
+  # on both, and it is chosen for that reason and no other.
+  #
+  # **When the answer arrives this is a one-line change**, which is the whole point of it being
+  # a variable: `linux/amd64` alone halves every build, removes the QEMU/buildx manifest work,
+  # and makes the `ubuntu-24.04-arm` runner question (Q-03/A-4) moot, because a standard
+  # ubuntu-latest runner is amd64 and builds it natively.
+  #
+  # ⚠ Cost, measured 2026-09-06 on the real images: app 0.39 GB compressed, ui 0.06 GB. So
+  # ~0.45 GB per commit single-arch, ~0.9 GB multi-arch — before layer sharing, which takes the
+  # *incremental* cost per commit down to the layers that actually changed. See the note on
+  # retention in PROGRESS.md: GHCR does not prune old versions on its own.
+  PLATFORMS: linux/amd64,linux/arm64
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: app
+            context: .
+            dockerfile: Dockerfile
+            suffix: ""
+            build_args: ""
+          - name: ui
+            context: ./channels/ticketing-ui
+            dockerfile: Dockerfile
+            suffix: ""
+            build_args: |
+              NEXT_PUBLIC_AUTH_MODE=keycloak
+          - name: ui
+            context: ./channels/ticketing-ui
+            dockerfile: Dockerfile
+            suffix: "-bypass"
+            build_args: |
+              NEXT_PUBLIC_AUTH_MODE=bypass
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ⚠ **The build context must not contain an env file.** The root Dockerfile is
+      # `COPY . /app`, and until 2026-09-06 the .dockerignore excluded no env file at all — so
+      # any build on a host holding env.local baked 9 secrets into a layer. That was survivable
+      # only while images were never pushed; this workflow pushes them.
+      #
+      # ⭐ This check on its own would be theatre and it is worth saying why: CI's checkout never
+      # has an env.local, so it can only ever pass. The real control is the .dockerignore, fixed
+      # first and verified on the built image below. This is the second control, and it earns
+      # its place only against a future workflow that starts writing an env file before building.
+      - name: The build context carries no env file
+        run: |
+          found="$(find . -maxdepth 2 \( -name 'env.local' -o -name '.env' -o -name '.env.local' \) \
+                    -not -path './node_modules/*' -print)"
+          if [ -n "$found" ]; then
+            echo "ERROR: an env file is present in the build context:"; echo "$found"
+            echo "The root Dockerfile is COPY . /app — this would bake it into a published image,"
+            echo "and a published image cannot be unpublished. See Q-18."
+            exit 1
+          fi
+          echo "OK: no env file in the build context"
+
+      # QEMU is needed whenever a target architecture is not the runner's own. Keyed on "is
+      # amd64 the only target", not on "is there a comma" — PLATFORMS=linux/arm64 alone has no
+      # comma and needs QEMU most of all, and the verification step below runs the image.
+      - uses: docker/setup-qemu-action@v3
+        if: env.PLATFORMS != 'linux/amd64'
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          # The workflow's own token. No new secret is needed to PUSH — a host that PULLS a
+          # private package does need one, which is a separate question (A-11).
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Tags
+        id: tags
+        run: |
+          # ⚠ Truncate the full sha rather than `git rev-parse --short`. On a pull_request the
+          # checkout is the merge commit, so the PR head object may not even be present locally
+          # — and `--short` picks a length based on repository ambiguity, so the two sides could
+          # legitimately disagree on how many characters a tag has. A fixed 7 is deterministic
+          # and computable by anything that knows the sha, which is what QA-05 needs.
+          full="${{ github.event.pull_request.head.sha || github.sha }}"
+          sha="$(echo "$full" | cut -c1-7)"
+          branch="$(echo "${{ github.head_ref || github.ref_name }}" | tr '/' '-')"
+          image="${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}"
+          {
+            echo "sha=$sha"
+            echo "tags=${image}:${sha}${{ matrix.suffix }},${image}:${branch}${{ matrix.suffix }}"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: docker/build-push-action@v6
+        id: build
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.context }}/${{ matrix.dockerfile }}
+          platforms: ${{ env.PLATFORMS }}
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: ${{ matrix.build_args }}
+          # Without a cache the Python image reruns pip install every time, and multi-arch pays
+          # that twice. The cache is not an optimisation here, it is what makes the trigger set
+          # above affordable.
+          cache-from: type=gha,scope=${{ matrix.name }}${{ matrix.suffix }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}${{ matrix.suffix }}
+
+      # ⭐ Verified on the artefact, not inferred from the .dockerignore — the acceptance
+      # criterion says so in those words, and the two are not the same claim.
+      - name: The published image contains no env file
+        run: |
+          img="${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.name }}:${{ steps.tags.outputs.sha }}${{ matrix.suffix }}"
+          echo "inspecting $img"
+          found="$(docker run --rm --entrypoint sh "$img" -c \
+            'ls -a /app 2>/dev/null | grep -E "^\.env$|^\.env\.local$|^env\.local$" || true')"
+          if [ -n "$found" ]; then
+            echo "ERROR: the PUBLISHED image contains an env file: $found"
+            echo "Rotate every secret in it — a published image cannot be unpublished."
+            exit 1
+          fi
+          echo "OK: no env file in the published image"
+
+      - name: Summary
+        run: |
+          {
+            echo "### ${{ matrix.name }}${{ matrix.suffix }}"
+            echo "- tags: \`${{ steps.tags.outputs.tags }}\`"
+            echo "- digest: \`${{ steps.build.outputs.digest }}\`"
+            echo "- platforms: \`${{ env.PLATFORMS }}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── e2e — a browser drives the officer UI and the complainant webchat ────────────────────
+  #
+  # ⚠ **REPORT-ONLY UNTIL 2026-09-21.** `continue-on-error: true` below means a failure here
+  # does not fail the build. That is a two-week bedding-in period for the flakiest kind of job
+  # there is — a full stack plus a browser — and **it expires on that date**, at which point the
+  # flag comes off and the job's context is added to the `Main` ruleset's required checks.
+  #
+  # ⭐ **The date is the control, and this repository knows why.** `ci.yml`'s own header records
+  # a gate that ran on nobody's machine for nine commits, and 27 test files CI never collected.
+  # `continue-on-error` with no expiry is how a gate becomes decoration; tracked as GRM-083 so
+  # the removal is somebody's job rather than a hope.
+  #
+  # What it runs: the images QA-02 published for THIS commit, on an isolated stack QA-03 makes
+  # (own project name, own volumes, own ports), seeded exactly as backend-tests seeds, driven by
+  # the 47 Playwright specs from QA-04.
+  e2e:
+    # ⭐ **`needs: build` is the whole reason this job lives here and not in `ci.yml`.** It pulls
+    # the images the job above just pushed, and the two workflows fire on identical triggers —
+    # so in `ci.yml` it raced the build and skipped, every time (measured 2026-09-07, run
+    # 34063394930: "No image for <sha> yet"). A gate that usually skips is decoration, which is
+    # the failure this repository keeps re-learning. Expressing it as a dependency also costs
+    # nothing: no runner idles waiting, and the ordering cannot drift.
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    # ⚠ Job-scoped, NOT workflow-scoped. A workflow-level group would cancel backend-tests and
+    # the rest too — a behaviour change to this repo's main gate that QA-05 never asked for.
+    # Only the full-stack job is expensive enough to be worth cancelling, and only it is
+    # cancelled. (images.yml deliberately does NOT cancel: every commit under test needs its
+    # own image, which is what Q-16 was answered to guarantee.)
+    concurrency:
+      group: e2e-${{ github.ref }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Can this commit be tested at all? ──────────────────────────────────────────────
+      # ⚠ **Skip cleanly, never fail.** A commit with no usable image is not a broken change,
+      # and a red X for that reason teaches people to ignore red X's — the precedent is
+      # `dpg-platform-independence`, which emits a `::notice` for the same reason.
+      # `needs: build` already guarantees the images exist, so what is left here is the case
+      # `needs` cannot cover: **no package read access**, i.e. a fork PR. Kept as a check on
+      # availability rather than on token presence, because QA-05 is explicit that gating on
+      # the token alone is the wrong test.
+      - name: Resolve the image tag for this commit
+        id: img
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          sha="$(echo "${{ github.event.pull_request.head.sha || github.sha }}" | cut -c1-7)"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          registry="ghcr.io/${{ github.repository }}"
+          echo "looking for $registry/app:$sha and $registry/ui:$sha-bypass"
+          if ! echo "$GH_TOKEN" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin 2>/dev/null; then
+            echo "::notice title=e2e skipped::No package access (fork PR?). Nothing to test against."
+            echo "runnable=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if docker manifest inspect "$registry/app:$sha" >/dev/null 2>&1 \
+             && docker manifest inspect "$registry/ui:$sha-bypass" >/dev/null 2>&1; then
+            echo "runnable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=e2e skipped::No image for $sha despite needs:build succeeding — that is a real inconsistency, not a race. Check the build job's push step."
+            echo "runnable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.img.outputs.runnable == 'true'
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: channels/ticketing-ui/package-lock.json
+
+      - name: Install UI dependencies + browsers
+        if: steps.img.outputs.runnable == 'true'
+        working-directory: channels/ticketing-ui
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      # A CI stack has no SOPS key and should not: an e2e stack has no business holding
+      # production credentials. This writes the same file shape from .env.shared with
+      # obviously-fake values — see the script's header.
+      - name: Test-only env.local
+        if: steps.img.outputs.runnable == 'true'
+        run: bash scripts/ci/gen_env_local_ci.sh
+
+      # QA-03's target. `-full` because QA-04d drives the webchat, which needs the chatbot half
+      # plus nginx — and nginx serves the webchat from the CHECKOUT, not from an image.
+      # UI_IMAGE_TAG is what lets the bypass UI run beside app:<sha> (QA-02 / Q-17).
+      - name: Bring up an isolated, seeded stack
+        if: steps.img.outputs.runnable == 'true'
+        env:
+          COMPOSE_PROJECT_NAME: grm_ci_${{ github.run_id }}
+          IMAGE_TAG: ${{ steps.img.outputs.sha }}
+          UI_IMAGE_TAG: ${{ steps.img.outputs.sha }}-bypass
+          IMAGE_REGISTRY: ghcr.io/${{ github.repository }}
+        run: make ephemeral-up-full EPHEMERAL_PROJECT=grm_ci_${{ github.run_id }}
+
+      # ⚠ Assert the stack is what the suite needs BEFORE running 47 specs against it. A
+      # Keycloak-built UI fails every one of them with an OIDC redirect, which reads like 47
+      # broken tests rather than one wrong image.
+      - name: The UI really is the bypass build
+        if: steps.img.outputs.runnable == 'true'
+        run: |
+          who="$(curl -sf --max-time 30 \
+            --cookie 'grm_bypass_user={"user_id":"grc-chair@grm.local","role_keys":["x"],"organization_id":"DOR"}' \
+            http://localhost:13001/api/v1/users/me/session | python3 -c 'import json,sys; print(json.load(sys.stdin).get("user_id",""))')"
+          if [ "$who" != "grc-chair@grm.local" ]; then
+            echo "ERROR: the cookie resolved to '$who', not grc-chair@grm.local."
+            echo "This stack is not running an AUTH_MODE=bypass UI — check UI_IMAGE_TAG."
+            exit 1
+          fi
+          echo "OK: bypass UI confirmed (cookie -> $who)"
+
+      # ⚠ **`E2E_TICKETING_API_KEY` is read from the generated env.local, not written here.**
+      # The flow specs create their own tickets through the intake webhook, which needs the
+      # stack's `x-api-key`. On a stack with **no** secret configured any value passes (the
+      # documented dev-bypass branch), which is why this was not needed locally — but
+      # `gen_env_local_ci.sh` *does* set one, so the comparison branch applies and the fixture's
+      # default key gets a 401. Measured 2026-09-07, run 34063762797: 43 passed, 4 failed, all
+      # four the ticket-creating flows. Deriving it from the file the stack actually uses means
+      # the two cannot drift; hard-coding the literal here would be a second copy waiting to.
+      - name: Playwright
+        if: steps.img.outputs.runnable == 'true'
+        working-directory: channels/ticketing-ui
+        env:
+          E2E_BASE_URL: http://localhost:13001
+          E2E_API_BASE_URL: http://localhost:15002
+          E2E_WEBCHAT_URL: http://localhost:18081/rest-webchat/
+        run: |
+          key="$(grep '^TICKETING_SECRET_KEY=' ../../env.local | cut -d= -f2-)"
+          if [ -z "$key" ]; then
+            echo "::warning::TICKETING_SECRET_KEY is empty in env.local — the intake webhook will accept any key (dev-bypass branch)."
+          fi
+          E2E_TICKETING_API_KEY="$key" npx playwright test
+
+      # ⚠ `always()`, and container logs matter MOST on the runs where the suite never started.
+      # A readiness failure with no logs is the least debuggable thing a pipeline can produce.
+      - name: Container logs
+        if: always() && steps.img.outputs.runnable == 'true'
+        run: |
+          mkdir -p /tmp/stack-logs
+          for svc in db redis ticketing_api grm_ui orchestrator backend nginx grm_celery; do
+            docker logs "grm_ci_${{ github.run_id }}-$svc-1" > "/tmp/stack-logs/$svc.log" 2>&1 || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.img.outputs.runnable == 'true'
+        with:
+          name: e2e-artifacts-${{ github.run_id }}
+          path: |
+            channels/ticketing-ui/test-results/
+            channels/ticketing-ui/playwright-report/
+            /tmp/stack-logs/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # ⚠ `always()` — including on a cancelled run, which is the case that leaks volumes.
+      - name: Tear down
+        if: always()
+        run: make ephemeral-down EPHEMERAL_PROJECT=grm_ci_${{ github.run_id }} || true

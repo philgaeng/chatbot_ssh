@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
+
 """Generate sample images for compression tests (no PII). Run after pyvips is installed."""
 
 from pathlib import Path

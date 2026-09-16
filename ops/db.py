@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 DB engine/session for the ops monitor (connects as scoped `ops_app` role).
 

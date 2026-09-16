@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /**
  * GRM API proxy — /api/v1/* → TICKETING_API_URL/api/v1/*
  *
@@ -7,12 +9,13 @@
  *
  * Browser only needs port 3001. No CORS issues.
  *
- * Dev-bypass identity: when NEXT_PUBLIC_BYPASS_AUTH=true the browser sets
+ * Dev-bypass identity: in a bypass build (AUTH_MODE=bypass) the browser sets
  * a `grm_bypass_user` cookie (JSON: {user_id, role_keys[], organization_id?}).
  * This proxy injects X-Internal-User-Id / X-Internal-Role / optional
  * X-Internal-Organization-Id so the backend matches the selected roster officer.
  */
 import { type NextRequest, NextResponse } from "next/server";
+import { AUTH_BYPASS } from "@/lib/auth/runtime-config";
 
 const UPSTREAM = process.env.TICKETING_API_URL ?? "http://localhost:5002";
 
@@ -46,11 +49,10 @@ async function proxy(
     fwdHeaders.set(k, v);
   }
 
-  // Dev-bypass identity (demo build only): grm_bypass_user from BypassRoleSwitcher.
-  // On auth builds (NEXT_PUBLIC_BYPASS_AUTH=false) ignore stale demo cookies — otherwise
-  // Keycloak mode rejects x-internal-user-id without x-api-key (401).
-  const bypassAuth = process.env.NEXT_PUBLIC_BYPASS_AUTH === "true";
-  const bypassCookieRaw = bypassAuth ? req.cookies.get("grm_bypass_user")?.value : undefined;
+  // Dev-bypass identity (bypass build only): grm_bypass_user from BypassRoleSwitcher.
+  // On keycloak builds ignore stale demo cookies — otherwise Keycloak mode rejects
+  // x-internal-user-id without x-api-key (401).
+  const bypassCookieRaw = AUTH_BYPASS ? req.cookies.get("grm_bypass_user")?.value : undefined;
   if (bypassCookieRaw) {
     try {
       const identity = JSON.parse(bypassCookieRaw) as {

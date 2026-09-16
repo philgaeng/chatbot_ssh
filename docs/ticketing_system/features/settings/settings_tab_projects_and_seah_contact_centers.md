@@ -1,5 +1,8 @@
 # Settings tab (Ticketing / management): Projects + SEAH contact centers
 
+**Status:** live specification (tier 1) — authoritative for what the system does today.
+**Last updated:** 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+
 ## Purpose
 
 This document is the **product + engineering contract** for a **Settings** area in the **Ticketing / management** application (separate from the chatbot UI, but sharing the same Postgres database). It covers:
@@ -16,8 +19,8 @@ It is written so a ticketing-team engineer can implement the tab without re-deri
 | [`features/projects_catalog_admin_layers_and_settings.md`](../projects_catalog_admin_layers_and_settings.md) | Country-agnostic project columns, JSON alignment rule |
 | [`10_settings_overview.md`](../../10_settings_overview.md) | Ticketing Settings index — **not** the same as `public.projects` |
 | [`13_projects_and_packages.md`](../../13_projects_and_packages.md) | GRM `ticketing.projects` (workflows, packages, go-live) |
-| [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../../../sprints/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md) | Catalog behavior, `project_uuid`, outro |
-| [`docs/Refactor specs/April20_seah/10_seah_db_migration_inventory.md`](../../../sprints/Refactor specs/April20_seah/10_seah_db_migration_inventory.md) | DB inventory and rollout notes |
+| [`docs/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md`](../../../sprints/archive/Refactor specs/April20_seah/08_seah_outro_and_project_catalog.md) | Catalog behavior, `project_uuid`, outro |
+| [`docs/Refactor specs/April20_seah/10_seah_db_migration_inventory.md`](../../../sprints/archive/Refactor specs/April20_seah/10_seah_db_migration_inventory.md) | DB inventory and rollout notes |
 | `backend/services/database_services/postgres_services.py` | `find_seah_contact_point`, `_ensure_seah_contact_points_table` |
 | `backend/actions/action_seah_outro.py` | Consumes `seah_contact_points` + complainant slots |
 | `scripts/database/seeds/projects_demo.csv` | Example **projects** CSV (column order) |

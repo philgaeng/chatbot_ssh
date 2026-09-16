@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 "use client";
 
 export interface ClosureCaseHeader {
@@ -96,7 +98,7 @@ export function ClosureSummaryBody({
               }
             />
             <MetaRow label="SLA breached" value={officerMetrics.sla_breached_yn} />
-            <MetaRow label="Resolution category" value={officerMetrics.resolution_category} />
+            <MetaRow label="Resolution action" value={officerMetrics.resolution_category} />
             <MetaRow label="Instance" value={officerMetrics.instance} />
             {officerMetrics.location_display && (
               <MetaRow label="Location" value={officerMetrics.location_display} />

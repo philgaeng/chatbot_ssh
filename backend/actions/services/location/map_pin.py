@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Pure map-pin location helpers (payload parsing + contact-slot prefills).
 
 Extracted from ``backend.actions.action_map_location`` so the Rasa actions keep

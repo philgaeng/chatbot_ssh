@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Shared outro actions for grievance and SEAH flows."""
 import asyncio
 from typing import Any, Dict, List, Text
@@ -8,6 +10,7 @@ from rasa_sdk.events import SlotSet
 from rasa_sdk.types import DomainDict
 
 from backend.actions.base_classes.base_classes import BaseAction
+from backend.services.db_debug_log import grievance_row_summary
 from backend.actions.action_submit_grievance import BaseActionSubmit
 from backend.actions.forms.form_dust import is_dust_intake
 from backend.actions.utils.utterance_mapping_rasa import get_utterance_base
@@ -140,8 +143,23 @@ class ActionGrievanceOutro(BaseActionSubmit):
             grievance_data = self._prepare_grievance_outro_data(tracker)
             self.db_manager.submit_grievance_to_db(grievance_data)
             self.logger.debug(
-                f"action_grievance_outro - grievance data saved to the database: {grievance_data}"
+                "action_grievance_outro - grievance saved: %s",
+                grievance_row_summary(grievance_data),
             )
+
+            # ⚠ Read the sensitivity flag back from the DB rather than trusting the
+            # slot. The slot can hold the KEYWORD detector's answer while the async model
+            # detector has already written True — that exact staleness is D-64, which
+            # silently routed a harassment report to the ordinary queue. The column only
+            # ever escalates, so the stored value is the authoritative one. A failed read
+            # leaves the key ABSENT, and the admin send treats absent as sensitive.
+            stored = self.db_manager.get_grievance_core_by_id(grievance_id) if grievance_id else None
+            if stored is not None:
+                grievance_data["grievance_sensitive_issue"] = bool(
+                    stored.get("grievance_sensitive_issue")
+                )
+            elif grievance_id:
+                grievance_data.pop("grievance_sensitive_issue", None)
 
             await self.send_recap_email_to_admin(
                 grievance_data, "GRIEVANCE_RECAP_ADMIN_BODY", dispatcher

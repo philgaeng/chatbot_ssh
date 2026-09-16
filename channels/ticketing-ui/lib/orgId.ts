@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+
 /** Client-side preview of organization_id (aligned with ticketing API rules). */
 
 const ORG_NAME_TOKEN_RE = /[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\b)|\d+/g;

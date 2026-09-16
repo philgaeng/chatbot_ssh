@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: Apache-2.0
 
 import os
 import sys
@@ -106,6 +107,28 @@ def enable_pgcrypto_extension() -> bool:
         logger.error(f"❌ Failed to enable pgcrypto extension: {str(e)}")
         return False
 
+def run_public_migrations() -> bool:
+    """Migrate-before-start: apply the public Alembic stream so all public.*
+    tables exist before init_database() seeds reference data.
+
+    Public.* DDL is owned exclusively by migrations/public (CL-01) — the app no
+    longer creates tables at startup. The ticketing.* and ops.* streams are
+    migrated by their own bring-up steps (see Makefile migrate_all / CI).
+    """
+    import subprocess
+
+    logger.info("Applying public Alembic migrations (migrations/public) ...")
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", "migrations/public/alembic.ini", "upgrade", "head"],
+        cwd=PROJECT_ROOT,
+    )
+    if result.returncode != 0:
+        logger.error("Public Alembic migration failed (exit %s)", result.returncode)
+        return False
+    logger.info("Public Alembic migrations applied")
+    return True
+
+
 def check_database_connection(max_retries: int, retry_delay: int) -> bool:
     """Check database connection with retries"""
     max_retries = max_retries or config['DB_CONNECTION_RETRIES']
@@ -158,9 +181,9 @@ def verify_database_setup() -> bool:
     try:
         # Check if required tables exist
         required_tables = [
-            'users', 'grievances', 'grievance_statuses', 'processing_statuses', 
+            'grievances', 'grievance_statuses', 'processing_statuses',
             'task_statuses', 'field_names', 'tasks', 'grievance_status_history',
-            'grievance_history', 'file_attachments', 'grievance_voice_recordings',
+            'file_attachments', 'grievance_voice_recordings',
             'grievance_transcriptions', 'grievance_translations', 'task_entities'
         ]
         
@@ -239,7 +262,11 @@ def main():
             if not enable_pgcrypto_extension():
                 logger.warning("Failed to enable pgcrypto extension - continuing without encryption")
 
-        # Initialize database with retry mechanism
+        # Migrate-before-start: create public.* schema via Alembic before seeding.
+        if not run_public_migrations():
+            raise DatabaseInitError("Public Alembic migration failed")
+
+        # Seed reference/lookup data (init_database no longer creates tables).
         if not init_database_with_retry(args.retries, args.delay):
             raise DatabaseInitError("Failed to initialize database")
 

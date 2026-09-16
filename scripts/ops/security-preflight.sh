@@ -36,10 +36,12 @@ getenv() { grep -E "^$1=" "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2- | sed
 echo "== Security preflight ($(date -u +%FT%TZ)) =="
 [[ -f "$ENV_FILE" ]] || fail "env file not found: $ENV_FILE"
 
-# 1. Bypass-auth must be off; demo profile not active.
-BYPASS="$(getenv NEXT_PUBLIC_BYPASS_AUTH)"
-[[ "$BYPASS" == "true" ]] && fail "NEXT_PUBLIC_BYPASS_AUTH=true (demo bypass)" || pass "bypass-auth not enabled"
-case " ${COMPOSE_PROFILES:-} " in *" demo "*) fail "COMPOSE_PROFILES includes 'demo'";; *) pass "demo profile not active";; esac
+# 1. Auth must be keycloak and env non-dev (dev bypass is honoured only when
+#    APP_ENV=dev AND AUTH_MODE=bypass — production can never bypass).
+APP_ENV_V="$(getenv APP_ENV)"
+AUTH_MODE_V="$(getenv AUTH_MODE)"
+[[ "$AUTH_MODE_V" == "bypass" ]] && fail "AUTH_MODE=bypass (demo bypass)" || pass "AUTH_MODE not bypass"
+[[ "$APP_ENV_V" == "dev" ]] && fail "APP_ENV=dev (not a deployed environment)" || pass "APP_ENV not dev"
 
 # 2. Keycloak issuer set.
 [[ -n "$(getenv KEYCLOAK_ISSUER)" ]] && pass "KEYCLOAK_ISSUER set" || fail "KEYCLOAK_ISSUER empty"
@@ -54,9 +56,51 @@ for k in REDIS_PASSWORD TICKETING_SECRET_KEY MESSAGING_API_KEY KEYCLOAK_WEBHOOK_
   fi
 done
 
-# 4. POSTGRES_PASSWORD != default.
+# 4. POSTGRES_PASSWORD: non-default in the env file, AND actually reaching the containers.
+#
+# ⚠ The second half is the point. This check read only $ENV_FILE for months and passed
+# the whole time, while eleven compose services set POSTGRES_PASSWORD in their own
+# `environment:` blocks — which override `env_file:` — so the value it was asserting on
+# was read by nobody and every deployed database ran as `user`/`password`. A gate that
+# reports green on a variable nothing consumes is worse than no gate, because it is
+# quoted as evidence. Checking the env file alone cannot detect that; checking the
+# compose files for a literal is what detects it, and needs no running stack.
 PG="$(getenv POSTGRES_PASSWORD)"
-[[ "$PG" == "password" || -z "$PG" ]] && fail "POSTGRES_PASSWORD is default/empty" || pass "POSTGRES_PASSWORD non-default"
+[[ "$PG" == "password" || -z "$PG" ]] && fail "POSTGRES_PASSWORD is default/empty in $ENV_FILE" || pass "POSTGRES_PASSWORD non-default in $ENV_FILE"
+
+# 4b. No compose file may pin the DB credentials to a literal — that makes $ENV_FILE inert.
+#     A value is acceptable only if it interpolates (`${VAR...}`); anything else is a literal.
+CRED_KEYS='POSTGRES_PASSWORD|POSTGRES_USER|POSTGRES_DB|KC_DB_PASSWORD|KC_DB_USERNAME'
+hardcoded=0
+for f in $COMPOSE_FILES; do
+  [[ -f "$f" ]] || continue
+  while IFS= read -r hit; do
+    [[ -n "$hit" ]] || continue
+    fail "$f hardcodes a DB credential (overrides env_file, making $ENV_FILE inert): ${hit%%:*}"
+    hardcoded=1
+  done < <(grep -nE "^[[:space:]]+($CRED_KEYS):[[:space:]]*[^\$[:space:]]" "$f" || true)
+  # DATABASE_URL with inline credentials is the same defect wearing a URL.
+  while IFS= read -r hit; do
+    [[ -n "$hit" ]] || continue
+    fail "$f embeds credentials in DATABASE_URL: ${hit%%:*}"
+    hardcoded=1
+  done < <(grep -nE "^[[:space:]]+DATABASE_URL:[[:space:]]*[a-z+]+://[^$]*:[^$@]*@" "$f" || true)
+done
+(( hardcoded == 0 )) && pass "no compose file hardcodes DB credentials"
+
+# 4c. Best effort, and only when a stack is up: what a container holds must match $ENV_FILE.
+#     Hashes are compared so no secret is ever printed or logged.
+if command -v docker >/dev/null 2>&1 && [[ -n "$PG" ]]; then
+  cf=""; for f in $COMPOSE_FILES; do [[ -f "$f" ]] && cf="$cf -f $f"; done
+  live="$(docker compose --env-file "$ENV_FILE" $cf exec -T backend printenv POSTGRES_PASSWORD 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "$live" ]]; then
+    echo "  SKIP: container check (no running backend) — 4b still covers the literal case"
+  elif [[ "$(printf %s "$live" | sha256sum)" == "$(printf %s "$PG" | sha256sum)" ]]; then
+    pass "the running backend holds $ENV_FILE's POSTGRES_PASSWORD"
+  else
+    fail "the running backend's POSTGRES_PASSWORD differs from $ENV_FILE — $ENV_FILE is inert"
+  fi
+fi
 
 # 5. CORS allowlist not '*'.
 CORS="$(getenv CORS_ALLOWED_ORIGINS)"

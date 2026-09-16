@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """
 HTTP client for the Backend Messaging API (POST /api/messaging/send-sms, send-email).
 

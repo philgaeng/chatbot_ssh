@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 """Sensitive content detection during grievance text intake."""
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from rasa_sdk.executor import CollectingDispatcher
 
 def trigger_detect_sensitive_content_task(
     logger: Any,
-    text: str,
+    text: str,  # noqa: ARG001 - retained for call-site compatibility; NOT transported (DPG-34)
     language_code: str,
     *,
     grievance_id: Optional[str] = None,
@@ -30,8 +32,14 @@ def trigger_detect_sensitive_content_task(
         try:
             from backend.task_queue.registered_tasks import detect_sensitive_content_task
 
+            # ⚠ `text=` is DELIBERATELY NOT SENT (DPG-34 step 3). It put the grievance
+            # narrative — harassment disclosures included — into Redis, which snapshots to
+            # disk (D-63). The task reads it from Postgres by `grievance_id`.
+            #
+            # ⚠ `persist_grievance_description_for_detection` must be called BEFORE this, and
+            # it is best-effort — so the task retries on a missing row and then fails
+            # terminally with a log rather than skipping the check in silence.
             detect_sensitive_content_task.delay(
-                text=text,
                 language_code=language_code,
                 grievance_id=grievance_id,
                 session_id=session_id,

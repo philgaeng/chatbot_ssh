@@ -1,9 +1,12 @@
+// SPDX-License-Identifier: Apache-2.0
+
 // GRM Ticketing API client
 // All requests use relative paths (/api/v1/...) so they are proxied through
 // the Next.js server rewrites → ticketing_api:5002 (see next.config.ts).
 // This avoids CORS issues and means the browser only needs port 3001.
 
-import { handleSessionExpired, isSessionExpiredResponse } from "./auth/session-expired";
+import { handleSessionExpired, isAccessTokenExpiringSoon } from "./auth/session-expired";
+import { refreshTokens } from "./auth/oidc-auth";
 import { projectsForOrganization } from "./officerJurisdiction";
 
 const BASE = "";
@@ -115,6 +118,44 @@ export interface TicketDetail extends TicketListItem {
   complainant_reply_owner_id: string | null;
   /** Step supervisor role configured and at least one officer resolvable in scope. */
   step_supervisor_available?: boolean;
+  /**
+   * GRM-116: what an officer may record as done on this case — its workflow's selection from the
+   * resolution-action catalog. **Empty for a sensitive workflow**, whose cases record no action.
+   */
+  resolution_options?: ResolutionOption[];
+  /**
+   * GRM-117: who can be named as having taken the action — the officer's own office(s), the
+   * organizations on this case's project, and the fixed outside bodies. **All empty on a sensitive
+   * workflow**, whose cases record no actor.
+   */
+  resolution_self_offices?: OrganizationChoice[];
+  resolution_office_suggestions?: OrganizationChoice[];
+  resolution_external_actors?: ExternalActor[];
+}
+
+export interface OrganizationChoice {
+  organization_id: string;
+  name: string;
+}
+
+export interface ExternalActor {
+  key: string;
+  label: string;
+}
+
+export type ResolutionActorKind = "self" | "organization" | "external";
+
+/** The actor fields of a RESOLVE — never a label: the server computes it (GRM-117). */
+export interface ResolutionActorPayload {
+  resolution_actor_kind: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
+}
+
+export interface ResolutionOption {
+  code: string;
+  label: string;
+  default_wording: string;
 }
 
 export interface SlaStatus {
@@ -172,6 +213,17 @@ export interface WorkflowStep {
   informed_roles: string[];
   observer_roles: string[];
   informed_pii_access: boolean;
+  actor_can_reassign?: boolean;
+  /** The author's name for each job at this level (doc 12 §6.2). Absent tier → fall back to
+   *  the bound role's display name, then the generic word. Never show a generic word when a
+   *  label exists (doc 13 §5A.1). */
+  tier_labels?: Record<string, { label: string; description?: string }>;
+  /** Non-actor tiers the author marked mandatory. The actor is always required and is never
+   *  listed here. Drives go-live's level-staffing gate. */
+  required_tiers?: string[];
+  /** Is this level staffed package by package (true) or once for the project (false)? Set by the
+   *  workflow author, so a typed project inherits it and cannot deviate. */
+  staff_per_package?: boolean;
   is_deleted?: boolean;
   workflow_id?: string;
   created_at?: string;
@@ -197,6 +249,11 @@ export interface WorkflowDefinition {
   version: number;
   is_template: boolean;
   template_source_id: string | null;
+  /** GRM-122: the organization it belongs to — decides which resolution actions it can offer. */
+  owner_organization_id?: string | null;
+  owner_name?: string | null;
+  /** Only on GET /workflows/{id}: names of the projects bound to it. */
+  used_by_projects?: string[];
   steps: WorkflowStep[];
   assignments: WorkflowAssignmentItem[];
   created_at: string;
@@ -217,7 +274,17 @@ function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
+async function apiFetch<T>(path: string, opts?: RequestInit, retried = false): Promise<T> {
+  // Proactive refresh: renew a token that expires within 60s *before* the request,
+  // so an officer mid-task never eats an avoidable 401. Single-flight in
+  // refreshTokens() collapses a burst of these into one token-endpoint POST.
+  if (!retried && typeof window !== "undefined") {
+    const token = window.localStorage.getItem("grm_access_token");
+    if (token && isAccessTokenExpiringSoon(token, 60)) {
+      await refreshTokens();
+    }
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...authHeaders(),
@@ -225,14 +292,50 @@ async function apiFetch<T>(path: string, opts?: RequestInit): Promise<T> {
   };
   const resp = await fetch(`${BASE}${path}`, { ...opts, headers, credentials: "include" });
   if (!resp.ok) {
-    const body = await resp.text();
-    if (isSessionExpiredResponse(resp.status, body)) {
-      handleSessionExpired();
+    // 401 = unauthenticated (expired/invalid token); permission failures are 403.
+    // Try a silent refresh + one retry before bouncing the officer to /login.
+    if (resp.status === 401) {
+      if (!retried) {
+        const refreshed = await refreshTokens();
+        if (refreshed) return apiFetch<T>(path, opts, true);
+      }
+      handleSessionExpired(); // no refresh token, or the retry still 401 — throws
     }
+    const body = await resp.text();
     throw new Error(`API ${resp.status} ${path}: ${body}`);
   }
   if (resp.status === 204) return undefined as T;
   return resp.json() as Promise<T>;
+}
+
+/**
+ * Give the blob/multipart fetch sites the same OIDC lifecycle apiFetch has.
+ *
+ * These sites can't go through apiFetch: they need the raw `Response` (blob) or a
+ * `FormData` body apiFetch's JSON path doesn't handle. So they used to hard-logout on any
+ * 401 (`isSessionExpiredResponse` → `handleSessionExpired`), losing an in-flight upload's
+ * file selection on a long-idle tab. This wraps a request thunk with:
+ *   1. proactive refresh (token expiring within 60s) — same single-flight as apiFetch;
+ *   2. `401 → refresh → retry-once` before bouncing to /login.
+ *
+ * `makeRequest` is re-invoked on the retry, so it MUST read the token (via `authHeaders()`)
+ * and rebuild any `FormData` at call time — the refreshed token is then applied and the
+ * multipart parts (File/FormData are re-readable) are re-sent intact.
+ */
+async function authedFetch(makeRequest: () => Promise<Response>): Promise<Response> {
+  if (typeof window !== "undefined") {
+    const token = window.localStorage.getItem("grm_access_token");
+    if (token && isAccessTokenExpiringSoon(token, 60)) {
+      await refreshTokens();
+    }
+  }
+  let resp = await makeRequest();
+  if (resp.status === 401) {
+    const refreshed = await refreshTokens();
+    if (refreshed) resp = await makeRequest();
+    if (resp.status === 401) handleSessionExpired(); // throws (redirects to /login)
+  }
+  return resp;
 }
 
 // ── Ticket endpoints ──────────────────────────────────────────────────────────
@@ -457,6 +560,9 @@ export interface ActionPayload {
   action_type: string;
   note?: string;
   resolution_category?: string;
+  resolution_actor_kind?: ResolutionActorKind;
+  resolution_actor_organization_id?: string;
+  resolution_actor_external?: string;
   assign_to_user_id?: string;
   grc_hearing_date?: string;
   escalation_date?: string;
@@ -594,11 +700,14 @@ export function listWorkflows(filters?: {
   workflow_type?: string;
   status?: string;
   is_template?: boolean;
+  /** GRM-122: only those owned by this organization or one above it (a new workflow's templates). */
+  for_organization_id?: string;
 }): Promise<{ items: WorkflowDefinition[]; total: number }> {
   const p = new URLSearchParams();
   if (filters?.workflow_type) p.set("workflow_type", filters.workflow_type);
   if (filters?.status) p.set("status", filters.status);
   if (filters?.is_template !== undefined) p.set("is_template", String(filters.is_template));
+  if (filters?.for_organization_id) p.set("for_organization_id", filters.for_organization_id);
   const qs = p.toString();
   return apiFetch(`/api/v1/workflows${qs ? `?${qs}` : ""}`);
 }
@@ -613,6 +722,8 @@ export interface WorkflowCreatePayload {
   description?: string;
   clone_from_id?: string;
   is_template?: boolean;
+  /** GRM-122: required from a platform admin; an org admin's defaults to its own organization. */
+  owner_organization_id?: string;
 }
 
 export function createWorkflow(payload: WorkflowCreatePayload): Promise<WorkflowDefinition> {
@@ -621,6 +732,72 @@ export function createWorkflow(payload: WorkflowCreatePayload): Promise<Workflow
 
 export function getWorkflow(workflowId: string): Promise<WorkflowDefinition> {
   return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}`);
+}
+
+// ── GRM-119: a workflow's resolution panel ───────────────────────────────────
+
+export interface ResolutionActionRow {
+  code: string;
+  label: string;
+  default_wording: string;
+  /** Set on a local action: the shared action it counts as in national reports. */
+  counts_as_code?: string | null;
+  counts_as_label?: string | null;
+  /** The viewer manages the action's organization. */
+  can_edit: boolean;
+  /** Workflows offering it — an edit applies to all of them. */
+  used_by_count: number;
+}
+
+export interface WorkflowResolutionPanel {
+  actions: ResolutionActionRow[];
+  /** The viewer manages the workflow's organization (and the workflow is not sensitive). */
+  can_change: boolean;
+  max: number;
+  /** The shared actions of the workflow's ministry — what a new local action may count as. */
+  national_choices: { code: string; label: string }[];
+  can_create_national: boolean;
+  is_sensitive: boolean;
+  /** The workflow belongs to a ministry itself: a new action is national and asks no "counts as". */
+  owner_is_ministry: boolean;
+}
+
+export function getWorkflowResolutionPanel(workflowId: string): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`);
+}
+
+export function listAvailableResolutionActions(workflowId: string, q?: string): Promise<ResolutionActionRow[]> {
+  const qs = q && q.trim() ? `?q=${encodeURIComponent(q.trim())}` : "";
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/available${qs}`);
+}
+
+export function setWorkflowResolutionActions(workflowId: string, codes: string[]): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions`, { method: "PUT", body: JSON.stringify({ codes }) });
+}
+
+export function createWorkflowResolutionAction(
+  workflowId: string,
+  body: { label: string; default_wording: string; counts_as_code?: string; national?: boolean },
+): Promise<WorkflowResolutionPanel> {
+  return apiFetch(`/api/v1/workflows/${workflowId}/resolution-actions/new`, { method: "POST", body: JSON.stringify(body) });
+}
+
+export function updateResolutionAction(
+  code: string,
+  body: { label?: string; default_wording?: string; counts_as_code?: string },
+): Promise<ResolutionActionRow> {
+  return apiFetch(`/api/v1/resolution-actions/${encodeURIComponent(code)}`, { method: "PATCH", body: JSON.stringify(body) });
+}
+
+/**
+ * GRM-122: move a workflow or template to another organization. Refused (422) while its resolution
+ * actions include one the new organization cannot use — the detail names each, one per line.
+ */
+export function changeWorkflowOrganization(workflowId: string, organizationId: string): Promise<WorkflowDefinition> {
+  return apiFetch<WorkflowDefinition>(`/api/v1/workflows/${workflowId}/organization`, {
+    method: "PATCH",
+    body: JSON.stringify({ organization_id: organizationId }),
+  });
 }
 
 export function saveWorkflowAsTemplate(
@@ -651,17 +828,30 @@ export function deleteWorkflow(id: string): Promise<void> {
 
 export interface StepPayload {
   display_name: string;
-  assigned_role_key: string;
+  // Optional now: the tier-toggle editor omits it (Actor auto-minted a synthetic per-step key).
+  assigned_role_key?: string;
   step_key?: string;
   response_time_hours?: number | null;
   resolution_time_days?: number | null;
   stakeholders?: string[] | null;
   expected_actions?: string[] | null;
-  // Spec 12 tier model fields
+  // Spec 12 tier model fields (legacy named-key path)
   supervisor_role?: string | null;
   informed_roles?: string[];
   observer_roles?: string[];
   informed_pii_access?: boolean;
+  actor_can_reassign?: boolean;
+  // Tier-toggle editor (DESIGN-cast-model §3.5): on/off toggles → backend mints synthetic keys.
+  supervisor_enabled?: boolean;
+  participants_enabled?: boolean;
+  observers_enabled?: boolean;
+  /** The author's name for each job at this level (doc 12 §6.2). */
+  tier_labels?: Record<string, { label: string; description?: string }>;
+  /** Non-actor tiers the author marks mandatory; "actor" is rejected server-side. */
+  required_tiers?: string[];
+  /** Is this level staffed package by package (true) or once for the project (false)? Set by the
+   *  workflow author, so a typed project inherits it and cannot deviate. */
+  staff_per_package?: boolean;
 }
 
 export function addStep(workflowId: string, payload: StepPayload): Promise<WorkflowStep> {
@@ -745,6 +935,12 @@ export interface GrmRole {
   permissions: unknown;
   role_kind?: string | null;
   role_origin?: string | null;
+  /** Permission-template family (role_archetypes) — groups role pickers by function. */
+  archetype?: string | null;
+  /** Actor affiliation (org_category vocab) — soft-narrows the position role picker by office type. */
+  actor_category?: string | null;
+  /** SH-7 org-scoped catalog: owning org node (null = global/system). */
+  owner_organization_id?: string | null;
   steps_count?: number;
   officers_count?: number;
   created_at: string;
@@ -806,7 +1002,8 @@ export interface AdminScopeRow {
 
 export interface AdminContext {
   is_super_admin: boolean;
-  is_country_admin: boolean;
+  // SH-7: backend renamed is_country_admin → is_org_admin (country_admin tier retired).
+  is_org_admin: boolean;
   is_project_admin: boolean;
   admin_workflow_tracks: string[];
   admin_project_ids: string[];
@@ -814,6 +1011,10 @@ export interface AdminContext {
   can_access_platform_settings: boolean;
   can_manage_structure: boolean;
   can_create_project: boolean;
+  /** May open sensitive (SEAH) grievances — cast membership only, never an admin tier. */
+  can_see_seah: boolean;
+  /** May administer sensitive workflows (author / list / bind / staff). No case access. */
+  can_configure_sensitive: boolean;
   admin_scopes: AdminScopeRow[];
 }
 
@@ -827,10 +1028,12 @@ export function listAdminScopes(): Promise<AdminScopeRow[]> {
 
 export function createAdminScope(payload: {
   user_id: string;
-  role_key: "country_admin" | "project_admin";
+  // SH-7 4-tier ladder: country_admin retired → org_admin. Backend rejects country_admin.
+  role_key: "org_admin" | "project_admin" | "officer_admin";
   country_code?: string;
   project_id?: string;
   organization_id?: string;
+  package_id?: string;
   workflow_track?: "standard" | "seah" | "both";
   workflow_tracks?: ("standard" | "seah")[];
 }): Promise<AdminScopeRow> {
@@ -857,6 +1060,7 @@ export function updateRole(
     description?: string | null;
     workflow_scope?: string | null;
     jurisdiction_mode?: string | null;
+    permissions?: string[];
   }
 ): Promise<GrmRole> {
   return apiFetch<GrmRole>(`/api/v1/roles/${roleId}`, {
@@ -891,12 +1095,221 @@ export interface OfficerRosterEntry {
   project_codes?: string[];
   package_ids?: string[];
   scopes?: OfficerRosterScope[];
+  /** OC-04 §5.1 — active position titles ("Senior Divisional Engineer · DOR_JHA"). */
+  positions?: string[];
   /** invited until Keycloak webhook confirms password update */
   onboarding_status?: string;
+  /** Frame-11: soft-deactivated officers keep history but lose access. */
+  is_active?: boolean;
 }
 
 export function listOfficerRoster(): Promise<OfficerRosterEntry[]> {
   return apiFetch<OfficerRosterEntry[]>("/api/v1/users/roster");
+}
+
+// ── Officer directory search + lifecycle (Frame 11) ───────────────────────────
+
+export interface OfficerRosterPage {
+  items: OfficerRosterEntry[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export function searchOfficerRoster(opts?: {
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<OfficerRosterPage> {
+  const p = new URLSearchParams();
+  if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
+  if (opts?.limit != null) p.set("limit", String(opts.limit));
+  if (opts?.offset != null) p.set("offset", String(opts.offset));
+  return apiFetch<OfficerRosterPage>(`/api/v1/users/roster/search?${p}`);
+}
+
+export interface OfficerOpenCases {
+  user_id: string;
+  open_count: number;
+  tickets: { ticket_id: string; grievance_id: string; status: string }[];
+}
+
+export function getOfficerOpenCases(userId: string): Promise<OfficerOpenCases> {
+  return apiFetch<OfficerOpenCases>(`/api/v1/users/${encodeURIComponent(userId)}/open-cases`);
+}
+
+export interface OfficerLifecycleResult {
+  ok: boolean;
+  user_id: string;
+  is_active: boolean;
+  onboarding_status?: string | null;
+}
+
+export function deactivateOfficer(userId: string): Promise<OfficerLifecycleResult> {
+  return apiFetch<OfficerLifecycleResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/deactivate`,
+    { method: "POST" },
+  );
+}
+
+export function reactivateOfficer(userId: string): Promise<OfficerLifecycleResult> {
+  return apiFetch<OfficerLifecycleResult>(
+    `/api/v1/users/${encodeURIComponent(userId)}/reactivate`,
+    { method: "POST" },
+  );
+}
+
+// ── Position types + position→role matrix (OC-02, doc 16 §3.2/§9) ─────────────
+
+/** ticketing.position_types row — a display-only job title (DESIGN-cast-model §3.2). */
+export interface PositionTypeItem {
+  position_type_id: string;
+  position_key: string;
+  display_name: string;
+  display_name_ne: string | null;
+  allowed_unit_types: string[];
+  reports_to_position_key: string | null;
+  /** "same_unit" | "parent_unit" | null */
+  reports_to_locus: string | null;
+  /** Legacy role link — nullable; a title carries no role (tier chosen at staffing). */
+  default_role_key: string | null;
+  /** "none" | "direct_reports" | "subtree" */
+  visibility_mode: string;
+  /** "standard" | "seah" | "both" */
+  workflow_track: string;
+  /** SH-7 org-scoped catalog owner node (null = global/system). */
+  owner_organization_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PositionTypeCreate {
+  // position_key is server-minted from display_name — not part of the create payload.
+  // A title carries no role/track/visibility (DESIGN-cast-model §3.2); owner is server-set.
+  display_name: string;
+  display_name_ne?: string | null;
+  allowed_unit_types?: string[];
+  reports_to_position_key?: string | null;
+  reports_to_locus?: string | null;
+}
+
+/** All fields optional; position_key is immutable and cannot be updated. */
+export interface PositionTypeUpdate {
+  display_name?: string;
+  display_name_ne?: string | null;
+  allowed_unit_types?: string[];
+  reports_to_position_key?: string | null;
+  reports_to_locus?: string | null;
+  default_role_key?: string;
+  visibility_mode?: string;
+  workflow_track?: string;
+  owner_organization_id?: string | null;
+}
+
+/** An officer holding a position type (Review-holders modal). Descriptive only. */
+export interface PositionHolder {
+  officer_position_id: string;
+  user_id: string;
+  organization_id: string;
+  reports_to_user_id: string | null;
+  is_active: boolean;
+}
+
+export function listPositionTypes(opts?: {
+  workflow_track?: string;
+  owner_organization_id?: string;
+}): Promise<PositionTypeItem[]> {
+  const p = new URLSearchParams();
+  if (opts?.workflow_track) p.set("workflow_track", opts.workflow_track);
+  if (opts?.owner_organization_id) p.set("owner_organization_id", opts.owner_organization_id);
+  const qs = p.toString();
+  return apiFetch<PositionTypeItem[]>(`/api/v1/position-types${qs ? `?${qs}` : ""}`);
+}
+
+export function createPositionType(payload: PositionTypeCreate): Promise<PositionTypeItem> {
+  return apiFetch<PositionTypeItem>("/api/v1/position-types", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function updatePositionType(
+  positionTypeId: string,
+  payload: PositionTypeUpdate,
+): Promise<PositionTypeItem> {
+  return apiFetch<PositionTypeItem>(`/api/v1/position-types/${positionTypeId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function deletePositionType(positionTypeId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/position-types/${positionTypeId}`, { method: "DELETE" });
+}
+
+export function listPositionTypeHolders(
+  positionTypeId: string,
+  activeOnly = true,
+): Promise<PositionHolder[]> {
+  return apiFetch<PositionHolder[]>(
+    `/api/v1/position-types/${positionTypeId}/holders?active_only=${activeOnly}`,
+  );
+}
+
+// ── Officer positions — staff an officer by position type (OC-03, doc 16 §3.3) ─
+
+/** ticketing.officer_positions row — descriptive; never an access-control source. */
+export interface OfficerPositionItem {
+  officer_position_id: string;
+  user_id: string;
+  position_type_id: string;
+  position_key: string | null;
+  position_display_name: string | null;
+  organization_id: string;
+  default_role_key: string | null;
+  reports_to_user_id: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface OfficerPositionAssign {
+  position_type_id: string;
+  organization_id: string;
+  // Overrides — any of these, when set, beats the matrix / territory pre-fill.
+  role_key?: string | null;
+  location_code?: string | null;
+  includes_children?: boolean | null;
+  project_id?: string | null;
+  project_code?: string | null;
+  package_id?: string | null;
+  /** HR/admin override only (deputation / acting); not used for supervision. */
+  reports_to_user_id?: string | null;
+}
+
+export function listOfficerPositions(
+  userId: string,
+  activeOnly = true,
+): Promise<OfficerPositionItem[]> {
+  return apiFetch<OfficerPositionItem[]>(
+    `/api/v1/users/${encodeURIComponent(userId)}/positions?active_only=${activeOnly}`,
+  );
+}
+
+export function assignOfficerPosition(
+  userId: string,
+  payload: OfficerPositionAssign,
+): Promise<OfficerPositionItem> {
+  return apiFetch<OfficerPositionItem>(
+    `/api/v1/users/${encodeURIComponent(userId)}/positions`,
+    { method: "POST", body: JSON.stringify(payload) },
+  );
+}
+
+export function endOfficerPosition(userId: string, officerPositionId: string): Promise<void> {
+  return apiFetch<void>(
+    `/api/v1/users/${encodeURIComponent(userId)}/positions/${officerPositionId}`,
+    { method: "DELETE" },
+  );
 }
 
 // ── File attachments ──────────────────────────────────────────────────────────
@@ -950,18 +1363,18 @@ export function officerAttachmentPath(fileId: string): string {
 
 /** Fetch a protected file with session cookie + Bearer token; returns a blob URL. */
 export async function fetchAuthenticatedBlobUrl(path: string): Promise<string> {
-  const resp = await fetch(`${BASE}${path}`, {
-    credentials: "include",
-    headers: {
-      Accept: "*/*",
-      ...authHeaders(),
-    },
-  });
+  const resp = await authedFetch(() =>
+    fetch(`${BASE}${path}`, {
+      credentials: "include",
+      headers: {
+        Accept: "*/*",
+        ...authHeaders(),
+      },
+    }),
+  );
   if (!resp.ok) {
+    // 401 already handled by authedFetch (refresh + retry, else logout-throw).
     const text = await resp.text();
-    if (isSessionExpiredResponse(resp.status, text)) {
-      handleSessionExpired();
-    }
     let message = text || `File request failed (${resp.status})`;
     try {
       const parsed = JSON.parse(text) as { detail?: string };
@@ -1030,20 +1443,20 @@ export async function uploadOfficerAttachment(
   file: File,
   caption: string,
 ): Promise<OfficerAttachment> {
-  const form = new FormData();
-  form.append("file", file);
-  form.append("caption", caption);
-  // Do NOT set Content-Type — browser sets multipart boundary automatically
-  const resp = await fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
-    method: "POST",
-    headers: authHeaders(),
-    body: form,
+  // Rebuild FormData inside the thunk so a 401→refresh→retry re-sends the same parts.
+  const resp = await authedFetch(() => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("caption", caption);
+    // Do NOT set Content-Type — browser sets multipart boundary automatically
+    return fetch(`${BASE}/api/v1/tickets/${ticketId}/attachments`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
   });
   if (!resp.ok) {
     const body = await resp.text();
-    if (isSessionExpiredResponse(resp.status, body)) {
-      handleSessionExpired();
-    }
     throw new Error(`Upload failed ${resp.status}: ${body}`);
   }
   return resp.json();
@@ -1159,20 +1572,20 @@ export const exportReport = exportReportUrl;
 /** Download binary export with auth cookie + Bearer token (anchor href cannot send these). */
 async function downloadApiFile(path: string, filename: string, init?: RequestInit): Promise<void> {
   const extraHeaders = (init?.headers as Record<string, string> | undefined) ?? {};
-  const resp = await fetch(`${BASE}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream",
-      ...authHeaders(),
-      ...extraHeaders,
-    },
-  });
+  const resp = await authedFetch(() =>
+    fetch(`${BASE}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/octet-stream",
+        ...authHeaders(),
+        ...extraHeaders,
+      },
+    }),
+  );
   if (!resp.ok) {
+    // 401 already handled by authedFetch (refresh + retry, else logout-throw).
     const text = await resp.text();
-    if (isSessionExpiredResponse(resp.status, text)) {
-      handleSessionExpired();
-    }
     let message = text || `Export failed (${resp.status})`;
     try {
       const parsed = JSON.parse(text) as { detail?: string };
@@ -1585,6 +1998,16 @@ export interface OrganizationItem {
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  // Org tree (OC-01, doc 16 §3.1). Optional so existing callers still compile.
+  parent_organization_id?: string | null;
+  org_category?: string;
+  unit_type?: string | null;
+  territory_location_code?: string | null;
+  territory_includes_children?: boolean;
+  display_name_ne?: string | null;
+  // Duplicate-candidate signals (SH-4) — non-PII org contact fields.
+  email?: string | null;
+  address?: string | null;
 }
 
 export interface LevelDef {
@@ -1619,6 +2042,11 @@ export interface OrgRole {
   key: string;
   label: string;
   description: string;
+  /** From the project type's catalog (doc 13 §2) — absent on legacy untyped projects. */
+  required?: boolean;
+  required_package?: boolean;
+  scope?: string;
+  sort_order?: number;
 }
 
 /** Organization linked to a project, with its role in that project. */
@@ -1656,12 +2084,20 @@ export interface ProjectItem {
   standard_workflow_id: string | null;
   /** @deprecated use workflow_slots — mirrors seah slot */
   seah_workflow_id: string | null;
+  /** doc 13 §2: the accountable government agency (routing anchor). */
+  implementing_agency_org_id?: string | null;
+  /** doc 13 §3: donor organization ids funding this project. */
+  donor_org_ids?: string[];
   workflow_slots?: ProjectWorkflowSlot[];
   created_at: string;
   updated_at: string;
   /** Organizations linked to this project, each with an optional role. */
   organizations: ProjectOrgItem[];
+  /** @deprecated empty since coverage moved to packages (2026-08-08) — use the counts below. */
   location_codes: string[];
+  /** Packages on the project, and the distinct districts they cover between them. */
+  package_count?: number;
+  covered_location_count?: number;
 }
 
 export interface ProjectCreate {
@@ -1670,7 +2106,10 @@ export interface ProjectCreate {
   name: string;
   description?: string | null;
   is_active?: boolean;
+  /** Required: the template this project is built from (doc 13 §3). */
   project_type_key?: string | null;
+  /** @deprecated legacy `projects.implementing_agency_org_id`; fills no organization slot. */
+  implementing_agency_org_id?: string | null;
 }
 
 export interface TypeActorRoleDef {
@@ -1682,14 +2121,28 @@ export interface TypeActorRoleDef {
   scope?: string;
 }
 
+/** One workflow a project of this type runs — same shape the project screen edits. */
+export interface TypeWorkflowBinding {
+  display_label: string;
+  workflow_id: string;
+  is_default: boolean;
+  classifications: string[];
+  intake_route: string | null;
+  sort_order: number;
+}
+
 export interface ProjectTypeItem {
   type_key: string;
   label: string;
   description: string | null;
   standard_workflow_id: string | null;
   seah_workflow_id: string | null;
-  routing_org_role: string;
   actor_roles: TypeActorRoleDef[];
+  workflow_bindings: TypeWorkflowBinding[];
+  /** The organization this template belongs to. null = shared with everyone. */
+  owner_organization_id: string | null;
+  /** >0 → the setup is frozen: copy it, or deactivate the project first (doc 14 §4.1). */
+  active_project_count: number;
   is_active: boolean;
   sort_order: number;
 }
@@ -1697,7 +2150,6 @@ export interface ProjectTypeItem {
 export interface GoLiveCheck {
   id: string;
   label: string;
-  group: string;
   severity: string;
   status: string;
   message: string;
@@ -1725,17 +2177,69 @@ export interface OrganizationCreate {
   name: string;
   country_code?: string | null;
   is_active?: boolean;
+  // Org tree (OC-01, doc 16 §3.1). parent NULL = root; children inherit org_category.
+  parent_organization_id?: string | null;
+  org_category?: string;
+  unit_type?: string | null;
+  territory_location_code?: string | null;
+  territory_includes_children?: boolean;
+  display_name_ne?: string | null;
+  // Duplicate-candidate signals (SH-4).
+  email?: string | null;
+  address?: string | null;
 }
 
 export interface OrganizationUpdate {
   name?: string;
   country_code?: string | null;
   is_active?: boolean;
+  // Org tree (OC-01, doc 16 §3.1). Supplying `parent_organization_id: null` detaches to root.
+  parent_organization_id?: string | null;
+  org_category?: string;
+  unit_type?: string | null;
+  territory_location_code?: string | null;
+  territory_includes_children?: boolean;
+  display_name_ne?: string | null;
+  // Duplicate-candidate signals (SH-4). "" clears to null server-side.
+  email?: string | null;
+  address?: string | null;
 }
 
-export function listOrganizations(country?: string): Promise<OrganizationItem[]> {
-  const qs = country ? `?country=${country}&active_only=false` : "?active_only=false";
-  return apiFetch<OrganizationItem[]>(`/api/v1/organizations${qs}`);
+export function listOrganizations(
+  country?: string,
+  opts?: { rootId?: string; tree?: boolean; q?: string; manageable?: boolean; activeOnly?: boolean },
+): Promise<OrganizationItem[]> {
+  const p = new URLSearchParams();
+  if (country) p.set("country", country);
+  p.set("active_only", opts?.activeOnly ? "true" : "false");
+  if (opts?.rootId) p.set("root_id", opts.rootId);
+  if (opts?.tree) p.set("tree", "true");
+  // GRM-122: only organizations the caller administers (a platform admin: all).
+  if (opts?.manageable) p.set("manageable", "true");
+  if (opts?.q && opts.q.trim()) p.set("q", opts.q.trim());
+  return apiFetch<OrganizationItem[]>(`/api/v1/organizations?${p}`);
+}
+
+/** Frame-12 aggregated delete-impact preview (every blocking reference in one call). */
+export interface OrgDeleteImpact {
+  organization_id: string;
+  child_count: number;
+  ticket_count: number;
+  role_count: number;
+  scope_count: number;
+  position_count: number;
+  workflow_assignment_count: number;
+  package_actor_count: number;
+  project_actor_count: number;
+  /** GRM-116: resolution actions this organization owns — an owner cannot be deleted. */
+  resolution_action_count: number;
+  /** Workflows and templates this organization owns — informational: a delete leaves them with no organization. */
+  workflow_count: number;
+  deletable: boolean;
+}
+
+export function getOrganizationDeleteImpact(orgId: string): Promise<OrgDeleteImpact> {
+  return apiFetch<OrgDeleteImpact>(`/api/v1/organizations/${orgId}/delete-impact`);
 }
 
 export function createOrganization(payload: OrganizationCreate): Promise<OrganizationItem> {
@@ -1754,6 +2258,80 @@ export function updateOrganization(orgId: string, payload: OrganizationUpdate): 
 
 export function deleteOrganization(orgId: string): Promise<void> {
   return apiFetch(`/api/v1/organizations/${orgId}`, { method: "DELETE" });
+}
+
+// ── Org duplicate-candidate finder + tree import (SH-4 / OC-01) ────────────────
+
+/** Request body for POST /organizations/duplicate-candidates (a preview — no write). */
+export interface DuplicateCheckRequest {
+  name: string;
+  email?: string | null;
+  address?: string | null;
+  country_code?: string | null;
+  /** On update, exclude the org being edited so it never matches itself. */
+  exclude_organization_id?: string | null;
+  limit?: number;
+}
+
+/** One soft-flag duplicate candidate returned by the fuzzy finder. */
+export interface DuplicateCandidateItem {
+  organization_id: string;
+  name: string;
+  score: number;
+  reasons: string[];
+  name_score: number;
+  email_domain_match: boolean;
+  address_score: number;
+  country_code: string | null;
+  org_category: string | null;
+  unit_type: string | null;
+}
+
+/** Soft-flag preview: likely-duplicate orgs for a proposed {name,email,address}. Never blocks create. */
+export function findDuplicateOrganizations(
+  payload: DuplicateCheckRequest,
+): Promise<DuplicateCandidateItem[]> {
+  return apiFetch<DuplicateCandidateItem[]>("/api/v1/organizations/duplicate-candidates", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Result of POST /organizations/import (all-or-nothing whole-file upsert). */
+export interface OrgImportResult {
+  organizations_upserted: number;
+  dry_run: boolean;
+  errors: string[];
+}
+
+export function getOrgImportTemplateCsvUrl(): string {
+  return `${BASE}/api/v1/organizations/import/template.csv`;
+}
+
+/**
+ * Import an org tree from a CSV file (multipart upload — mirrors importLocations).
+ * The backend validates the whole file first; on any error nothing is written.
+ */
+export async function importOrganizations(
+  file: File,
+  opts?: { dry_run?: boolean },
+): Promise<OrgImportResult> {
+  // Rebuild FormData inside the thunk so a 401→refresh→retry re-sends the same parts.
+  const resp = await authedFetch(() => {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("dry_run", String(opts?.dry_run ?? false));
+    return fetch(`${BASE}/api/v1/organizations/import`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: form,
+    });
+  });
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Org import failed ${resp.status}: ${body}`);
+  }
+  return resp.json();
 }
 
 /** List all projects that include a given organization (linked org or contractor packages). */
@@ -1841,16 +2419,50 @@ export function getProjectGoLive(projectId: string): Promise<GoLiveReport> {
   return apiFetch<GoLiveReport>(`/api/v1/projects/${projectId}/go-live`);
 }
 
-export function listProjectTypes(activeOnly = true): Promise<ProjectTypeItem[]> {
-  return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?active_only=${activeOnly}`);
+/** `ownerOrganizationId` = the New-project filter: that organization's types plus the shared ones. */
+export function listProjectTypes(
+  activeOnly = true,
+  ownerOrganizationId?: string | null,
+): Promise<ProjectTypeItem[]> {
+  const q = new URLSearchParams({ active_only: String(activeOnly) });
+  if (ownerOrganizationId) q.set("owner_organization_id", ownerOrganizationId);
+  return apiFetch<ProjectTypeItem[]>(`/api/v1/project-types?${q.toString()}`);
+}
+
+export function getProjectType(typeKey: string): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}`);
+}
+
+export type ProjectTypePayload = Partial<
+  Omit<ProjectTypeItem, "type_key" | "active_project_count">
+>;
+
+export function createProjectType(
+  payload: ProjectTypePayload & { type_key: string; label: string },
+): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>("/api/v1/project-types", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function updateProjectType(
   typeKey: string,
-  payload: Partial<Omit<ProjectTypeItem, "type_key" | "actor_roles">>,
+  payload: ProjectTypePayload,
 ): Promise<ProjectTypeItem> {
   return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}`, {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** "Use as template" — the way to change a type that live projects run on (doc 14 §4.1). */
+export function duplicateProjectType(
+  typeKey: string,
+  payload: { type_key: string; label?: string; owner_organization_id?: string | null },
+): Promise<ProjectTypeItem> {
+  return apiFetch<ProjectTypeItem>(`/api/v1/project-types/${typeKey}/duplicate`, {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
@@ -1862,14 +2474,41 @@ export function updateProject(
     short_code?: string;
     description?: string | null;
     is_active?: boolean;
+    /** Rebuild the project from a different template. Refused (409) while it accepts grievances. */
+    project_type_key?: string | null;
     standard_workflow_id?: string | null;
     seah_workflow_id?: string | null;
+    /** @deprecated legacy accountable-organization field; reporting is membership now. */
+    implementing_agency_org_id?: string | null;
   },
 ): Promise<ProjectItem> {
   return apiFetch<ProjectItem>(`/api/v1/projects/${projectId}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
+}
+
+// ── Project donors (doc 13 §3) ────────────────────────────────────────────────
+
+/** A donor org linked to a project (org id + display name). */
+export interface ProjectDonorItem {
+  organization_id: string;
+  name: string | null;
+}
+
+export function listProjectDonors(projectId: string): Promise<ProjectDonorItem[]> {
+  return apiFetch<ProjectDonorItem[]>(`/api/v1/projects/${projectId}/donors`);
+}
+
+export function addProjectDonor(projectId: string, orgId: string): Promise<ProjectDonorItem> {
+  return apiFetch<ProjectDonorItem>(
+    `/api/v1/projects/${projectId}/donors/${orgId}`,
+    { method: "POST" },
+  );
+}
+
+export function removeProjectDonor(projectId: string, orgId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/donors/${orgId}`, { method: "DELETE" });
 }
 
 export function listWorkflowRoutingOptions(): Promise<WorkflowRoutingOptions> {
@@ -1978,6 +2617,11 @@ export function setGrievanceCategoriesCatalog(
 }
 
 /** Per-project actor role vocabulary (editable; seeded from global defaults). */
+/** Organizations linked to a project, each in one of the type's slots (`org_role`). */
+export function listProjectOrganizations(projectId: string): Promise<ProjectOrgItem[]> {
+  return apiFetch<ProjectOrgItem[]>(`/api/v1/projects/${projectId}/organizations`);
+}
+
 export function getProjectActorRoles(projectId: string): Promise<OrgRole[]> {
   return apiFetch<OrgRole[]>(`/api/v1/projects/${projectId}/actor-roles`);
 }
@@ -1999,6 +2643,31 @@ export function addProjectLocation(projectId: string, locationCode: string): Pro
 
 export function removeProjectLocation(projectId: string, locationCode: string): Promise<void> {
   return apiFetch<void>(`/api/v1/projects/${projectId}/locations/${locationCode}`, { method: "DELETE" });
+}
+
+// ── Notification rules ────────────────────────────────────────────────────────
+
+/** channel keys ("app" | "email" | "sms") enabled for a given event + tier. */
+export type NotificationRuleChannels = string[];
+/** tier key ("actor" | "supervisor" | "informed" | "observer") -> channels. */
+export type NotificationEventRules = Record<string, NotificationRuleChannels>;
+/** event key (e.g. "ticket_created") -> tier rules, for one workflow. */
+export type NotificationWorkflowRules = Record<string, NotificationEventRules>;
+/** workflow slug ("standard" | "seah") -> per-workflow rules. */
+export type NotificationRulesValue = Record<string, NotificationWorkflowRules>;
+
+/** Admin: per-workflow notification routing rules (ticketing.settings.notification_rules). */
+export function getNotificationRules(): Promise<NotificationRulesValue> {
+  return apiFetch<{ key: string; value: NotificationRulesValue }>(
+    "/api/v1/settings/notification_rules",
+  ).then((r) => r.value ?? {});
+}
+
+export function saveNotificationRules(value: NotificationRulesValue): Promise<void> {
+  return apiFetch<void>("/api/v1/settings/notification_rules", {
+    method: "PUT",
+    body: JSON.stringify({ value }),
+  });
 }
 
 // ── Packages ──────────────────────────────────────────────────────────────────
@@ -2222,6 +2891,55 @@ export function deleteScope(userId: string, scopeId: string): Promise<void> {
   });
 }
 
+// ── Per-package cast staffing (DESIGN-cast-model §3.3 / §3.6) ──────────────────
+
+/** One staffed (step, tier) slot for a package (or project-wide when package_id is null). */
+export interface CastScope {
+  scope_id: string;
+  user_id: string;
+  role_key: string;
+  tier: string; // "actor" | "supervisor" | "participant" | "observer"
+  step_id: string;
+  package_id: string | null;
+  location_code: string | null;
+  organization_id: string;
+}
+
+export interface CastAssign {
+  workflow_id: string;
+  step_id: string;
+  tier: string;
+  user_id: string;
+  organization_id: string;
+  package_id?: string | null;
+  location_code?: string | null;
+  includes_children?: boolean;
+}
+
+/** Read the cast for a workflow — project-wide (omit package_id) or for one package. */
+export function readCast(
+  projectId: string,
+  opts: { workflow_id: string; package_id?: string | null },
+): Promise<CastScope[]> {
+  const p = new URLSearchParams();
+  p.set("workflow_id", opts.workflow_id);
+  if (opts.package_id) p.set("package_id", opts.package_id);
+  return apiFetch<CastScope[]>(`/api/v1/projects/${projectId}/cast?${p.toString()}`);
+}
+
+/** Staff one (step, tier) slot — writes an officer_scope via the sanctioned backend writer. */
+export function staffCastSlot(projectId: string, payload: CastAssign): Promise<CastScope> {
+  return apiFetch<CastScope>(`/api/v1/projects/${projectId}/cast`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export function unstaffCastSlot(projectId: string, scopeId: string): Promise<void> {
+  return apiFetch<void>(`/api/v1/projects/${projectId}/cast/${scopeId}`, { method: "DELETE" });
+}
+
 // ── Teammates (for reassign dropdown) ────────────────────────────────────────
 
 export interface TeammatesResponse {
@@ -2304,14 +3022,16 @@ export function closeReveal(
 
 export interface OfficerInvitePayload {
   email: string;
-  role_key: string;
+  /** Optional (DESIGN-cast-model): a position-based invite carries no role — Cast staffing binds it. */
+  role_key?: string | null;
   organization_id: string;
   location_code?: string | null;
   project_id?: string | null;
   project_code?: string | null;
   package_id?: string | null;
   includes_children?: boolean;
-  temp_password?: string;
+  /** R7 (M5): invite-by-position — records the officer_positions row. */
+  position_type_id?: string | null;
 }
 
 export interface OfficerInviteResult {

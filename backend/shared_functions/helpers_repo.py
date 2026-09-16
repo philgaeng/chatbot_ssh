@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
 from .location_validator import ContactLocationValidator
 from .keyword_detector import KeywordDetector
 from backend.config.constants import DEFAULT_VALUES, EMAIL_PROVIDERS_NEPAL_LIST
