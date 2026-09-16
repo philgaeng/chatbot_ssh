@@ -15,7 +15,7 @@
 #   # NEXT_PUBLIC_OIDC_ISSUER is derived from KEYCLOAK_ISSUER at build (grm_ui build args) —
 #   # no separate hand-kept var.
 #
-# TLS: after certbot for grm-chatbot.dor.gov.np, mount webchat_rest_compose_prod.tls.conf
+# TLS: the site config is webchat_rest_compose_prod.tls.conf, selected by NGINX_SITE_CONF below.
 
 services:
   # Keycloak sends officer invite mail from this container (Java SMTP). Prefer IPv4 —
@@ -24,9 +24,31 @@ services:
     environment:
       JAVA_OPTS_APPEND: "-Djava.net.preferIPv4Stack=true"
 
+  # ⛔ GRM-147 (2026-09-16) — production is layered ON TOP OF docker-compose.aws.yml, so this block
+  # must restate everything aws.yml sets that production needs different. It inherits whatever it
+  # does not override, and on 2026-09-16 that took production's site down.
+  #
+  # What happened. GRM-103 (2026-09-14) changed aws.yml's nginx to mount the whole deployment/nginx
+  # DIRECTORY at /etc/nginx/site and start via `sh /etc/nginx/site/bootstrap.sh`, which includes the
+  # file NGINX_SITE_CONF names. This file still carried the old single-file mount under
+  # `volumes: !override`. Merged, production got aws.yml's command and aws.yml's NGINX_SITE_CONF,
+  # but THIS file's volumes — so bootstrap.sh was not mounted, nginx could not start, and it
+  # crash-looped until rolled back. Measured by rendering the exact four-file merge:
+  #   command         : sh /etc/nginx/site/bootstrap.sh
+  #   NGINX_SITE_CONF : webchat_rest_compose_aws.conf     <- STAGING's server_name
+  #   /etc/nginx/site mounted? False
+  #
+  # ⭐ The crash is what saved production. Had bootstrap.sh been found, nginx would have loaded
+  # webchat_rest_compose_aws.conf — staging's hostname — and served it on grm-chatbot.dor.gov.np.
+  # That is GRM-141, one layer down. Both halves are fixed here, and pinned by
+  # tests/repo/test_prod_compose_nginx.py so a future aws.yml change cannot silently re-break it.
   nginx:
+    environment:
+      NGINX_SITE_CONF: webchat_rest_compose_prod.tls.conf
     volumes: !override
-      - ./deployment/nginx/webchat_rest_compose_prod.tls.conf:/etc/nginx/conf.d/webchat_rest_compose_prod.tls.conf:ro
+      # The DIRECTORY, not the file: a single-file bind mount stays pinned to the pre-pull inode,
+      # so `git pull` + reload would keep serving the old config (GRM-103).
+      - ./deployment/nginx:/etc/nginx/site:ro
       - ./channels/REST_webchat:/app/channels/REST_webchat:ro
       - ./channels/shared:/app/channels/shared:ro
       - ./deployment/certbot/www:/var/www/certbot:ro

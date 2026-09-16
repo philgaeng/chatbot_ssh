@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-16 — §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -188,13 +188,58 @@ IMAGE_TAG=<7-char-sha> $PC run --rm --no-deps backend python -m alembic -c ticke
 IMAGE_TAG=<7-char-sha> $PC run --rm --no-deps backend python -m alembic -c ops/migrations/alembic.ini upgrade head
 ```
 
-nginx last, validated before applied:
+nginx last — ⛔ **and only once `GRM-147`'s `prod.yml` fix is on `main`**, or it crash-loops.
+
+⛔ **These MUST be one `&&`-chained command.** On 2026-09-16 they were given as three separate
+lines: the validation failed, the apply ran anyway, and the site went down. A test that cannot
+stop what follows it is not a gate.
 
 ```bash
-$PC run --rm --no-deps -T nginx "sh /etc/nginx/site/bootstrap.sh --test"
-$PC up -d --no-deps nginx
-$PC exec -T nginx nginx -s reload
+$PC run --rm --no-deps -T nginx "sh /etc/nginx/site/bootstrap.sh --test" \
+  && $PC up -d --no-deps nginx \
+  && sleep 10 && docker ps --format '{{.Names}}\t{{.Status}}' | grep nginx
 ```
+
+Expect `Up … (healthy)`, **never** `Restarting`. Then confirm from **outside the box** — the host
+cannot reach its own public hostname (hairpin NAT), so an empty `curl` run on the box proves nothing.
+
+**Rollback** routes traffic back to the June `_auth` containers, which must still be running:
+
+```bash
+git checkout 00f13230 -- docker-compose.yml docker-compose.aws.yml docker-compose.grm.yml docker-compose.prod.yml deployment/nginx \
+  && $PC up -d --no-deps --force-recreate nginx \
+  && git checkout HEAD -- docker-compose.yml docker-compose.aws.yml docker-compose.grm.yml docker-compose.prod.yml deployment/nginx
+```
+
+⚠ **Do not remove the orphan `_auth` containers until the new site is verified.** The June nginx
+routes to `grm_ui_auth:3001` and `ticketing_api_auth:5003`; they are the rollback path.
+
+## 11. Where production actually stopped, 2026-09-16
+
+| Step | State |
+| --- | --- |
+| Backup | ✅ first ever — `app_db_20260916T081356Z.dump`, dir `700`, files `600` |
+| `env.local` | ✅ `0600`; ✅ `GHCR_READ_TOKEN` added; ⏳ `OPS_DB_PASSWORD` not yet set |
+| Code | ✅ `main` at `b3e890d2`, pulled on the host |
+| Images | ✅ `app:b3e890d`, `ui:b3e890d` pulled (registry is private — the token was required) |
+| Ticketing migrations | ✅ **all 23 applied**, head `b3d5f7h9`; `HR-03` dedup was a no-op |
+| Ops migration | ⏳ not run |
+| Public stream | ⛔ deliberately not run (§4) |
+| New containers | ✅ `ticketing_api`, `grm_ui`, `backend`, `celery_default`, `grm_celery`, `ops` up at `b3e890d` |
+| `grm_celery_beat` | ⏳ **held back on purpose** — the old one still runs from June; see §12 |
+| nginx | ⛔ **rolled back to June** after crash-looping (`GRM-147`); site served, `302` from outside |
+| Serving users | the June `grm_ui_auth` + `ticketing_api_auth`, against the **migrated** schema |
+
+⚠ **June's code is serving against the new schema.** The migrations are additive, and the site
+answered `302` afterwards — but the cutover should not wait long.
+
+## 12. ⚠ The SLA watchdog is already running
+
+`docker ps` after Step 5 showed **`grms-grm_celery_beat-1` — `Up 2 months (healthy)`**, the June
+container, still running. "Holding back `grm_celery_beat`" only kept the *new* image from starting;
+the old scheduler was never stopped. So whatever it does, it has been doing throughout — yet
+`GRM-144` found 129 tickets unflagged, which means that beat is running and **not escalating**.
+Find out why before replacing it: the new watchdog may behave very differently from the old one.
 
 ## 9. Phase 4 — what production has never had
 

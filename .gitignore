@@ -27,6 +27,14 @@ env.local
 # go in env.local.extra, which the generator appends verbatim.
 env.local.extra
 env.local.example
+# Hand-made backups of env.local, which every runbook tells an operator to take before
+# editing a live host's secrets. `env.local` is ignored; `env.local.bak-2026-09-16` was not,
+# so it sat untracked-but-stageable in the repo directory with DB_ENCRYPTION_KEY and
+# POSTGRES_PASSWORD in it. ⚠ Measured on the DOR production host 2026-09-16: two such files
+# (from 2026-06-15 and 2026-06-16) were sitting there, and one `git add -A` would have
+# committed production's secrets to a public repository (GRM-146).
+env.local.bak*
+env.local.pre-sops*
 .env.local
 aws_local.local
 *.aws.local
