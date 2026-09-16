@@ -21,6 +21,8 @@ import re
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from ticketing.auth import keycloak_setup as ks
 
 THEME = Path(__file__).resolve().parents[2] / "deployment" / "keycloak" / "themes" / "grm"
@@ -98,4 +100,22 @@ def test_smtp_only_changes_nothing_else() -> None:
     assert [c.args[1] for c in admin.update_realm.call_args_list] == [{"smtpServer": smtp}]
     admin.update_client.assert_not_called()
     admin.create_user.assert_not_called()
+    master.assert_not_called()
+
+
+def test_an_unknown_flag_refuses_instead_of_running_the_full_bootstrap() -> None:
+    """GRM-138, measured by doing it. Every dispatch in main() is `if "--x" in args`, so an
+    unrecognised flag matched none of them and fell through to the full run — which rewrites
+    demo officers, clients and token policy on a live realm, and logs "setup complete".
+
+    The way that happens in practice is not a typo: it is a target one deploy ahead of its host.
+    `--smtp-only` was run against a staging image that predated the flag."""
+    with patch.object(ks, "_realm_admin") as realm, patch.object(
+        ks, "get_settings", return_value=MagicMock(keycloak_admin_url="http://keycloak:8080")
+    ), patch.object(ks, "_master_admin") as master:
+        with pytest.raises(SystemExit) as exc:
+            ks.main(["--smtp-only-typo"])
+
+    assert exc.value.code == 2
+    realm.assert_not_called()
     master.assert_not_called()
