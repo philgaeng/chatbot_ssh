@@ -2,7 +2,7 @@
 
 **Status:** internal handover — a runbook for in-flight work, not a specification.
 **Audience:** internal
-**Last updated:** 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production (`GRM-133`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production, and the relay was then **verified by authenticating against it** (`GRM-133`); production's own `env.local` is world-readable (`GRM-135`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 > 🔴 **This document is excluded from the public repository, deliberately.** It carries the staging
 > host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is the
@@ -438,11 +438,16 @@ present in a host's current `env.local` and absent from those two halves is **si
 > `SMTP_PASSWORD` and `SMTP_FROM` in `secrets.enc.env` are now that host's values —
 > `info@grm-chatbot-nepal.org`. `make env-local` regenerates cleanly: **54 variables, 16 encrypted**.
 >
-> ⚠ **Two things this did not establish.** Production's `SMTP_SERVER`, `SMTP_PORT` and
-> `SMTP_FROM_DISPLAY` were never read back, so the plaintext half is unchanged on the assumption
-> they match `mail.infomaniak.com` / `587` / `GRM` — an assumption a staging send will settle,
-> because a mismatched relay fails authentication immediately. And nothing was migrated *onto*
-> production: it still has no `sops`, and its `env.local` is still hand-written (`GRM-058`).
+> ✅ **The relay was verified, the same day.** Production's `SMTP_SERVER`, `SMTP_PORT` and
+> `SMTP_FROM_DISPLAY` were never read back, so the plaintext half was left unchanged on the
+> assumption they match `mail.infomaniak.com` / `587` / `GRM`. `test_smtp.py --check-only` then
+> **authenticated against that relay** with the new credential — NOOP + LOGIN over starttls, no
+> message sent — which is the assumption settled, not deferred: a mismatched host, port or
+> password fails at LOGIN. ⚠ What remains unmeasured is **deliverability**, which is `GRM-133`'s
+> actual question and needs a real send from a host.
+>
+> ⚠ **Nothing was migrated *onto* production.** It still has no `sops`, and its `env.local` is
+> still hand-written (`GRM-058`) — and world-readable (`GRM-135`).
 >
 > 🔑 **The trap this walked into, worth keeping.** Three non-secret names (`SMTP_SERVER`,
 > `SMTP_PORT`, `SMTP_FROM_DISPLAY`) were first pasted into `secrets.enc.env` beside the password.
