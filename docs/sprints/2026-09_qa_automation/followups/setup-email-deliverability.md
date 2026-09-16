@@ -3,11 +3,42 @@
 **Opened 2026-09-15** while verifying `GRM-130` on staging with the owner. Logged in
 [`SPINE.md`](../../../SPINE.md).
 
-**State, 2026-09-16:** `GRM-133` has its email template (built, tested, not deployed). The sender switch
-waits on the owner copying production's mail credentials. `GRM-134` was measured and is **not a
-problem**; the escaping defect it found is fixed.
+**State, 2026-09-16: ✅ CLOSED — both.** `GRM-133` is fixed and **verified on staging by the owner**:
+setup emails now arrive in the **inbox**, at both an Infomaniak mailbox and an **`adb.org`** one.
+`GRM-134` was measured and is **not a problem**; the escaping defect it found is fixed.
 
-## `GRM-133` — setup emails are filed as spam
+> **The `adb.org` result is the one that matters.** Infomaniak is the relay's own provider, so it
+> was always the friendlier test. ADB is the recipient organisation, and a corporate filter is the
+> case that decides whether officers ever see a setup link. Both were checked; both reached the
+> inbox.
+
+### What actually fixed it — and what this does *not* establish
+
+Two changes landed together, so **their individual contributions are not separated**: the `grm`
+email theme replaced Keycloak's default *Update Your Account*, **and** the sender moved from a
+personal address to `info@grm-chatbot-nepal.org` (SPF and DMARC already set for that domain).
+Deliverability is fixed; **which of the two fixed it is unmeasured**, and nobody should assume
+either one alone is sufficient. It would take a deliberate A/B to find out, and there is no reason
+to spend it — the point is that both are now true, permanently, on every environment.
+
+⚠ **This was measured on staging, not production.** Production sends from the same mailbox and the
+same relay, but its realm has had neither the theme nor a verifying send (`GRM-132` covers staging
+only). Production also still runs `00f13230`, which predates the template.
+
+## `GRM-133` — setup emails are filed as spam ✅ FIXED
+
+### ✅ Verified on staging, 2026-09-16 — inbox, both mailboxes
+
+| Email | Sender | Where it went |
+| --- | --- | --- |
+| Keycloak setup email, Infomaniak mailbox | `"GRM" <info@grm-chatbot-nepal.org>` | **Inbox** (owner confirmed) |
+| Keycloak setup email, `adb.org` mailbox | `"GRM" <info@grm-chatbot-nepal.org>` | **Inbox** (owner confirmed) |
+
+Deployed state at the time of the test: image `c75f7c4` on staging, realm `emailTheme: grm`,
+Keycloak recreated so the template files were live (verified inside the container, matching the
+repo byte for byte), realm SMTP and `env.local` both on the new sender.
+
+### The original measurement, 2026-09-15 — for contrast
 
 ### Measured on staging, 2026-09-15
 
