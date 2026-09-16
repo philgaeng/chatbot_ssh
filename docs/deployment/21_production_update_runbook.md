@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-16 — written; Phase 0 complete, Phase 1 blocked on a decision (§4)
+**Last updated:** 2026-09-16 — §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -89,13 +89,40 @@ no record of the decision.
 
 **Answer these before touching the public stream:**
 
-1. Are those 25 vault payloads live SEAH data, superseded data, or test data? (`grievance_parties`
-   + PII vault is the canonical model; these may predate it.)
+1. ~~Are those 25 vault payloads live SEAH data, superseded data, or test data?~~ ⛔ **ANSWERED
+   2026-09-16 — live encrypted content.** The columns are `content_ciphertext`, `content_redacted`,
+   `content_hash`, `pii_detection_metadata`, `case_sensitivity`: this is the **sensitive-content
+   vault**, 25 rows spanning 2026-04-28 to 2026-06-19. And it is **broader than SEAH** — 25 payloads
+   against only 4 `grievances_seah`, keyed by `grievance_id` with its own sensitivity column.
+   Running the baseline would destroy 25 encrypted sensitive payloads.
 2. If they must be kept — migrated into the canonical model, or exported and retained outside the DB?
 3. If they may go — who confirms that, and where is it recorded? CL-01's "0 rows" finding is now
    known to be false for production, so it cannot be the authority a second time.
 
 **Until answered: the public stream stays stuck. That is the correct state, not a problem to clear.**
+
+## 4a. What production's data says about the running system
+
+Measured 2026-09-16 while answering §4. Two findings that change what "update the box" means.
+
+**The SLA watchdog is not running (`GRM-144`).** Tickets: 70 OPEN, 59 ESCALATED, 1 RESOLVED,
+created 2026-04-27 → 2026-08-21 — but `sla_breached` is **false on 129 of 130**. The UI computes
+overdue live (`queueTiles.ts:28`), so everything correctly *looks* overdue; the flag is the
+watchdog's, and `escalation.py:550` selects exactly those unflagged tickets to escalate. If it were
+running they would be escalating. It ran once — 58 overdue episodes exist — then stopped. **The last
+ticket event of any kind is 2026-08-21.**
+
+**Contact details are present but not displayed.** 70 of 130 tickets join through to a complainant
+with both a name and a phone, so the data is reachable. The likely cause is that production
+**predates T3-04**: at `00f13230`, `GET /api/grievance/{id}` returned pgcrypto hex and ticketing
+decrypted client-side via `pii_vault.py` — the workaround T3-04 deleted when it moved decryption
+server-side. ⭐ **If so, this update is the fix.** Confirm from `ticketing_api` logs while opening a
+ticket rather than assuming.
+
+**3 phone numbers are stored in plaintext (`GRM-145`)** in a column that is supposed to be
+encrypted: of 89 values, 79 are ciphertext, 3 are bare 10-digit numbers, 7 are a 12-character
+sentinel containing letters. `_decrypt_field` returns the raw value when decryption fails, which is
+why this rendered correctly and stayed invisible.
 
 ## 5. Phase 0 — safety ✅ DONE 2026-09-16
 
