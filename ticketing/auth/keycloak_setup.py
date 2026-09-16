@@ -273,9 +273,14 @@ def setup_realm_smtp(admin: KeycloakAdmin) -> None:
 
 
 def setup_realm_login_theme(admin: KeycloakAdmin) -> None:
-    """GRM login theme: skip execute-actions interstitial; link back to officer UI login."""
-    admin.update_realm(REALM, {"loginTheme": "grm", "emailTheme": "keycloak"})
-    logger.info("Realm '%s' login theme set to 'grm'", REALM)
+    """GRM login + email themes (`deployment/keycloak/themes/grm`).
+
+    Login: skip the execute-actions interstitial; link back to the officer UI login.
+    Email: a plain-language setup email. Keycloak's default ("Update Your Account") was filed as
+    spam on staging (GRM-133).
+    """
+    admin.update_realm(REALM, {"loginTheme": "grm", "emailTheme": "grm"})
+    logger.info("Realm '%s' login and email themes set to 'grm'", REALM)
 
 
 def setup_user_profile_policy(admin: KeycloakAdmin) -> None:
@@ -604,6 +609,12 @@ def main(argv: list[str] | None = None) -> None:
         if ui_uuid:
             logger.info("%s redirectUris now: %s", CLIENT_UI, grm.get_client(ui_uuid).get("redirectUris"))
         logger.info("Clients applied; nothing else was changed.")
+        return
+    if "--theme-only" in args:
+        # Login + email themes on a live realm. The theme files must already be on the host
+        # (bind-mounted); a Keycloak running `start` caches themes until it restarts.
+        setup_realm_login_theme(_realm_admin())
+        logger.info("Themes applied; nothing else was changed.")
         return
     if "--clear-invite-passwords" in args:
         # GRM-131. Without --apply this only counts, so an operator sees the size first.
