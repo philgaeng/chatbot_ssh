@@ -2,7 +2,7 @@
 
 **Status:** internal handover — a runbook for in-flight work, not a specification.
 **Audience:** internal
-**Last updated:** 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production (`GRM-133`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 > 🔴 **This document is excluded from the public repository, deliberately.** It carries the staging
 > host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is the
@@ -422,7 +422,7 @@ present in a host's current `env.local` and absent from those two halves is **si
 > | Bucket | Variables | Where |
 > |---|---|---|
 > | **Secret, shared** (5 new) | `DOIT_SMS_BEARER_TOKEN`, `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET`, `SMTP_FROM` | `secrets.enc.env` + `#@secret` marker |
-> | **Secret, overwritten** (2) | `SMTP_USERNAME`, `SMTP_PASSWORD` — staging's mail config is authoritative, on the owner's instruction | `secrets.enc.env` |
+> | **Secret, overwritten** (2) | `SMTP_USERNAME`, `SMTP_PASSWORD` — staging's mail config is authoritative, on the owner's instruction. ⚠ **Superseded 2026-09-16** — see the note under this table | `secrets.enc.env` |
 > | **Non-secret, shared** (8) | `SMTP_SERVER` (overwritten), `SMTP_FROM_DISPLAY`, `SMS_PROVIDER`, `DOIT_SMS_BASE_URL`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_INVITE_CLIENT_ID`, `NEXT_PUBLIC_OIDC_CLIENT_ID`, `KEYCLOAK_HOST_PORT` | `.env.shared` |
 > | ⛔ **Host-specific — must NOT be shared** (10) | `KEYCLOAK_ISSUER`, `KC_HOSTNAME_URL`, `KC_HTTP_RELATIVE_PATH`, `KEYCLOAK_ADMIN_URL`, `KEYCLOAK_JWKS_URL`, `KEYCLOAK_INVITE_REDIRECT_URI`, `NEXT_PUBLIC_OIDC_ISSUER`, `NEXT_PUBLIC_BYPASS_AUTH`, `SMS_ENABLED`, `CHATBOT_WEBCHAT_URL` | **`env.local.extra` on each host** — they encode that deployment's own hostname and auth mode. Putting staging's `nepal-gms-chatbot.facets-ai.com` in a shared file breaks local and prod |
 > | ⛔ **Dead — do not propagate** (8) | `DATABASE_HOST/NAME/PASSWORD/PORT/USER`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`, `SOCKETIO_REDIS_URL` | Nowhere. ⚠ **`DATABASE_*` is read by no code** (`git grep` over `backend/ ticketing/ ops/ channels/ scripts/` is empty) and carries the stale `password` credential. The three Redis URLs are set by compose `environment:`, **which wins over `env_file:`** — and staging's copies carry **no** `REDIS_PASSWORD`, so propagating them would be a downgrade. Delete them from the host's `env.local` during the migration |
@@ -430,6 +430,25 @@ present in a host's current `env.local` and absent from those two halves is **si
 > ⚠ **`SMS_ENABLED` is host-specific for a reason worth stating:** staging has it `true`. A shared
 > `true` would make every developer's stack send real SMS to Nepali phone numbers. Absent, the code
 > falls back to `backend/config/constants.SMS_ENABLED` (`sms_config.py:58-63`).
+
+> ### ✉️ Reconciled a second time, 2026-09-16 — from DOR production, not staging (`GRM-133`)
+>
+> `GRM-133` needed the real sender, and the owner read it off the **DOR production host**, where
+> `env.local` has been hand-maintained since 16 June and is not generated. `SMTP_USERNAME`,
+> `SMTP_PASSWORD` and `SMTP_FROM` in `secrets.enc.env` are now that host's values —
+> `info@grm-chatbot-nepal.org`. `make env-local` regenerates cleanly: **54 variables, 16 encrypted**.
+>
+> ⚠ **Two things this did not establish.** Production's `SMTP_SERVER`, `SMTP_PORT` and
+> `SMTP_FROM_DISPLAY` were never read back, so the plaintext half is unchanged on the assumption
+> they match `mail.infomaniak.com` / `587` / `GRM` — an assumption a staging send will settle,
+> because a mismatched relay fails authentication immediately. And nothing was migrated *onto*
+> production: it still has no `sops`, and its `env.local` is still hand-written (`GRM-058`).
+>
+> 🔑 **The trap this walked into, worth keeping.** Three non-secret names (`SMTP_SERVER`,
+> `SMTP_PORT`, `SMTP_FROM_DISPLAY`) were first pasted into `secrets.enc.env` beside the password.
+> `gen_env_local.sh` refused, exit 3 — correctly. Generation walks `.env.shared` and substitutes
+> **only** at `#@secret` markers, so a value put in the wrong half is copied nowhere and read by
+> nothing. Without that parity check the port would have been "set" and silently ignored.
 >
 > **Verified after the fold:** every folded value's digest matches staging's; `POSTGRES_PASSWORD` kept
 > its **locally rotated** value and was *not* clobbered by staging's pre-rotation one;
