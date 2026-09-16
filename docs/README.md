@@ -3,6 +3,7 @@
 **Status:** index — the map of the tree, not a spec in itself.
 **Audience:** public — published with the open-source repository.
 **Last updated:** 2026-09-06 — the release/versioning policy is no longer deferred: `deployment/20_release_and_versioning.md`. Earlier: `SPINE.md` added as the register; `TODO.md` retired behind it (OM-02). Earlier: sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-06 — ⛔ the DOR host from its June checkout to current: what it actually is, and the blocker that must be answered first
 
 Top-level guide to the spec tree. Every folder has its own index; this page is the map.
 
