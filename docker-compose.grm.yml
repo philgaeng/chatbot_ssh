@@ -84,7 +84,15 @@ services:
       # UPDATE_PASSWORD events to http://ticketing_api:5002/api/v1/webhooks/keycloak
       # with header X-Keycloak-Webhook-Secret: ${KEYCLOAK_WEBHOOK_SECRET}.
     ports:
-      - "${KEYCLOAK_HOST_PORT:-18080}:8080"
+      # ⚠ HOST_BIND defaults to 127.0.0.1 (GRM-151, 2026-09-17). These four ports used to bind
+      # 0.0.0.0 on every interface: on the DOR host that put Postgres — and Keycloak's admin
+      # console — on the DOR internal network and the VPN, reachable by anything on them.
+      # Docker publishes ahead of ufw, so a host firewall does not cover this; the binding is
+      # the control. Loopback still serves nginx (container network), `docker compose port`
+      # (so the deploy's port verification still matches), and an SSH tunnel, which is how a
+      # GUI client should reach the database anyway. Set HOST_BIND=0.0.0.0 deliberately if a
+      # host genuinely needs to publish outward.
+      - "${HOST_BIND:-127.0.0.1}:${KEYCLOAK_HOST_PORT:-18080}:8080"
     depends_on:
       db:
         condition: service_healthy
@@ -106,7 +114,7 @@ services:
   # ── Postgres host port (for host-side pytest / psql — containers still use db:5432) ──
   db:
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "${HOST_BIND:-127.0.0.1}:${POSTGRES_HOST_PORT:-5433}:5432"
 
   # ── Backend API port override (base docker-compose.yml has no host port mapping) ──
   # This overlay exposes port 5001 so the host browser can reach /api/grievance/*.
@@ -175,7 +183,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"  # fallback if issuer uses localhost
     ports:
-      - "${TICKETING_API_HOST_PORT:-5002}:5002"
+      - "${HOST_BIND:-127.0.0.1}:${TICKETING_API_HOST_PORT:-5002}:5002"
     depends_on:
       db:
         condition: service_healthy
@@ -346,7 +354,7 @@ services:
       # Server-side proxy target — uses Docker service name (not localhost)
       TICKETING_API_URL: ${TICKETING_API_URL:-http://ticketing_api:5002}
     ports:
-      - "${GRM_UI_HOST_PORT:-3001}:3001"
+      - "${HOST_BIND:-127.0.0.1}:${GRM_UI_HOST_PORT:-3001}:3001"
     depends_on:
       - ticketing_api
     restart: unless-stopped
