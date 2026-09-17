@@ -1,7 +1,7 @@
 # Decisions
 
 **Status:** authoritative (2026-09-06). The **public** record of forks taken: what was chosen, what was rejected, and what would change the answer.
-**Last updated:** 2026-09-15 — D-012 **built** (`GRM-111`): the setup script writes the three lengths, a test pins their order, and officers are warned before the idle window ends a session — not yet applied to staging or production. Earlier the same day: D-012 added: officer sessions use a short access token (5 min) inside a 30-minute idle window and an 8-hour maximum; the rejected alternative (a longer idle window) and what would reverse it are recorded. ⚠ Decided, not built. Earlier: D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
+**Last updated:** 2026-09-17 — **D-013**: the 25 SEAH vault payloads on production may be dropped, on the owner's inspection of every case — which unsticks the public migration stream (`GRM-142`). Earlier, 2026-09-15 — D-012 **built** (`GRM-111`): the setup script writes the three lengths, a test pins their order, and officers are warned before the idle window ends a session — not yet applied to staging or production. Earlier the same day: D-012 added: officer sessions use a short access token (5 min) inside a 30-minute idle window and an 8-hour maximum; the rejected alternative (a longer idle window) and what would reverse it are recorded. ⚠ Decided, not built. Earlier: D-011 added: releases are dated (`vYYYY.MM.DD`), not semantically versioned; the rejected alternative and what would reverse it are recorded. Earlier: D-010 **done**: the working repository was made private the same day (verified `gh repo view` → `PRIVATE`). D-009 and D-010 added: the public repository is a **versioned release artifact**, cut on production deploy, and the working repository goes **private**. Earlier: D-004…D-007 added by the fold pass (the org/workflow model: participants, project types, membership visibility, sensitive workflows). Created under [`engineering/06_documentation_lifecycle.md`](engineering/06_documentation_lifecycle.md) §10.3. **Seeded, not complete:** historical decisions are backfilled as specs are folded, so absence of an entry means nobody has written it yet — not that no fork was taken.
 **Reads with:** the live specs in [`ticketing_system/`](ticketing_system/), [`deployment/`](deployment/), [`services/`](services/) — a spec says *what is true*; this file says *why not the alternative*.
 
 ---
@@ -359,3 +359,42 @@ on the very shared computer this window protects, and in the sensitive stream it
 practice, or a DOR or ADB security requirement naming different limits. Either would be settled by
 moving the idle window, **never** by letting the access token exceed it.
 
+---
+
+## D-013 · The 25 SEAH vault payloads on production may be dropped — the owner opened every case
+
+**Date:** 2026-09-17 · **Status:** ✅ **decided, on evidence from the production database itself** · ⏳ **not yet applied**
+
+**The fork.** `public.grievance_vault_payloads` holds **25 rows** on DOR production, all
+`payload_type = original_grievance`, all `case_sensitivity = seah` — the original submitted narratives
+of SEAH cases, encrypted. CL-01's canonical baseline (`pub000_public_core_baseline`, 2026-07-06) **drops
+that table**, recording it as *"product-owner-confirmed dead, 0 rows"*. Production's public migration
+stream has been stuck on `pub009_seah_service_providers` ever since, because advancing it would run that
+baseline.
+
+**Chosen: the payloads may be dropped, and the public schema converges on the baseline.**
+
+**Why, and what the evidence actually is.** The owner **opened every one of the cases in the officer UI
+on 2026-09-17** and found no substantive content — they are test submissions from the build period.
+`payload_type = original_grievance` means the payload holds the *same text* as the grievance the UI
+renders, so inspecting the case does tell you what is in the payload. Dates corroborate: 20 of the 25
+predate the 16 June cutoff used to prune 76 trial tickets that same day.
+
+**What this decision is NOT, and why the distinction matters.** It is **not** a repeat of CL-01's
+finding. That one recorded "0 rows" — a claim about the data — and was **false for production**, which
+had 25. The audit behind it had been run against a database with no SEAH data in it. This entry claims
+something narrower and checkable: the rows exist, and their **content** was inspected, by name, on a
+stated date, in the system that renders it. ⭐ **A confirmation is only as good as the database it was
+run against, and CL-01 did not say which one it used.** This one does.
+
+**Rejected — migrate the 5 post-cutoff payloads into the canonical model first.** Five of the 25 belong
+to grievances dated after the 16 June cutoff and therefore survived the prune, which is why this was the
+default recommendation. It was rejected because the owner's inspection covered those cases too and found
+them equally empty; migrating empty test rows into `grievance_parties` + PII vault would carry the test
+data forward rather than retire it.
+
+**What would reverse this.** Evidence that any payload holds a real survivor account. The data is
+exported before the drop — `vault_payloads_20260917.sql.gpg`, encrypted with the backup passphrase and
+held off the database — so reversal is a restore of one table, not of the system. ⚠ **If that export was
+not taken, this decision has no undo short of the nightly backup**, and the entry should be treated as
+unsafe until someone confirms the file exists.
