@@ -28,6 +28,7 @@ no Docker — so they run in CI rather than skipping there, which would make the
 """
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -120,4 +121,53 @@ def test_prod_keeps_the_certificates_mounted() -> None:
     """The prod config names `/etc/letsencrypt/live/...`; dropping that mount fails `nginx -t`."""
     assert "/etc/letsencrypt" in _volume_targets(PROD), (
         "prod.yml's nginx volumes no longer mount /etc/letsencrypt — the TLS config cannot load"
+    )
+
+
+def _prod_ssh_targets() -> list[str]:
+    """Every `prod-*` target whose recipe sends a command over ssh."""
+    text = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+    found, current = [], None
+    for line in text.splitlines():
+        if line and not line[0].isspace() and ":" in line and not line.startswith(("#", "define", "\t")):
+            current = line.split(":", 1)[0].strip()
+        elif line.startswith("\t$(SSH_PROD)") and current and current.startswith("prod-"):
+            if current not in found:
+                found.append(current)
+    return found
+
+
+@pytest.mark.parametrize("target", _prod_ssh_targets())
+def test_every_prod_target_sends_the_production_overlay(target: str) -> None:
+    """`GRM-141` — production runs FOUR compose files; `REMOTE_COMPOSE` names three.
+
+    ⚠ **Measured 2026-09-16 by taking the site down.** `aws.yml` sets
+    `NGINX_SITE_CONF=webchat_rest_compose_aws.conf` — *staging's* server_name — and its volume set
+    carries no certbot mounts. `prod.yml` restores both and must come last so its
+    `volumes: !override` wins. A prod target that omits it points production's nginx at staging's
+    hostname and drops the TLS certificates.
+
+    Each `prod-*` target overrides `REMOTE_COMPOSE` with `PROD_REMOTE_COMPOSE` via a
+    target-specific variable. That is one line per target and therefore one line to forget, which
+    is what this test is for: a new prod target added without it would inherit the staging overlay
+    and look entirely normal until it reloaded nginx.
+    """
+    out = subprocess.run(
+        ["make", "-n", target, "IMAGE_TAG=abc1234"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    ).stdout
+
+    # ⚠ Asserting `"docker-compose.prod.yml" in out` is NOT enough, and the first version of this
+    # test did exactly that and passed against a deliberately broken Makefile. `prod-deploy` also
+    # calls REMOTE_VERIFY_GRM_PORTS_PROD, which names prod.yml independently — so the string is
+    # present whether or not the DEPLOY commands carry it. Count instead: every compose invocation
+    # in the payload must have its own `-f docker-compose.prod.yml`.
+    invocations = out.count("docker compose --env-file env.local")
+    with_prod = out.count("-f docker-compose.prod.yml")
+    assert invocations > 0, f"{target}: found no compose invocation to check — did the macro move?"
+    assert with_prod == invocations, (
+        f"{target}: {invocations} compose invocation(s) but only {with_prod} carry "
+        "docker-compose.prod.yml. The ones without it use the STAGING overlay — staging's "
+        "server_name and no certbot mounts (GRM-141). Add "
+        f"`{target}: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)` above its recipe."
     )

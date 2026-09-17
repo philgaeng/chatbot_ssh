@@ -32,12 +32,10 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 
 SSH_TARGETS = [
     "aws-deploy",
-    "aws-deploy-light",
     "aws-deploy-full",
     "aws-deploy-ops",
     "aws-seed-seah-providers",
     "prod-deploy",
-    "prod-deploy-light",
     "prod-deploy-full",
     "prod-deploy-ops",
     "prod-seed-seah-providers",
