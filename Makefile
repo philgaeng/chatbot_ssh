@@ -50,12 +50,15 @@ _env_prod_user := $(call _get_env,PROD_SERVER_USER)
 _env_prod_host := $(call _get_env,PROD_HOST)
 _env_prod_dir := $(call _get_env,PROD_REMOTE_DIR)
 _env_prod_ssh_key := $(call _get_env,PROD_SSH_KEY)
-PROD_SERVER_USER ?= $(if $(_env_prod_user),$(_env_prod_user),ubuntu)
+# ⚠ Defaults MEASURED on the DOR host 2026-09-16 (GRM-136). They were `ubuntu` and
+# /home/ubuntu/nepal_chatbot, which exist on staging and on no production box — every prod
+# target cd'd into a path that was not there. Override in env.local if a host differs.
+PROD_SERVER_USER ?= $(if $(_env_prod_user),$(_env_prod_user),administrator)
 PROD_HOST ?= $(if $(_env_prod_host),$(_env_prod_host),103.175.193.226)
 # Expand ${PROD_SERVER_USER} in path (env.local is not shell — Make substitutes after read).
 _prod_remote_dir := $(shell u='$(PROD_SERVER_USER)'; d='$(_env_prod_dir)'; \
   printf '%s' "$$d" | sed "s|\$${PROD_SERVER_USER}|$$u|g; s|\$$(PROD_SERVER_USER)|$$u|g")
-PROD_REMOTE_DIR ?= $(if $(_env_prod_dir),$(_prod_remote_dir),/home/$(PROD_SERVER_USER)/$(PROJECT_DIRECTORY))
+PROD_REMOTE_DIR ?= $(if $(_env_prod_dir),$(_prod_remote_dir),/opt/grms)
 PROD_SSH_KEY ?= $(_env_prod_ssh_key)
 PROD_SSH_IDENTITY = $(if $(PROD_SSH_KEY),-i $(PROD_SSH_KEY),)
 PROD_SSH_OPTS ?= -o ConnectTimeout=30 -o StrictHostKeyChecking=accept-new
@@ -74,6 +77,16 @@ COMPOSE_AWS_AUTH = $(COMPOSE_AWS) --profile auth
 # COMPOSE_PARALLEL_LIMIT=1 — EC2 stalls when multiple Next.js + Python images build at once.
 REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
   -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  --profile auth
+
+# ⛔ Production runs a FOURTH overlay, and omitting it takes the site down (GRM-141, measured
+# 2026-09-16 by doing it). REMOTE_COMPOSE stops at aws.yml, which sets
+# NGINX_SITE_CONF=webchat_rest_compose_aws.conf — STAGING's server_name — and whose volume set
+# lacks the certbot mounts. docker-compose.prod.yml restores both, and must come LAST so its
+# `volumes: !override` wins. Every prod-* target below overrides REMOTE_COMPOSE with this.
+PROD_REMOTE_COMPOSE = COMPOSE_PARALLEL_LIMIT=1 docker compose --env-file env.local \
+  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
+  -f docker-compose.prod.yml \
   --profile auth
 
 # ── Stack isolation: project name + host ports (QA-03) ───────────────────────────────────
@@ -403,9 +416,7 @@ set -e; \
 	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
 	$(call REMOTE_REPORT_DIGESTS,$(filter-out nginx,$(2)),$(3)) && \
 	$(REMOTE_COMPOSE) up -d --force-recreate nginx && \
-	ui_auth_port="$$(docker compose --env-file env.local \
-	  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-	  --profile auth port grm_ui 3001 2>/dev/null || true)" && \
+	ui_auth_port="$$($(REMOTE_COMPOSE) port grm_ui 3001 2>/dev/null || true)" && \
 	case "$$ui_auth_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_auth_port)"; exit 1;; esac; \
 	echo "$(3) OK: grm_ui=$$ui_auth_port nginx=restarted"
 endef
@@ -701,19 +712,23 @@ ssh-prod:
 	@echo "VPN required. Connecting to $(PROD_SERVER_USER)@$(PROD_HOST) (password prompt)..."
 	$(SSH_PROD)
 
+prod-deploy: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy: release-check
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy)'
 
+prod-deploy-light: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy-light: release-check
 	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_LIGHT,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_LIGHT_SERVICES),prod-deploy-light)'
 
+prod-deploy-full: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy-full: release-check
 	@echo "VPN required. Full deploy to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_FULL,$(PROD_REMOTE_DIR)) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy-full)'
 
 # Ops-only deploy: build + migrate (ops stream) + restart just the ops monitor on prod.
+prod-deploy-ops: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy-ops: release-check
 	@echo "VPN required. Deploying ops monitor to $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_OPS,$(PROD_REMOTE_DIR),prod-deploy-ops)'
@@ -759,6 +774,7 @@ seed_seah_providers_dry_run:
 aws-seed-seah-providers:
 	$(SSH_RUNNING) '$(call REMOTE_SEED_SEAH_PROVIDERS,$(REMOTE_DIR_RUNNING))'
 
+prod-seed-seah-providers: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-seed-seah-providers:
 	@echo "VPN required. Seeding SEAH providers on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_SEED_SEAH_PROVIDERS,$(PROD_REMOTE_DIR))'
@@ -798,22 +814,27 @@ aws-keycloak-clear-invite-passwords:
 	$(SSH_RUNNING) '$(call REMOTE_KEYCLOAK_ADMIN,$(REMOTE_DIR_RUNNING),--clear-invite-passwords $(KC_APPLY))'
 
 # ── Keycloak: DOR production (VPN + password SSH) ─────────────────────────────
+prod-keycloak-smtp: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-keycloak-smtp:
 	@echo "VPN required. Applying realm SMTP on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--smtp-only)'
 
+prod-keycloak-themes: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-keycloak-themes:
 	@echo "VPN required. Applying realm themes on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--theme-only)'
 
+prod-keycloak-clients: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-keycloak-clients:
 	@echo "VPN required. Applying realm clients on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--clients-only)'
 
+prod-keycloak-token-policy: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-keycloak-token-policy:
 	@echo "VPN required. Applying realm token policy on $(PROD_HOST) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--token-policy-only)'
 
+prod-keycloak-clear-invite-passwords: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-keycloak-clear-invite-passwords:
 	@echo "VPN required. Invite-password clean-up on $(PROD_HOST) — counts only unless APPLY=1..."
 	$(SSH_PROD) '$(call REMOTE_KEYCLOAK_ADMIN,$(PROD_REMOTE_DIR),--clear-invite-passwords $(KC_APPLY))'

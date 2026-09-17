@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-17 — ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-17 — ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -64,7 +64,22 @@ Row counts that matter (2026-09-16): **130** grievances · **144** complainants 
 use, and this codebase has no delete path on purpose: erasure in a government GRM is a suppression
 path. Backup, then migrate.
 
-## 3. ⛔ Do not use `make prod-deploy`
+## 3. ✅ `make prod-deploy` — fixed 2026-09-17, was unusable before
+
+> ⛔ **This section said "do not use `make prod-deploy`" until 2026-09-17.** It is now fixed and is
+> the supported path: `PROD_SERVER_USER=administrator`, `PROD_REMOTE_DIR=/opt/grms`, and a
+> `PROD_REMOTE_COMPOSE` carrying all four files, applied to every `prod-*` target through a
+> target-specific `REMOTE_COMPOSE` override. `tests/repo/test_prod_compose_nginx.py` pins it by
+> counting: **every** compose invocation in the remote payload must carry
+> `-f docker-compose.prod.yml`.
+>
+> ```bash
+> make prod-deploy IMAGE_TAG=<7-char-sha>
+> ```
+>
+> ⚠ Still true, and the reason the section existed:
+
+## 3a. ⛔ Why it was unusable
 
 Every deploy action in the prod targets goes through `REMOTE_COMPOSE`, which hardcodes
 `docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml` — it **omits
