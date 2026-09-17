@@ -1,7 +1,7 @@
 # Host Hardening Runbook
 
 **Status:** Operational runbook (manual, prod host). Companion to [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 12 and [`13_security.md`](13_security.md).
-**Last updated:** 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
+**Last updated:** 2026-09-17 — ⛔ **§1, §2 and §6 were measured against the DOR host and largely do NOT describe it** (`GRM-148`): fail2ban is not installed, password SSH is on, the TLS renewal here is **Docker-based** so §6's host-certbot installer would break it, and the backup script now refuses to write an unencrypted dump. §5 and §6 record what is actually installed and working as of 2026-09-17. Earlier, 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
 
 Single Ubuntu host, Docker Compose, public on `grm-chatbot.dor.gov.np`. These are host-OS controls that sit underneath the container hardening.
 
@@ -26,6 +26,16 @@ sudo ufw status verbose
 ---
 
 ## 2. SSH lockdown + fail2ban
+
+> ⛔ **NOT APPLIED on the DOR production host — measured 2026-09-17 (`GRM-148`).** `fail2ban-client`
+> is **not installed** (`command not found`), and password SSH is **enabled** — it is how the owner
+> logs in daily, and how every `make prod-*` target authenticates. So the block below is a
+> *proposal*, not a description. Treat it that way before quoting it as the host's posture.
+>
+> ⚠ **`PasswordAuthentication no` would lock you out of this box.** It is reachable only over the
+> Sophos VPN, no SSH key is installed for `administrator`, and the Makefile's prod targets use
+> password auth. Set up a key, **test it from a second terminal while the first stays open**, and
+> change the Makefile path, before going anywhere near this setting.
 
 ```bash
 # /etc/ssh/sshd_config.d/10-hardening.conf
@@ -88,6 +98,47 @@ scripts/ops/install_tls_renew_cron.sh /opt/grms     # certbot renew
 #   15 2 * * *  /opt/grms/scripts/ops/backup_db.sh /opt/grms
 #   30 4 * * 0  /opt/grms/scripts/ops/restore_drill.sh /opt/grms
 ```
+
+> ### ✅ What is actually installed on the DOR host, 2026-09-17 (`GRM-148`)
+>
+> The commands above do **not** work on this host as written. Three reasons, all measured:
+>
+> **1. `install_tls_renew_cron.sh` would break TLS here.** It refuses to run without a **host**
+> certbot, and deliberately so — its header explains that renewal configs record absolute host
+> paths, which a container cannot resolve. **On this host the opposite is true.** `certbot` is not
+> installed; the certificate is issued and renewed by the **`certbot/certbot` Docker image**, and
+> `renewal/grm-chatbot.dor.gov.np.conf` records *container* paths (`/etc/letsencrypt/...`,
+> `webroot_path = /var/www/certbot`). Installing a host certbot and pointing it at
+> `deployment/certbot/conf` would reproduce the exact parse-fail-and-report-success that let
+> staging's certificate expire on 2026-08-13.
+>
+> It also defaults `NGINX_CONTAINER=nepal_chatbot-nginx-1` — **staging's** name. Here it is
+> `grms-nginx-1`, so renewal would succeed and the reload would target nothing.
+>
+> **What is installed instead:** `/usr/local/bin/grms-cert-renew` — runs the certbot container,
+> reloads `grms-nginx-1`, then **verifies real expiry** and exits non-zero under 21 days (the one
+> safeguard the original script is right about: `certbot renew` exits 0 even when every renewal
+> config failed). Scheduled daily at 03:17 via `/etc/cron.d/grms-cert-renew`. Verified end to end.
+>
+> **2. `backup_db.sh` now refuses to keep an unencrypted dump.** The first run after the September
+> deploy produced `dump_ok=false, size=0` — correctly, since the archive holds complainant PII,
+> voice notes and photographs. A cron calling the script bare would have produced **nothing every
+> night**, reporting success in its own log. It needs `BACKUP_GPG_RECIPIENT`, `BACKUP_PASSPHRASE`,
+> or an explicit `BACKUP_ALLOW_UNENCRYPTED=1`.
+>
+> **What is installed instead:** `/etc/grms-backup.env` (root-only, holds a symmetric passphrase)
+> plus `/usr/local/bin/grms-backup` and `/usr/local/bin/grms-restore-drill`, scheduled in
+> `/etc/cron.d/grms-backup`. ⚠ **The passphrase exists only on this host and in the owner's password
+> manager.** An encrypted backup whose passphrase died with the machine is not a backup.
+>
+> **3. The scripts were non-executable until 2026-09-16** (`GRM-139`), which is the older half of
+> why none of this ran.
+>
+> ✅ **First successful restore drill in the system's history, 2026-09-17:** the encrypted dump was
+> decrypted and restored into a scratch database, 130 grievances and 130 tickets verified, `ok=true`.
+> Until that moment nothing had ever been restored from a backup of this system.
+>
+> ⏳ **Still open:** `offbox=false`. The backups sit on the machine they protect.
 
 > ### ⛔ None of this ran, from 2026-06-23 to 2026-09-16 (`GRM-139`)
 >
