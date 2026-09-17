@@ -137,9 +137,7 @@ AUTH_SERVICES := keycloak
 # Build order matters: Python/API images first (ops is a Python image), Next.js UI last (sequential loop below).
 AWS_DEPLOY_SERVICES ?= ticketing_api backend celery_default grm_celery grm_celery_beat ops grm_ui
 # UI-only release (no migrations, no API/backend rebuild). Add nginx for REST webchat static/conf bind-mounts.
-AWS_DEPLOY_LIGHT_SERVICES ?= grm_ui nginx
 PROD_DEPLOY_SERVICES ?= ticketing_api backend celery_default grm_celery grm_celery_beat ops grm_ui
-PROD_DEPLOY_LIGHT_SERVICES ?= grm_ui nginx
 
 # SEAH service provider directory (chatbot outro — public.seah_service_providers).
 # Data-only import; schema via migrate_public (pub009). Commit the CSV after refreshing from xlsx.
@@ -405,22 +403,6 @@ endef
 # plain `up -d nginx` sees no service-spec change and won't recreate, so the running container
 # keeps the OLD inode's config — even `nginx -s reload` re-reads the stale mount. Recreating
 # re-binds the mount to the current file. (wsl-nginx already does this locally for the same reason.)
-define REMOTE_DEPLOY_LIGHT
-set -e; \
-	cd $(1) && \
-	git fetch origin && \
-	git checkout -- docker-compose.aws.yml .dockerignore 2>/dev/null || true && \
-	git checkout $(DEPLOY_BRANCH) && \
-	git reset --hard origin/$(DEPLOY_BRANCH) && \
-	git checkout -- docker-compose.aws.yml 2>/dev/null || true && \
-	$(call REMOTE_ACQUIRE_IMAGES,$(filter-out nginx,$(2)),$(3)) && \
-	$(REMOTE_IMAGE_ENV) $(REMOTE_COMPOSE) up -d $(filter-out nginx,$(2)) && \
-	$(call REMOTE_REPORT_DIGESTS,$(filter-out nginx,$(2)),$(3)) && \
-	$(REMOTE_COMPOSE) up -d --force-recreate nginx && \
-	ui_auth_port="$$($(REMOTE_COMPOSE) port grm_ui 3001 2>/dev/null || true)" && \
-	case "$$ui_auth_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_auth_port)"; exit 1;; esac; \
-	echo "$(3) OK: grm_ui=$$ui_auth_port nginx=restarted"
-endef
 
 define REMOTE_DEPLOY_FULL
 set -e; \
@@ -471,8 +453,8 @@ endef
 
 .PHONY: help env-local secrets-edit \
 	wsl-up wsl-demo-bypass wsl-auth wsl-chatbot wsl-ticketing wsl-nginx wsl-ops wsl-down \
-	aws-up aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops \
-	prod-deploy prod-deploy-light prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
+	aws-up aws-deploy aws-deploy-full aws-deploy-ops \
+	prod-deploy prod-deploy-full prod-deploy-ops prod-sync-db-from-aws ssh-prod \
 	release-check release-tag hooks \
 	test-ticketing test-ticketing-host test-ticketing-unit dev-grm-deps \
 	migrate_ticketing migrate_public migrate_ops migrate_all reset_public_dev security-preflight \
@@ -516,7 +498,6 @@ help:
 	@echo "     aws-deploy does NOT run env-local: it pulls, rebuilds and migrates only."
 	@echo "  make aws-up           rebuild & up on this host (aws + GRM compose files)"
 	@echo "  make aws-deploy       pull integration/stage, migrate (incl. ops), rebuild AWS_DEPLOY_SERVICES (one image at a time)"
-	@echo "  make aws-deploy-light pull integration/stage, rebuild UI (+ nginx); no migrations (sequential builds)"
 	@echo "  make aws-deploy-full  pull integration/stage, migrate, rebuild entire stack (sequential builds)"
 	@echo "  make aws-deploy-ops   build + ops migration + restart ONLY the ops monitor"
 	@echo "  make ssh-running      open SSH session to staging"
@@ -524,7 +505,6 @@ help:
 	@echo "Production (VPN + password SSH — $(PROD_HOST)):"
 	@echo "  make ssh-prod         open SSH session (prompts for password)"
 	@echo "  make prod-deploy      pull main, migrate (incl. ops), rebuild PROD_DEPLOY_SERVICES"
-	@echo "  make prod-deploy-light UI-only rebuild (+ nginx); no migrations"
 	@echo "  make prod-deploy-full pull main, migrate, rebuild entire stack"
 	@echo "  make prod-deploy-ops  build + ops migration + restart ONLY the ops monitor (VPN)"
 	@echo "  make prod-sync-db-from-aws CONFIRM=1  replace prod DB from AWS (VPN; downtime OK)"
@@ -606,7 +586,7 @@ wsl-down:
 # AWS staging is our stage box: it tracks the integration branch, not main.
 # Prod deploys keep DEPLOY_BRANCH=main (the default) — this override is scoped to
 # the aws-deploy* targets only.
-aws-deploy aws-deploy-light aws-deploy-full aws-deploy-ops: DEPLOY_BRANCH := integration/stage
+aws-deploy aws-deploy-full aws-deploy-ops: DEPLOY_BRANCH := integration/stage
 
 # On the EC2 host (already in repo directory). Chatbot + GRM + Keycloak (auth profile).
 aws-up:
@@ -624,9 +604,6 @@ aws-deploy:
 	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_CORE,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_SERVICES),aws-deploy) && $(call REMOTE_APPLY_NGINX,aws-deploy) && $(call REMOTE_VERIFY_GRM_PORTS,aws-deploy)'
 
 # Light remote deploy: officer UI (+ optional nginx for bind-mounted webchat). Skips migrations and API/backend.
-aws-deploy-light: DEPLOY_BUILD = 0
-aws-deploy-light:
-	$(SSH_RUNNING) '$(call REMOTE_DEPLOY_LIGHT,$(REMOTE_DIR_RUNNING),$(AWS_DEPLOY_LIGHT_SERVICES),aws-deploy-light)'
 
 # Full remote deploy: entire stack (Rasa, orchestrator, all celery, etc.).
 aws-deploy-full: DEPLOY_BUILD = 0
@@ -717,11 +694,6 @@ prod-deploy: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy: release-check
 	@echo "VPN required. Deploying to $(PROD_HOST) as $(PROD_SERVER_USER) (password prompt)..."
 	$(SSH_PROD) '$(call REMOTE_DEPLOY_CORE,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_SERVICES),prod-deploy) && $(call REMOTE_VERIFY_GRM_PORTS_PROD,prod-deploy)'
-
-prod-deploy-light: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
-prod-deploy-light: release-check
-	@echo "VPN required. Light deploy to $(PROD_HOST) (password prompt)..."
-	$(SSH_PROD) '$(call REMOTE_DEPLOY_LIGHT,$(PROD_REMOTE_DIR),$(PROD_DEPLOY_LIGHT_SERVICES),prod-deploy-light)'
 
 prod-deploy-full: REMOTE_COMPOSE = $(PROD_REMOTE_COMPOSE)
 prod-deploy-full: release-check
