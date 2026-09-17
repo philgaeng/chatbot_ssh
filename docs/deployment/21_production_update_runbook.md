@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-17 — ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-17 — 🚀 **§13: the update is DONE** — `5a6dd71` deployed as `v2026.09.17`, all three streams at head, public schema converged, monitoring alive. ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -302,6 +302,40 @@ operator's home directory, **outside the repo**), `ALTER ROLE` for the Postgres 
   asserts one value per secret across hosts; production's is hand-written, so that assertion does not
   bind here — but it will the moment anyone migrates this host to SOPS. See
   [`18_sops_migration_handover.md`](18_sops_migration_handover.md) §5a Hazard 1.
+
+## 13. 🚀 Done — 2026-09-17
+
+`make prod-deploy IMAGE_TAG=5a6dd71 PROD_HOST=192.168.20.63` completed end to end, the first time that
+command has ever finished against this host. Verified from outside the VPN: `302` on the root,
+`200` on `/login`, **`401` on `/api/v1/tickets`** (alive and authenticating), `200` on Keycloak
+discovery, certificate valid to 14 December with renewal now scheduled.
+
+| Stream | Now |
+| --- | --- |
+| `ticketing` | `b3d5f7h9` |
+| `public` | `pub000_public_core_baseline` — converged, 26 tables both sides |
+| `ops` | `ops003_reportgrants` — **first run on this host** |
+
+**Two things that had to be true first**, and neither was obvious from the runbook:
+
+1. ⛔ **`make prod-deploy` runs ALL THREE migration streams**, not the two this document implied. It
+   died on the frozen `public` stream — safely, since that stream refusing to act is what protected
+   the vault payloads — but it meant the command could not complete, and the `&&` chain also blocked
+   the `ops` migration and the nginx apply behind it. `GRM-142` had to be resolved before any deploy
+   could finish.
+2. ⚠ **`PROD_HOST` must be the private address.** The Makefile default is the public IP, whose SSH
+   times out at banner exchange from the development machine; `192.168.20.63` over the VPN is the
+   working route. Same shape as `GRM-136`.
+
+**Monitoring is alive.** `OPS_DB_PASSWORD` was absent, so `ops001` had created `ops_app LOGIN` with
+**no password at all** — setting the variable alone would not have fixed it; the role needed
+`ALTER ROLE`. `python -m ops.selfcheck` exits **0**, which is the only evidence that counts: the
+container reporting `healthy` is what hid a blind monitor for three days on staging.
+
+⚠ **The first health rows take five minutes** (interval checks) and the daily ones fill in overnight:
+`cert_check` 02:30, `smtp_check` 02:35, `backup_status_check` 03:00, `restore_drill` Sunday 04:00.
+Those are precisely the checks that would have caught the expired certificate and the absent backups
+before anyone had to find them by hand.
 
 ## 12. ⚠ The SLA watchdog is already running
 
