@@ -2,7 +2,7 @@
 
 **Status:** internal handover — a runbook for in-flight work, not a specification.
 **Audience:** internal
-**Last updated:** 2026-09-17 — ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` are ROTATED on DOR production**, so `password` is no longer that host's live credential — the banner below, §6 item 5 and open item 6 are narrowed to **staging only**; ✅ prod's `env.local` is `0600` (`GRM-135` fixed) and the host is no longer unmeasured (`GRM-148`, [runbook](21_production_update_runbook.md)). Earlier, 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production, and the relay was then **verified by authenticating against it** (`GRM-133`); production's own `env.local` is world-readable (`GRM-135`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-17 — ⭐ **§5b: six secrets are now PER-HOST** (owner's decision, plan B) — `secrets.enc.env` carries placeholders and each host supplies the real value in `env.local.extra`; ✅ **Hazard 1 is CLOSED for production** — `DB_ENCRYPTION_KEY` hash-compared and identical across all three; ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` are ROTATED on DOR production**, so `password` is no longer that host's live credential — the banner below, §6 item 5 and open item 6 are narrowed to **staging only**; ✅ prod's `env.local` is `0600` (`GRM-135` fixed) and the host is no longer unmeasured (`GRM-148`, [runbook](21_production_update_runbook.md)). Earlier, 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production, and the relay was then **verified by authenticating against it** (`GRM-133`); production's own `env.local` is world-readable (`GRM-135`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 > 🔴 **This document is excluded from the public repository, deliberately.** It carries the staging
 > host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is
@@ -345,7 +345,7 @@ repairs it. Treat setting it for the first time exactly like rotating it.
 >
 > | Secret | Local | AWS staging | Verdict |
 > |---|---|---|---|
-> | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** The irreversible hazard is cleared **for staging** |
+> | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** ⭐ **And DOR production measured 2026-09-17: `0be56b09e6dc3c62` — identical too. Hazard 1 is CLOSED for all three hosts.** |
 > | `SEARCH_TOKEN_PEPPER` | ⛔ absent | ⛔ absent | ✅ Consistent — see the correction below |
 > | `OPS_DB_PASSWORD` | present | ⛔ absent | ~~Expected; staging runs no `ops` container~~ ⚠ **This row's justification expired on 2026-09-03**, when `ops` was deployed there and the absence stopped being harmless. **Now present on staging** (appended 2026-09-03, digest `1a5b66412c05bdc9` on both sides) — Hazard 3, closed for staging |
 > | `POSTGRES_PASSWORD` | rotated 2026-08-21 | ⚠ **still the pre-rotation value**, confirmed by digest | Matches what `14_…` §1 records. This is open item 6 |
@@ -395,6 +395,58 @@ values — trailing newlines and quote stripping both change the digest.
 | **Any differ** | ⛔ **Stop.** One shared file cannot hold two values. You need a per-host encrypted file (`secrets.prod.enc.env`, its own recipient, its own `path_regex`) — **or** a planned re-encryption migration. Do **not** "just use the local one" |
 | **`⛔ ABSENT` on some hosts but not others** | ⛔ **Stop, and do not read this as a match.** Whichever host *has* the value is the one whose behaviour differs; deciding which way to converge is a data question, not a config one. For `SEARCH_TOKEN_PEPPER` specifically, see the note above — introducing it anywhere requires the rehash script |
 | **`⛔ ABSENT` everywhere** | Expected for `SEARCH_TOKEN_PEPPER` today. Record it and move on — but **do not add the variable as part of this migration** |
+
+### ⭐ 5b. Six secrets are per-host — the owner's decision, 2026-09-17
+
+**The problem this solves.** One `secrets.enc.env` asserts **one value per secret across every
+host**. Production's `POSTGRES_PASSWORD` and `REDIS_PASSWORD` were rotated on 2026-09-17 and now
+differ from local's, so `make env-local` there would install local's credentials against
+production's database. More importantly, sharing them means **a staging compromise yields
+production's database and its IdP admin**.
+
+**The decision (owner, 2026-09-17): per-host, via `env.local.extra`.** Three options were weighed —
+converge on one shared value; keep these out of the encrypted half; or a per-host encrypted file
+with its own recipient. The middle one was chosen: it is the smallest step, and `env.local.extra`
+already exists for exactly this.
+
+| Secret | Where the real value lives |
+| --- | --- |
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | each host's `env.local.extra` |
+| `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET` | each host's `env.local.extra` |
+| `OPS_DB_PASSWORD` | each host's `env.local.extra` — the role's password already lives per-database (Hazard 3) |
+| everything else | `secrets.enc.env`, shared — single-account credentials (SMTP, DOIT, OpenAI, GHCR) plus `DB_ENCRYPTION_KEY` and `TICKETING_SECRET_KEY`, which **must** match across hosts |
+
+#### ⭐ How it works without a single line of code changing
+
+1. **The `#@secret` marker stays in `.env.shared`.** ⚠ This is load-bearing:
+   `scripts/ci/gen_env_local_ci.sh` substitutes its fake values **at those markers**, so deleting
+   one makes CI's test stack silently lose the variable.
+2. **`secrets.enc.env` keeps an entry**, so the generator's parity check still passes — but the
+   value is a visible placeholder, `__SET_PER_HOST_IN_env.local.extra__`.
+3. **`env.local.extra` is appended last**, and `gen_env_local.sh` says so in its own comment:
+   *"Appended verbatim, so it wins on any duplicate key — dotenv semantics are last-one-wins."*
+   The count check counts lines, so the duplicate satisfies `want + mark + extra_n`.
+4. **A host with no `env.local.extra` gets the placeholder and fails loudly at authentication.**
+   That is the intended failure: loud and closed, never quiet and shared.
+
+✅ **Verified locally 2026-09-17:** `make env-local` writes **60 variables (38 + 16 + 6)**;
+`POSTGRES_PASSWORD`'s digest is **unchanged** before and after the switch, proving the overlay wins;
+the placeholder is the first occurrence, proving the fallback; all six CI markers intact; 207 repo
+tests pass.
+
+#### What each host needs before it can generate
+
+Production already holds all six values in its hand-written `env.local`. The migration is to copy
+them into `/opt/grms/env.local.extra` **first**, together with the ten host-specific non-secrets
+Hazard 2 lists (`KEYCLOAK_ISSUER`, `KC_HOSTNAME_URL`, …), then install `sops` + `age`, give the host
+**its own keypair** as a recipient, run the name-parity dry run, and only then `make env-local`.
+
+⚠ **Do not copy values by reading them.** Build the overlay from the host's existing `env.local`
+with a `grep` into a file, as was done locally, so no value is printed or pasted.
+
+⚠ **Local developers need an `env.local.extra` too, from now on.** A fresh clone that runs
+`make env-local` gets placeholders for these six and a stack that cannot authenticate — which is the
+design, but it needs saying in the onboarding path.
 
 #### Hazard 2 — the generator writes `env.local` from scratch
 
