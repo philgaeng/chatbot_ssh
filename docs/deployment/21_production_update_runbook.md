@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-17 — ✅ **the update is COMPLETE and verified end to end** (§11); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-17 — ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -268,6 +268,25 @@ Also settled the same day: the queue was pruned to **54 live tickets** (76 pre-1
 soft-deleted, reversible), and the two live SEAH tickets surface under **High Priority** — the
 Actor and Supervisor tabs are correctly empty, since neither is assigned to the reader and they sit
 at a Level 1 step.
+
+## 11b. ✅ Credentials rotated and the stack fully restarted, 2026-09-17
+
+`POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated in one pass: `sed` on `env.local` (backed up to the
+operator's home directory, **outside the repo**), `ALTER ROLE` for the Postgres role, then
+`up -d --force-recreate --remove-orphans` across the whole stack.
+
+- **Verified by consequence, not assumption.** Every container holds the new value from `env.local`;
+  had the `ALTER ROLE` not run, all of them would be failing authentication. The site returns `200`
+  and the queue renders, which only works if file and role agree.
+- **Redis came up on `8.10.1`** — the `redis:8.10` pin is a **licence** decision (Redis 8 is
+  tri-licensed and AGPLv3 is elected; `redis:7` had floated onto the non-OSI line), and the minor pin
+  is doing its job: patches arrive, a relicence does not.
+- **The June `_auth` containers were removed**, ending the nginx rollback path — acceptable only
+  because the cutover had been verified down to reading a grievance's phone number (§11a).
+- ⚠ **The passwords now differ from AWS staging**, which is un-rotated. A single `secrets.enc.env`
+  asserts one value per secret across hosts; production's is hand-written, so that assertion does not
+  bind here — but it will the moment anyone migrates this host to SOPS. See
+  [`18_sops_migration_handover.md`](18_sops_migration_handover.md) §5a Hazard 1.
 
 ## 12. ⚠ The SLA watchdog is already running
 

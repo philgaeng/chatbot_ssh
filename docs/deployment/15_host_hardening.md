@@ -1,7 +1,7 @@
 # Host Hardening Runbook
 
 **Status:** Operational runbook (manual, prod host). Companion to [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 12 and [`13_security.md`](13_security.md).
-**Last updated:** 2026-09-17 — ⛔ **§1, §2 and §6 were measured against the DOR host and largely do NOT describe it** (`GRM-148`): fail2ban is not installed, password SSH is on, the TLS renewal here is **Docker-based** so §6's host-certbot installer would break it, and the backup script now refuses to write an unencrypted dump. §5 and §6 record what is actually installed and working as of 2026-09-17. Earlier, 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
+**Last updated:** 2026-09-17 — ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated on this host** (§5); §1 gains what its ufw block does and does not achieve here. ⛔ **§1, §2 and §6 were measured against the DOR host and largely do NOT describe it** (`GRM-148`): fail2ban is not installed, password SSH is on, the TLS renewal here is **Docker-based** so §6's host-certbot installer would break it, and the backup script now refuses to write an unencrypted dump. §5 and §6 record what is actually installed and working as of 2026-09-17. Earlier, 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
 
 Single Ubuntu host, Docker Compose, public on `grm-chatbot.dor.gov.np`. These are host-OS controls that sit underneath the container hardening.
 
@@ -22,6 +22,25 @@ sudo ufw status verbose
 ```
 
 > Docker can bypass ufw via its own iptables chains. Ensure no compose service publishes `5432`/`6379` to `0.0.0.0` (the preflight gate asserts this). For host-side psql, bind to `127.0.0.1` only.
+
+> ### ⚠ Measured on the DOR host, 2026-09-17 (`GRM-148`)
+>
+> **ufw is not installed here, and the warning above is the operative fact:** `db` publishes
+> `${POSTGRES_HOST_PORT:-5433}:5432` and `redis` `6379` on `0.0.0.0`, so both are reachable from the
+> DOR internal network and the VPN regardless of any host firewall. **Binding them to `127.0.0.1` in
+> compose is the fix; a ufw rule is not.** The preflight gate that asserts this has never been run
+> against this host.
+>
+> ⛔ **A port scan of this host is misleading — do not act on one alone.** A TCP connect from the open
+> internet *succeeds* on 5432, 5433, 6379, 18080, 3001, 5002 and 8080. That is the **upstream NAT**
+> completing handshakes for ports it never forwards — the host's own interface holds a **private**
+> address, and the public address is not on it at all. The protocol probe is what settles it: HTTP returns `000` and Postgres sends
+> no packet. ⚠ This was mistaken for a critical exposure on 2026-09-17 on the strength of the connect
+> alone. **Always follow a connect with a protocol probe before acting.**
+>
+> An `iptables -I DOCKER-USER … -j DROP` rule was added as a stopgap and matched **zero packets** —
+> inbound traffic does not arrive the way such a rule assumes, and it would not survive a reboot
+> anyway. The compose binding is the only durable fix.
 
 ---
 
@@ -86,6 +105,14 @@ sudo dpkg-reconfigure -plow unattended-upgrades
   an unencrypted copy of a survivor's report is not.
 - Weekly restore verification: `scripts/ops/restore_drill.sh`.
 - `DB_ENCRYPTION_KEY` stored separately — see [`14_key_and_secret_lifecycle.md`](14_key_and_secret_lifecycle.md).
+
+✅ **Credentials rotated on this host, 2026-09-17.** `POSTGRES_PASSWORD` and `REDIS_PASSWORD` were
+rotated together — `sed` on `env.local`, `ALTER ROLE` for the Postgres role, then a full
+`up -d --force-recreate --remove-orphans`, which also retired the two June `_auth` containers and
+brought Redis up on **8.10.1**. That retires `password`, the credential
+[`18_sops_migration_handover.md`](18_sops_migration_handover.md) records as live on this host and
+still names in three tracked files. ⚠ **AWS staging is not rotated.** ⚠ The pre-rotation `env.local`
+is in the operator's home directory, **outside the repo** — delete it once the rotation is trusted.
 
 ---
 
