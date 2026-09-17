@@ -375,13 +375,14 @@ set -e; \
 	$(REMOTE_COMPOSE) ps ops
 endef
 
+# ⚠ Uses $(REMOTE_COMPOSE), which every prod-* target overrides with PROD_REMOTE_COMPOSE.
+# It used to spell the four files out again. That duplication is the shape of GRM-141 itself —
+# a second place to forget an overlay — and it would have gone stale the first time a fifth
+# file appeared. One source of truth for the file list, checked by
+# tests/repo/test_prod_compose_nginx.py.
 define REMOTE_VERIFY_GRM_PORTS_PROD
-ui_port="$$(docker compose --env-file env.local \
-  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  -f docker-compose.prod.yml --profile auth port grm_ui 3001 2>/dev/null || true)" && \
-api_port="$$(docker compose --env-file env.local \
-  -f docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml \
-  -f docker-compose.prod.yml --profile auth port ticketing_api 5002 2>/dev/null || true)" && \
+ui_port="$$($(REMOTE_COMPOSE) port grm_ui 3001 2>/dev/null || true)" && \
+api_port="$$($(REMOTE_COMPOSE) port ticketing_api 5002 2>/dev/null || true)" && \
 case "$$ui_port" in *":$(EXPECT_GRM_UI_PORT)") ;; *) echo "ERROR: grm_ui not on host :$(EXPECT_GRM_UI_PORT) (actual: $$ui_port)"; exit 1;; esac; \
 case "$$api_port" in *":$(EXPECT_TICKETING_API_PORT)") ;; *) echo "ERROR: ticketing_api not on host :$(EXPECT_TICKETING_API_PORT) (actual: $$api_port)"; exit 1;; esac; \
 echo "$(1) OK: grm_ui=$$ui_port ticketing_api=$$api_port"
