@@ -1,9 +1,26 @@
 # Host Hardening Runbook
 
 **Status:** Operational runbook (manual, prod host). Companion to [`../services/12_security_monitoring_service.md`](../services/12_security_monitoring_service.md) §3 item 12 and [`13_security.md`](13_security.md).
-**Last updated:** 2026-09-17 — ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated on this host** (§5); §1 gains what its ufw block does and does not achieve here. ⛔ **§1, §2 and §6 were measured against the DOR host and largely do NOT describe it** (`GRM-148`): fail2ban is not installed, password SSH is on, the TLS renewal here is **Docker-based** so §6's host-certbot installer would break it, and the backup script now refuses to write an unencrypted dump. §5 and §6 record what is actually installed and working as of 2026-09-17. Earlier, 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
+**Last updated:** 2026-09-17 — ⛔ **§1-§3 are RECOMMENDATIONS TO HAND TO DOR, not tasks** (`D-014`): this project owns the application, DOR owns the host OS. Key-only SSH is **rejected by client policy**, not pending. ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated on this host** (§5); §1 gains what its ufw block does and does not achieve here. ⛔ **§1, §2 and §6 were measured against the DOR host and largely do NOT describe it** (`GRM-148`): fail2ban is not installed, password SSH is on, the TLS renewal here is **Docker-based** so §6's host-certbot installer would break it, and the backup script now refuses to write an unencrypted dump. §5 and §6 record what is actually installed and working as of 2026-09-17. Earlier, 2026-09-16 — §6: ⛔ **none of these cron scripts could ever execute** — they were non-executable in git from the day they were added (`GRM-139`, measured on the DOR host). ⚠ The rest was backfilled from git 2026-09-04 and is still not re-verified against the code
 
 Single Ubuntu host, Docker Compose, public on `grm-chatbot.dor.gov.np`. These are host-OS controls that sit underneath the container hardening.
+
+> ## ⛔ Read this before running anything in §1–§3 — it is not your machine
+>
+> **`D-014` (2026-09-17): the DOR production host's OS security belongs to DOR. This project owns
+> the application running on it.** Deploys, migrations, the app's backups and TLS renewal, the
+> credentials in `env.local`, and **the compose port bindings** are ours. The firewall, `sshd_config`,
+> fail2ban, and OS patching are theirs.
+>
+> **So §1–§3 below are recommendations to hand over, not a checklist to execute.** They are written
+> in the imperative, which is how `ufw` came to be enabled on that host at 11:00 on 2026-09-17 during
+> an unrelated deploy — a sane configuration, verified not to break Docker's forwarding, but a change
+> to a client's firewall the client had not asked for. It was disclosed. The same reflex applied to
+> `sshd_config` would have locked everyone out of a VPN-only box.
+>
+> ⭐ **Where a control can be achieved inside our own files, do it there instead.** `GRM-151` closed
+> an exposed production database by changing the **compose binding**, not by adding a firewall rule —
+> the binding is ours, the firewall is theirs, and Docker publishes ahead of the firewall anyway.
 
 ---
 
@@ -46,15 +63,21 @@ sudo ufw status verbose
 
 ## 2. SSH lockdown + fail2ban
 
-> ⛔ **NOT APPLIED on the DOR production host — measured 2026-09-17 (`GRM-148`).** `fail2ban-client`
-> is **not installed** (`command not found`), and password SSH is **enabled** — it is how the owner
-> logs in daily, and how every `make prod-*` target authenticates. So the block below is a
-> *proposal*, not a description. Treat it that way before quoting it as the host's posture.
+> ⛔ **`PasswordAuthentication no` is REJECTED for the DOR host — not pending (`D-014`, 2026-09-17).**
+> The client's access model is **VPN plus password SSH**, and the VPN is the boundary they have
+> chosen. This is their policy, not ours. ⚠ **Recording it as "not yet applied" was the error** —
+> that phrasing invites the next reader to apply it, to a box reachable only over that VPN, with no
+> key installed for `administrator` and every `make prod-*` target authenticating by password.
 >
-> ⚠ **`PasswordAuthentication no` would lock you out of this box.** It is reachable only over the
-> Sophos VPN, no SSH key is installed for `administrator`, and the Makefile's prod targets use
-> password auth. Set up a key, **test it from a second terminal while the first stays open**, and
-> change the Makefile path, before going anywhere near this setting.
+> ⚠ **fail2ban is NOT installed there, and this project did not install it.** Worth knowing why the
+> case is weaker than it looks: **SSH on that host is not reachable from the internet** — the NAT in
+> front of it accepts the TCP handshake and forwards nothing (measured 2026-09-17: banner exchange
+> times out from outside). So there is no anonymous attacker to slow down; it would cover a
+> compromised VPN client, someone already on the DOR network, or a future change to a NAT nobody here
+> controls. A reasonable recommendation to hand DOR. Not ours to run.
+>
+> **Measured on the host 2026-09-17 (`GRM-148`), so the block below describes nobody's reality:**
+> `fail2ban-client` is absent, and password SSH is enabled and is the documented access route.
 
 ```bash
 # /etc/ssh/sshd_config.d/10-hardening.conf
