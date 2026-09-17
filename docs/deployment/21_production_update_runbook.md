@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-17 — ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -30,6 +30,24 @@ Do not trust the specs on these — each line below contradicted something writt
 ⚠ **Production runs *both* the `aws` and `prod` overlays**, with `prod.yml` last so its
 `volumes: !override` wins for nginx. This is why `make prod-deploy` is unsafe — see §3.
 
+## 1a. ⚠ This host's ports look internet-exposed. They are not.
+
+A TCP connect from the open internet **succeeds** on 5432, 5433, 6379, 18080, 3001, 5002 and 8080.
+That is the **upstream NAT device** completing the handshake for ports it never forwards — the host
+itself is `192.168.20.63`, and the public address is not on it.
+
+⚠ **Measured 2026-09-17, after I called this a critical exposure on the strength of the TCP connect
+alone.** The protocol-level check is what settles it: HTTP returns `000` on 3001/5002/18080 and
+Postgres sends no packet at all on 5433. Nothing is behind those accepted connections.
+
+**So a port scan of this host is misleading, and anyone who runs one will reach the wrong
+conclusion.** Always follow a connect with a protocol probe before acting.
+
+**What remains true at its proper size:** those ports bind `0.0.0.0`, so anything on the DOR internal
+network or the VPN reaches Postgres and Redis directly. Binding them to `127.0.0.1` in compose is
+the durable fix — an iptables `DOCKER-USER` rule does not survive a reboot, and on this host it
+matched zero packets because inbound traffic does not arrive the way the rule assumed.
+
 ## 2. Database state
 
 | Stream | Production | Head | Gap |
@@ -46,7 +64,22 @@ Row counts that matter (2026-09-16): **130** grievances · **144** complainants 
 use, and this codebase has no delete path on purpose: erasure in a government GRM is a suppression
 path. Backup, then migrate.
 
-## 3. ⛔ Do not use `make prod-deploy`
+## 3. ✅ `make prod-deploy` — fixed 2026-09-17, was unusable before
+
+> ⛔ **This section said "do not use `make prod-deploy`" until 2026-09-17.** It is now fixed and is
+> the supported path: `PROD_SERVER_USER=administrator`, `PROD_REMOTE_DIR=/opt/grms`, and a
+> `PROD_REMOTE_COMPOSE` carrying all four files, applied to every `prod-*` target through a
+> target-specific `REMOTE_COMPOSE` override. `tests/repo/test_prod_compose_nginx.py` pins it by
+> counting: **every** compose invocation in the remote payload must carry
+> `-f docker-compose.prod.yml`.
+>
+> ```bash
+> make prod-deploy IMAGE_TAG=<7-char-sha>
+> ```
+>
+> ⚠ Still true, and the reason the section existed:
+
+## 3a. ⛔ Why it was unusable
 
 Every deploy action in the prod targets goes through `REMOTE_COMPOSE`, which hardcodes
 `docker-compose.yml -f docker-compose.aws.yml -f docker-compose.grm.yml` — it **omits
@@ -232,6 +265,43 @@ routes to `grm_ui_auth:3001` and `ticketing_api_auth:5003`; they are the rollbac
 
 ⚠ **June's code is serving against the new schema.** The migrations are additive, and the site
 answered `302` afterwards — but the cutover should not wait long.
+
+## 11a. ✅ Verified end to end, 2026-09-17
+
+The owner **read a SEAH grievance's phone number through the new UI**. That single act closes the
+chain this whole update existed for:
+
+- **Contact details display again.** The §4a hypothesis was right: production predated T3-04 and was
+  still attempting the deleted client-side decryption path. The update was the fix.
+- **PII decryption works server-side** on the deployed code.
+- **SEAH access works, and works the way it is designed to** — via cast membership on a
+  `KL_ROAD_SEAH` step, not via `org_admin`, which grants configure rights and no case access.
+- **The officer UI is live on the new code**, serving from the migrated database through the new
+  nginx routing.
+
+Also settled the same day: the queue was pruned to **54 live tickets** (76 pre-16-June trials
+soft-deleted, reversible), and the two live SEAH tickets surface under **High Priority** — the
+Actor and Supervisor tabs are correctly empty, since neither is assigned to the reader and they sit
+at a Level 1 step.
+
+## 11b. ✅ Credentials rotated and the stack fully restarted, 2026-09-17
+
+`POSTGRES_PASSWORD` and `REDIS_PASSWORD` rotated in one pass: `sed` on `env.local` (backed up to the
+operator's home directory, **outside the repo**), `ALTER ROLE` for the Postgres role, then
+`up -d --force-recreate --remove-orphans` across the whole stack.
+
+- **Verified by consequence, not assumption.** Every container holds the new value from `env.local`;
+  had the `ALTER ROLE` not run, all of them would be failing authentication. The site returns `200`
+  and the queue renders, which only works if file and role agree.
+- **Redis came up on `8.10.1`** — the `redis:8.10` pin is a **licence** decision (Redis 8 is
+  tri-licensed and AGPLv3 is elected; `redis:7` had floated onto the non-OSI line), and the minor pin
+  is doing its job: patches arrive, a relicence does not.
+- **The June `_auth` containers were removed**, ending the nginx rollback path — acceptable only
+  because the cutover had been verified down to reading a grievance's phone number (§11a).
+- ⚠ **The passwords now differ from AWS staging**, which is un-rotated. A single `secrets.enc.env`
+  asserts one value per secret across hosts; production's is hand-written, so that assertion does not
+  bind here — but it will the moment anyone migrates this host to SOPS. See
+  [`18_sops_migration_handover.md`](18_sops_migration_handover.md) §5a Hazard 1.
 
 ## 12. ⚠ The SLA watchdog is already running
 

@@ -2,11 +2,12 @@
 
 **Status:** internal handover — a runbook for in-flight work, not a specification.
 **Audience:** internal
-**Last updated:** 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production, and the relay was then **verified by authenticating against it** (`GRM-133`); production's own `env.local` is world-readable (`GRM-135`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
+**Last updated:** 2026-09-17 — ⭐ **§5b: six secrets are now PER-HOST** (owner's decision, plan B) — `secrets.enc.env` carries placeholders and each host supplies the real value in `env.local.extra`; ✅ **Hazard 1 is CLOSED for production** — `DB_ENCRYPTION_KEY` hash-compared and identical across all three; ✅ **`POSTGRES_PASSWORD` and `REDIS_PASSWORD` are ROTATED on DOR production**, so `password` is no longer that host's live credential — the banner below, §6 item 5 and open item 6 are narrowed to **staging only**; ✅ prod's `env.local` is `0600` (`GRM-135` fixed) and the host is no longer unmeasured (`GRM-148`, [runbook](21_production_update_runbook.md)). Earlier, 2026-09-16 — §5a: the mail credential was reconciled a second time, from DOR production, and the relay was then **verified by authenticating against it** (`GRM-133`); production's own `env.local` is world-readable (`GRM-135`). Earlier, 2026-09-04 — sprint citations folded — reasons kept inline, forks recorded in `DECISIONS.md` (lifecycle §10)
 
 > 🔴 **This document is excluded from the public repository, deliberately.** It carries the staging
-> host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is the
-> live pre-rotation credential on staging and DOR production**, not a stale example. Those facts are
+> host's address and an `ssh` login for it, and it quotes **`POSTGRES_PASSWORD=password` — which is
+> still the live pre-rotation credential on AWS staging**, not a stale example. ⚠ **Narrowed
+> 2026-09-17: DOR production is rotated** and no longer holds it; staging does. Those facts are
 > load-bearing here: the document's whole argument is that the credential is real, published in tracked
 > files, and must be *rotated* rather than deleted. **Redacting them would destroy the document; the
 > correct control is not publishing it** (lifecycle §10.5). ⚠ It is also not a specification — it is a
@@ -81,9 +82,11 @@
 > | `docs/sprints/archive/.../PROGRESS.md` | Archived history describing the defect | ✅ Leave. Rewriting history to hide a finding is worse than the finding |
 >
 > ⭐ **Why this still matters even though the value was rotated locally:** `14_…` §1 records that
-> **staging and DOR prod were never rotated and still hold the pre-rotation credential**. So `password`
-> is not a stale string in those files — it is **the live database credential for both servers**, sitting
-> in the working tree of a repository slated for public release. The fix is the rotation in item 4
+> **staging was never rotated and still holds the pre-rotation credential**. So `password` is not a
+> stale string in those files — it is **the live database credential for that server**, sitting in the
+> working tree of a repository slated for public release. ⚠ **Narrowed 2026-09-17: DOR production is
+> rotated**, so the blast radius is one host rather than two — which makes purging the literals
+> cheaper, not less necessary. The fix is the rotation in item 4
 > below, not a `sed`; this document's own conclusion applies unchanged — *encrypting (or deleting) a
 > value that is already in git history protects nothing; it has to be rotated.*
 
@@ -162,9 +165,17 @@ in front of a deploy that works is not a harmless excess of caution. It is the s
 permanently red build (D-26) — people learn that the warning is wrong, and then they are trained to
 walk past the next one, which will not be.
 
-⚠ **DOR production is unmeasured and nothing here has been verified against it.** Hazard 1 —
-overwriting `DB_ENCRYPTION_KEY` and rendering every encrypted PII column permanently unreadable,
-silently, because decryption fails open — is **open for prod and only for prod**.
+⚠ **Hazard 1 is still open for DOR production, and only for production** — overwriting
+`DB_ENCRYPTION_KEY` and rendering every encrypted PII column permanently unreadable, silently,
+because decryption fails open.
+
+> ✅ **Corrected 2026-09-17 — production is no longer "unmeasured".** This paragraph used to say
+> nothing here had been verified against that host. A full day on it produced
+> [`21_production_update_runbook.md`](21_production_update_runbook.md) §1: its real SSH user, repo
+> root, compose file set, `env.local` gap (11 variables absent, measured), database state and row
+> counts. **What is still unmeasured is the one thing that matters for this hazard** —
+> `DB_ENCRYPTION_KEY` has never been hash-compared between production and `secrets.enc.env`. Run
+> `hash_secret DB_ENCRYPTION_KEY` there before `make env-local` is ever contemplated on that box.
 
 ---
 
@@ -334,7 +345,7 @@ repairs it. Treat setting it for the first time exactly like rotating it.
 >
 > | Secret | Local | AWS staging | Verdict |
 > |---|---|---|---|
-> | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** The irreversible hazard is cleared **for staging** |
+> | `DB_ENCRYPTION_KEY` | `0be56b09e6dc3c62` | `0be56b09e6dc3c62` | ✅ **Identical.** ⭐ **And DOR production measured 2026-09-17: `0be56b09e6dc3c62` — identical too. Hazard 1 is CLOSED for all three hosts.** |
 > | `SEARCH_TOKEN_PEPPER` | ⛔ absent | ⛔ absent | ✅ Consistent — see the correction below |
 > | `OPS_DB_PASSWORD` | present | ⛔ absent | ~~Expected; staging runs no `ops` container~~ ⚠ **This row's justification expired on 2026-09-03**, when `ops` was deployed there and the absence stopped being harmless. **Now present on staging** (appended 2026-09-03, digest `1a5b66412c05bdc9` on both sides) — Hazard 3, closed for staging |
 > | `POSTGRES_PASSWORD` | rotated 2026-08-21 | ⚠ **still the pre-rotation value**, confirmed by digest | Matches what `14_…` §1 records. This is open item 6 |
@@ -384,6 +395,58 @@ values — trailing newlines and quote stripping both change the digest.
 | **Any differ** | ⛔ **Stop.** One shared file cannot hold two values. You need a per-host encrypted file (`secrets.prod.enc.env`, its own recipient, its own `path_regex`) — **or** a planned re-encryption migration. Do **not** "just use the local one" |
 | **`⛔ ABSENT` on some hosts but not others** | ⛔ **Stop, and do not read this as a match.** Whichever host *has* the value is the one whose behaviour differs; deciding which way to converge is a data question, not a config one. For `SEARCH_TOKEN_PEPPER` specifically, see the note above — introducing it anywhere requires the rehash script |
 | **`⛔ ABSENT` everywhere** | Expected for `SEARCH_TOKEN_PEPPER` today. Record it and move on — but **do not add the variable as part of this migration** |
+
+### ⭐ 5b. Six secrets are per-host — the owner's decision, 2026-09-17
+
+**The problem this solves.** One `secrets.enc.env` asserts **one value per secret across every
+host**. Production's `POSTGRES_PASSWORD` and `REDIS_PASSWORD` were rotated on 2026-09-17 and now
+differ from local's, so `make env-local` there would install local's credentials against
+production's database. More importantly, sharing them means **a staging compromise yields
+production's database and its IdP admin**.
+
+**The decision (owner, 2026-09-17): per-host, via `env.local.extra`.** Three options were weighed —
+converge on one shared value; keep these out of the encrypted half; or a per-host encrypted file
+with its own recipient. The middle one was chosen: it is the smallest step, and `env.local.extra`
+already exists for exactly this.
+
+| Secret | Where the real value lives |
+| --- | --- |
+| `POSTGRES_PASSWORD`, `REDIS_PASSWORD` | each host's `env.local.extra` |
+| `KEYCLOAK_ADMIN_PASSWORD`, `KEYCLOAK_CLIENT_SECRET`, `KEYCLOAK_WEBHOOK_SECRET` | each host's `env.local.extra` |
+| `OPS_DB_PASSWORD` | each host's `env.local.extra` — the role's password already lives per-database (Hazard 3) |
+| everything else | `secrets.enc.env`, shared — single-account credentials (SMTP, DOIT, OpenAI, GHCR) plus `DB_ENCRYPTION_KEY` and `TICKETING_SECRET_KEY`, which **must** match across hosts |
+
+#### ⭐ How it works without a single line of code changing
+
+1. **The `#@secret` marker stays in `.env.shared`.** ⚠ This is load-bearing:
+   `scripts/ci/gen_env_local_ci.sh` substitutes its fake values **at those markers**, so deleting
+   one makes CI's test stack silently lose the variable.
+2. **`secrets.enc.env` keeps an entry**, so the generator's parity check still passes — but the
+   value is a visible placeholder, `__SET_PER_HOST_IN_env.local.extra__`.
+3. **`env.local.extra` is appended last**, and `gen_env_local.sh` says so in its own comment:
+   *"Appended verbatim, so it wins on any duplicate key — dotenv semantics are last-one-wins."*
+   The count check counts lines, so the duplicate satisfies `want + mark + extra_n`.
+4. **A host with no `env.local.extra` gets the placeholder and fails loudly at authentication.**
+   That is the intended failure: loud and closed, never quiet and shared.
+
+✅ **Verified locally 2026-09-17:** `make env-local` writes **60 variables (38 + 16 + 6)**;
+`POSTGRES_PASSWORD`'s digest is **unchanged** before and after the switch, proving the overlay wins;
+the placeholder is the first occurrence, proving the fallback; all six CI markers intact; 207 repo
+tests pass.
+
+#### What each host needs before it can generate
+
+Production already holds all six values in its hand-written `env.local`. The migration is to copy
+them into `/opt/grms/env.local.extra` **first**, together with the ten host-specific non-secrets
+Hazard 2 lists (`KEYCLOAK_ISSUER`, `KC_HOSTNAME_URL`, …), then install `sops` + `age`, give the host
+**its own keypair** as a recipient, run the name-parity dry run, and only then `make env-local`.
+
+⚠ **Do not copy values by reading them.** Build the overlay from the host's existing `env.local`
+with a `grep` into a file, as was done locally, so no value is printed or pasted.
+
+⚠ **Local developers need an `env.local.extra` too, from now on.** A fresh clone that runs
+`make env-local` gets placeholders for these six and a stack that cannot authenticate — which is the
+design, but it needs saying in the onboarding path.
 
 #### Hazard 2 — the generator writes `env.local` from scratch
 
@@ -447,7 +510,8 @@ present in a host's current `env.local` and absent from those two halves is **si
 > actual question and needs a real send from a host.
 >
 > ⚠ **Nothing was migrated *onto* production.** It still has no `sops`, and its `env.local` is
-> still hand-written (`GRM-058`) — and world-readable (`GRM-135`).
+> still hand-written (`GRM-058`). ✅ **No longer world-readable** — `chmod 600` applied 2026-09-17,
+> `GRM-135` closed on the host.
 >
 > 🔑 **The trap this walked into, worth keeping.** Three non-secret names (`SMTP_SERVER`,
 > `SMTP_PORT`, `SMTP_FROM_DISPLAY`) were first pasted into `secrets.enc.env` beside the password.
@@ -550,7 +614,7 @@ each one**:
 2. `HG_TOKEN` — ⚠ also re-paste the **GitHub Actions secret `HF_TOKEN`**; it is the same credential
 3. `OPENAI_API_KEY`
 4. `SMTP_PASSWORD`
-5. ~~`POSTGRES_PASSWORD`, `REDIS_PASSWORD`~~ ✅ **rotated locally — 2026-08-21 and 2026-08-23** (`14_…` §1 carries the dates and the reason each was rotated). ⚠ **Staging and DOR prod still hold both old values, and `REDIS_PASSWORD`'s previous value is in public git history** — rotating them there is part of the host migration, not of this pass. Coordinate with a stack restart. ⚠ **`ops_app` is a separate role with a separate password** (`OPS_DB_PASSWORD`) and is **not** carried along by this rotation. That coupling used to exist implicitly, and rotating `POSTGRES_PASSWORD` on 2026-08-21 blinded the monitor for three days because of it — see §5a Hazard 3. It is fixed; do not recreate it by leaving `OPS_DB_PASSWORD` unset on a host that runs `ops`.
+5. ~~`POSTGRES_PASSWORD`, `REDIS_PASSWORD`~~ ✅ **rotated locally — 2026-08-21 and 2026-08-23**, and ✅ **on DOR production 2026-09-17** (`14_…` §1 carries the dates and the reason each was rotated). ⚠ **AWS staging still holds both old values, and `REDIS_PASSWORD`'s previous value is in public git history** — rotating it there is part of the host migration, not of this pass. ⭐ **Production's rotation did not require the SOPS migration first**, which is worth knowing: its `env.local` is hand-written, so the rotation was `sed` + `ALTER ROLE` + a full `up -d --force-recreate`, with the old file kept outside the repo. The migration and the rotation are separable. Coordinate with a stack restart. ⚠ **`ops_app` is a separate role with a separate password** (`OPS_DB_PASSWORD`) and is **not** carried along by this rotation. That coupling used to exist implicitly, and rotating `POSTGRES_PASSWORD` on 2026-08-21 blinded the monitor for three days because of it — see §5a Hazard 3. It is fixed; do not recreate it by leaving `OPS_DB_PASSWORD` unset on a host that runs `ops`.
 
 ### ⚠ Two that are NOT in the pass
 

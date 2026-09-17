@@ -1,7 +1,7 @@
 # Setup — Docker-era runbook
 
 **Status:** As-built, July 2026 — rewritten from legacy doc, original in [`archive/02_setup.md`](archive/02_setup.md). The legacy systemd / virtualenv / `rasa train` path is gone; everything runs via Docker Compose (see [`01_architecture.md`](01_architecture.md) for the service map, [`DOCKER.md`](DOCKER.md) for day-to-day container commands).
-**Last updated:** 2026-09-07 — host ports are defaults and `make ephemeral-up` runs an isolated second stack (QA-03). Earlier: §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
+**Last updated:** 2026-09-17 — the `*-deploy-light` targets are removed (`GRM-150`): they never pulled the code, so they left the working tree — and therefore the nginx config — behind the images they deployed. host ports are defaults and `make ephemeral-up` runs an isolated second stack (QA-03). Earlier: §4 gains the additive repair path for a drifted dev database (`ensure_officer_coverage`), so recovering staffing no longer means `--reset` taking the projects and organizations with it. Earlier: 2026-09-04 · ⚠ backfilled from git 2026-09-04; not re-verified against the code
 
 ## 1. Prerequisites
 
@@ -158,8 +158,8 @@ Remote deploys are Makefile-driven (pull `main`, migrate, rebuild selected servi
 
 | Env | Targets |
 |---|---|
-| AWS staging (`nepal-gms-chatbot.facets-ai.com`, key SSH) | `make aws-up` (on host) · `make aws-deploy` / `aws-deploy-light` / `aws-deploy-full` / `aws-deploy-ops` · `make ssh-running` |
-| Nepal DOR prod (`grm-chatbot.dor.gov.np`, Sophos VPN + password SSH) | `make prod-deploy` / `prod-deploy-light` / `prod-deploy-full` / `prod-deploy-ops` · `make ssh-prod` · `make prod-sync-db-from-aws CONFIRM=1` |
+| AWS staging (`nepal-gms-chatbot.facets-ai.com`, key SSH) | `make aws-up` (on host) · `make aws-deploy` / `aws-deploy-full` / `aws-deploy-ops` · `make ssh-running` |
+| Nepal DOR prod (`grm-chatbot.dor.gov.np`, Sophos VPN + password SSH) | `make prod-deploy` / `prod-deploy-full` / `prod-deploy-ops` · `make ssh-prod` · `make prod-sync-db-from-aws CONFIRM=1` |
 
 Prod compose stack:
 
