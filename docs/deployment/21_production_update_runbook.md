@@ -2,7 +2,7 @@
 
 **Status:** Operational runbook for a specific, one-off update. Written 2026-09-16 from facts measured on the host that day, not from the specs — several of which were wrong about this box.
 **Audience:** internal
-**Last updated:** 2026-09-17 — 🚀 **§13: the update is DONE** — deployed and tagged `v2026.09.17`, all three streams at head, public schema converged, monitoring alive. ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
+**Last updated:** 2026-09-18 — ✅ **§1a: the loopback bindings are live** — Postgres and Keycloak listen on `127.0.0.1` only (`GRM-151`). Earlier, 2026-09-17 — 🚀 **§13: the update is DONE** — deployed and tagged `v2026.09.17`, all three streams at head, public schema converged, monitoring alive. ✅ **§3: `make prod-deploy` is fixed and is now the supported path** (`GRM-136`, `GRM-141`) — right user, right path, production overlay on all 10 targets; ✅ **the update is COMPLETE and verified end to end** (§11a), and ✅ **the database and Redis credentials are rotated** (§11b); §1a records why this host's ports look internet-exposed and are not. Earlier, 2026-09-16 — §8: ⛔ **the nginx step took the site down** (`GRM-147`) and is rewritten so a failed validation cannot apply; §11 records where production actually stopped. Earlier: §4 question 1 **answered** (`GRM-142`): the vault holds 25 live encrypted payloads, so the public stream stays stuck. §2 gains what production's data actually shows (`GRM-144`, `GRM-145`)
 
 > **Goal beyond this update:** make production and staging differ **only** in the repo root path
 > (`/opt/grms` vs `/home/ubuntu/nepal_chatbot`) and in host-specific values, so that every future
@@ -43,10 +43,13 @@ Postgres sends no packet at all on 5433. Nothing is behind those accepted connec
 **So a port scan of this host is misleading, and anyone who runs one will reach the wrong
 conclusion.** Always follow a connect with a protocol probe before acting.
 
-**What remains true at its proper size:** those ports bind `0.0.0.0`, so anything on the DOR internal
-network or the VPN reaches Postgres and Redis directly. Binding them to `127.0.0.1` in compose is
-the durable fix — an iptables `DOCKER-USER` rule does not survive a reboot, and on this host it
-matched zero packets because inbound traffic does not arrive the way the rule assumed.
+**What was true at its proper size, and is now fixed (`GRM-151`, verified 2026-09-18):** those ports
+bound `0.0.0.0`, so anything on the DOR internal network or the VPN reached Postgres and Keycloak's
+admin console directly. ⚠ Redis was never among them — it publishes no host port at all; an earlier
+line here said otherwise, on the strength of the NAT answering. They now bind **`127.0.0.1`**
+(`${HOST_BIND:-127.0.0.1}:`), measured with `ss -ltnp` on the host: `127.0.0.1:5433`,
+`127.0.0.1:18080`. An iptables `DOCKER-USER` rule was tried first as a stopgap and matched zero
+packets — the compose binding is the durable fix, and it is ours to make (`D-014`).
 
 ## 2. Database state
 
